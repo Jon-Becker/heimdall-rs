@@ -53,13 +53,13 @@ main() {
   
   # if they specified a version, use that
   if [ -n "$TARGET_VERSION" ]; then
-    ensure git checkout $TARGET_VERSION
+    ensure git checkout $TARGET_VERSION > /dev/null 2>&1
   else
-    ensure git checkout origin/main
+    ensure git checkout origin/main > /dev/null 2>&1
   fi
 
   # build the binaries
-  RUSTFLAGS="-C target-cpu=native" ensure cargo install --path ./ --bins --locked --force --root $BIFROST_PATH
+  RUSTFLAGS="-C target-cpu=native" ensure cargo install --path ./heimdall --bins --locked --force --root $BIFROST_PATH
 
   echo "bifrost: Installation complete."
 }
