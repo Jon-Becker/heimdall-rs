@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -e 
+
+BIFROST_PATH=${BIFROST_PATH:-"$HOME/.bifrost"}
+BIFROST_BIN_DIR="$BIFROST_PATH/bin"
+
+BIFROST_BINARY="https://raw.githubusercontent.com/Jon-Becker"
+
+# Create the bifrost directory and install the bifrost executable in it.
+#mkdir -p $BIFROST_BIN_DIR
+#curl -# -L $BIFROST_BINARY
+#chmod a+x "$BIFROST_BIN_DIR/bifrost
+
+# Detect the current shell being used for the installation
+if [[ $SHELL in */zsh ]]; then
+    PREF_SHELL=zsh
+elif [[ $SHELL in */fish ]]; then
+    PREF_SHELL=fish
+elif [[ $SHELL in */bash ]]; then
+    PREF_SHELL=bash
+fi
+
+echo $SHELL
