@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -e
+
+BIFROST_PATH=${BIFROST_PATH:-"$HOME/.bifrost"}
+BIFROST_BIN_DIR="$BIFROST_PATH/bin"
+
+main() {
+  # ensuring git, curl, and cargo are installed
+  requires_cmd git
+  requires_cmd curl
+  requires_cmd cargo
+
+  # parsing parameters
+  while [[ $1 ]]; do
+    case $1 in
+      --)               shift; break;;
+
+      -v|--version)     shift; TARGET_VERSION=$1;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      -l|--list|--versions)
+        versions
+        exit 0
+        ;;
+      *) 
+        echo "bifrost: Option '$1' not recognized\n"
+        exit 1
+        ;;
+    esac; shift
+  done
+  # remove the current heimdall installation if it exists
+  ensure rm -f "$BIFROST_BIN_DIR/heimdall"
+  
+  BUILD_PATH="${BIFROST_PATH}/build"
+
+  # make the directory if it doesn't exist
+  if [ ! -d $BUILD_PATH ]; then
+    ensure mkdir -p $BUILD_PATH
+  fi
+
+  # remove the build directory if it exists
+  ensure rm -rf "$BUILD_PATH/heimdall-rs"
+
+  cd $BUILD_PATH
+  
+  ensure git clone "https://github.com/Jon-Becker/heimdall-rs"
+
+  cd "heimdall-rs"
+
+  ensure git fetch origin
+  
+  # if they specified a version, use that
+  if [ -n "$TARGET_VERSION" ]; then
+    ensure git checkout $TARGET_VERSION
+  else
+    ensure git checkout origin/main
+  fi
+
+  # build the binaries
+  RUSTFLAGS="-C target-cpu=native" ensure cargo install --path ./ --bins --locked --force --root $BIFROST_PATH
+
+  echo "bifrost: Installation complete."
+}
+
+versions() {
+  cat 1>&2 <<EOF
+
+
+Available versions of Heimdall:
+
+Version                                   |   Tag                      |
+----------------------------------------- | -------------------------- |
+EOF
+  git ls-remote --tags "https://github.com/Jon-Becker/heimdall-rs"
+}
+
+usage() {
+  cat 1>&2 <<EOF
+
+
+Bifrost is the version manager for Heimdall.
+
+Install and manage specific versions of Heimdall and it's packages.
+
+USAGE:
+    bifrost <OPTIONS>
+
+OPTIONS:
+    -h, --help      Print help information
+    -v, --version   Install a specific version
+    -l, --list      List all available versions
+
+
+EOF
+}
+
+ensure() {
+  if ! "$@"; then echo "bifrost: required command '$*' failed."; exit 1; fi
+}
+
+command_exists() {
+  command -v "$1" > /dev/null 2>&1
+}
+
+requires_cmd() {
+  if ! command_exists "$1"; then
+    echo "bifrost: '$1' is required but not installed on this system"
+    exit 1
+  fi
+}
+
+main "$@" || exit 1
