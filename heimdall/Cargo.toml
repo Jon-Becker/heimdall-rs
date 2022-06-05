@@ -1,8 +1,19 @@
 [package]
-name = "heimdall-rs"
+name = "heimdall"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+readme = "README.md"
+description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
+keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "3.1.18", features = ["derive"] }
+
+
+[[bin]]
+name = "heimdall"
+path = "src/heimdall.rs"

@@ -1,5 +1,10 @@
+*/target
+*/out
+*/debug
+*/src/debug
 
-
-# Added by cargo
-
-/target
+Cargo.lock
+*.rustc_info.json
+out.json
+.idea
+.DS_STORE
