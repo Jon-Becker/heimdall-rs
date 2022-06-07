@@ -8,10 +8,12 @@ description = "Heimdall is an advanced Ethereum smart contract toolkit for foren
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+heimdall-common = { path = "./../common" }
+heimdall-config = { path = "./../config" }
+
 clap = { version = "3.1.18", features = ["derive"] }
+clap-verbosity-flag = "1.0.0"
 
 
 [[bin]]

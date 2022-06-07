@@ -1,0 +1,10 @@
+[package]
+name = "heimdall-config"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+readme = "README.md"
+description = "Configuration management for Heimdall."
+keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
+
+[dependencies]
