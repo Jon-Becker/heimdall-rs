@@ -162,6 +162,13 @@ lazy_static! {
 }
 
 // Returns the opcode for the given hexcode, fetched from the hashmap.
-pub fn opcode(code: &str) -> Option<&Opcode> {
-    return OPCODES.get(code);
+pub fn opcode(code: &str) -> Opcode {
+    return match OPCODES.get(code) {
+        Some(op) => op.clone(),
+        None => Opcode {
+            name: String::from("unknown"),
+            hexcode: String::from(code),
+            mingas: 0,
+        },
+    };
 }
