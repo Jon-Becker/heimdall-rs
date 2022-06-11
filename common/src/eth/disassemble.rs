@@ -15,7 +15,9 @@ use crate::{
         logging::*,
         file::*,
     },
-    opcodes::opcode
+    eth::{
+        opcodes::opcode
+    }
 };
 
 #[derive(Debug, Clone, Parser)]
@@ -23,7 +25,6 @@ use crate::{
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall disassemble <TARGET> [OPTIONS]")]
-
 pub struct DisassemblerArgs {
     // The target to decompile, either a file, contract address, or ENS name.
     #[clap(required=true)]

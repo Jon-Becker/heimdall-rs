@@ -3,8 +3,11 @@ mod decompile;
 use clap::{Parser, Subcommand};
 
 use heimdall_common::{
-    disassemble::{disassemble, DisassemblerArgs},
+    eth::{
+        disassemble::{disassemble, DisassemblerArgs},
+    }
 };
+use heimdall_config::{config, ConfigArgs};
 
 #[derive(Debug, Parser)]
 #[clap(name = "heimdall", author = "Jonathan Becker <jonathan@jbecker.dev>", version)]
@@ -28,7 +31,7 @@ pub enum Subcommands {
     Disassemble(DisassemblerArgs),
 
     #[clap(name = "config", about = "Display and edit the current configuration")]
-    Config(decompile::DecompilerArgs),
+    Config(ConfigArgs),
 
     #[clap(name = "cache", about = "Manage cached files for Heimdall.")]
     Cache(decompile::DecompilerArgs),
@@ -48,7 +51,7 @@ fn main() {
         }
 
         Subcommands::Config(cmd) => {
-            println!("{:#?}", cmd)
+            config(cmd);
         }
 
         Subcommands::Cache(cmd) => {
@@ -56,3 +59,4 @@ fn main() {
         }
     }
 }
+

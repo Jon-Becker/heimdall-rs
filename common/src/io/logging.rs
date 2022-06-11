@@ -1,7 +1,7 @@
 use colored::*;
 
 pub fn error(message: &str){
-    println!("{} {}", "   error:".bright_red().bold(), message);
+    println!("{} {}", "error:".bright_red().bold(), message);
     std::process::exit(1);
 }
 
@@ -10,11 +10,11 @@ pub fn success(message: &str){
 }
 
 pub fn info(message: &str){
-    println!("{} {}", "   info:".bright_cyan().bold(), message);
+    println!("{} {}", "info:".bright_cyan().bold(), message);
 }
 
 pub fn warning(message: &str){
-    println!("{} {}", "   warn:".bright_yellow().bold(), message);
+    println!("{} {}", "warn:".bright_yellow().bold(), message);
 }
 
 // TODO: in the future, possibly add a verbose flag to this function

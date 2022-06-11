@@ -8,3 +8,8 @@ description = "Configuration management for Heimdall."
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 
 [dependencies]
+heimdall-common = { path = "./../common" }
+clap-verbosity-flag = "1.0.0"
+clap = { version = "3.1.18", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = { version = "0.5.9" }
