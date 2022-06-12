@@ -44,13 +44,15 @@ pub struct DisassemblerArgs {
 
 pub fn disassemble(args: DisassemblerArgs) {
 
+    let logger = Logger::new(args.verbose.log_level().unwrap().as_str());
+
     // parse the output directory
     let mut output_dir: String;
     if &args.output.len() <= &0 {
         output_dir = match env::current_dir() {
             Ok(dir) => dir.into_os_string().into_string().unwrap(),
             Err(_) => {
-                error("failed to get current directory.");
+                logger.error("failed to get current directory.");
                 std::process::exit(1);
             }
         };
@@ -79,7 +81,7 @@ pub fn disassemble(args: DisassemblerArgs) {
 
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
-                error("disassembling an on-chain contract requires an RPC provider. Use `heimdall disassemble --help` for more information.");
+                logger.error("disassembling an on-chain contract requires an RPC provider. Use `heimdall disassemble --help` for more information.");
                 std::process::exit(1);
             }
 
@@ -87,21 +89,21 @@ pub fn disassemble(args: DisassemblerArgs) {
             let provider = match Provider::<Http>::try_from(&args.rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {
-                    error(&format!("failed to connect to RPC provider \"{}\" .", &args.rpc_url).to_string());
+                    logger.error(&format!("failed to connect to RPC provider \"{}\" .", &args.rpc_url).to_string());
                     std::process::exit(1)
                 }
             };
             let address = match args.target.parse::<Address>() {
                 Ok(address) => address,
                 Err(_) => {
-                    error(&format!("failed to parse address \"{}\" .", &args.target).to_string());
+                    logger.error(&format!("failed to parse address \"{}\" .", &args.target).to_string());
                     std::process::exit(1)
                 }
             };
             let bytecode_as_bytes = match provider.get_code(address, None).await {
                 Ok(bytecode) => bytecode,
                 Err(_) => {
-                    error(&format!("failed to fetch bytecode from \"{}\" .", &args.target).to_string());
+                    logger.error(&format!("failed to fetch bytecode from \"{}\" .", &args.target).to_string());
                     std::process::exit(1)
                 }
             };
@@ -123,12 +125,12 @@ pub fn disassemble(args: DisassemblerArgs) {
                     contents.replacen("0x", "", 1)
                 }
                 else {
-                    error(&format!("file \"{}\" doesn't contain valid bytecode.", &args.target).to_string());
+                    logger.error(&format!("file \"{}\" doesn't contain valid bytecode.", &args.target).to_string());
                     std::process::exit(1)
                 }
             },
             Err(_) => {
-                error(&format!("failed to open file \"{}\" .", &args.target).to_string());
+                logger.error(&format!("failed to open file \"{}\" .", &args.target).to_string());
                 std::process::exit(1)
             }
         };
@@ -160,9 +162,9 @@ pub fn disassemble(args: DisassemblerArgs) {
         program_counter += 1;
     }
 
-    success(&format!("disassembled {} bytes successfully.", program_counter).to_string());
+    logger.success(&format!("disassembled {} bytes successfully.", program_counter).to_string());
 
     let file_path = write_file(&String::from(format!("{}/disassembled.asm", &output_dir)), &output);
-    info(&format!("wrote disassembled bytecode to \"{}\" .", file_path).to_string());
+    logger.info(&format!("wrote disassembled bytecode to \"{}\" .", file_path).to_string());
     return
 }

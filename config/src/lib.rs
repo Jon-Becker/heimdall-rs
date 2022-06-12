@@ -51,7 +51,8 @@ pub fn write_config(contents: String) {
             let _ = write_file(&home.into_os_string().to_str().unwrap().to_string(), &contents);
         }
         None => {
-            error(&format!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?").to_string());
+            let logger = Logger::new("");
+            logger.error(&format!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?").to_string());
             std::process::exit(1)
         }
     }
@@ -78,7 +79,8 @@ pub fn read_config() -> String {
             }
         }
         None => {
-            error(&format!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?").to_string());
+            let logger = Logger::new("");
+            logger.error(&format!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?").to_string());
             std::process::exit(1)
         }
     }
@@ -109,7 +111,8 @@ pub fn update_config(key: &String, value: &String) {
             contents.etherscan_api_key = value.to_string();
         }
         _ => {
-            error(&format!("unknown configuration key \'{}\' .", key).to_string());
+            let logger = Logger::new("");
+            logger.error(&format!("unknown configuration key \'{}\' .", key).to_string());
             std::process::exit(1)
         }
     }
@@ -121,18 +124,19 @@ pub fn update_config(key: &String, value: &String) {
 
 
 pub fn config(args: ConfigArgs) {
+    let logger = Logger::new("");
     if &args.key != "" {
         
         if &args.value != "" {
             
             // read the config file and update the key/value pair
             update_config(&args.key, &args.value);
-            success(&format!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value).to_string());
+            logger.success(&format!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value).to_string());
         }
         else {
 
             // key is set, but no value is set
-            error("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
+            logger.error("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
             std::process::exit(1);
         }
     }
@@ -140,6 +144,6 @@ pub fn config(args: ConfigArgs) {
 
         // no key is set, print the config file
         println!("{:#?}", get_config());
-        info("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
+        logger.info("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
     }
 }

@@ -1,26 +1,60 @@
 use colored::*;
 
-pub fn error(message: &str){
-    println!("{} {}", "error:".bright_red().bold(), message);
-    std::process::exit(1);
+
+pub struct Logger {
+    pub level: u8
 }
 
+impl Logger {
 
-pub fn success(message: &str){
-    println!("{} {}", "success:".bright_green().bold(), message);
+    // create a new logger
+    pub fn new(verbosity: &str) -> Logger {
+
+        match verbosity {
+            "ERROR" => Logger { level: 0 },
+            "WARN" => Logger { level: 1 },
+            "INFO" => Logger { level: 2 },
+            "DEBUG" => Logger { level: 3 },
+            "TRACE" => Logger { level: 4 },
+            _  => Logger { level: 2 }
+        }
+    }
+    
+
+    pub fn error(&self, message: &str) {
+        println!("{} {}", "error:".bright_red().bold(), message);
+    }
+    
+
+    pub fn success(&self, message: &str) {
+        println!("{} {}", "success:".bright_green().bold(), message);
+    }
+
+
+    pub fn warn (&self, message: &str) {
+        if self.level >= 1 {
+            println!("{} {}", "warn:".bright_yellow().bold(), message);
+        }
+    }
+
+
+    pub fn info (&self, message: &str) {
+        if self.level >= 2 {
+            println!("{} {}", "info:".bright_cyan().bold(), message);
+        }
+    }
+
+
+    pub fn debug (&self, message: &str) {
+        if self.level >= 3 {
+            println!("{} {}", "debug:".bright_magenta().bold(), message);
+        }
+    }
+
+
+    pub fn trace (&self, message: &str) {
+        if self.level >= 4 {
+            println!("{} {}", "trace:".bright_blue().bold(), message);
+        }
+    }
 }
-
-
-pub fn info(message: &str){
-    println!("{} {}", "info:".bright_cyan().bold(), message);
-}
-
-
-pub fn warning(message: &str){
-    println!("{} {}", "warn:".bright_yellow().bold(), message);
-}
-
-
-// TODO: in the future, possibly add a verbose flag to this function
-// potentially make this a Logger struct, which stores the verbosity level
-// and can be used to selectively print messages based on the verbosity level
