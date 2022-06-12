@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
 
-pub mod eth;
+pub mod ether;
 pub mod consts;
 pub mod io;

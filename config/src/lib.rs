@@ -1,9 +1,8 @@
 use toml;
-use serde::{Deserialize, Serialize};
+#[allow(deprecated)]
 use std::{env::home_dir};
-
 use clap::{AppSettings, Parser};
-
+use serde::{Deserialize, Serialize};
 use heimdall_common::{
     io::{
         file::{read_file, write_file},
@@ -29,7 +28,7 @@ pub struct ConfigArgs {
 
 
 pub static DEFAULT_CONFIG: &str = "verbosity = 0
-quiet = 0
+quiet = false
 output = \"\"
 rpc_url = \"\"
 local_rpc_url = \"http://localhost:8545\"
@@ -40,14 +39,14 @@ etherscan_api_key = \"\"
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Configuration {
     verbosity: u8,
-    quiet: u8,
+    quiet: bool,
     output: String,
     rpc_url: String,
     local_rpc_url: String,
     etherscan_api_key: String,
 }
 
-
+#[allow(deprecated)]
 pub fn write_config(contents: String) {
     match home_dir() {
         Some(mut home) => {
@@ -63,7 +62,7 @@ pub fn write_config(contents: String) {
     }
 }
 
-
+#[allow(deprecated)]
 pub fn read_config() -> String {
     match home_dir() {
         Some(mut home) => {
@@ -108,16 +107,16 @@ pub fn update_config(key: &String, value: &String) {
             contents.verbosity = match value.parse::<u8>() {
                 Ok(v) => v,
                 Err(_) => {
-                    error(&format!("key \'{}\' expects a number but got value \'{}\' .", &key, &value).to_string());
+                    error(&format!("key \'{}\' expects a number 0 - 256 but got value \'{}\' .", &key, &value).to_string());
                     std::process::exit(1)
                 }
             };
         }
         "quiet" => {
-            contents.quiet = match value.parse::<u8>() {
+            contents.quiet = match value.parse::<bool>() {
                 Ok(v) => v,
                 Err(_) => {
-                    error(&format!("key \'{}\' expects a number but got value \'{}\' .", &key, &value).to_string());
+                    error(&format!("key \'{}\' expects a boolean but got value \'{}\' .", &key, &value).to_string());
                     std::process::exit(1)
                 }
             };

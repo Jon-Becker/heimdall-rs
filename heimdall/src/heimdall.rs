@@ -3,7 +3,7 @@ mod decompile;
 use clap::{Parser, Subcommand};
 
 use heimdall_common::{
-    eth::{
+    ether::{
         disassemble::{disassemble, DisassemblerArgs},
     }
 };

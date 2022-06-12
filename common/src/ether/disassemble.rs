@@ -15,7 +15,7 @@ use crate::{
         logging::*,
         file::*,
     },
-    eth::{
+    ether::{
         opcodes::opcode
     }
 };
