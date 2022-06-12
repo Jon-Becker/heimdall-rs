@@ -51,7 +51,8 @@ impl Logger {
         }
     }
 
-
+    // TODO: trace is a different beast, needs to be implemented with
+    // a format that includes line number, method, depht, and message.
     pub fn trace (&self, message: &str) {
         if self.level >= 4 {
             println!("{} {}", "trace:".bright_blue().bold(), message);
