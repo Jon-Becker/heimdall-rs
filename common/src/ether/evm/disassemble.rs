@@ -7,18 +7,11 @@ use ethers::{
     providers::{Middleware, Provider, Http},
 };
 use crate::{
-    consts::{
-        ADDRESS_REGEX,
-        BYTECODE_REGEX
-    },
-    io::{
-        logging::*,
-        file::*,
-    },
-    ether::{
-        opcodes::opcode
-    }
+    consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
+    io::{ logging::*, file::* },
+    ether::{ opcodes::opcode }
 };
+
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Disassemble EVM bytecode to Assembly",
@@ -28,25 +21,26 @@ use crate::{
 pub struct DisassemblerArgs {
     // The target to decompile, either a file, contract address, or ENS name.
     #[clap(required=true)]
-    target: String,
+    pub target: String,
 
     // Set the output verbosity level, 1 - 5.
     #[clap(flatten)]
-    verbose: clap_verbosity_flag::Verbosity,
+    pub verbose: clap_verbosity_flag::Verbosity,
     
     // The output directory to write the decompiled files to
     #[clap(long="output", short, default_value = "", hide_default_value = true)]
-    output: String,
+    pub output: String,
 
     // The RPC provider to use for fetching target bytecode.
-    #[clap(long="rpc-url", short, default_value = "http://localhost:8545", hide_default_value = true)]
-    rpc_url: String,
+    #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
+    pub rpc_url: String,
 
     // When prompted, always select the default value.
     #[clap(long, short)]
-    default: bool,
+    pub default: bool,
 
 }
+
 
 pub fn disassemble(args: DisassemblerArgs) {
 
@@ -69,6 +63,11 @@ pub fn disassemble(args: DisassemblerArgs) {
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target) {
 
+        // push the address to the output directory
+        if &output_dir != &args.output {
+            output_dir.push_str(&format!("/{}", &args.target));
+        }
+
         // create new runtime block
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -77,6 +76,14 @@ pub fn disassemble(args: DisassemblerArgs) {
 
         // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
+
+            // make sure the RPC provider isn't empty
+            if &args.rpc_url.len() <= &0 {
+                error("disassembling an on-chain contract requires an RPC provider. Use `heimdall disassemble --help` for more information.");
+                std::process::exit(1);
+            }
+
+            // create new provider
             let provider = match Provider::<Http>::try_from(&args.rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {
@@ -103,6 +110,11 @@ pub fn disassemble(args: DisassemblerArgs) {
         
     }
     else {
+
+        // push the address to the output directory
+        if &output_dir != &args.output {
+            output_dir.push_str("/local");
+        }
 
         // We are decompiling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {

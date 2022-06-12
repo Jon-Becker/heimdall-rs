@@ -11,6 +11,12 @@ use heimdall_common::{
 };
 
 
+pub static DEFAULT_CONFIG: &str = "rpc_url = \"\"
+local_rpc_url = \"http://localhost:8545\"
+etherscan_api_key = \"\"
+";
+
+
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Display and edit the current configuration",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
@@ -27,24 +33,13 @@ pub struct ConfigArgs {
 }
 
 
-pub static DEFAULT_CONFIG: &str = "verbosity = 0
-quiet = false
-output = \"\"
-rpc_url = \"\"
-local_rpc_url = \"http://localhost:8545\"
-etherscan_api_key = \"\"
-";
-
-
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Configuration {
-    verbosity: u8,
-    quiet: bool,
-    output: String,
-    rpc_url: String,
-    local_rpc_url: String,
-    etherscan_api_key: String,
+    pub rpc_url: String,
+    pub local_rpc_url: String,
+    pub etherscan_api_key: String,
 }
+
 
 #[allow(deprecated)]
 pub fn write_config(contents: String) {
@@ -61,6 +56,7 @@ pub fn write_config(contents: String) {
         }
     }
 }
+
 
 #[allow(deprecated)]
 pub fn read_config() -> String {
@@ -103,27 +99,6 @@ pub fn update_config(key: &String, value: &String) {
 
     // update the key in the struct and ensure it's the correct type
     match key.as_str() {
-        "verbosity" => {
-            contents.verbosity = match value.parse::<u8>() {
-                Ok(v) => v,
-                Err(_) => {
-                    error(&format!("key \'{}\' expects a number 0 - 256 but got value \'{}\' .", &key, &value).to_string());
-                    std::process::exit(1)
-                }
-            };
-        }
-        "quiet" => {
-            contents.quiet = match value.parse::<bool>() {
-                Ok(v) => v,
-                Err(_) => {
-                    error(&format!("key \'{}\' expects a boolean but got value \'{}\' .", &key, &value).to_string());
-                    std::process::exit(1)
-                }
-            };
-        }
-        "output" => {
-            contents.output = value.to_string();
-        }
         "rpc_url" => {
             contents.rpc_url = value.to_string();
         }

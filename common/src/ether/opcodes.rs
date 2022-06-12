@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+
 #[derive(Clone, Debug)]
 pub struct Opcode {
     pub name: String,
@@ -160,6 +161,7 @@ lazy_static! {
         m
     };
 }
+
 
 // Returns the opcode for the given hexcode, fetched from the hashmap.
 pub fn opcode(code: &str) -> Opcode {

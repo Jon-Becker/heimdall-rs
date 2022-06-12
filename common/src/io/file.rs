@@ -1,10 +1,12 @@
-use std::{fs::File, io::{Write, Read}};
-
 use super::logging::error;
 
+use std::{
+    fs::File,
+    io::{Write, Read}
+};
 
-pub fn write_file(_path: &String, contents: &String) -> String
-{
+
+pub fn write_file(_path: &String, contents: &String) -> String {
     let path = std::path::Path::new(_path);
     let prefix = path.parent().unwrap();
     std::fs::create_dir_all(prefix).unwrap();
@@ -26,6 +28,7 @@ pub fn write_file(_path: &String, contents: &String) -> String
 
     return _path.to_string();
 }
+
 
 pub fn read_file(_path: &String) -> String {
     let path = std::path::Path::new(_path);

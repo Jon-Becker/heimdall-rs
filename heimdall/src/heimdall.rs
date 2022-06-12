@@ -3,19 +3,19 @@ mod decompile;
 use clap::{Parser, Subcommand};
 
 use heimdall_common::{
-    ether::{
-        disassemble::{disassemble, DisassemblerArgs},
+    ether::evm::{
+        disassemble::*,
     }
 };
-use heimdall_config::{config, ConfigArgs};
+use heimdall_config::{ config, get_config, ConfigArgs };
 
 #[derive(Debug, Parser)]
 #[clap(name = "heimdall", author = "Jonathan Becker <jonathan@jbecker.dev>", version)]
-       
 pub struct Arguments {
     #[clap(subcommand)]
     pub sub: Subcommands,
 }
+
 
 #[derive(Debug, Subcommand)]
 #[clap(
@@ -38,15 +38,24 @@ pub enum Subcommands {
 
 }
 
+
 fn main() {
     let args = Arguments::parse();
     
+    let configuration = get_config();
     match args.sub {
         Subcommands::Decompile(cmd) => {
             println!("{:#?}", cmd)
         }
 
-        Subcommands::Disassemble(cmd) => {
+        Subcommands::Disassemble(mut cmd) => {
+
+            // if the user has not specified a rpc url, use the default
+            match cmd.rpc_url.as_str() {
+                "" => {  cmd.rpc_url = configuration.rpc_url.clone(); }
+                _ => {}
+            };
+
             disassemble(cmd);
         }
 

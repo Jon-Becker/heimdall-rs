@@ -1,11 +1,11 @@
 use clap::{AppSettings, Parser};
 
+
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Decompile EVM bytecode to Solidity",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall decompile <TARGET> [OPTIONS]")]
-       
 pub struct DecompilerArgs {
     // The target to decompile, either a file, contract address, or ENS name.
     #[clap(required=true)]
