@@ -10,7 +10,6 @@ pub struct Stack {
 }
 
 // TODO: handle panics
-// TODO: implement swap, dup
 impl Stack {
     pub fn new() -> Stack {
         Stack { stack: VecDeque::new() }
@@ -71,8 +70,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stack() {
-
+    fn test_push() {
         let mut stack = Stack::new();
         stack.push("0x01");
         stack.push("0x02");
@@ -81,16 +79,28 @@ mod tests {
         assert_eq!(stack.stack, vec![U256::from_str("0x02").unwrap(), U256::from_str("0x01").unwrap()]);
         assert_eq!(stack.peek(), U256::from_str("0x02").unwrap());
         assert_eq!(stack.pop(), U256::from_str("0x02").unwrap());
+    }
+
+    #[test]
+    fn test_pop_n() {
+        let mut stack = Stack::new();
+        stack.push("0x01");
+        stack.push("0x03");
 
         // testing pop_n
-        stack.push("0x03");
         assert_eq!(stack.stack, vec![U256::from_str("0x03").unwrap(), U256::from_str("0x01").unwrap()]);
         assert_eq!(stack.pop_n(2), vec![U256::from_str("0x03").unwrap(), U256::from_str("0x01").unwrap()]);
-        
-        // test empty stack
-        assert_eq!(stack.is_empty(), true);
+    }
 
-        // testing swap
+    #[test]
+    fn test_is_empty() {
+        let stack = Stack::new();
+        assert_eq!(stack.is_empty(), true);
+    }
+
+    #[test]
+    fn test_swap() {
+        let mut stack = Stack::new();
         stack.push("0x02");
         stack.push("0x00");
         stack.push("0x00");
@@ -102,9 +112,12 @@ mod tests {
         stack.push("0x01");
         stack.swap(8);
         assert_eq!(stack.peek(), U256::from_str("0x02").unwrap());
+    }
 
-        // testing dup
-        stack.push("0x01");
+    #[test]
+    fn test_dup() {
+        let mut stack = Stack::new();
+        stack.push("0x09");
         stack.push("0x00");
         stack.push("0x00");
         stack.push("0x00");
@@ -113,7 +126,7 @@ mod tests {
         stack.push("0x00");
         stack.push("0x00");
         stack.dup(8);
-        assert_eq!(stack.peek(), U256::from_str("0x01").unwrap());
+        assert_eq!(stack.peek(), U256::from_str("0x09").unwrap());
     }
 
 }
