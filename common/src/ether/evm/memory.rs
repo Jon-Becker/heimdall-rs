@@ -11,6 +11,7 @@ impl Memory {
         Memory { memory: String::new() }
     }
 
+    // get the size of the memory in bytes
     pub fn size(&self) -> u128 {
         return (self.memory.len() / 2) as u128;
     }
@@ -27,14 +28,14 @@ impl Memory {
             new_mem_size = offset + size + 32 - r;
         }
 
+        // for every missing byte, append a null byte
         let byte_difference = new_mem_size - self.size();
-
         if byte_difference > 0 {
             self.memory.push_str(&"00".repeat(byte_difference as usize));
         }
     }
 
-
+    // stores a bytearray in the memory at offset
     pub fn store(&mut self, offset: usize, size: usize, mut value: String) {
         if  value.len() % 2 == 0 {
 
@@ -45,13 +46,16 @@ impl Memory {
             // byte offset is the str offset where we start writing
             self.extend(offset as u128, size as u128);
 
+            // store the value in memory by replacing bytes in the memory
             self.memory.replace_range((offset*2)..(offset*2) + value.len(), &value)
 
         }
     }
 
-    
+    // read a value from the memory at the given offset, with a fixed size
     pub fn read(&self, offset: usize, size: usize) -> String {
+
+        // if the offset + size will be out of bounds, append null bytes until the size is met
         if offset + size > self.size() as usize {
             let mut value = self.memory[(offset*2)..].to_string();
             value.push_str(&"00".repeat(size - value.len() / 2));
