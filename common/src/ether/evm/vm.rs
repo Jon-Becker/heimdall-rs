@@ -1,4 +1,4 @@
-use std::{str::FromStr, ops::Div};
+use std::{str::FromStr, ops::{Div, Rem}};
 
 use ethers::{prelude::U256, abi::AbiEncode};
 
@@ -27,7 +27,6 @@ pub struct VM {
     pub value: u128,
     pub gas_remaining: u128,
     pub gas_used: u128,
-
     pub logger: Logger,
 }
 
@@ -48,7 +47,7 @@ impl VM {
             stack: Stack::new(),
             memory: Memory::new(),
             storage: Storage::new(),
-            instruction: 0,
+            instruction: 0, // TODO: increase this to 1
             bytecode: bytecode.replace("0x", ""),
             calldata: calldata.replace("0x", ""),
             address: address.replace("0x", ""),
@@ -98,7 +97,7 @@ impl VM {
 
 
                 // ADD
-                if op ==  1 {
+                if op == 1 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -107,7 +106,7 @@ impl VM {
 
 
                 // MUL
-                if op ==  2 {
+                if op == 2 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -116,7 +115,7 @@ impl VM {
 
 
                 // SUB
-                if op ==  3 {
+                if op == 3 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -125,20 +124,80 @@ impl VM {
 
 
                 // DIV
-                if op ==  4 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                if op == 4 {
+                    let numerator = self.stack.pop();
+                    let denominator = self.stack.pop();
 
-                    self.stack.push(a.div(b).encode_hex().as_str());
+                    self.stack.push(numerator.div(denominator).encode_hex().as_str());
                 }
 
 
                 // SDIV
-                if op ==  5 {
+                if op == 5 {
+                    let numerator = self.stack.pop();
+                    let denominator = self.stack.pop();
+
+                    self.stack.push(sign_uint(numerator).div(sign_uint(denominator)).encode_hex().as_str());
+                }
+
+
+                // MOD
+                if op == 6 {
+                    let a = self.stack.pop();
+                    let modulus = self.stack.pop();
+
+                    self.stack.push(a.rem(modulus).encode_hex().as_str());
+                }
+
+
+                // SMOD
+                if op == 7 {
+                    let a = self.stack.pop();
+                    let modulus = self.stack.pop();
+
+                    self.stack.push(sign_uint(a).rem(sign_uint(modulus)).encode_hex().as_str());
+                }
+
+
+                // ADDMOD
+                if op == 8 {
+                    let a = self.stack.pop();
+                    let b = self.stack.pop();
+                    let modulus = self.stack.pop();
+
+                    self.stack.push(a.overflowing_add(b).0.rem(modulus).encode_hex().as_str());
+                }
+
+
+                // MULMOD
+                if op == 9 {
+                    let a = self.stack.pop();
+                    let b = self.stack.pop();
+                    let modulus = self.stack.pop();
+
+                    self.stack.push(a.overflowing_mul(b).0.rem(modulus).encode_hex().as_str());
+                }
+
+
+                // EXP
+                if op == 10 {
+                    let a = self.stack.pop();
+                    let exponent = self.stack.pop();
+
+                    self.stack.push(a.overflowing_pow(exponent).0.encode_hex().as_str());
+                }
+
+
+                // SIGNEXTEND
+                if op == 11 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
-                    self.stack.push(sign_uint(a).div(sign_uint(b)).encode_hex().as_str());
+                    if b < U256::from_str("0x20").unwrap() {
+                        let t = b * 8 + 7;
+                        let s = 1 << t;
+                    }
+                    self.stack.push(a);
                 }
 
                 
@@ -201,7 +260,7 @@ mod tests {
     fn test_vm() {
 
         let mut vm = VM::new(
-            String::from("0x7fFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7fFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE05"),
+            String::from("0x6002600a0a"),
             String::from(""),
             String::from("0x6865696d64616c6c000000000061646472657373"),
             String::from("0x6865696d64616c6c0000000000006f726967696e"),
