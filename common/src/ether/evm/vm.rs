@@ -4,8 +4,7 @@ use ethers::{
     prelude::U256,
     abi::AbiEncode,
     utils::{
-        keccak256, 
-        rlp::{Encodable, Rlp}
+        keccak256,
     }
 };
 
@@ -81,7 +80,8 @@ impl VM {
         // TODO: make this call the REVERT instruction
         if amount > self.gas_remaining {
             self.logger.error("Execution Reverted: Out of gas.");
-            std::process::exit(1);
+            self.returndata = "0x".to_string();
+            self.exitcode = 4;
         }
 
         self.gas_remaining = self.gas_remaining.saturating_sub(amount);
@@ -89,6 +89,13 @@ impl VM {
     }
 
     pub fn execute(&mut self) {
+
+        // sanity check
+        if self.bytecode.len() < (self.instruction*2+2) as usize {
+            self.logger.error("Execution Reverted: Instruction out of bounds.");
+            self.returndata = "0x".to_string();
+            self.exitcode = 4;
+        }
 
         // get the opcode at the current instruction
         let opcode = self.bytecode[(self.instruction*2) as usize..(self.instruction*2+2) as usize].to_string();
@@ -414,7 +421,12 @@ impl VM {
                 if op == 53 {
                     let i = self.stack.pop();
 
-                    self.stack.push(U256::from_str(&self.calldata[ i.as_usize()*2 .. (i.as_usize() + 32)*2 ]).unwrap().encode_hex().as_str());
+                    // panic safety
+                    if i.as_usize() + 32 > self.calldata.len() / 2 {
+                        self.stack.push(U256::from_str(&self.calldata[ i.as_usize()*2 ..]).unwrap().encode_hex().as_str());
+                    } else {
+                        self.stack.push(U256::from_str(&self.calldata[ i.as_usize()*2 .. (i.as_usize() + 32)*2 ]).unwrap().encode_hex().as_str());
+                    }
                 }
 
 
@@ -428,7 +440,12 @@ impl VM {
                 if op == 55 {
                     let dest_offset = self.stack.pop();
                     let offset = self.stack.pop();
-                    let size = self.stack.pop();
+                    let mut size = self.stack.pop();
+
+                    // panic check
+                    if offset.overflowing_add(size).0.as_usize() > self.calldata.len() / 2 as usize {
+                        size = U256::from(&self.calldata.len() / 2 as usize);
+                    }
                     
                     self.memory.store(dest_offset.try_into().unwrap(), size.try_into().unwrap(), self.calldata[ offset.as_usize()*2 .. (offset.as_usize() + size.as_usize())*2 ].to_string())
                 }
@@ -444,7 +461,12 @@ impl VM {
                 if op == 57 {
                     let dest_offset = self.stack.pop();
                     let offset = self.stack.pop();
-                    let size = self.stack.pop();
+                    let mut size = self.stack.pop();
+
+                    // panic check
+                    if offset.overflowing_add(size).0.as_usize() > self.bytecode.len() / 2 as usize {
+                        size = U256::from(&self.bytecode.len() / 2 as usize);
+                    }
                     
                     self.memory.store(dest_offset.try_into().unwrap(), size.try_into().unwrap(), self.bytecode[ offset.as_usize()*2 .. (offset.as_usize() + size.as_usize())*2 ].to_string())
                 }
@@ -646,7 +668,9 @@ impl VM {
                     
                     let data = self.memory.read(offset.as_usize(), size.as_usize());
 
-                    self.events.push(Log::new(self.events.len().try_into().unwrap(), topics, data))
+                    // no need for a panic check because the length of events should never be 
+                    // larger than a u128
+                    self.events.push(Log::new((self.events.len() as usize).try_into().unwrap(), topics, data))
                 }
 
 

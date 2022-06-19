@@ -24,7 +24,10 @@ impl Stack {
 
     // Pop a value off the stack.
     pub fn pop(&mut self) -> U256 {
-        self.stack.pop_front().unwrap()
+        match self.stack.pop_front() {
+            Some(value) => value,
+            None => U256::from(0 as u8)
+        }
     }
 
 
@@ -52,7 +55,10 @@ impl Stack {
 
     // Peek at the top value on the stack.
     pub fn peek(&self) -> U256 {
-        self.stack.get(0).unwrap().to_owned()
+        match self.stack.get(0) {
+            Some(value) => value.to_owned(),
+            None => U256::from(0 as u8)
+        }
     }
 
 
