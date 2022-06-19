@@ -54,8 +54,8 @@ impl Stack {
 
 
     // Peek at the top value on the stack.
-    pub fn peek(&self) -> U256 {
-        match self.stack.get(0) {
+    pub fn peek(&self, index: usize) -> U256 {
+        match self.stack.get(index) {
             Some(value) => value.to_owned(),
             None => U256::from(0 as u8)
         }
@@ -83,7 +83,7 @@ mod tests {
         
         // test push, peek and pop
         assert_eq!(stack.stack, vec![U256::from_str("0x02").unwrap(), U256::from_str("0x01").unwrap()]);
-        assert_eq!(stack.peek(), U256::from_str("0x02").unwrap());
+        assert_eq!(stack.peek(0), U256::from_str("0x02").unwrap());
         assert_eq!(stack.pop(), U256::from_str("0x02").unwrap());
     }
 
@@ -117,7 +117,7 @@ mod tests {
         stack.push("0x00");
         stack.push("0x01");
         stack.swap(8);
-        assert_eq!(stack.peek(), U256::from_str("0x02").unwrap());
+        assert_eq!(stack.peek(0), U256::from_str("0x02").unwrap());
     }
 
     #[test]
@@ -132,7 +132,7 @@ mod tests {
         stack.push("0x00");
         stack.push("0x00");
         stack.dup(8);
-        assert_eq!(stack.peek(), U256::from_str("0x09").unwrap());
+        assert_eq!(stack.peek(0), U256::from_str("0x09").unwrap());
     }
 
 }

@@ -15,13 +15,14 @@ impl Storage {
 
     // stores a key:value pair in the storage map
     pub fn store(&mut self, mut key: String, mut value: String) {
+        value = value.replace("0x", "");
         if value.len() % 2 == 0 {
 
             // extend the key to 32 bytes
-            key.insert_str(0, &"00".repeat(32 - key.len() / 2));
+            key.insert_str(0, &"00".repeat(32 - (key.len() / 2)));
 
             // extend the value to 32 bytes
-            value.insert_str(0, &"00".repeat(32 - value.len() / 2));
+            value.insert_str(0, &"00".repeat(32 - (value.len() / 2)));
 
             // store the key:value pair
             self.storage.insert(key, value);

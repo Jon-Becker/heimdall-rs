@@ -1,5 +1,4 @@
 use std::{str::FromStr, ops::{Div, Rem, Shl, Shr}, time::{UNIX_EPOCH, SystemTime}};
-
 use ethers::{
     prelude::U256,
     abi::AbiEncode,
@@ -10,7 +9,10 @@ use ethers::{
 
 use crate::{
     io::logging::Logger,
-    utils::sign_uint
+    utils::{
+        sign_uint,
+        decode_hex
+    }
 };
 
 use super::{
@@ -68,7 +70,7 @@ impl VM {
             gas_used: 0,
             events: Vec::new(),
             returndata: String::new(),
-            exitcode: 0,
+            exitcode: 255,
 
             logger: Logger::new(&verbosity),
         }
@@ -82,19 +84,22 @@ impl VM {
             self.logger.error("Execution Reverted: Out of gas.");
             self.returndata = "0x".to_string();
             self.exitcode = 4;
+            return
         }
 
         self.gas_remaining = self.gas_remaining.saturating_sub(amount);
         self.gas_used = self.gas_used.saturating_add(amount);
     }
 
-    pub fn execute(&mut self) {
+    // Steps to the next PC and executes the instruction
+    pub fn step(&mut self) {
 
         // sanity check
         if self.bytecode.len() < (self.instruction*2+2) as usize {
             self.logger.error("Execution Reverted: Instruction out of bounds.");
             self.returndata = "0x".to_string();
             self.exitcode = 4;
+            return
         }
 
         // get the opcode at the current instruction
@@ -112,8 +117,9 @@ impl VM {
 
                 // STOP
                 if op == 0 {
-
-                    // TODO: stop execution
+                    self.returndata = "0x".to_string();
+                    self.exitcode = 0;
+                    return
                 }
 
 
@@ -379,8 +385,7 @@ impl VM {
                     let size = self.stack.pop();
 
                     let data = self.memory.read(offset.as_usize(), size.as_usize());
-
-                    self.stack.push(keccak256(data).encode_hex().as_str());
+                    self.stack.push(keccak256(decode_hex(data.as_str()).unwrap()).encode_hex().as_str());
                 }
 
 
@@ -423,7 +428,9 @@ impl VM {
 
                     // panic safety
                     if i.as_usize() + 32 > self.calldata.len() / 2 {
-                        self.stack.push(U256::from_str(&self.calldata[ i.as_usize()*2 ..]).unwrap().encode_hex().as_str());
+                        let mut calldata = self.calldata[ i.as_usize()*2 ..].to_string();
+                        calldata.push_str(&"0".repeat(64 - calldata.len()));
+                        self.stack.push(U256::from_str(&calldata).unwrap().encode_hex().as_str());
                     } else {
                         self.stack.push(U256::from_str(&self.calldata[ i.as_usize()*2 .. (i.as_usize() + 32)*2 ]).unwrap().encode_hex().as_str());
                     }
@@ -546,7 +553,7 @@ impl VM {
                 if op == 81 {
                     let i = self.stack.pop();
 
-                    self.stack.push(self.memory.read(i.as_usize(), 32).encode_hex().as_str());
+                    self.stack.push(U256::from_str(self.memory.read(i.as_usize(), 32).as_str()).unwrap().encode_hex().as_str());
                 }
 
 
@@ -555,7 +562,7 @@ impl VM {
                     let offset = self.stack.pop();
                     let value = self.stack.pop();
 
-                    self.memory.store(offset.as_usize(), 32, value.to_string());
+                    self.memory.store(offset.as_usize(), 32, value.encode_hex().replace("0x", ""));
                 }
 
 
@@ -564,7 +571,7 @@ impl VM {
                     let offset = self.stack.pop();
                     let value = self.stack.pop();
 
-                    self.memory.store(offset.as_usize(), 1, value.to_string());
+                    self.memory.store(offset.as_usize(), 1, value.encode_hex().replace("0x", ""));
                 }
 
 
@@ -706,6 +713,7 @@ impl VM {
 
                     self.returndata = self.memory.read(offset.as_usize(), size.as_usize());
                     self.exitcode = 1;
+                    return
                 }
                 
 
@@ -724,6 +732,7 @@ impl VM {
                         255 => self.exitcode = 3,
                         _ => self.exitcode = 4,
                     }
+                    return
                 }
 
             }
@@ -732,35 +741,18 @@ impl VM {
                 // we reached an INVALID opcode, consume all remaining gas
                 self.consume_gas(self.gas_remaining);
                 self.exitcode = 4;
+                return
             }
         }
 
     }
 
-}
 
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[test]
-    fn test_vm() {
-
-        let mut vm = VM::new(
-            String::from("0xa4"),
-            String::from("0x"),
-            String::from("0x6865696d64616c6c000000000061646472657373"),
-            String::from("0x6865696d64616c6c0000000000006f726967696e"),
-            String::from("0x6865696d64616c6c00000000000063616c6c6572"),
-            0,
-            9999999999,
-            "INFO"
-        );
-
-        vm.execute();
-
-        println!("{:?}", vm.stack.peek().encode_hex());
-
+    // Executes the code until finished
+    pub fn execute(&mut self) {
+        while (self.bytecode.len() >= (self.instruction*2+2) as usize) && self.exitcode == 255 {
+            self.step();
+        }
     }
+
 }
