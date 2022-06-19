@@ -5,7 +5,7 @@ use ethers::{
     abi::AbiEncode,
     utils::{
         keccak256, 
-        rlp::Encodable
+        rlp::{Encodable, Rlp}
     }
 };
 
@@ -17,7 +17,8 @@ use crate::{
 use super::{
     stack::Stack,
     memory::Memory,
-    storage::Storage
+    storage::Storage,
+    log::Log,
 };
 
 
@@ -34,8 +35,9 @@ pub struct VM {
     pub value: u128,
     pub gas_remaining: u128,
     pub gas_used: u128,
-    pub events: Vec<>,
-
+    pub events: Vec<Log>,
+    pub returndata: String,
+    pub exitcode: u128,
     pub logger: Logger,
 }
 
@@ -66,6 +68,8 @@ impl VM {
             gas_remaining: gas_limit,
             gas_used: 0,
             events: Vec::new(),
+            returndata: String::new(),
+            exitcode: 0,
 
             logger: Logger::new(&verbosity),
         }
@@ -632,14 +636,78 @@ impl VM {
                     self.stack.dup(index);
                 }
 
+
+                // LOG0 -> LOG4
+                if op >= 160 && op <= 164 {
+                    let topic_count = (op - 160) as usize;
+                    let offset = self.stack.pop();
+                    let size = self.stack.pop();
+                    let topics = self.stack.pop_n(topic_count);
+                    
+                    let data = self.memory.read(offset.as_usize(), size.as_usize());
+
+                    self.events.push(Log::new(self.events.len().try_into().unwrap(), topics, data))
+                }
+
+
+                // CREATE
+                if op == 240 {
+                    self.stack.pop_n(3);
+
+                    self.stack.push("0x6865696d64616c6c000000000000637265617465");
+                }
+
+
+                // CALL, DELGATECALL, STATICCALL, CALLCODE
+                if op == 241 || op == 242 || op == 244 || op == 246 {
+                    self.stack.pop_n(7);
+
+                    self.stack.push("0x01");
+                }
+
+
+                // RETURN
+                if op == 243 {
+                    let offset = self.stack.pop();
+                    let size = self.stack.pop();
+
+                    self.returndata = self.memory.read(offset.as_usize(), size.as_usize());
+                }
+
+
+                // REVERT
+                if op == 243 {
+                    let offset = self.stack.pop();
+                    let size = self.stack.pop();
+
+                    self.returndata = self.memory.read(offset.as_usize(), size.as_usize());
+                    self.exitcode = 1;
+                }
                 
 
+                // CREATE2
+                if op == 245 {
+                    self.stack.pop_n(4);
+
+                    self.stack.push("0x6865696d64616c6c000000000063726561746532");
+                }
+
+                // INVALID & SELFDESTRUCT
+                if op >= 254 {
+                    self.consume_gas(self.gas_remaining);
+                    match op {
+                        254 => self.exitcode = 2,
+                        255 => self.exitcode = 3,
+                        _ => self.exitcode = 4,
+                    }
+                }
 
             }
             _ => {
                 
                 // we reached an INVALID opcode, consume all remaining gas
                 self.consume_gas(self.gas_remaining);
+                self.exitcode = 4;
             }
         }
 
@@ -656,8 +724,8 @@ mod tests {
     fn test_vm() {
 
         let mut vm = VM::new(
-            String::from("0x600435"),
-            String::from("0xffffffff000000000000000000000000000000000000000000000000000000000000000000000000"),
+            String::from("0xa4"),
+            String::from("0x"),
             String::from("0x6865696d64616c6c000000000061646472657373"),
             String::from("0x6865696d64616c6c0000000000006f726967696e"),
             String::from("0x6865696d64616c6c00000000000063616c6c6572"),
@@ -666,7 +734,6 @@ mod tests {
             "INFO"
         );
 
-        vm.execute();
         vm.execute();
 
         println!("{:?}", vm.stack.peek().encode_hex());

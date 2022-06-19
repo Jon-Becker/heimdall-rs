@@ -149,7 +149,7 @@ pub fn opcode(code: &str) -> Opcode {
         "f6" => Opcode { name: String::from("STATICCALL"), mingas: 100 },
         "f7" => Opcode { name: String::from("REVERT"), mingas: 0 },
         "fe" => Opcode { name: String::from("INVALID"), mingas: 0 },
-        "fa" => Opcode { name: String::from("SELFDESTRUCT"), mingas: 5000 },
+        "ff" => Opcode { name: String::from("SELFDESTRUCT"), mingas: 5000 },
         _ => Opcode {
             name: String::from("unknown"),
             mingas: 0,
