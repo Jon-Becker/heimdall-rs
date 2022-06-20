@@ -5,6 +5,7 @@ use ethers::prelude::U256;
 // This implemtation is a simple, (hopefully lightweight) LIFO stack.
 // Supports simple push/pop operations, with further helper operations
 // such as peek and is_empty.
+#[derive(Clone, Debug)]
 pub struct Stack {
     pub stack: VecDeque<U256>
 }
@@ -59,6 +60,14 @@ impl Stack {
             Some(value) => value.to_owned(),
             None => U256::from(0 as u8)
         }
+    }
+
+    pub fn peek_n(&self, n: usize) -> Vec<U256> {
+        let mut values = Vec::new();
+        for i in 0..n {
+            values.push(self.peek(i));
+        }
+        values
     }
 
 

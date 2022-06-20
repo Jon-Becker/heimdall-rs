@@ -1,6 +1,7 @@
 use ethers::prelude::U256;
 
 
+#[derive(Clone, Debug)]
 pub struct Log {
     pub index: u128,
     pub topics: Vec<String>,

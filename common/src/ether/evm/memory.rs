@@ -1,3 +1,4 @@
+#[derive(Clone, Debug)]
 pub struct Memory {
     pub memory: String
 }
@@ -28,8 +29,12 @@ impl Memory {
             new_mem_size = offset + size + 32 - r;
         }
 
+        let mut byte_difference = 0;
+        if self.size() <= new_mem_size {
+            byte_difference = new_mem_size - self.size();
+        }
+        
         // for every missing byte, append a null byte
-        let byte_difference = new_mem_size - self.size();
         if byte_difference > 0 {
             self.memory.push_str(&"00".repeat(byte_difference as usize));
         }
@@ -57,7 +62,12 @@ impl Memory {
 
         // if the offset + size will be out of bounds, append null bytes until the size is met
         if offset + size > self.size() as usize {
-            let mut value = self.memory[(offset*2)..].to_string();
+            let mut value = String::new();
+
+            if offset <= self.size() as usize {
+                value = self.memory[(offset*2)..].to_string();
+            }
+            
             value.push_str(&"00".repeat(size - value.len() / 2));
             value
         }

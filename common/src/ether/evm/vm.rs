@@ -1,4 +1,4 @@
-use std::{str::FromStr, ops::{Div, Rem, Shl, Shr}, time::{UNIX_EPOCH, SystemTime}};
+use std::{str::FromStr, ops::{Div, Rem, Shl, Shr}, time::{UNIX_EPOCH, SystemTime, Instant}};
 use ethers::{
     prelude::U256,
     abi::AbiEncode,
@@ -22,7 +22,7 @@ use super::{
     log::Log,
 };
 
-
+#[derive(Clone, Debug)]
 pub struct VM {
     pub stack: Stack,
     pub memory: Memory,
@@ -39,7 +39,19 @@ pub struct VM {
     pub events: Vec<Log>,
     pub returndata: String,
     pub exitcode: u128,
+
+    pub timestamp: Instant,
     pub logger: Logger,
+}
+
+#[derive(Clone, Debug)]
+pub struct Result {
+    pub gas_used: u128,
+    pub gas_remaining: u128,
+    pub returndata: String,
+    pub exitcode: u128,
+    pub events: Vec<Log>,
+    pub runtime: f64,
 }
 
 
@@ -59,19 +71,20 @@ impl VM {
             stack: Stack::new(),
             memory: Memory::new(),
             storage: Storage::new(),
-            instruction: 0, // TODO: increase this to 1
-            bytecode: bytecode.replace("0x", ""),
+            instruction: 1,
+            bytecode: format!("0x{}", bytecode.replace("0x", "")),
             calldata: calldata.replace("0x", ""),
             address: address.replace("0x", ""),
             origin: origin.replace("0x", ""),
             caller: caller.replace("0x", ""),
             value: value,
-            gas_remaining: gas_limit,
-            gas_used: 0,
+            gas_remaining: gas_limit - 21000,
+            gas_used: 21000,
             events: Vec::new(),
             returndata: String::new(),
             exitcode: 255,
 
+            timestamp: Instant::now(),
             logger: Logger::new(&verbosity),
         }
     }
@@ -106,8 +119,14 @@ impl VM {
         let opcode = self.bytecode[(self.instruction*2) as usize..(self.instruction*2+2) as usize].to_string();
         self.instruction += 1;
 
+        // add the opcode to the trace
+        let opcode_details = crate::ether::opcodes::opcode(opcode.replace("0x", "").as_str());
+
+        let trace_instruction = self.instruction-1;
+        let trace_inputs = self.stack.peek_n(opcode_details.inputs.into());
+
         // Consume the minimum gas for the opcode
-        let gas_cost = crate::ether::opcodes::opcode(opcode.replace("0x", "").as_str()).mingas;
+        let gas_cost = opcode_details.mingas;
         self.consume_gas(gas_cost.into());
 
         match U256::from_str(&opcode) {
@@ -479,8 +498,14 @@ impl VM {
                 }
 
 
-                // GASPRICE and EXTCODESIZE
-                if op == 58 || op == 59{
+                // GASPRICE
+                if op == 58 {
+                    self.stack.push("0x01");
+                }
+
+                // EXTCODESIZE 
+                if op == 59 {
+                    self.stack.pop();
                     self.stack.push("0x01");
                 }
 
@@ -595,7 +620,7 @@ impl VM {
                 // JUMP
                 if op == 86 {
                     let pc = self.stack.pop();
-                    self.instruction = pc.as_u128();
+                    self.instruction = pc.as_u128() + 1;
                 }
 
 
@@ -605,7 +630,7 @@ impl VM {
                     let condition = self.stack.pop();
 
                     if !condition.eq(&U256::from(0 as u8)) {
-                        self.instruction = pc.as_u128();
+                        self.instruction = pc.as_u128() + 1;
                     }
                 }
 
@@ -662,7 +687,7 @@ impl VM {
                     let index = (op - 143) as usize;
                     
                     // Perform the swap
-                    self.stack.dup(index);
+                    self.stack.swap(index);
                 }
 
 
@@ -689,9 +714,16 @@ impl VM {
                 }
 
 
-                // CALL, DELGATECALL, STATICCALL, CALLCODE
-                if op == 241 || op == 242 || op == 244 || op == 246 {
+                // CALL, CALLCODE
+                if op == 241 || op == 242 {
                     self.stack.pop_n(7);
+
+                    self.stack.push("0x01");
+                }
+
+                // DELEGATECALL, STATICCALL
+                if op == 244 || op == 246 {
+                    self.stack.pop_n(6);
 
                     self.stack.push("0x01");
                 }
@@ -703,6 +735,8 @@ impl VM {
                     let size = self.stack.pop();
 
                     self.returndata = self.memory.read(offset.as_usize(), size.as_usize());
+                    self.exitcode = 0;
+                    return
                 }
 
 
@@ -745,13 +779,24 @@ impl VM {
             }
         }
 
+        println!("[ {} ] {} {:?} >> {:?}", trace_instruction, opcode_details.name, trace_inputs, self.stack.peek_n(opcode_details.outputs.into()));
+
     }
 
 
     // Executes the code until finished
-    pub fn execute(&mut self) {
-        while (self.bytecode.len() >= (self.instruction*2+2) as usize) && self.exitcode == 255 {
+    pub fn execute(&mut self) -> Result {
+        while (self.bytecode.len() >= (self.instruction*2+2) as usize) && self.returndata.len() == 0 {
             self.step();
+        }
+
+        return Result { 
+            gas_used: self.gas_used,
+            gas_remaining: self.gas_remaining,
+            returndata: self.returndata.to_owned(),
+            exitcode: self.exitcode,
+            events: self.events.clone(),
+            runtime: self.timestamp.elapsed().as_secs_f64(),
         }
     }
 
