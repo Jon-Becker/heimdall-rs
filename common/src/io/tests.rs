@@ -22,10 +22,3 @@ mod tests {
     }
 
 }
-
-// adding traces is simple
-// 1. make a new tracefactory
-// 2. make a new trace 
-// 3. use trace.add_child_trace() to add children to the main trace etc
-// 4. when the trace is complete, add it to the tracefactory
-// 5. profit
