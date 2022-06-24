@@ -1,5 +1,3 @@
-use std::borrow::BorrowMut;
-
 use colored::*;
 
 
@@ -17,34 +15,8 @@ pub struct TraceFactory {
 pub struct Trace {
     pub instruction: u32,
     pub message: Vec<String>,
-    pub children: Vec<Trace>,
-    pub trace_node: Vec<u32>
-}
-
-impl Trace {
-    
-    // create a new trace
-    pub fn new(instruction: u32, message: Vec<String>, trace_node: Vec<u32>) -> Trace {
-        // TODO CLASS LOGIC
-        Trace {
-            instruction,
-            message,
-            children: Vec::new(),
-            trace_node: trace_node
-        }
-    }
-
-    // adds a new trace as a child of this trace
-    pub fn add_child_trace(&mut self, instruction: u32, message: Vec<String>) -> Trace {
-        let mut parent_node = self.trace_node.clone();
-        parent_node.push(self.children.len() as u32);
-
-        let trace = Trace::new(instruction, message, parent_node);
-        self.children.push(trace);
-
-        // rebuild the parent trace and add it to the trace factory
-        self.children.last().unwrap().clone()
-    }
+    pub parent: u32,
+    pub children: Vec<u32>,
 }
 
 impl TraceFactory {
@@ -57,19 +29,51 @@ impl TraceFactory {
     }
 
     // adds a new trace to the factory
-    pub fn add_trace(&mut self, instruction: u32, message: Vec<String>) -> Trace {
-        let mut parent_node = Vec::new();
-        parent_node.push(self.traces.len() as u32);
+    pub fn add_trace(&mut self, parent_index: u32, instruction: u32, message: Vec<String>) -> u32{
+        
+        // build the new trace
+        let trace = Trace::new(
+            parent_index,
+            instruction,
+            message,
+        );
+        let trace_index = self.traces.len() as u32 + 1;
 
-        let trace = Trace::new(instruction, message, parent_node);
+        // add the children indices to the parent
+        if trace.parent != 0 {
+
+            // get the parent
+            let parent = self.traces.get_mut(trace.parent as usize - 1).unwrap();
+            
+            // add the child index to the parent
+            parent.children.push(trace_index as u32);
+        }
+
         self.traces.push(trace);
-        self.traces.last().unwrap().clone()
+        
+        // return the index of the new trace
+        trace_index
     }
 
+    
     // pretty print the trace
-    pub fn print() {
-        // TODO
+    pub fn print(self) {
+        
     }
+}
+
+impl Trace {
+    
+    // create a new trace
+    pub fn new(parent_index: u32, instruction: u32, message: Vec<String>) -> Trace {
+        Trace {
+            instruction,
+            message,
+            parent: parent_index,
+            children: Vec::new()
+        }
+    }
+
 }
 
 impl Logger {
