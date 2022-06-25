@@ -125,10 +125,6 @@ impl VM {
         // add the opcode to the trace
         let opcode_details = crate::ether::opcodes::opcode(opcode.replace("0x", "").as_str());
 
-        // traces
-        let trace_instruction = self.instruction-1;
-        let trace_inputs = self.stack.peek_n(opcode_details.inputs.into());
-
         // Consume the minimum gas for the opcode
         let gas_cost = opcode_details.mingas;
         match self.consume_gas(gas_cost.into()) {
@@ -897,8 +893,6 @@ impl VM {
                 return self.exit(4, "0x", "Execution Reverted: Unknown OPCODE.");
             }
         }
-
-        println!("[ {} ] {} {:?} >> {:?}", trace_instruction, opcode_details.name, trace_inputs, self.stack.peek_n(opcode_details.outputs.into()));
 
     }
 
