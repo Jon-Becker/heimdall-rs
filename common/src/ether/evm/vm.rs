@@ -1,4 +1,7 @@
 use std::{str::FromStr, ops::{Div, Rem, Shl, Shr}, time::{UNIX_EPOCH, SystemTime, Instant}};
+
+use colored::Colorize;
+
 use ethers::{
     prelude::U256,
     abi::AbiEncode,
@@ -65,9 +68,21 @@ impl VM {
         origin: String,
         caller: String,
         value: u128,
-        gas_limit: u128,
+        mut gas_limit: u128,
         verbosity: &str) -> VM {
+        if gas_limit < 21000 { gas_limit = 21000; }
         let (logger, mut trace)= Logger::new(&verbosity);
+
+        // initialize the trace
+        trace.add_call(
+            0,
+            0, 
+            "Contract".to_string(), 
+            calldata.replace("0x", "").to_string(),
+            vec![],
+            "()".to_string()
+        );
+
         VM {
             stack: Stack::new(),
             memory: Memory::new(),
@@ -132,8 +147,9 @@ impl VM {
         let gas_cost = opcode_details.mingas;
         match self.consume_gas(gas_cost.into()) {
             true => {},
-            false => { return self.exit(2, "0x", "Execution Reverted: Out of gas."); }
+            false => { return self.exit(1, "0x", "Execution Reverted: Out of gas."); }
         }
+
 
         match U256::from_str(&opcode) {
 
@@ -410,11 +426,11 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     let data = self.memory.read(offset, size);
@@ -462,15 +478,21 @@ impl VM {
                     // Safely convert U256 to usize
                     let i: usize = match i.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     // panic safety
-                    if i + 32 > self.calldata.len() / 2 {
-                        let mut calldata = self.calldata[ i*2 ..].to_string();
-                        calldata.push_str(&"0".repeat(64 - calldata.len()));
-                        self.stack.push(U256::from_str(&calldata).unwrap().encode_hex().as_str());
-                    } else {
+                    if i + 32 > self.calldata.len() / 2 as usize {
+                        let mut value = String::new();
+            
+                        if i <= self.calldata.len() / 2 as usize {
+                            value = self.calldata[(i*2)..].to_string();
+                        }
+                        
+                        value.push_str(&"00".repeat(32 - value.len() / 2));
+                        self.stack.push(U256::from_str(&value).unwrap().encode_hex().as_str());
+                    }
+                    else {
                         self.stack.push(U256::from_str(&self.calldata[ i*2 .. (i + 32)*2 ]).unwrap().encode_hex().as_str());
                     }
                 }
@@ -491,15 +513,15 @@ impl VM {
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let mut size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     // panic check
@@ -526,15 +548,15 @@ impl VM {
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let mut size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     // panic check
@@ -567,11 +589,11 @@ impl VM {
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     self.memory.store(dest_offset, size, "FF".repeat(size / 2))
@@ -595,11 +617,11 @@ impl VM {
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     self.memory.store(dest_offset, size, "FF".repeat(size / 2))
@@ -649,7 +671,7 @@ impl VM {
                     // Safely convert U256 to usize
                     let i: usize = match i.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     self.stack.push(U256::from_str(self.memory.read(i, 32).as_str()).unwrap().encode_hex().as_str());
@@ -664,7 +686,7 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     self.memory.store(offset, 32, value.encode_hex().replace("0x", ""));
@@ -679,7 +701,7 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     self.memory.store(offset, 1, value.encode_hex().replace("0x", ""));
@@ -710,7 +732,7 @@ impl VM {
                     // Safely convert U256 to u128
                     let pc: u128 = match pc.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     self.instruction = pc + 1;
@@ -725,7 +747,7 @@ impl VM {
                     // Safely convert U256 to u128
                     let pc: u128 = match pc.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     if !condition.eq(&U256::from(0 as u8)) {
@@ -800,11 +822,11 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     
                     let data = self.memory.read(offset, size);
@@ -830,14 +852,6 @@ impl VM {
                     self.stack.push("0x01");
                 }
 
-                // DELEGATECALL, STATICCALL
-                if op == 244 || op == 246 {
-                    self.stack.pop_n(6);
-
-                    self.stack.push("0x01");
-                }
-
-
                 // RETURN
                 if op == 243 {
                     let offset = self.stack.pop();
@@ -846,35 +860,24 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
                     };
 
                     return self.exit(0, self.memory.read(offset, size).as_str(), "");
                 }
 
 
-                // REVERT
-                if op == 243 {
-                    let offset = self.stack.pop();
-                    let size = self.stack.pop();
+                // DELEGATECALL, STATICCALL
+                if op == 244 || op == 246 {
+                    self.stack.pop_n(6);
 
-                    // Safely convert U256 to usize
-                    let offset: usize = match offset.try_into() {
-                        Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
-                    };
-                    let size: usize = match size.try_into() {
-                        Ok(x) => x,
-                        Err(_) => { return self.exit(2, "", "Execution Reverted: Integer overflow when casting to usize.."); },
-                    };
-
-                    return self.exit(1, self.memory.read(offset, size).as_str(), self.memory.read(offset, size).as_str());
+                    self.stack.push("0x01");
                 }
-                
+
 
                 // CREATE2
                 if op == 245 {
@@ -882,6 +885,26 @@ impl VM {
 
                     self.stack.push("0x6865696d64616c6c000000000063726561746532");
                 }
+
+
+                // REVERT
+                if op == 253 {
+                    let offset = self.stack.pop();
+                    let size = self.stack.pop();
+
+                    // Safely convert U256 to usize
+                    let offset: usize = match offset.try_into() {
+                        Ok(x) => x,
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                    };
+                    let size: usize = match size.try_into() {
+                        Ok(x) => x,
+                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                    };
+
+                    return self.exit(1, self.memory.read(offset, size).as_str(), self.memory.read(offset, size).as_str());
+                }
+                
 
                 // INVALID & SELFDESTRUCT
                 if op >= 254 {
@@ -909,6 +932,16 @@ impl VM {
                 break
             }
         }
+
+        // add the return data to the trace
+        let mut new_message = self.trace.traces.get(0).unwrap().message.clone();
+        new_message.pop();
+        match self.exitcode {
+            0 => new_message.push(self.returndata.clone()),
+            1 => new_message.push(format!("{} {}", "revert:".bright_red().bold(), self.returndata.clone())),
+            _ => new_message.push(format!("{} {}", "error:".bright_red().bold(), self.returndata.clone()))
+        }
+        self.trace.update(1, new_message);
 
         return Result { 
             gas_used: self.gas_used,

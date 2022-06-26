@@ -148,8 +148,8 @@ pub fn opcode(code: &str) -> Opcode {
         "f3" => Opcode { name: String::from("RETURN"), mingas: 0, inputs: 2, outputs: 0 },
         "f4" => Opcode { name: String::from("DELEGATECALL"), mingas: 100, inputs: 6, outputs: 1 },
         "f5" => Opcode { name: String::from("CREATE2"), mingas: 32000, inputs: 4, outputs: 1 },
-        "f6" => Opcode { name: String::from("STATICCALL"), mingas: 100, inputs: 6, outputs: 1 },
-        "f7" => Opcode { name: String::from("REVERT"), mingas: 0, inputs: 2, outputs: 0 },
+        "fa" => Opcode { name: String::from("STATICCALL"), mingas: 100, inputs: 6, outputs: 1 },
+        "fd" => Opcode { name: String::from("REVERT"), mingas: 0, inputs: 2, outputs: 0 },
         "fe" => Opcode { name: String::from("INVALID"), mingas: 0, inputs: 0, outputs: 0 },
         "ff" => Opcode { name: String::from("SELFDESTRUCT"), mingas: 5000, inputs: 1, outputs: 0 },
         _ => Opcode {
