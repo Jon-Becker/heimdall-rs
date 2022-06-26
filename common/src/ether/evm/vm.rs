@@ -8,7 +8,7 @@ use ethers::{
 };
 
 use crate::{
-    io::logging::Logger,
+    io::logging::{Logger, TraceFactory},
     utils::{
         sign_uint,
         decode_hex
@@ -41,6 +41,7 @@ pub struct VM {
 
     pub timestamp: Instant,
     pub logger: Logger,
+    pub trace: TraceFactory
 }
 
 #[derive(Clone, Debug)]
@@ -66,6 +67,7 @@ impl VM {
         value: u128,
         gas_limit: u128,
         verbosity: &str) -> VM {
+        let (logger, mut trace)= Logger::new(&verbosity);
         VM {
             stack: Stack::new(),
             memory: Memory::new(),
@@ -84,7 +86,8 @@ impl VM {
             exitcode: 255,
 
             timestamp: Instant::now(),
-            logger: Logger::new(&verbosity),
+            logger: logger,
+            trace: trace
         }
     }
 

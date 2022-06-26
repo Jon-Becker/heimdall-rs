@@ -46,7 +46,7 @@ pub fn disassemble(args: DisassemblerArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let logger = Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
 
     // parse the output directory
     let mut output_dir: String;

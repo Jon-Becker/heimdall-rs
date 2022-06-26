@@ -51,7 +51,7 @@ pub fn write_config(contents: String) {
             let _ = write_file(&home.into_os_string().to_str().unwrap().to_string(), &contents);
         }
         None => {
-            let logger = Logger::new("");
+            let (logger, _) = Logger::new("");
             logger.error(&format!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?").to_string());
             std::process::exit(1)
         }
@@ -79,7 +79,7 @@ pub fn read_config() -> String {
             }
         }
         None => {
-            let logger = Logger::new("");
+            let (logger, _) = Logger::new("");
             logger.error(&format!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?").to_string());
             std::process::exit(1)
         }
@@ -111,7 +111,7 @@ pub fn update_config(key: &String, value: &String) {
             contents.etherscan_api_key = value.to_string();
         }
         _ => {
-            let logger = Logger::new("");
+            let (logger, _) = Logger::new("");
             logger.error(&format!("unknown configuration key \'{}\' .", key).to_string());
             std::process::exit(1)
         }
@@ -124,7 +124,7 @@ pub fn update_config(key: &String, value: &String) {
 
 
 pub fn config(args: ConfigArgs) {
-    let logger = Logger::new("");
+    let (logger, _) = Logger::new("");
     if &args.key != "" {
         
         if &args.value != "" {

@@ -5,12 +5,12 @@ use super::super::utils::replace_last;
 
 pub struct Logger {
     pub level: u8,
-    pub trace: TraceFactory,
 }
 
 
 #[derive(Clone, Debug)]
 pub struct TraceFactory {
+    pub level: u8,
     pub traces: Vec<Trace>
 }
 
@@ -38,14 +38,15 @@ pub struct Trace {
 impl TraceFactory {
 
     // creates a new empty trace factory
-    pub fn new() -> TraceFactory {
+    pub fn new(level: u8) -> TraceFactory {
         TraceFactory {
+            level: level,
             traces: Vec::new()
         }
     }
 
     // adds a new trace to the factory
-    pub fn add_trace(&mut self, category: &str, parent_index: u32, instruction: u32, message: Vec<String>) -> u32{
+    pub fn add(&mut self, category: &str, parent_index: u32, instruction: u32, message: Vec<String>) -> u32{
         
         // build the new trace
         let trace = Trace::new(
@@ -74,16 +75,18 @@ impl TraceFactory {
 
     
     // pretty print the trace
-    pub fn display(self) {
-        for index in 0..self.traces.len() {
-            
-            // safe to unwrap because we just iterated over the traces
-            let trace = self.traces.get(index).unwrap();
+    pub fn display(&self) {
+        if self.level >= 4 {
+            for index in 0..self.traces.len() {
+                
+                // safe to unwrap because we just iterated over the traces
+                let trace = self.traces.get(index).unwrap();
 
-            // match only root traces and print them
-            match trace.parent {
-                0 => { self.print_trace("", index); },
-                _ => {}
+                // match only root traces and print them
+                match trace.parent {
+                    0 => { self.print_trace("", index); },
+                    _ => {}
+                }
             }
         }
     }
@@ -136,18 +139,35 @@ impl TraceFactory {
                 );
             },
             TraceCategory::LogUnknown => {
-                for message_index in 0..trace.message.len() {
-                    let message = trace.message.get(message_index).unwrap();
+                let log_size = trace.message.len();
+                if log_size > 1 {
+                    for message_index in 0..trace.message.len()-1 {
+                        let message = trace.message.get(message_index).unwrap();
+                        println!(
+                            "{} {} {}: {}",
+                            if message_index == 0 { replace_last(prefix.to_string(), "│ ", " ├─") }
+                            else { replace_last(prefix.to_string(), "│ ", " │ ") },
+                            if message_index == 0 { "emit" } else { "    " },
+                            format!("topic {}", message_index).purple(),
+                            message
+                        );
+                    }
                     println!(
-                        "{} emit topic 0 {}",
-                        if message_index == 0 {
-                            replace_last(prefix.to_string(), "│ ", " ├─")
-                        } else {
-                            replace_last(prefix.to_string(), "│ ", " │ ")
-                        },
-                        message
+                        "{}         {}: {}",
+                        replace_last(prefix.to_string(), "│ ", " │ "),
+                        "data".purple(),
+                        trace.message.last().unwrap()
                     );
                 }
+                else {
+                    println!(
+                        "{} emit {}: {}",
+                        replace_last(prefix.to_string(), "│ ", " ├─"),
+                        "data".purple(),
+                        trace.message.last().unwrap()
+                    );
+                }
+                
             },
             TraceCategory::Message => {
                 for message_index in 0..trace.message.len() {
@@ -165,11 +185,10 @@ impl TraceFactory {
             },
             TraceCategory::Create => {
                 println!(
-                    "{}[{}] create → {}@{}",
+                    "{}[{}] create → {}",
                     replace_last(prefix.to_string(), "│ ", " ├─"),
                     trace.instruction,
-                    trace.message.get(0).unwrap(),
-                    trace.message.get(1).unwrap()
+                    trace.message.get(0).unwrap()
                 );
 
                 // print the children
@@ -181,10 +200,130 @@ impl TraceFactory {
                 }
 
                 // print the return value
-                println!( "{}  └─ ← {} bytes", prefix, trace.message.get(2).unwrap())
+                println!( "{}  └─ ← {} bytes", prefix, trace.message.get(1).unwrap())
             }
         }
 
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////////
+    //                                TRACE HELPERS                               //
+    ////////////////////////////////////////////////////////////////////////////////
+    
+
+    // adds a function call trace
+    pub fn add_call(
+        &mut self,
+        parent_index: u32, 
+        instruction: u32, 
+        origin: String,
+        function_name: String,
+        args: Vec<String>,
+        returns: String,
+    ) -> u32 {
+        let title = format!(
+            "{}::{}({})", 
+            origin.bright_cyan(),
+            function_name.bright_cyan(),
+            args.join(", ")
+        );
+        self.add("call", parent_index, instruction, vec![title, returns])
+    }
+
+
+    // adds a contract creation trace
+    pub fn add_creation(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        name: String,
+        pointer: String,
+        size: u128
+    ) -> u32 {
+        let contract = format!(
+            "{}@{}", 
+            name.green(),
+            pointer.green(),
+        );
+        self.add("create", parent_index, instruction, vec![contract, size.to_string()])
+    }
+
+
+    // adds a known log trace
+    pub fn add_emission(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        name: String,
+        args: Vec<String>
+    ) -> u32 {
+        let log = format!(
+            "{}({})", 
+            name.purple(),
+            args.join(", ")
+        );
+        self.add("log", parent_index, instruction, vec![log])
+    }
+
+
+    // adds an unknown or raw log trace
+    pub fn add_raw_emission(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        mut topics: Vec<String>,
+        data: String
+    ) -> u32 {
+        topics.push(data);
+        self.add("log_unknown", parent_index, instruction, topics)
+    }
+
+
+    // add info to the trace
+    pub fn add_info(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        message: String
+    ) -> u32 {
+        let message = format!("{} {}", "info:".bright_cyan().bold(), message);
+        self.add("message", parent_index, instruction, vec![message])
+    }
+
+
+    // add error to the trace
+    pub fn add_error(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        message: String
+    ) -> u32 {
+        let message = format!("{} {}", "error:".bright_red().bold(), message);
+        self.add("message", parent_index, instruction, vec![message])
+    }
+
+
+    // add warn to the trace
+    pub fn add_warn(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        message: String
+    ) -> u32 {
+        let message = format!("{} {}", "warn:".bright_yellow().bold(), message);
+        self.add("message", parent_index, instruction, vec![message])
+    }
+
+
+    // add a vector of strings to the trace
+    pub fn add_message(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        message: Vec<String>
+    ) -> u32 {
+        self.add("message", parent_index, instruction, message)
     }
 
 }
@@ -197,7 +336,7 @@ impl Trace {
             category: match category {
                 "log" => TraceCategory::Log,
                 "log_unknown" => TraceCategory::LogUnknown,
-                "info" => TraceCategory::Message,
+                "message" => TraceCategory::Message,
                 "call" => TraceCategory::Call,
                 "create" => TraceCategory::Create,
                 _ => TraceCategory::Message
@@ -214,16 +353,17 @@ impl Trace {
 impl Logger {
 
     // create a new logger
-    pub fn new(verbosity: &str) -> Logger {
+    pub fn new(verbosity: &str) -> (Logger, TraceFactory) {
 
         match verbosity {
-            "ERROR" => Logger { level: 0, trace: TraceFactory::new() },
-            "WARN" => Logger { level: 1, trace: TraceFactory::new() },
-            "INFO" => Logger { level: 2, trace: TraceFactory::new() },
-            "DEBUG" => Logger { level: 3,trace: TraceFactory::new() },
-            "TRACE" => Logger {level: 4, trace: TraceFactory::new() },
-            _  => Logger { level: 2, trace: TraceFactory::new() },
+            "ERROR" => (Logger { level: 0, }, TraceFactory::new(0)),
+            "WARN" => (Logger { level: 1, }, TraceFactory::new(1)),
+            "INFO" => (Logger { level: 2, }, TraceFactory::new(2)),
+            "DEBUG" => (Logger { level: 3, }, TraceFactory::new(3)),
+            "TRACE" => (Logger { level: 4, }, TraceFactory::new(4)),
+            _  => (Logger { level: 2, }, TraceFactory::new(2)),
         }
+        
     }
     
 
@@ -257,6 +397,4 @@ impl Logger {
         }
     }
 
-    // trace variables and functions available through
-    // self.trace.*
 }
