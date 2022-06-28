@@ -1,6 +1,17 @@
-use std::{str::FromStr, ops::{Div, Rem, Shl, Shr}, time::{UNIX_EPOCH, SystemTime, Instant}};
-
-use colored::Colorize;
+use std::{
+    str::FromStr,
+    ops::{
+        Div,
+        Rem,
+        Shl,
+        Shr
+    }, 
+    time::{
+        UNIX_EPOCH,
+        SystemTime,
+        Instant
+    }
+};
 
 use ethers::{
     prelude::U256,
@@ -11,11 +22,11 @@ use ethers::{
 };
 
 use crate::{
-    io::logging::{Logger, TraceFactory},
     utils::{
         sign_uint,
         decode_hex
-    }
+    },
+    ether::opcodes::Opcode
 };
 
 use super::{
@@ -43,8 +54,6 @@ pub struct VM {
     pub exitcode: u128,
 
     pub timestamp: Instant,
-    pub logger: Logger,
-    pub trace: TraceFactory
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +64,26 @@ pub struct Result {
     pub exitcode: u128,
     pub events: Vec<Log>,
     pub runtime: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct State {
+    pub last_instruction: Instruction,
+    pub gas_used: u128,
+    pub gas_remaining: u128,
+    pub stack: Stack,
+    pub memory: Memory,
+    pub storage: Storage,
+    pub events: Vec<Log>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Instruction {
+    pub instruction: u128,
+    pub opcode: String,
+    pub opcode_details: Option<Opcode>,
+    pub inputs: Vec<U256>,
+    pub outputs: Vec<U256>,
 }
 
 
@@ -68,20 +97,8 @@ impl VM {
         origin: String,
         caller: String,
         value: u128,
-        mut gas_limit: u128,
-        verbosity: &str) -> VM {
+        mut gas_limit: u128) -> VM {
         if gas_limit < 21000 { gas_limit = 21000; }
-        let (logger, mut trace)= Logger::new(&verbosity);
-
-        // initialize the trace
-        trace.add_call(
-            0,
-            0, 
-            "Contract".to_string(), 
-            calldata.replace("0x", "").to_string(),
-            vec![],
-            "()".to_string()
-        );
 
         VM {
             stack: Stack::new(),
@@ -101,18 +118,13 @@ impl VM {
             exitcode: 255,
 
             timestamp: Instant::now(),
-            logger: logger,
-            trace: trace
         }
     }
 
-    pub fn exit(&mut self, code: u128, returndata: &str, message: &str) {
+    pub fn exit(&mut self, code: u128, returndata: &str) {
         self.exitcode = code;
         self.returndata = returndata.to_string();
 
-        if code >= 1 {
-            self.logger.error(message);
-        }
         return
     }
 
@@ -128,37 +140,60 @@ impl VM {
     }
 
     // Steps to the next PC and executes the instruction
-    pub fn step(&mut self) {
+    fn _step(&mut self) -> Instruction {
 
         // sanity check
         if self.bytecode.len() < (self.instruction*2+2) as usize {
-            self.exit(2, "0x", "Execution Reverted: Instruction out of bounds.");
-            return
+            self.exit(2, "0x");
+            Instruction {
+                instruction: self.instruction,
+                opcode: "PANIC".to_string(),
+                opcode_details: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+            };
         }
 
         // get the opcode at the current instruction
         let opcode = self.bytecode[(self.instruction*2) as usize..(self.instruction*2+2) as usize].to_string();
+        let last_instruction = self.instruction;
         self.instruction += 1;
 
         // add the opcode to the trace
         let opcode_details = crate::ether::opcodes::opcode(opcode.replace("0x", "").as_str());
+        let inputs = self.stack.peek_n(opcode_details.inputs as usize);
 
         // Consume the minimum gas for the opcode
         let gas_cost = opcode_details.mingas;
         match self.consume_gas(gas_cost.into()) {
             true => {},
-            false => { return self.exit(1, "0x", "Execution Reverted: Out of gas."); }
+            false => {
+                return Instruction {
+                    instruction: last_instruction,
+                    opcode: opcode,
+                    opcode_details: Some(opcode_details),
+                    inputs: inputs,
+                    outputs: Vec::new(),
+                };
+            }
         }
 
 
         match U256::from_str(&opcode) {
 
-            Ok(opcode) => {
-                let op = opcode.as_usize();
+            Ok(_opcode) => {
+                let op = _opcode.as_usize();
 
                 // STOP
                 if op == 0 {
-                    return self.exit(0, "0x", "");   
+                    self.exit(0, "0x");
+                    return Instruction {
+                        instruction: last_instruction,
+                        opcode: opcode,
+                        opcode_details: Some(opcode_details),
+                        inputs: inputs,
+                        outputs: Vec::new(),
+                    };
                 }
 
 
@@ -426,11 +461,29 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     let data = self.memory.read(offset, size);
@@ -478,7 +531,16 @@ impl VM {
                     // Safely convert U256 to usize
                     let i: usize = match i.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     // panic safety
@@ -513,15 +575,42 @@ impl VM {
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let mut size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     // panic check
@@ -548,15 +637,42 @@ impl VM {
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let mut size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     // panic check
@@ -589,11 +705,29 @@ impl VM {
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     self.memory.store(dest_offset, size, "FF".repeat(size / 2))
@@ -617,11 +751,29 @@ impl VM {
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     self.memory.store(dest_offset, size, "FF".repeat(size / 2))
@@ -671,7 +823,16 @@ impl VM {
                     // Safely convert U256 to usize
                     let i: usize = match i.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     self.stack.push(U256::from_str(self.memory.read(i, 32).as_str()).unwrap().encode_hex().as_str());
@@ -686,7 +847,16 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     self.memory.store(offset, 32, value.encode_hex().replace("0x", ""));
@@ -701,7 +871,16 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     self.memory.store(offset, 1, value.encode_hex().replace("0x", ""));
@@ -732,7 +911,16 @@ impl VM {
                     // Safely convert U256 to u128
                     let pc: u128 = match pc.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     self.instruction = pc + 1;
@@ -747,7 +935,16 @@ impl VM {
                     // Safely convert U256 to u128
                     let pc: u128 = match pc.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
                     if !condition.eq(&U256::from(0 as u8)) {
@@ -822,11 +1019,29 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     
                     let data = self.memory.read(offset, size);
@@ -860,14 +1075,32 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
-                    return self.exit(0, self.memory.read(offset, size).as_str(), "");
+                    self.exit(0, self.memory.read(offset, size).as_str());
                 }
 
 
@@ -895,31 +1128,82 @@ impl VM {
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
                     let size: usize = match size.try_into() {
                         Ok(x) => x,
-                        Err(_) => { return self.exit(2, "0x", "Execution Reverted: Integer overflow when casting to usize.."); },
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        },
                     };
 
-                    return self.exit(1, self.memory.read(offset, size).as_str(), self.memory.read(offset, size).as_str());
+                    self.exit(1, self.memory.read(offset, size).as_str());
                 }
                 
 
                 // INVALID & SELFDESTRUCT
                 if op >= 254 {
                     self.consume_gas(self.gas_remaining);
-                    return self.exit(1, "0x", "Execution Reverted: Invalid OPCODE.");
+                    self.exit(1, "0x");
                 }
+
+                // get outputs
+                let outputs = self.stack.peek_n(opcode_details.outputs as usize);
+
+                return Instruction {
+                    instruction: last_instruction,
+                    opcode: opcode,
+                    opcode_details: Some(opcode_details),
+                    inputs: inputs,
+                    outputs: outputs,
+                };
 
             }
             _ => {
                 
                 // we reached an INVALID opcode, consume all remaining gas
-                return self.exit(4, "0x", "Execution Reverted: Unknown OPCODE.");
+                self.exit(4, "0x");
+                return Instruction {
+                    instruction: last_instruction,
+                    opcode: "unknown".to_string(),
+                    opcode_details: Some(opcode_details),
+                    inputs: inputs,
+                    outputs: Vec::new(),
+                };
             }
         }
 
+    }
+    
+    // Executes the next instruction in the VM and returns a snapshot its the state
+    pub fn step(&mut self) -> State {
+        let instruction = self._step();
+
+        State {
+            last_instruction: instruction,
+            gas_used: self.gas_used,
+            gas_remaining: self.gas_remaining,
+            stack: self.stack.clone(),
+            memory: self.memory.clone(),
+            storage: self.storage.clone(),
+            events: self.events.clone()
+        }
     }
 
 
@@ -932,16 +1216,6 @@ impl VM {
                 break
             }
         }
-
-        // add the return data to the trace
-        let mut new_message = self.trace.traces.get(0).unwrap().message.clone();
-        new_message.pop();
-        match self.exitcode {
-            0 => new_message.push(self.returndata.clone()),
-            1 => new_message.push(format!("{} {}", "revert:".bright_red().bold(), self.returndata.clone())),
-            _ => new_message.push(format!("{} {}", "error:".bright_red().bold(), self.returndata.clone()))
-        }
-        self.trace.update(1, new_message);
 
         return Result { 
             gas_used: self.gas_used,
