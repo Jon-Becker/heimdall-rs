@@ -84,7 +84,7 @@ impl TraceFactory {
     
     // pretty print the trace
     pub fn display(&self) {
-        if self.level >= 4 {
+        if self.level >= 3 {
             for index in 0..self.traces.len() {
                 
                 // safe to unwrap because we just iterated over the traces
@@ -368,8 +368,7 @@ impl Logger {
             "WARN" => (Logger { level: 1, }, TraceFactory::new(1)),
             "INFO" => (Logger { level: 2, }, TraceFactory::new(2)),
             "DEBUG" => (Logger { level: 3, }, TraceFactory::new(3)),
-            "TRACE" => (Logger { level: 4, }, TraceFactory::new(4)),
-            _  => (Logger { level: 2, }, TraceFactory::new(2)),
+            _  => (Logger { level: 1, }, TraceFactory::new(1)),
         }
         
     }
@@ -385,22 +384,21 @@ impl Logger {
     }
 
 
-    pub fn warn (&self, message: &str) {
-        if self.level >= 1 {
-            println!("{} {}", "warn:".bright_yellow().bold(), message);
-        }
-    }
-
-
     pub fn info (&self, message: &str) {
-        if self.level >= 2 {
+        if self.level >= 1 {
             println!("{} {}", "info:".bright_cyan().bold(), message);
         }
     }
 
 
+    pub fn warn (&self, message: &str) {
+        println!("{} {}", "warn:".bright_yellow().bold(), message);
+
+    }
+
+
     pub fn debug (&self, message: &str) {
-        if self.level >= 3 {
+        if self.level >= 2 {
             println!("{} {}", "debug:".bright_magenta().bold(), message);
         }
     }

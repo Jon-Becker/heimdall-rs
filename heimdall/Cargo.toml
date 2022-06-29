@@ -1,18 +1,19 @@
 [package]
-name = "heimdall"
-version = "0.1.0"
-edition = "2021"
-license = "MIT"
-readme = "README.md"
 description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
+edition = "2021"
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
-
+license = "MIT"
+name = "heimdall"
+readme = "README.md"
+version = "0.1.0"
 
 [dependencies]
-heimdall-common = { path = "./../common" }
-heimdall-config = { path = "./../config" }
-clap = { version = "3.1.18", features = ["derive"] }
+clap = {version = "3.1.18", features = ["derive"]}
 clap-verbosity-flag = "1.0.0"
+ethers = {git = "https://github.com/gakonst/ethers-rs"}
+heimdall-common = {path = "./../common"}
+heimdall-config = {path = "./../config"}
+tokio = {version = "1", features = ["full"]}
 
 [[bin]]
 name = "heimdall"

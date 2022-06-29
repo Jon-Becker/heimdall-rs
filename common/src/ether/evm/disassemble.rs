@@ -95,6 +95,8 @@ pub fn disassemble(args: DisassemblerArgs) {
                     std::process::exit(1)
                 }
             };
+
+            // safely unwrap the address
             let address = match args.target.parse::<Address>() {
                 Ok(address) => address,
                 Err(_) => {
@@ -102,6 +104,8 @@ pub fn disassemble(args: DisassemblerArgs) {
                     std::process::exit(1)
                 }
             };
+
+            // fetch the bytecode at the address
             let bytecode_as_bytes = match provider.get_code(address, None).await {
                 Ok(bytecode) => bytecode,
                 Err(_) => {
