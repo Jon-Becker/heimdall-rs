@@ -23,8 +23,10 @@ use ethers::{
 
 use crate::{
     utils::{
-        sign_uint,
-        decode_hex
+        strings::{
+            sign_uint,
+            decode_hex
+        },
     },
     ether::opcodes::Opcode
 };

@@ -1,6 +1,10 @@
 use colored::*;
 
-use super::super::utils::replace_last;
+use super::super::{
+    utils::{
+        strings::replace_last,
+    },
+};
 
 
 pub struct Logger {

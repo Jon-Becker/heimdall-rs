@@ -10,9 +10,10 @@ keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 [dependencies]
 colored = "2"
 regex = "1.1.5"
-serde_json = "1.0"
 lazy_static = "1.4.0"
 clap-verbosity-flag = "1.0.0"
 tokio = { version = "1", features = ["full"] }
 clap = { version = "3.1.18", features = ["derive"] }
 ethers = { git = "https://github.com/gakonst/ethers-rs" }
+reqwest = {version = "0.11.11"}
+serde_json = "1.0"

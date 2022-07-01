@@ -1,12 +1,26 @@
-use std::str::FromStr;
+use std::{
+    str::FromStr
+};
 
 use clap::{AppSettings, Parser};
 use ethers::{
     core::types::{H256},
     providers::{Middleware, Provider, Http},
+    abi::{ParamType, decode as decode_abi},
 };
 
-use heimdall_common::{io::logging::Logger, consts::TRANSACTION_HASH_REGEX};
+use heimdall_common::{
+    io::logging::Logger,
+    consts::TRANSACTION_HASH_REGEX,
+    utils::{
+        strings::{
+            replace_last, decode_hex
+        },
+        http::{
+            get_json_from_url,
+        }
+    }, ether::evm::types::to_abi_type
+};
 
 
 #[derive(Debug, Clone, Parser)]
@@ -33,6 +47,66 @@ pub struct DecodeArgs {
 
 }
 
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub signature: String,
+    pub inputs: Vec<String>
+}
+
+
+pub fn resolve_signature(signature: &String) -> Option<Vec<Function>> {
+
+    // get function possibilities from 4byte
+    let signatures = match get_json_from_url(format!("https://www.4byte.directory/api/v1/signatures/?format=json&hex_signature=0x{}", &signature)) {
+        Some(signatures) => signatures,
+        None => return None
+    };
+
+    // convert the serde value into a vec of possible functions
+    let results = match signatures.get("results") {
+        Some(results) => match results.as_array() {
+            Some(results) => results,
+            None => return None
+        },
+        None => return None
+    };
+
+    println!("{:#?}", results);
+
+    let mut signature_list: Vec<Function> = Vec::new();
+
+    for signature in results {
+
+        // get the function text signature and unwrap it into a string
+        let text_signature = match signature.get("text_signature") {
+            Some(text_signature) => text_signature.to_string().replace("\"", ""),
+            None => continue
+        };
+        
+        // safely split the text signature into name and inputs
+        let function_parts = match text_signature.split_once("(") {
+            Some(function_parts) => function_parts,
+            None => continue
+        };
+
+        signature_list.push(Function {
+            name: function_parts.0.to_string(),
+            signature: text_signature.to_string(),
+            inputs: replace_last(function_parts.1.to_string(), ")", "").split(",").map(|input| input.to_string()).collect()
+        });
+
+    }
+
+    return match signature_list.len() {
+        0 => None,
+        _ => Some(signature_list)
+    }
+
+}
+
+
 pub fn decode(args: DecodeArgs) {
     let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
     
@@ -48,7 +122,7 @@ pub fn decode(args: DecodeArgs) {
             .unwrap();
         
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
-        calldata = rt.block_on(async {
+      calldata = rt.block_on(async {
 
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
@@ -99,16 +173,60 @@ pub fn decode(args: DecodeArgs) {
     }
 
     // check if the calldata length is a standard length
+    if calldata.len() % 2 != 0 {
+        logger.error("calldata is not a valid hex string.");
+        std::process::exit(1);
+    }
+
     if calldata[8..].len() % 64 != 0 {
-        println!("{}", calldata[..8].len());
         logger.warn("calldata is not a standard size. decoding may fail since each word is not exactly 32 bytes long.");
     }
 
     let function_signature = calldata[0..8].to_owned();
-    let args = calldata[8..].to_owned().chars().collect::<Vec<char>>().chunks(64).map(|c| c.iter().collect::<String>()).collect::<Vec<String>>();
+    let args = match decode_hex(&calldata[8..]) {
+        Ok(args) => args,
+        Err(_) => {
+            logger.error("failed to parse bytearray from calldata.");
+            std::process::exit(1)
+        }
+    };
 
-    logger.info(&function_signature);
-    println!("{:#?}", args);
-    
+    // get the function signature possibilities
+    let potential_matches = match resolve_signature(&function_signature) {
+        Some(signatures) => signatures,
+        None => Vec::new()
+    };
+
+    let mut matches: Vec<Function> = Vec::new();
+
+    for potential_match in &potential_matches {        
+        let mut inputs: Vec<ParamType> = Vec::new();
+        for input in &potential_match.inputs {
+            match to_abi_type(input.to_owned()) {
+                Some(type_) => inputs.push(type_),
+                None => continue
+            }
+        }
+        println!("{:#?}", inputs);
+        match decode_abi(&inputs, &args) {
+            Ok(result) => {
+                if result.len() == potential_match.inputs.len() {
+                    println!("{:#?}", result);
+                    matches.push(potential_match.to_owned());
+                }
+            },
+            Err(_) => continue
+        }
+    }
+
+    if matches.len() == 0 {
+        logger.warn("couldn't find any matches for the given function signature.");
+
+        //TODO: return
+        
+    }
+    else {
+
+    }
 
 }
