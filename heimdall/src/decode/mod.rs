@@ -73,8 +73,6 @@ pub fn resolve_signature(signature: &String) -> Option<Vec<Function>> {
         None => return None
     };
 
-    println!("{:#?}", results);
-
     let mut signature_list: Vec<Function> = Vec::new();
 
     for signature in results {
