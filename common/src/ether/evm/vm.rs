@@ -296,12 +296,12 @@ impl VM {
                     let x = self.stack.pop();
                     let b = self.stack.pop();
 
-                    let t = x * U256::from(8 as u32) + U256::from(7 as u32);
-                    let sign_bit = U256::from(1 as u32) << t;
+                    let t = x * U256::from(8u32) + U256::from(7u32);
+                    let sign_bit = U256::from(1u32) << t;
 
                     // (b & sign_bit - 1) - (b & sign_bit)
                     self.stack.push(((b & (sign_bit
-                        .overflowing_sub(U256::from(1 as u32)).0))
+                        .overflowing_sub(U256::from(1u32)).0))
                         .overflowing_sub(b & sign_bit).0).encode_hex().as_str()
                     )
                 }
@@ -371,7 +371,7 @@ impl VM {
                 if op == 21 {
                     let a = self.stack.pop();
 
-                    match a.eq(&U256::from(0 as u32)) {
+                    match a.eq(&U256::from(0u8)) {
                         true => self.stack.push("0x01"),
                         false => self.stack.push("0x00"),
                     }
@@ -417,11 +417,11 @@ impl VM {
                     let b = self.stack.pop();
                     let a = self.stack.pop();
 
-                    match b >= U256::from(32 as u32) {
+                    match b >= U256::from(32u32) {
                         true => self.stack.push("0x00"),
                         false => {
                             self.stack.push((
-                                (a / ( U256::from(256 as u32).pow(U256::from(31 as u32) - b) )) % U256::from(256 as u32)
+                                (a / ( U256::from(256u32).pow(U256::from(31u32) - b) )) % U256::from(256u32)
                             ).encode_hex().as_str());
                         },
                     }
@@ -546,10 +546,10 @@ impl VM {
                     };
 
                     // panic safety
-                    if i + 32 > self.calldata.len() / 2 as usize {
+                    if i + 32 > self.calldata.len() / 2usize {
                         let mut value = String::new();
             
-                        if i <= self.calldata.len() / 2 as usize {
+                        if i <= self.calldata.len() / 2usize {
                             value = self.calldata[(i*2)..].to_string();
                         }
                         
@@ -564,7 +564,7 @@ impl VM {
 
                 // CALLDATASIZE
                 if op == 54 {
-                    self.stack.push(U256::from(&self.calldata.len() / 2 as usize).encode_hex().as_str());
+                    self.stack.push(U256::from(&self.calldata.len() / 2usize).encode_hex().as_str());
                 }
 
 
@@ -616,8 +616,8 @@ impl VM {
                     };
 
                     // panic check
-                    if offset.overflowing_add(size).0 > self.calldata.len() / 2 as usize {
-                        size = self.calldata.len() / 2 as usize;
+                    if offset.overflowing_add(size).0 > self.calldata.len() / 2usize {
+                        size = self.calldata.len() / 2usize;
                     }
                     
                     self.memory.store(dest_offset, size, self.calldata[ offset*2 .. (offset + size)*2 ].to_string())
@@ -626,7 +626,7 @@ impl VM {
 
                 // CODESIZE
                 if op == 56 {
-                    self.stack.push(U256::from(&self.bytecode.len() / 2 as usize).encode_hex().as_str());
+                    self.stack.push(U256::from(&self.bytecode.len() / 2usize).encode_hex().as_str());
                 }
 
 
@@ -678,8 +678,8 @@ impl VM {
                     };
 
                     // panic check
-                    if offset.overflowing_add(size).0 > self.bytecode.len() / 2 as usize {
-                        size = self.bytecode.len() / 2 as usize;
+                    if offset.overflowing_add(size).0 > self.bytecode.len() / 2usize {
+                        size = self.bytecode.len() / 2usize;
                     }
                     
                     self.memory.store(dest_offset, size, self.bytecode[ offset*2 .. (offset + size)*2 ].to_string())
@@ -949,7 +949,7 @@ impl VM {
                         },
                     };
 
-                    if !condition.eq(&U256::from(0 as u8)) {
+                    if !condition.eq(&U256::from(0u8)) {
                         self.instruction = pc + 1;
                     }
                 }
