@@ -225,6 +225,7 @@ pub fn decode(args: DecodeArgs) {
         let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![args.target], "()".to_string());
         trace.br(decode_call);
         trace.add_message(decode_call, 1, vec![format!("selector: 0x{}", function_signature).to_string()]);
+        trace.add_message(decode_call, 1, vec![format!("calldata: {} bytes", calldata.len() / 2usize).to_string()]);
         trace.br(decode_call);
 
         // print out the decoded inputs
@@ -267,7 +268,8 @@ pub fn decode(args: DecodeArgs) {
         trace.br(decode_call);
         trace.add_message(decode_call, 1, vec![format!("name:     {}", selected_match.name).to_string()]);
         trace.add_message(decode_call, 1, vec![format!("selector: 0x{}", function_signature).to_string()]);
-        trace.add_message(decode_call, 1, vec![format!("function: {}", selected_match.signature).to_string(), "".to_string()]);
+        trace.add_message(decode_call, 1, vec![format!("function: {}", selected_match.signature).to_string()]);
+        trace.add_message(decode_call, 1, vec![format!("calldata: {} bytes", calldata.len() / 2usize).to_string()]);
         trace.br(decode_call);
 
         // print out the decoded inputs
