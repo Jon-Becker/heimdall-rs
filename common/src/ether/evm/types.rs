@@ -122,4 +122,11 @@ mod tests {
         let param_type = to_abi_type(solidity_type);
         assert_eq!(param_type, Some(ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(256)])));
     }
+
+    #[test]
+    fn test_nested_tuple() {
+        let solidity_type = "(address,uint256,uint256,address,address,address,uint256,uint256,uint8,uint256,uint256,bytes32,uint256,bytes32,bytes32,uint256,(uint256,address)[],bytes)".to_string();
+        let param_type = to_abi_type(solidity_type);
+        assert_eq!(param_type, Some(ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(256)])));
+    }
 }

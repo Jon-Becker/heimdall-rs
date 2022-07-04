@@ -6,7 +6,7 @@ use clap::{AppSettings, Parser};
 use ethers::{
     core::types::{H256},
     providers::{Middleware, Provider, Http},
-    abi::{ParamType, decode as decode_abi},
+    abi::{ParamType, decode as decode_abi, Token},
 };
 
 use heimdall_common::{
@@ -52,7 +52,8 @@ pub struct DecodeArgs {
 pub struct Function {
     pub name: String,
     pub signature: String,
-    pub inputs: Vec<String>
+    pub inputs: Vec<String>,
+    pub decoded_inputs: Option<Vec<Token>>,
 }
 
 
@@ -92,7 +93,8 @@ pub fn resolve_signature(signature: &String) -> Option<Vec<Function>> {
         signature_list.push(Function {
             name: function_parts.0.to_string(),
             signature: text_signature.to_string(),
-            inputs: replace_last(function_parts.1.to_string(), ")", "").split(",").map(|input| input.to_string()).collect()
+            inputs: replace_last(function_parts.1.to_string(), ")", "").split(",").map(|input| input.to_string()).collect(),
+            decoded_inputs: None
         });
 
     }
@@ -106,7 +108,7 @@ pub fn resolve_signature(signature: &String) -> Option<Vec<Function>> {
 
 
 pub fn decode(args: DecodeArgs) {
-    let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
     
     let calldata: String;
 
@@ -181,8 +183,8 @@ pub fn decode(args: DecodeArgs) {
     }
 
     let function_signature = calldata[0..8].to_owned();
-    let args = match decode_hex(&calldata[8..]) {
-        Ok(args) => args,
+    let byte_args = match decode_hex(&calldata[8..]) {
+        Ok(byte_args) => byte_args,
         Err(_) => {
             logger.error("failed to parse bytearray from calldata.");
             std::process::exit(1)
@@ -205,12 +207,12 @@ pub fn decode(args: DecodeArgs) {
                 None => continue
             }
         }
-        println!("{:#?}", inputs);
-        match decode_abi(&inputs, &args) {
+        match decode_abi(&inputs, &byte_args) {
             Ok(result) => {
                 if result.len() == potential_match.inputs.len() {
-                    println!("{:#?}", result);
-                    matches.push(potential_match.to_owned());
+                    let mut found_match = potential_match.clone();
+                    found_match.decoded_inputs = Some(result);
+                    matches.push(found_match);
                 }
             },
             Err(_) => continue
@@ -220,11 +222,72 @@ pub fn decode(args: DecodeArgs) {
     if matches.len() == 0 {
         logger.warn("couldn't find any matches for the given function signature.");
 
-        //TODO: return
+        let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![args.target], "()".to_string());
+        trace.br(decode_call);
+        trace.add_message(decode_call, 1, vec![format!("selector: 0x{}", function_signature).to_string()]);
+        trace.br(decode_call);
+
+        // print out the decoded inputs
+        let mut inputs: Vec<String> = Vec::new();
+        for (i, input) in calldata[8..].chars().collect::<Vec<char>>().chunks(64).map(|c| c.iter().collect::<String>()).collect::<Vec<String>>().iter().enumerate() {
+            inputs.push(
+                format!(
+                    "{} {}:{}{}",
+                    if i == 0 { "input" } else { "     " },
+                    i,
+                    " ".repeat(3 - i.to_string().len()),
+                    input
+                ).to_string()
+            )
+        }
+        trace.add_message(decode_call, 1, inputs);
         
     }
     else {
+        let mut selection: u8 = 0;
+        if matches.len() > 1 {
+            selection = logger.option(
+                "warn", "multiple possible matches found. select an option below",
+                matches.iter()
+                .map(|x| x.signature.clone()).collect(),
+                Some(*&(matches.len()-1) as u8)
+            );
+        }
 
+        let selected_match = match matches.get(selection as usize) {
+            Some(selected_match) => selected_match,
+            None => {
+                logger.error("invalid selection.");
+                std::process::exit(1)
+            }
+        };
+
+        // print out the match and it's decoded inputs
+        let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![args.target], "()".to_string());
+        trace.br(decode_call);
+        trace.add_message(decode_call, 1, vec![format!("name:     {}", selected_match.name).to_string()]);
+        trace.add_message(decode_call, 1, vec![format!("selector: 0x{}", function_signature).to_string()]);
+        trace.add_message(decode_call, 1, vec![format!("function: {}", selected_match.signature).to_string(), "".to_string()]);
+        trace.br(decode_call);
+
+        // print out the decoded inputs
+        let mut inputs: Vec<String> = Vec::new();
+        for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
+            inputs.push(
+                format!(
+                    "{} {}:{}{:?}",
+                    if i == 0 { "input" } else { "     " },
+                    i,
+                    " ".repeat(3 - i.to_string().len()),
+                    input
+                ).to_string()
+            )
+        }
+        trace.add_message(decode_call, 1, inputs);
     }
+
+    // force the trace to display
+    trace.level = 4;
+    trace.display();
 
 }

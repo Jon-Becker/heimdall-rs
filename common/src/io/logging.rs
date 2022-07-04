@@ -27,7 +27,8 @@ pub enum TraceCategory {
     LogUnknown,
     Message,
     Call,
-    Create
+    Create,
+    Empty
 }
 
 
@@ -196,6 +197,17 @@ impl TraceFactory {
                         message
                     );
                 }
+
+                // print the children
+                for child in &trace.children {
+                    self.print_trace(
+                        &format!("{}  │", prefix),
+                        *child as usize - 1
+                    );
+                }
+            },
+            TraceCategory::Empty => {
+                println!("{}", replace_last(prefix.to_string(), "│ ", " │ "));
             },
             TraceCategory::Create => {
                 println!(
@@ -340,6 +352,14 @@ impl TraceFactory {
         self.add("message", parent_index, instruction, message)
     }
 
+    // add a line break
+    pub fn br(
+        &mut self,
+        parent_index: u32,
+    ) -> u32 {
+        self.add("empty", parent_index, 0, vec!["".to_string()])
+    }
+
 }
 
 impl Trace {
@@ -353,6 +373,7 @@ impl Trace {
                 "message" => TraceCategory::Message,
                 "call" => TraceCategory::Call,
                 "create" => TraceCategory::Create,
+                "empty" => TraceCategory::Empty,
                 _ => TraceCategory::Message
             },
             instruction,
@@ -451,7 +472,7 @@ impl Logger {
                     if default.is_some() {
                         return default.unwrap();
                     } else {
-                        self.error("Invalid selection.");
+                        self.error("invalid selection.");
                         return self.option(function, message, options, default);
                     }
                 }
@@ -460,7 +481,7 @@ impl Logger {
                 let selected_index = match selection.trim().parse::<u8>() {
                     Ok(i) => i,
                     Err(_) => {
-                        self.error("Invalid selection.");
+                        self.error("invalid selection.");
                         return self.option(function, message, options, default);
                     }
                 };
@@ -471,12 +492,12 @@ impl Logger {
                 } {
                     return selected_index;
                 } else {
-                    self.error("Invalid selection.");
+                    self.error("invalid selection.");
                     return self.option(function, message, options, default);
                 }
             },
             Err(_) => {
-                self.error("Invalid selection.");
+                self.error("invalid selection.");
                 return self.option(function, message, options, default);
             }
         };
