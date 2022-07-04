@@ -1,3 +1,5 @@
+use std::io::{stdout, Write, stdin};
+
 use colored::*;
 
 use super::super::{
@@ -372,6 +374,7 @@ impl Logger {
             "WARN" => (Logger { level: 1, }, TraceFactory::new(1)),
             "INFO" => (Logger { level: 2, }, TraceFactory::new(2)),
             "DEBUG" => (Logger { level: 3, }, TraceFactory::new(3)),
+            "TRACE" => (Logger { level: 4, }, TraceFactory::new(4)),
             _  => (Logger { level: 1, }, TraceFactory::new(1)),
         }
         
@@ -405,6 +408,78 @@ impl Logger {
         if self.level >= 2 {
             println!("{} {}", "debug:".bright_magenta().bold(), message);
         }
+    }
+
+    pub fn option (&self, function: &str, message: &str, options: Vec<String>, default: Option<u8>) -> u8 {
+        
+        // log the message with the given class
+        match function {
+            "error" => self.error(message),
+            "success" => self.success(message),
+            "warn" => self.warn(message),
+            "debug" => self.debug(message),
+            _ => self.info(message)
+        }
+
+        // print the option tree
+        for (i, option) in options.iter().enumerate() {
+            println!(
+                "  {} {}: {}",
+                if i == options.len() - 1 { "└─" } else { "├─" },
+                i.to_string(),
+                option
+            );
+        }
+        
+        // flush output print prompt
+        let mut selection = String::new();
+        print!(
+            "\nSelect an option {}: ",
+            if default.is_some() {
+                format!("(default: {})", default.unwrap())
+            } else {
+                "".to_string()
+            }
+        );
+        let _ = stdout().flush();
+
+        // get input
+        match stdin().read_line(&mut selection) {
+            Ok(_) => {
+                // check if default was selected
+                if selection.trim() == "" {
+                    if default.is_some() {
+                        return default.unwrap();
+                    } else {
+                        self.error("Invalid selection.");
+                        return self.option(function, message, options, default);
+                    }
+                }
+
+                // check if the input is a valid option
+                let selected_index = match selection.trim().parse::<u8>() {
+                    Ok(i) => i,
+                    Err(_) => {
+                        self.error("Invalid selection.");
+                        return self.option(function, message, options, default);
+                    }
+                };
+
+                if match options.get(selected_index as usize) {
+                    Some(_) => true,
+                    None => false
+                } {
+                    return selected_index;
+                } else {
+                    self.error("Invalid selection.");
+                    return self.option(function, message, options, default);
+                }
+            },
+            Err(_) => {
+                self.error("Invalid selection.");
+                return self.option(function, message, options, default);
+            }
+        };
     }
 
 }
@@ -454,5 +529,12 @@ mod tests {
         logger.info(&format!("Tracing took {}", start_time.elapsed().as_secs_f64()));
     }
 
+
+    #[test]
+    fn test_option() {
+        let (logger, _)= Logger::new("TRACE");
+
+        logger.option("warn", "multiple possibilities", vec!["option 1".to_string(), "option 2".to_string(), "option 3".to_string()], Some(0));
+    }
 
 }
