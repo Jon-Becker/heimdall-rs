@@ -28,7 +28,7 @@ use crate::{
             decode_hex
         },
     },
-    ether::opcodes::Opcode
+    ether::evm::opcodes::Opcode
 };
 
 use super::{
@@ -162,7 +162,7 @@ impl VM {
         self.instruction += 1;
 
         // add the opcode to the trace
-        let opcode_details = crate::ether::opcodes::opcode(opcode.replace("0x", "").as_str());
+        let opcode_details = crate::ether::evm::opcodes::opcode(opcode.replace("0x", "").as_str());
         let inputs = self.stack.peek_n(opcode_details.inputs as usize);
 
         // Consume the minimum gas for the opcode

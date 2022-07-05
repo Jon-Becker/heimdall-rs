@@ -9,7 +9,7 @@ use ethers::{
 use crate::{
     consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::*, file::* },
-    ether::{ opcodes::opcode }
+    ether::evm::{ opcodes::opcode }
 };
 
 

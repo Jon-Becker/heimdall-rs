@@ -5,9 +5,9 @@ use crate::utils::strings::replace_last;
 
 // decode a string into an ethereum type
 pub fn to_abi_type(solidity_type: String) -> Option<ParamType> {
-    
+
     // trim
-    let solidity_type = solidity_type.trim();
+    let solidity_type = solidity_type.trim().replace(")", "");
 
     if solidity_type == "address" { return Some(ParamType::Address); }
     if solidity_type == "bytes" { return Some(ParamType::Bytes); }
@@ -98,6 +98,7 @@ pub fn to_abi_type(solidity_type: String) -> Option<ParamType> {
 
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,13 +121,14 @@ mod tests {
     fn test_tuple() {
         let solidity_type = "(uint256,uint256[])".to_string();
         let param_type = to_abi_type(solidity_type);
-        assert_eq!(param_type, Some(ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(256)])));
+        assert_eq!(param_type, Some(ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Array(Box::new(ParamType::Uint(256)))])));
     }
 
     #[test]
     fn test_nested_tuple() {
         let solidity_type = "(address,uint256,uint256,address,address,address,uint256,uint256,uint8,uint256,uint256,bytes32,uint256,bytes32,bytes32,uint256,(uint256,address)[],bytes)".to_string();
         let param_type = to_abi_type(solidity_type);
-        assert_eq!(param_type, Some(ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(256)])));
+
+        println!("{:#?}", param_type);
     }
 }

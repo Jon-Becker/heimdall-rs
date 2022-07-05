@@ -4,7 +4,7 @@ set -e
 BIFROST_PATH=${BIFROST_PATH:-"$HOME/.bifrost"}
 BIFROST_BIN_DIR="$BIFROST_PATH/bin"
 
-BIFROST_BINARY="https://raw.githubusercontent.com/Jon-Becker/heimdall-rs/main/bifrost/bifrost?token=GHSAT0AAAAAABPTFLJAPJXTS3VHZSXXIMEGYU3RMCQ"
+BIFROST_BINARY="https://raw.githubusercontent.com/Jon-Becker/heimdall-rs/main/bifrost/bifrost"
 
 # Create the bifrost directory and install the bifrost executable in it.
 mkdir -p $BIFROST_BIN_DIR

@@ -92,6 +92,7 @@ impl TraceFactory {
     // pretty print the trace
     pub fn display(&self) {
         if self.level >= 3 {
+            println!();
             for index in 0..self.traces.len() {
                 
                 // safe to unwrap because we just iterated over the traces
@@ -431,8 +432,8 @@ impl Logger {
         }
     }
 
-    pub fn option (&self, function: &str, message: &str, options: Vec<String>, default: Option<u8>) -> u8 {
-        
+    pub fn option (&self, function: &str, message: &str, options: Vec<String>, default: Option<u8>, skip: bool) -> u8 {
+
         // log the message with the given class
         match function {
             "error" => self.error(message),
@@ -463,6 +464,16 @@ impl Logger {
             }
         );
         let _ = stdout().flush();
+        
+        if skip {
+            if default.is_some() {
+                println!("{}", default.unwrap());
+            }
+            else {
+                println!();
+            }
+            return default.unwrap();
+        }
 
         // get input
         match stdin().read_line(&mut selection) {
@@ -473,7 +484,7 @@ impl Logger {
                         return default.unwrap();
                     } else {
                         self.error("invalid selection.");
-                        return self.option(function, message, options, default);
+                        return self.option(function, message, options, default, skip);
                     }
                 }
 
@@ -482,7 +493,7 @@ impl Logger {
                     Ok(i) => i,
                     Err(_) => {
                         self.error("invalid selection.");
-                        return self.option(function, message, options, default);
+                        return self.option(function, message, options, default, skip);
                     }
                 };
 
@@ -493,12 +504,12 @@ impl Logger {
                     return selected_index;
                 } else {
                     self.error("invalid selection.");
-                    return self.option(function, message, options, default);
+                    return self.option(function, message, options, default, skip);
                 }
             },
             Err(_) => {
                 self.error("invalid selection.");
-                return self.option(function, message, options, default);
+                return self.option(function, message, options, default, skip);
             }
         };
     }
@@ -555,7 +566,7 @@ mod tests {
     fn test_option() {
         let (logger, _)= Logger::new("TRACE");
 
-        logger.option("warn", "multiple possibilities", vec!["option 1".to_string(), "option 2".to_string(), "option 3".to_string()], Some(0));
+        logger.option("warn", "multiple possibilities", vec!["option 1".to_string(), "option 2".to_string(), "option 3".to_string()], Some(0), false);
     }
 
 }
