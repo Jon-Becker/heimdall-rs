@@ -106,10 +106,10 @@ pub fn resolve_signature(signature: &String) -> Option<Vec<ResolvedFunction>> {
 
 }
 
+
 #[allow(deprecated)]
 pub fn decode(args: DecodeArgs) {
     let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
-    
     let calldata: String;
 
     // determine whether or not the target is a transaction hash
@@ -122,7 +122,7 @@ pub fn decode(args: DecodeArgs) {
             .unwrap();
         
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
-      calldata = rt.block_on(async {
+        calldata = rt.block_on(async {
 
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
@@ -178,9 +178,11 @@ pub fn decode(args: DecodeArgs) {
         std::process::exit(1);
     }
 
+    // if calldata isn't a multiple of 64, it may be harder to decode.
     if calldata[8..].len() % 64 != 0 { logger.warn("calldata is not a standard size. decoding may fail since each word is not exactly 32 bytes long."); }
 
-    let function_signature = calldata[0..8].to_owned();
+    // parse the two parts of calldata, inputs and selector
+    let function_selector = calldata[0..8].to_owned();
     let byte_args = match decode_hex(&calldata[8..]) {
         Ok(byte_args) => byte_args,
         Err(_) => {
@@ -190,13 +192,11 @@ pub fn decode(args: DecodeArgs) {
     };
 
     // get the function signature possibilities
-    let potential_matches = match resolve_signature(&function_signature) {
+    let potential_matches = match resolve_signature(&function_selector) {
         Some(signatures) => signatures,
         None => Vec::new()
     };
-
     let mut matches: Vec<ResolvedFunction> = Vec::new();
-
     for potential_match in &potential_matches {
 
         // convert the string inputs into a vector of decoded types
@@ -234,7 +234,7 @@ pub fn decode(args: DecodeArgs) {
                         // decode the function call in trimmed bytes, removing 0s, because contracts can use nonstandard sized words
                         // and padding is hard
                         let cleaned_bytes = decoded_function_call.encode_hex().replace("0", "");
-                        let decoded_function_call = match cleaned_bytes.split_once(&function_signature.replace("0", "")) {
+                        let decoded_function_call = match cleaned_bytes.split_once(&function_selector.replace("0", "")) {
                             Some(decoded_function_call) => decoded_function_call.1,
                             None => continue
                         };
@@ -264,7 +264,7 @@ pub fn decode(args: DecodeArgs) {
         // build a trace of the calldata
         let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![args.target], "()".to_string());
         trace.br(decode_call);
-        trace.add_message(decode_call, 1, vec![format!("selector: 0x{}", function_signature).to_string()]);
+        trace.add_message(decode_call, 1, vec![format!("selector: 0x{}", function_selector).to_string()]);
         trace.add_message(decode_call, 1, vec![format!("calldata: {} bytes", calldata.len() / 2usize).to_string()]);
         trace.br(decode_call);
 
@@ -309,11 +309,11 @@ pub fn decode(args: DecodeArgs) {
         trace.br(decode_call);
         trace.add_message(decode_call, 1, vec![format!("name:      {}", selected_match.name).to_string()]);
         trace.add_message(decode_call, 1, vec![format!("signature: {}", selected_match.signature).to_string()]);
-        trace.add_message(decode_call, 1, vec![format!("selector:  0x{}", function_signature).to_string()]);
+        trace.add_message(decode_call, 1, vec![format!("selector:  0x{}", function_selector).to_string()]);
         trace.add_message(decode_call, 1, vec![format!("calldata:  {} bytes", calldata.len() / 2usize).to_string()]);
         trace.br(decode_call);
 
-        // print out the decoded inputs
+        // print out the decoded inputs using the Token impl
         let mut inputs: Vec<String> = Vec::new();
         for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
             inputs.push(
