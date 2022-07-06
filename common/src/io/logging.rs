@@ -100,7 +100,7 @@ impl TraceFactory {
 
                 // match only root traces and print them
                 match trace.parent {
-                    0 => { self.print_trace("", index); },
+                    0 => { self.print_trace(" ", index); },
                     _ => {}
                 }
             }
