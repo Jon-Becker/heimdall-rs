@@ -19,9 +19,10 @@ use heimdall_common::{
         http::{
             get_json_from_url,
         }
-    }, ether::evm::types::to_abi_type
+    }, ether::evm::types::{parse_function_parameters, display}
 };
 
+use strsim::normalized_damerau_levenshtein as similarity;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Decode calldata into readable types",
@@ -60,15 +61,22 @@ pub struct ResolvedFunction {
 pub fn resolve_signature(signature: &String) -> Option<Vec<ResolvedFunction>> {
 
     // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://www.4byte.directory/api/v1/signatures/?format=json&hex_signature=0x{}", &signature)) {
+    let signatures = match get_json_from_url(format!("https://sig.eth.samczsun.com/api/v1/signatures?all=true&function=0x{}", &signature)) {
         Some(signatures) => signatures,
         None => return None
     };
 
     // convert the serde value into a vec of possible functions
-    let results = match signatures.get("results") {
-        Some(results) => match results.as_array() {
-            Some(results) => results,
+    // AAAHAHHHHHH IM MATCHING
+    let results = match signatures.get("result") {
+        Some(result) => match result.get("function") {
+            Some(function) => match function.get(format!("0x{signature}")) {
+                Some(functions) => match functions.as_array() {
+                    Some(functions) => functions.to_vec(),
+                    None => return None
+                },
+                None => return None
+            },
             None => return None
         },
         None => return None
@@ -79,7 +87,7 @@ pub fn resolve_signature(signature: &String) -> Option<Vec<ResolvedFunction>> {
     for signature in results {
 
         // get the function text signature and unwrap it into a string
-        let text_signature = match signature.get("text_signature") {
+        let text_signature = match signature.get("name") {
             Some(text_signature) => text_signature.to_string().replace("\"", ""),
             None => continue
         };
@@ -201,11 +209,13 @@ pub fn decode(args: DecodeArgs) {
 
         // convert the string inputs into a vector of decoded types
         let mut inputs: Vec<ParamType> = Vec::new();
-        for input in &potential_match.inputs {
-            match to_abi_type(input.to_owned()) {
-                Some(type_) => inputs.push(type_),
-                None => continue
-            }
+        match parse_function_parameters(potential_match.signature.to_owned()) {
+            Some(type_) => {
+                for input in type_ {
+                    inputs.push(input);
+                }
+            },
+            None => continue
         }
         match decode_abi(&inputs, &byte_args) {
             Ok(result) => {
@@ -236,11 +246,14 @@ pub fn decode(args: DecodeArgs) {
                         let cleaned_bytes = decoded_function_call.encode_hex().replace("0", "");
                         let decoded_function_call = match cleaned_bytes.split_once(&function_selector.replace("0", "")) {
                             Some(decoded_function_call) => decoded_function_call.1,
-                            None => continue
+                            None => {
+                                logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
+                                continue
+                            }
                         };
 
-                        // if the decoded function call matches the function signature, add it to the list of matches
-                        if decoded_function_call == calldata[8..].replace("0", "") {
+                        // if the decoded function call matches (95%) the function signature, add it to the list of matches
+                        if similarity(decoded_function_call,&calldata[8..].replace("0", "")).abs() >= 0.95 {
                             let mut found_match = potential_match.clone();
                             found_match.decoded_inputs = Some(result);
                             matches.push(found_match);
@@ -312,21 +325,27 @@ pub fn decode(args: DecodeArgs) {
         trace.add_message(decode_call, 1, vec![format!("selector:  0x{}", function_selector).to_string()]);
         trace.add_message(decode_call, 1, vec![format!("calldata:  {} bytes", calldata.len() / 2usize).to_string()]);
         trace.br(decode_call);
-
-        // print out the decoded inputs using the Token impl
-        let mut inputs: Vec<String> = Vec::new();
         for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
-            inputs.push(
-                format!(
-                    "{} {}:{}{:?}",
-                    if i == 0 { "input" } else { "     " },
+            let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
+            if i == 0 {
+                decoded_inputs_as_message[0] = format!(
+                    "input {}:{}{}",
                     i,
                     " ".repeat(4 - i.to_string().len()),
-                    input
-                ).to_string()
-            )
+                    decoded_inputs_as_message[0].replacen("           ", "", 1)
+                )
+            }
+            else {
+                decoded_inputs_as_message[0] = format!(
+                    "      {}:{}{}",
+                    i,
+                    " ".repeat(4 - i.to_string().len()),
+                    decoded_inputs_as_message[0].replacen("           ", "", 1)
+                )
+            }
+
+            trace.add_message(decode_call, 1, decoded_inputs_as_message);
         }
-        trace.add_message(decode_call, 1, inputs);
     }
 
     // force the trace to display

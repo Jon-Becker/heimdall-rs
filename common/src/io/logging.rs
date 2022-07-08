@@ -92,7 +92,7 @@ impl TraceFactory {
     // pretty print the trace
     pub fn display(&self) {
         if self.level >= 3 {
-            println!();
+            println!("{}:", "trace".bright_blue().bold());
             for index in 0..self.traces.len() {
                 
                 // safe to unwrap because we just iterated over the traces
@@ -121,8 +121,8 @@ impl TraceFactory {
                 
                 // print the trace title
                 println!(
-                    "{} [{}] call {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
+                    "{} [{}] {}",
+                    replace_last(prefix.to_string(), "│ ", " ├─").bold().white(),
                     trace.instruction,
                     trace.message.get(0).unwrap()
                 );
@@ -130,15 +130,15 @@ impl TraceFactory {
                 // print the children
                 for child in &trace.children {
                     self.print_trace(
-                        &format!("{}   │", prefix).bold().bright_white(),
+                        &format!("{}   │", prefix).bold().white(),
                         *child as usize - 1
                     );
                 }
 
                 // print the return value
                 println!(
-                    "{} ← {} bytes",
-                    format!("{}   └─", prefix).bold().bright_white(),
+                    "{} ← {}",
+                    format!("{}   └─", prefix).bold().white(),
                     match trace.message.get(1) {
                         Some(message) => message,
                         None => "()"
@@ -149,7 +149,7 @@ impl TraceFactory {
             TraceCategory::Log => {
                 println!(
                     "{} emit {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
+                    replace_last(prefix.to_string(), "│ ", " ├─").bold().white(),
                     trace.message.get(0).unwrap()
                     
                 );
@@ -161,8 +161,8 @@ impl TraceFactory {
                         let message = trace.message.get(message_index).unwrap();
                         println!(
                             "{} {} {}: {}",
-                            if message_index == 0 { replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white() }
-                            else { replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white() },
+                            if message_index == 0 { replace_last(prefix.to_string(), "│ ", " ├─").bold().white() }
+                            else { replace_last(prefix.to_string(), "│ ", " │ ").bold().white() },
                             if message_index == 0 { "emit" } else { "    " },
                             format!("topic {}", message_index).purple(),
                             message
@@ -170,7 +170,7 @@ impl TraceFactory {
                     }
                     println!(
                         "{}         {}: {}",
-                        replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white(),
+                        replace_last(prefix.to_string(), "│ ", " │ ").bold().blue(),
                         "data".purple(),
                         trace.message.last().unwrap()
                     );
@@ -178,7 +178,7 @@ impl TraceFactory {
                 else {
                     println!(
                         "{} emit {}: {}",
-                        replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
+                        replace_last(prefix.to_string(), "│ ", " ├─").bold().white(),
                         "data".purple(),
                         trace.message.last().unwrap()
                     );
@@ -191,9 +191,9 @@ impl TraceFactory {
                     println!(
                         "{} {}",
                         if message_index == 0 {
-                            replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white()
+                            replace_last(prefix.to_string(), "│ ", " ├─").bold().white()
                         } else {
-                            replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white()
+                            replace_last(prefix.to_string(), "│ ", " │ ").bold().white()
                         },
                         message
                     );
@@ -202,18 +202,18 @@ impl TraceFactory {
                 // print the children
                 for child in &trace.children {
                     self.print_trace(
-                        &format!("{}   │", prefix).bold().bright_white(),
+                        &format!("{}   │", prefix).bold().white(),
                         *child as usize - 1
                     );
                 }
             },
             TraceCategory::Empty => {
-                println!("{}", replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white());
+                println!("{}", replace_last(prefix.to_string(), "│ ", " │ ").bold().white());
             },
             TraceCategory::Create => {
                 println!(
                     "{} [{}] create → {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
+                    replace_last(prefix.to_string(), "│ ", " ├─").bold().white(),
                     trace.instruction,
                     trace.message.get(0).unwrap()
                 );
@@ -221,15 +221,15 @@ impl TraceFactory {
                 // print the children
                 for child in &trace.children {
                     self.print_trace(
-                        &format!("{}   │", prefix).bold().bright_white(),
+                        &format!("{}   │", prefix).bold().white(),
                         *child as usize - 1
                     );
                 }
 
                 // print the return value
                 println!(
-                    "{} ← {} bytes",
-                    format!("{}   └─", prefix).bold().bright_white(),
+                    "{} ← {}",
+                    format!("{}   └─", prefix).bold().white(),
                     trace.message.get(1).unwrap()
                 )
             }
@@ -408,31 +408,31 @@ impl Logger {
     
 
     pub fn error(&self, message: &str) {
-        println!("{} {}", "error:".bright_red().bold(), message);
+        println!("{}: {}", "error".bright_red().bold(), message);
     }
     
 
     pub fn success(&self, message: &str) {
-        println!("{} {}", "success:".bright_green().bold(), message);
+        println!("{}: {}", "success".bright_green().bold(), message);
     }
 
 
     pub fn info (&self, message: &str) {
         if self.level >= 1 {
-            println!("{} {}", "info:".bright_cyan().bold(), message);
+            println!("{}: {}", "info".bright_cyan().bold(), message);
         }
     }
 
 
     pub fn warn (&self, message: &str) {
-        println!("{} {}", "warn:".bright_yellow().bold(), message);
+        println!("{}: {}", "warn".bright_yellow().bold(), message);
 
     }
 
 
     pub fn debug (&self, message: &str) {
         if self.level >= 2 {
-            println!("{} {}", "debug:".bright_magenta().bold(), message);
+            println!("{}: {}", "debug".bright_magenta().bold(), message);
         }
     }
 
@@ -451,7 +451,7 @@ impl Logger {
         for (i, option) in options.iter().enumerate() {
             println!(
                 "  {} {}: {}",
-                if i == options.len() - 1 { "└─".bold().bright_white() } else { "├─".bold().bright_white() },
+                if i == options.len() - 1 { "└─".bold().white() } else { "├─".bold().white() },
                 i.to_string(),
                 option
             );
