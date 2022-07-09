@@ -158,14 +158,25 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
                 }
             },
             Token::FixedArray(val) | Token::Array(val) => {
-                output.push(format!("{prefix}["));
-                output.extend(display(val.to_vec(), &format!("{prefix}   ")));
-                output.push(format!("{prefix}]"));
+                if val.len() == 0 {
+                    output.push(format!("{prefix}[]"));
+                }
+                else {
+                    output.push(format!("{prefix}["));
+                    output.extend(display(val.to_vec(), &format!("{prefix}   ")));
+                    output.push(format!("{prefix}]"));
+                }
             },
             Token::Tuple(val) => {
-                output.push(format!("{prefix}("));
-                output.extend(display(val.to_vec(), &format!("{prefix}   ")));
-                output.push(format!("{prefix})"));
+                if val.len() == 0 {
+                    output.push(format!("{prefix}()"));
+                }
+                else {
+                    output.push(format!("{prefix}("));
+                    output.extend(display(val.to_vec(), &format!("{prefix}   ")));
+                    output.push(format!("{prefix})"));
+                }  
+                
             },
         };
     }

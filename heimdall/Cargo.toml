@@ -16,6 +16,7 @@ heimdall-common = {path = "./../common"}
 heimdall-config = {path = "./../config"}
 tokio = {version = "1", features = ["full"]}
 serde_json = "1.0"
+indicatif = "0.16.2"
 strsim = "0.10.0"
 
 [[bin]]

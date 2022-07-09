@@ -30,17 +30,17 @@ main() {
         ;;
     esac; shift
   done
+
   # remove the current heimdall installation if it exists
   ensure rm -f "$BIFROST_BIN_DIR/heimdall"
   
+  # make the build path if it doesn't exist
   BUILD_PATH="${BIFROST_PATH}/build"
-
-  # make the directory if it doesn't exist
   if [ ! -d $BUILD_PATH ]; then
     ensure mkdir -p $BUILD_PATH
   fi
 
-  # remove the build directory if it exists
+  # remove the source directory if it exists
   ensure rm -rf "$BUILD_PATH/heimdall-rs"
 
   cd $BUILD_PATH
@@ -55,7 +55,10 @@ main() {
   if [ -n "$TARGET_VERSION" ]; then
     ensure git checkout $TARGET_VERSION > /dev/null 2>&1
   else
-    ensure git checkout origin/main > /dev/null 2>&1
+
+    # checkout the latest tag
+    tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+    ensure git checkout $tag -b latest > /dev/null 2>&1
   fi
 
   # build the binaries

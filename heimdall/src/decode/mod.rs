@@ -30,19 +30,20 @@ use strsim::normalized_damerau_levenshtein as similarity;
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall decode <TARGET> [OPTIONS]")]
 pub struct DecodeArgs {
-    // The target to decode, either a transaction hash or string of bytes.
+    
+    /// The target to decode, either a transaction hash or string of bytes.
     #[clap(required=true)]
     pub target: String,
 
-    // Set the output verbosity level, 1 - 5.
+    /// Set the output verbosity level, 1 - 5.
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
 
-    // The RPC provider to use for fetching target bytecode.
+    /// The RPC provider to use for fetching target bytecode.
     #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
-    // When prompted, always select the default value.
+    /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
 
@@ -253,7 +254,7 @@ pub fn decode(args: DecodeArgs) {
                         };
 
                         // if the decoded function call matches (95%) the function signature, add it to the list of matches
-                        if similarity(decoded_function_call,&calldata[8..].replace("0", "")).abs() >= 0.95 {
+                        if similarity(decoded_function_call,&calldata[8..].replace("0", "")).abs() >= 0.90 {
                             let mut found_match = potential_match.clone();
                             found_match.decoded_inputs = Some(result);
                             matches.push(found_match);
@@ -271,11 +272,17 @@ pub fn decode(args: DecodeArgs) {
         }
     }
 
+    // truncate target for prettier display
+    let mut shortened_target = args.target;
+    if shortened_target.len() > 66 {
+        shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+    }
+
     if matches.len() == 0 {
         logger.warn("couldn't find any matches for the given function signature.");
 
         // build a trace of the calldata
-        let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![args.target], "()".to_string());
+        let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
         trace.br(decode_call);
         trace.add_message(decode_call, 1, vec![format!("selector: 0x{}", function_selector).to_string()]);
         trace.add_message(decode_call, 1, vec![format!("calldata: {} bytes", calldata.len() / 2usize).to_string()]);
@@ -318,7 +325,8 @@ pub fn decode(args: DecodeArgs) {
         };
 
         // print out the match and it's decoded inputs
-        let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![args.target], "()".to_string());
+
+        let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
         trace.br(decode_call);
         trace.add_message(decode_call, 1, vec![format!("name:      {}", selected_match.name).to_string()]);
         trace.add_message(decode_call, 1, vec![format!("signature: {}", selected_match.signature).to_string()]);

@@ -23,10 +23,12 @@ etherscan_api_key = \"\"
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall config [OPTIONS]")]
 pub struct ConfigArgs {
-    // The target key to update.
+    
+    /// The target key to update.
     #[clap(required=false, default_value="")]
     key: String,
 
+    /// The value to set the key to.
     #[clap(required=false, default_value="")]
     value: String,
 
@@ -37,7 +39,7 @@ pub struct ConfigArgs {
 pub struct Configuration {
     pub rpc_url: String,
     pub local_rpc_url: String,
-    pub etherscan_api_key: String,
+    pub etherscan_api_key: String
 }
 
 

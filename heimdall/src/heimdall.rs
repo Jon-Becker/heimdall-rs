@@ -26,8 +26,6 @@ pub struct Arguments {
 )]
 #[allow(clippy::large_enum_variant)]
 pub enum Subcommands {
-    #[clap(name = "decompile", about = "Decompile EVM bytecode to Solidity")]
-    Decompile(decompile::DecompilerArgs),
 
     #[clap(name = "disassemble", about = "Disassemble EVM bytecode to assembly")]
     Disassemble(DisassemblerArgs),
@@ -38,8 +36,7 @@ pub enum Subcommands {
     #[clap(name = "config", about = "Display and edit the current configuration")]
     Config(ConfigArgs),
 
-    #[clap(name = "cache", about = "Manage cached files for Heimdall.")]
-    Cache(decompile::DecompilerArgs),
+
 }
 
 fn main() {
@@ -47,9 +44,6 @@ fn main() {
 
     let configuration = get_config();
     match args.sub {
-        Subcommands::Decompile(cmd) => {
-            println!("{:#?}", cmd)
-        }
 
         Subcommands::Disassemble(mut cmd) => {
             // if the user has not specified a rpc url, use the default
@@ -78,9 +72,6 @@ fn main() {
         Subcommands::Config(cmd) => {
             config(cmd);
         }
-
-        Subcommands::Cache(cmd) => {
-            println!("{:#?}", cmd)
-        }
+        
     }
 }

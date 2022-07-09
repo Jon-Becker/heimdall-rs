@@ -19,23 +19,23 @@ use crate::{
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall disassemble <TARGET> [OPTIONS]")]
 pub struct DisassemblerArgs {
-    // The target to decompile, either a file, contract address, or ENS name.
+    /// The target to decompile, either a file, contract address, or ENS name.
     #[clap(required=true)]
     pub target: String,
 
-    // Set the output verbosity level, 1 - 5.
+    /// Set the output verbosity level, 1 - 5.
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
     
-    // The output directory to write the decompiled files to
+    /// The output directory to write the decompiled files to
     #[clap(long="output", short, default_value = "", hide_default_value = true)]
     pub output: String,
 
-    // The RPC provider to use for fetching target bytecode.
+    /// The RPC provider to use for fetching target bytecode.
     #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
-    // When prompted, always select the default value.
+    /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
 
