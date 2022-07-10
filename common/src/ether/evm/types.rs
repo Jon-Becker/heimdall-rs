@@ -137,23 +137,23 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
 
     for input in inputs {
         match input {
-            Token::Address(_) => output.push(format!("{prefix}{} 0x{input}", "address".dimmed().blue())),
-            Token::Int(val) => output.push(format!("{prefix}{} {}", "int    ".dimmed().blue(), val.to_string())),
-            Token::Uint(val) => output.push(format!("{prefix}{} {}", "uint   ".dimmed().blue(), val.to_string())),
-            Token::String(val) => output.push(format!("{prefix}{} {val}", "string ".dimmed().blue())),
+            Token::Address(_) => output.push(format!("{prefix}{} 0x{input}", "address".blue())),
+            Token::Int(val) => output.push(format!("{prefix}{} {}", "int    ".blue(), val.to_string())),
+            Token::Uint(val) => output.push(format!("{prefix}{} {}", "uint   ".blue(), val.to_string())),
+            Token::String(val) => output.push(format!("{prefix}{} {val}", "string ".blue())),
             Token::Bool(val) => {
-                if val { output.push(format!("{prefix}{} true", "bool   ".dimmed().blue())); }
-                else { output.push(format!("{prefix}{} false",  "bool   ".dimmed().blue())); }
+                if val { output.push(format!("{prefix}{} true", "bool   ".blue())); }
+                else { output.push(format!("{prefix}{} false",  "bool   ".blue())); }
             },
             Token::FixedBytes(_) | Token::Bytes(_) => {
                 let bytes = input.to_string().chars().collect::<Vec<char>>().chunks(64).map(|c| c.iter().collect::<String>()).collect::<Vec<String>>();
 
                 for (i, byte) in bytes.iter().enumerate() {
                     if i == 0 {
-                        output.push(format!("{prefix}{} 0x{}",  "bytes  ".dimmed().blue(), byte));
+                        output.push(format!("{prefix}{} 0x{}",  "bytes  ".blue(), byte));
                     }
                     else {
-                        output.push(format!("{prefix}{}   {}",  "       ".dimmed().blue(), byte));
+                        output.push(format!("{prefix}{}   {}",  "       ".blue(), byte));
                     }
                 }
             },
@@ -175,8 +175,7 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
                     output.push(format!("{prefix}("));
                     output.extend(display(val.to_vec(), &format!("{prefix}   ")));
                     output.push(format!("{prefix})"));
-                }  
-                
+                }    
             },
         };
     }

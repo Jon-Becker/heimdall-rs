@@ -1,0 +1,37 @@
+name: Question
+description: Ask a general question about Heimdall
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please ensure that the question has not already been asked in the issue tracker, and that the wiki won't answer it.
+
+        Thank you!
+  - type: textarea
+    attributes:
+      label: Version
+      description: Which version of heimdall is the bug in? (`heimdall -V`).
+    validations:
+      required: true
+  - type: checkboxes
+    attributes:
+      label: Please check the following
+      options:
+        - label: This is not a duplicate question
+        - label: I have checked the wiki beforehand
+  - type: dropdown
+    attributes:
+      label: Operating System
+      description: What operating system are you on?
+      options:
+        - Windows
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Linux
+  - type: textarea
+    attributes:
+      label: Ask your question here
+    validations:
+      required: true

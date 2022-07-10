@@ -1,0 +1,51 @@
+name: Bug report
+description: File a bug report
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please ensure that the bug has not already been filed in the issue tracker.
+
+        Thanks for taking the time to report this bug!
+  - type: dropdown
+    attributes:
+      label: Component
+      description: What component is the bug in?
+      multiple: true
+      options:
+        - Installing bifrost
+        - Installing heimdall
+        - Heimdall CLI
+        - Heimdall Config
+        - Heimdall Modules
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Version
+      description: Which version of heimdall is the bug in? (`heimdall -V`).
+    validations:
+      required: true
+  - type: checkboxes
+    attributes:
+      label: Please check the following
+      options:
+        - label: This is not a duplicate issue
+        - label: I have checked the wiki and tried troubleshooting the issue
+  - type: dropdown
+    attributes:
+      label: Operating System
+      description: What operating system are you on?
+      options:
+        - Windows
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Linux
+  - type: textarea
+    attributes:
+      label: Describe the issue you are facing
+      description: Include all relevant information about the issue, including the steps to reproduce it, and the expected result.
+    validations:
+      required: true
