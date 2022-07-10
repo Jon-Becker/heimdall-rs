@@ -53,11 +53,16 @@ main() {
   
   # if they specified a version, use that
   if [ -n "$TARGET_VERSION" ]; then
+    echo "bifrost: Installing version $TARGET_VERSION."
+
     ensure git checkout $TARGET_VERSION > /dev/null 2>&1
   else
 
     # checkout the latest tag
     tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+
+    echo "bifrost: Installing version $tag."
+
     ensure git checkout $tag -b latest > /dev/null 2>&1
   fi
 

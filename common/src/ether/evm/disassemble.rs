@@ -151,15 +151,21 @@ pub fn disassemble(args: DisassemblerArgs) {
         .chunks(2)
         .map(|c| c.iter().collect::<String>())
         .collect::<Vec<String>>();
-    
-    while program_counter < byte_array.len() {
-        
+
+    while program_counter < byte_array.len(){
+
         let operation = opcode(&byte_array[program_counter]);
         let mut pushed_bytes: String = String::new();
 
         if operation.name.contains("PUSH") {
             let byte_count_to_push: u8 = operation.name.replace("PUSH", "").parse().unwrap();
-            pushed_bytes = byte_array[program_counter + 1..program_counter + 1 + byte_count_to_push as usize].join("");
+        
+            pushed_bytes = match  byte_array.get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize) {
+                Some(bytes) => bytes.join(""),
+                None => {
+                    break
+                }
+            };
             program_counter += byte_count_to_push as usize;
         }
         
