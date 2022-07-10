@@ -15,7 +15,6 @@ If you want to manually install bifrost, you can download the latest release fro
 Once you have installed `bifrost`, you can use it to install Heimdall using the following command from a new terminal:
 
 ```bash
-# install heimdall. By default, it will be compiled from source, which may take some time.
 bifrost
 ```
 
