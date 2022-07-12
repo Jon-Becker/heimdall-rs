@@ -12,9 +12,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Open Directory
-      run: cd ./heimdall
     - name: Build
+      working-directory: ./heimdall
       run: cargo build --verbose
     - name: Run tests
+      working-directory: ./heimdall
       run: cargo test --verbose
