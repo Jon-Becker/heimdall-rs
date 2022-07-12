@@ -570,7 +570,7 @@ mod tests {
     fn test_option() {
         let (logger, _)= Logger::new("TRACE");
 
-        logger.option("warn", "multiple possibilities", vec!["option 1".to_string(), "option 2".to_string(), "option 3".to_string()], Some(0), false);
+        logger.option("warn", "multiple possibilities", vec!["option 1".to_string(), "option 2".to_string(), "option 3".to_string()], Some(0), true);
     }
 
 }
