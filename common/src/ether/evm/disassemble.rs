@@ -19,7 +19,7 @@ use crate::{
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall disassemble <TARGET> [OPTIONS]")]
 pub struct DisassemblerArgs {
-    /// The target to decompile, either a file, contract address, or ENS name.
+    /// The target to decompile, either a file, bytecode, contract address, or ENS name.
     #[clap(required=true)]
     pub target: String,
 
@@ -65,7 +65,10 @@ pub fn disassemble(args: DisassemblerArgs) {
     }
 
     let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target) {
+    if BYTECODE_REGEX.is_match(&args.target) {
+        contract_bytecode = args.target.clone();
+    }
+    else if ADDRESS_REGEX.is_match(&args.target) {
 
         // push the address to the output directory
         if &output_dir != &args.output {
