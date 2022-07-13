@@ -60,7 +60,7 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
             continue
         }
         if solidity_type.ends_with("[]") {
-            let array_type = match parse_function_parameters(solidity_type.replace("[]", "")) {
+            let array_type = match parse_function_parameters(solidity_type[..solidity_type.len() - 2].to_string()) {
                 Some(types_) => types_,
                 None => continue,
             };
@@ -81,7 +81,7 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
                 },
                 None => continue,
             };
-            let array_type = match parse_function_parameters(solidity_type.replace("[]", "")) {
+            let array_type = match parse_function_parameters(solidity_type[..solidity_type.len() - (2 + size.to_string().len())].to_string()) {
                 Some(types_) => types_,
                 None => continue,
             };
