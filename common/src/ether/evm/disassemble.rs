@@ -19,7 +19,8 @@ use crate::{
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall disassemble <TARGET> [OPTIONS]")]
 pub struct DisassemblerArgs {
-    /// The target to decompile, either a file, bytecode, contract address, or ENS name.
+    
+    /// The target to disassemble, either a file, bytecode, contract address, or ENS name.
     #[clap(required=true)]
     pub target: String,
 
@@ -183,7 +184,6 @@ pub fn disassemble(args: DisassemblerArgs) {
     let file_path = write_file(&String::from(format!("{}/disassembled.asm", &output_dir)), &output);
     logger.info(&format!("wrote disassembled bytecode to '{}' .", file_path).to_string());
 
-    let elapsed = now.elapsed();
-    logger.debug(&format!("disassembly completed in {} ms.", elapsed.as_millis()).to_string());
+    logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()).to_string());
     return
 }

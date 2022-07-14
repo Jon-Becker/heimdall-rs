@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 
 use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_common::ether::evm::disassemble::*;
+use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
 
 
@@ -30,6 +31,9 @@ pub enum Subcommands {
     #[clap(name = "disassemble", about = "Disassemble EVM bytecode to assembly")]
     Disassemble(DisassemblerArgs),
 
+    #[clap(name = "decompile", about = "Decompile EVM bytecode to Solidity")]
+    Decompile(DecompilerArgs),
+
     #[clap(name = "decode", about = "Decode calldata into readable types")]
     Decode(DecodeArgs),
 
@@ -46,6 +50,7 @@ fn main() {
     match args.sub {
 
         Subcommands::Disassemble(mut cmd) => {
+            
             // if the user has not specified a rpc url, use the default
             match cmd.rpc_url.as_str() {
                 "" => {
@@ -57,7 +62,21 @@ fn main() {
             disassemble(cmd);
         }
 
+        Subcommands::Decompile(mut cmd) => {
+            
+            // if the user has not specified a rpc url, use the default
+            match cmd.rpc_url.as_str() {
+                "" => {
+                    cmd.rpc_url = configuration.rpc_url.clone();
+                }
+                _ => {}
+            };
+
+            decompile(cmd);
+        }
+
         Subcommands::Decode(mut cmd) => {
+            
             // if the user has not specified a rpc url, use the default
             match cmd.rpc_url.as_str() {
                 "" => {

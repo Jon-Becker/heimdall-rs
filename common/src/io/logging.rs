@@ -460,7 +460,7 @@ impl Logger {
         // flush output print prompt
         let mut selection = String::new();
         print!(
-            "\nSelect an option {}: ",
+            "\n  Select an option {}: ",
             if default.is_some() {
                 format!("(default: {})", default.unwrap())
             } else {

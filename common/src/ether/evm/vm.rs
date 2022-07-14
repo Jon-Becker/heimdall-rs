@@ -38,6 +38,7 @@ use super::{
     log::Log,
 };
 
+#[derive(Clone, Debug)]
 pub struct VM {
     pub stack: Stack,
     pub memory: Memory,
