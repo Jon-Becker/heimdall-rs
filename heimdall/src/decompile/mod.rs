@@ -1,3 +1,5 @@
+pub mod util;
+
 use std::env;
 use std::fs;
 
@@ -6,14 +8,20 @@ use ethers::{
     core::types::{Address},
     providers::{Middleware, Provider, Http},
 };
-use heimdall_common::ether::evm::disassemble::DisassemblerArgs;
-use heimdall_common::ether::evm::disassemble::disassemble;
-use heimdall_common::ether::evm::vm::VM;
 use heimdall_common::{
+    ether::evm::{
+        disassemble::{
+            DisassemblerArgs,
+            disassemble
+        },
+        vm::VM
+    },
     consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::* },
 };
-
+use crate::decompile::{
+    util::*
+};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Decompile EVM bytecode to Solidity",
@@ -149,7 +157,7 @@ pub fn decompile(args: DecompilerArgs) {
     }
 
     // disassemble the bytecode
-    disassemble(DisassemblerArgs {
+    let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
         default: args.default.clone(),
         verbose: args.verbose.clone(),
@@ -157,10 +165,9 @@ pub fn decompile(args: DecompilerArgs) {
         rpc_url: args.rpc_url.clone(),
     });
     
-    logger.debug(&format!("decompilation completed in {} ms.", now.elapsed().as_millis()).to_string());
 
     // create a new EVM instance
-    let mut evm = VM::new(
+    let evm = VM::new(
         contract_bytecode.clone(),
         String::from("0x"),
         String::from("0x6865696d64616c6c000000000061646472657373"),
@@ -170,6 +177,11 @@ pub fn decompile(args: DecompilerArgs) {
         u128::max_value(),
     );
 
-    println!("{:#?}", evm);
-    println!("{:#?}", evm.execute());
+    // find and resolve all selectors in the bytecode
+    let selectors = find_function_selectors(&evm.clone(), disassembled_bytecode);
+    let resolved_selectors = resolve_function_selectors(selectors.clone());
+    logger.debug(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
+
+
+    logger.debug(&format!("decompilation completed in {} ms.", now.elapsed().as_millis()).to_string());
 }

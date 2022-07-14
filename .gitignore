@@ -8,3 +8,7 @@ Cargo.lock
 out.json
 .idea
 .DS_STORE
+
+output
+output/*
+*/output

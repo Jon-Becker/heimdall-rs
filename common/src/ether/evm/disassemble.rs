@@ -43,7 +43,7 @@ pub struct DisassemblerArgs {
 }
 
 
-pub fn disassemble(args: DisassemblerArgs) {
+pub fn disassemble(args: DisassemblerArgs) -> String {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -185,5 +185,6 @@ pub fn disassemble(args: DisassemblerArgs) {
     logger.info(&format!("wrote disassembled bytecode to '{}' .", file_path).to_string());
 
     logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()).to_string());
-    return
+    
+    return output
 }
