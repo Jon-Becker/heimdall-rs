@@ -182,6 +182,11 @@ pub fn decompile(args: DecompilerArgs) {
     let resolved_selectors = resolve_function_selectors(selectors.clone());
     logger.debug(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
 
+    for selector in selectors {
+        let mut tracing_vm = evm.clone();
+        println!("{} {:#?}", selector.clone(), tracing_vm.call(selector, 0));
+    }
 
-    logger.debug(&format!("decompilation completed in {} ms.", now.elapsed().as_millis()).to_string());
+
+    logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()).to_string());
 }

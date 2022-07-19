@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use ethers::{prelude::rand::{self, Rng}, abi::AbiEncode};
 use heimdall_common::{
     ether::{evm::vm::VM, signatures::{ResolvedFunction, resolve_signature}}
 };
@@ -10,10 +11,20 @@ pub fn find_function_selectors(evm: &VM, assembly: String) -> Vec<String> {
     
     let mut function_selectors = Vec::new();
 
-    // execute an EVM call with empty calldata to find the dispatcher revert
     let mut vm = evm.clone();
-    vm.execute();
-    let dispatcher_revert = vm.instruction - 1;
+
+    // find a selector not present in the assembly
+    let selector;
+    loop {
+        let num = rand::thread_rng().gen_range(286331153..2147483647);
+        if !vm.bytecode.contains(&format!("63{}", num.encode_hex()[58..].to_string())) {
+            selector = num.encode_hex()[58..].to_string();
+            break;
+        }
+    }
+
+    // execute the EVM call to find the dispatcher revert
+    let dispatcher_revert = vm.call(selector, 0).instruction - 1;
 
     // search through assembly for PUSH4 instructions up until the dispatcher revert
     let assembly: Vec<String> = assembly.split("\n").map(|line| line.trim().to_string()).collect();
