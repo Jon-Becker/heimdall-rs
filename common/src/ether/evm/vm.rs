@@ -67,6 +67,7 @@ pub struct Result {
     pub exitcode: u128,
     pub events: Vec<Log>,
     pub runtime: f64,
+    pub instruction: u128,
 }
 
 #[derive(Clone, Debug)]
@@ -602,7 +603,7 @@ impl VM {
                             };
                         },
                     };
-                    let mut size: usize = match size.try_into() {
+                    let size: usize = match size.try_into() {
                         Ok(x) => x,
                         Err(_) => {
                             self.exit(2, "0x");
@@ -616,12 +617,16 @@ impl VM {
                         },
                     };
 
-                    // panic check
-                    if offset.overflowing_add(size).0 > self.calldata.len() / 2usize {
-                        size = self.calldata.len() / 2usize;
+                    let mut value = match self.calldata.get(offset*2 .. (offset + size)*2) {
+                        Some(x) => x.to_owned(),
+                        None => "".to_string(),
+                    };
+
+                    if value.len() < size * 2 {
+                        value.push_str(&"00".repeat(size - (value.len() / 2) ));
                     }
-                    
-                    self.memory.store(dest_offset, size, self.calldata[ offset*2 .. (offset + size)*2 ].to_string())
+
+                    self.memory.store(dest_offset, size, value)
                 }
 
 
@@ -664,7 +669,7 @@ impl VM {
                             };
                         },
                     };
-                    let mut size: usize = match size.try_into() {
+                    let size: usize = match size.try_into() {
                         Ok(x) => x,
                         Err(_) => {
                             self.exit(2, "0x");
@@ -678,12 +683,16 @@ impl VM {
                         },
                     };
 
-                    // panic check
-                    if offset.overflowing_add(size).0 > self.bytecode.len() / 2usize {
-                        size = self.bytecode.len() / 2usize;
+                    let mut value = match self.bytecode.get(offset*2 .. (offset + size)*2) {
+                        Some(x) => x.to_owned(),
+                        None => "".to_string(),
+                    };
+
+                    if value.len() < size * 2 {
+                        value.push_str(&"00".repeat(size - (value.len() / 2) ));
                     }
                     
-                    self.memory.store(dest_offset, size, self.bytecode[ offset*2 .. (offset + size)*2 ].to_string())
+                    self.memory.store(dest_offset, size, value)
                 }
 
 
@@ -845,7 +854,7 @@ impl VM {
                 // MSTORE
                 if op == 82 {
                     let offset = self.stack.pop();
-                    let value = self.stack.pop();
+                    let value = self.stack.pop().encode_hex().replace("0x", "");
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -862,14 +871,14 @@ impl VM {
                         },
                     };
 
-                    self.memory.store(offset, 32, value.encode_hex().replace("0x", ""));
+                    self.memory.store(offset, 32, value);
                 }
 
 
                 // MSTORE8
                 if op == 83 {
                     let offset = self.stack.pop();
-                    let value = self.stack.pop();
+                    let value = self.stack.pop().encode_hex().replace("0x", "");
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -886,24 +895,24 @@ impl VM {
                         },
                     };
 
-                    self.memory.store(offset, 1, value.encode_hex().replace("0x", ""));
+                    self.memory.store(offset, 1, value);
                 }
 
 
                 // SLOAD
                 if op == 84 {
-                    let key = self.stack.pop();
+                    let key = self.stack.pop().encode_hex().replace("0x", "");
 
-                    self.stack.push(&self.storage.load(key.to_string()))
+                    self.stack.push(&self.storage.load(key))
                 }
 
                 
                 // SSTORE
                 if op == 85 {
-                    let key = self.stack.pop();
-                    let value = self.stack.pop();
+                    let key = self.stack.pop().encode_hex().replace("0x", "");
+                    let value = self.stack.pop().encode_hex().replace("0x", "");
 
-                    self.storage.store(key.to_string(), value.encode_hex().to_string());
+                    self.storage.store(key, value);
                 }
 
 
@@ -1049,8 +1058,7 @@ impl VM {
                     
                     let data = self.memory.read(offset, size);
 
-                    // no need for a panic check because the length of events should never be 
-                    // larger than a u128
+                    // no need for a panic check because the length of events should never be larger than a u128
                     self.events.push(Log::new((self.events.len() as usize).try_into().unwrap(), topics, data))
                 }
 
@@ -1210,11 +1218,22 @@ impl VM {
     }
 
 
+    // Resets the VM state for a new execution
+    pub fn reset(&mut self) {
+        self.stack = Stack::new();
+        self.memory = Memory::new();
+        self.instruction = 1;
+        self.gas_remaining = u128::max_value();
+        self.gas_used = 21000;
+        self.events = Vec::new();
+        self.returndata = String::new();
+        self.exitcode = 255;
+        self.timestamp = Instant::now();
+    }  
+
     // Executes the code until finished
     pub fn execute(&mut self) -> Result {
         while self.bytecode.len() >= (self.instruction*2+2) as usize {
-            self.step();
-
             if self.exitcode != 255 || self.returndata.len() as usize > 0 {
                 break
             }
@@ -1227,7 +1246,20 @@ impl VM {
             exitcode: self.exitcode,
             events: self.events.clone(),
             runtime: self.timestamp.elapsed().as_secs_f64(),
+            instruction: self.instruction,
         }
+    }
+
+
+    // Executes provided calldata until finished
+    pub fn call(&mut self, calldata: String, value: u128) -> Result {
+        
+        // reset the VM temp state
+        self.reset();
+        self.calldata = calldata.replace("0x", "");
+        self.value = value;
+
+        return self.execute();
     }
 
 }
