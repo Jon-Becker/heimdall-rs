@@ -1234,6 +1234,8 @@ impl VM {
     // Executes the code until finished
     pub fn execute(&mut self) -> Result {
         while self.bytecode.len() >= (self.instruction*2+2) as usize {
+            self.step();
+
             if self.exitcode != 255 || self.returndata.len() as usize > 0 {
                 break
             }
