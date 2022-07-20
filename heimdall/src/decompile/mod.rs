@@ -50,6 +50,10 @@ pub struct DecompilerArgs {
     #[clap(long, short)]
     pub default: bool,
 
+    /// Whether to skip resolving function selectors.
+    #[clap(long="skip-resolving")]
+    pub skip_resolving: bool,
+
 }
 
 
@@ -179,9 +183,15 @@ pub fn decompile(args: DecompilerArgs) {
 
     // find and resolve all selectors in the bytecode
     let selectors = find_function_selectors(&evm.clone(), disassembled_bytecode);
-    let resolved_selectors = resolve_function_selectors(selectors.clone());
-    logger.debug(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
 
+    if !args.skip_resolving {
+        let resolved_selectors = resolve_function_selectors(selectors.clone());
+        logger.debug(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
+    }
+    else {
+        logger.debug(&format!("found {} function selectors.", selectors.len()).to_string());
+    }
+    
     for selector in selectors {
         let mut tracing_vm = evm.clone();
         println!("{} {:#?}", selector.clone(), tracing_vm.call(selector, 0));

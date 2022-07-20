@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 use ethers::{prelude::rand::{self, Rng}, abi::AbiEncode};
 use heimdall_common::{
@@ -8,7 +8,6 @@ use heimdall_common::{
 
 // Find all function selectors in the given EVM.
 pub fn find_function_selectors(evm: &VM, assembly: String) -> Vec<String> {
-    
     let mut function_selectors = Vec::new();
 
     let mut vm = evm.clone();

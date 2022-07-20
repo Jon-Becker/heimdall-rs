@@ -12,3 +12,5 @@ out.json
 output
 output/*
 */output
+*.evm
+*.asm
