@@ -42,10 +42,13 @@ pub fn find_function_selectors(evm: &VM, assembly: String) -> Vec<String> {
             break;
         }
     }
-
+    function_selectors.sort();
+    function_selectors.dedup();
     function_selectors
 }
 
+
+// resolve a list of function selectors to their possible signatures
 pub fn resolve_function_selectors(selectors: Vec<String>) -> HashMap<String, Vec<ResolvedFunction>> {
     
     let mut resolved_functions: HashMap<String, Vec<ResolvedFunction>> = HashMap::new();
@@ -60,4 +63,24 @@ pub fn resolve_function_selectors(selectors: Vec<String>) -> HashMap<String, Vec
     }
 
     resolved_functions
+}
+
+
+// trace a function call to create a tree of all possible jumps
+pub fn decompile_selector(evm: &VM, selector: String) -> Vec<String> {
+    let mut vm = evm.clone();
+    let mut trace = Vec::new();
+    let mut decompiled = Vec::new();
+    
+    vm.calldata = selector.clone();
+    while vm.bytecode.len() >= (vm.instruction*2+2) as usize {
+        trace.push(vm.step().last_instruction);
+
+        if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
+            break
+        }
+    }
+    println!("{:#?}", trace);
+
+    decompiled
 }

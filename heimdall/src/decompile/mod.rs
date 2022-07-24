@@ -192,9 +192,10 @@ pub fn decompile(args: DecompilerArgs) {
         logger.debug(&format!("found {} function selectors.", selectors.len()).to_string());
     }
     
+    logger.debug(&format!("performing static analysis on '{}' .", &args.target).to_string());
     for selector in selectors {
-        let mut tracing_vm = evm.clone();
-        println!("{} {:#?}", selector.clone(), tracing_vm.call(selector, 0));
+        println!("{:#?}", decompile_selector(&evm.clone(), selector.clone()));
+        //println!("{} {:?}", selector.clone(), tracing_vm.call(selector, 0));
     }
 
 
