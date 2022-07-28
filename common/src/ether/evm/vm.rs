@@ -617,7 +617,15 @@ impl VM {
                         },
                     };
 
-                    let mut value = match self.calldata.get(offset*2 .. (offset + size)*2) {
+                    let value_offset_safe = 
+                        if (offset + size)*2 > self.calldata.len() {
+                            self.calldata.len()
+                        }
+                        else {
+                            (offset + size)*2
+                        };
+
+                    let mut value = match self.calldata.get(offset*2 .. value_offset_safe) {
                         Some(x) => x.to_owned(),
                         None => "".to_string(),
                     };
@@ -683,7 +691,15 @@ impl VM {
                         },
                     };
 
-                    let mut value = match self.bytecode.get(offset*2 .. (offset + size)*2) {
+                    let value_offset_safe = 
+                        if (offset + size)*2 > self.calldata.len() {
+                            self.calldata.len()
+                        }
+                        else {
+                            (offset + size)*2
+                        };
+
+                    let mut value = match self.bytecode.get(offset*2 .. value_offset_safe) {
                         Some(x) => x.to_owned(),
                         None => "".to_string(),
                     };
