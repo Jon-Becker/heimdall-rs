@@ -1,6 +1,6 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, str::FromStr, ops::Add};
 
-use ethers::{prelude::rand::{self, Rng}, abi::AbiEncode};
+use ethers::{prelude::{rand::{self, Rng}, U256}, abi::AbiEncode};
 use heimdall_common::{
     ether::{evm::vm::VM, signatures::{ResolvedFunction, resolve_signature}}
 };
@@ -69,18 +69,36 @@ pub fn resolve_function_selectors(selectors: Vec<String>) -> HashMap<String, Vec
 // trace a function call to create a tree of all possible jumps
 pub fn decompile_selector(evm: &VM, selector: String) -> Vec<String> {
     let mut vm = evm.clone();
-    let mut trace = Vec::new();
+    let mut flag_next_jumpi = false;
+    let mut function_entry_point = 0;
     let mut decompiled = Vec::new();
     
+    // execute the EVM call to find the entry point for the given selector
     vm.calldata = selector.clone();
     while vm.bytecode.len() >= (vm.instruction*2+2) as usize {
-        trace.push(vm.step().last_instruction);
+        let call = vm.step();
+
+        // if the opcode is an EQ and it matched the selector, the next jumpi is the entry point
+        if call.last_instruction.opcode == "14" && 
+           call.last_instruction.inputs[0].eq(&U256::from_str(&selector.clone()).unwrap()) {
+            
+            flag_next_jumpi = true;
+        }
+
+        // if we are flagging the next jumpi, and the opcode is a JUMPI, we have found the entry point
+        if flag_next_jumpi && call.last_instruction.opcode == "57" {
+
+            // it's safe to convert here because we know max bytecode length is ~25kb, way less than 2^64
+            function_entry_point = call.last_instruction.inputs[0].as_u64();
+            break;
+        }
 
         if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
             break
         }
     }
-    println!("{:#?}", trace);
+
+    println!("{} => {:#?}", selector, function_entry_point.encode_hex());
 
     decompiled
 }
