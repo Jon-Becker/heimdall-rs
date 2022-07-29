@@ -211,10 +211,10 @@ pub fn decode(args: DecodeArgs) {
         logger.warn("couldn't find any matches for the given function signature.");
 
         // build a trace of the calldata
-        let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
+        let decode_call = trace.add_call(0, line!(), "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
         trace.br(decode_call);
-        trace.add_message(decode_call, 1, vec![format!("selector: 0x{}", function_selector).to_string()]);
-        trace.add_message(decode_call, 1, vec![format!("calldata: {} bytes", calldata.len() / 2usize).to_string()]);
+        trace.add_message(decode_call, line!(), vec![format!("selector: 0x{}", function_selector).to_string()]);
+        trace.add_message(decode_call, line!(), vec![format!("calldata: {} bytes", calldata.len() / 2usize).to_string()]);
         trace.br(decode_call);
 
         // print out the decoded inputs
@@ -230,7 +230,7 @@ pub fn decode(args: DecodeArgs) {
                 ).to_string()
             )
         }
-        trace.add_message(decode_call, 1, inputs);
+        trace.add_message(decode_call, line!(), inputs);
         
     }
     else {
@@ -255,12 +255,12 @@ pub fn decode(args: DecodeArgs) {
 
         // print out the match and it's decoded inputs
 
-        let decode_call = trace.add_call(0, 110, "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
+        let decode_call = trace.add_call(0, line!(), "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
         trace.br(decode_call);
-        trace.add_message(decode_call, 1, vec![format!("name:      {}", selected_match.name).to_string()]);
-        trace.add_message(decode_call, 1, vec![format!("signature: {}", selected_match.signature).to_string()]);
-        trace.add_message(decode_call, 1, vec![format!("selector:  0x{}", function_selector).to_string()]);
-        trace.add_message(decode_call, 1, vec![format!("calldata:  {} bytes", calldata.len() / 2usize).to_string()]);
+        trace.add_message(decode_call, line!(), vec![format!("name:      {}", selected_match.name).to_string()]);
+        trace.add_message(decode_call, line!(), vec![format!("signature: {}", selected_match.signature).to_string()]);
+        trace.add_message(decode_call, line!(), vec![format!("selector:  0x{}", function_selector).to_string()]);
+        trace.add_message(decode_call, line!(), vec![format!("calldata:  {} bytes", calldata.len() / 2usize).to_string()]);
         trace.br(decode_call);
         for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
             let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");

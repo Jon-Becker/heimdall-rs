@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, ops::Add};
+use std::{collections::HashMap, str::FromStr};
 
 use ethers::{prelude::{rand::{self, Rng}, U256}, abi::AbiEncode};
 use heimdall_common::{
@@ -66,12 +66,11 @@ pub fn resolve_function_selectors(selectors: Vec<String>) -> HashMap<String, Vec
 }
 
 
-// trace a function call to create a tree of all possible jumps
-pub fn decompile_selector(evm: &VM, selector: String) -> Vec<String> {
+// resolve a selector's function entry point from the EVM bytecode
+pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
     let mut vm = evm.clone();
     let mut flag_next_jumpi = false;
     let mut function_entry_point = 0;
-    let mut decompiled = Vec::new();
     
     // execute the EVM call to find the entry point for the given selector
     vm.calldata = selector.clone();
@@ -98,7 +97,5 @@ pub fn decompile_selector(evm: &VM, selector: String) -> Vec<String> {
         }
     }
 
-    println!("{} => {:#?}", selector, function_entry_point.encode_hex());
-
-    decompiled
+    function_entry_point
 }

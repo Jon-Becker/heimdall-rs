@@ -28,7 +28,7 @@ pub struct DisassemblerArgs {
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
     
-    /// The output directory to write the decompiled files to
+    /// The output directory to write the disassembled bytecode to
     #[clap(long="output", short, default_value = "", hide_default_value = true)]
     pub output: String,
 
@@ -82,7 +82,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
             .build()
             .unwrap();
 
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
+        // We are disassembling a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
 
             // make sure the RPC provider isn't empty
@@ -128,7 +128,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
             output_dir.push_str("/local");
         }
 
-        // We are decompiling a file, so we need to read the bytecode from the file.
+        // We are disassembling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {                
                 if BYTECODE_REGEX.is_match(&contents) && contents.len() % 2 == 0 {

@@ -61,7 +61,14 @@ pub fn decompile(args: DecompilerArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
+
+    // truncate target for prettier display
+    let mut shortened_target = args.target.clone();
+    if shortened_target.len() > 66 {
+        shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+    }
+    let decompile_call = trace.add_call(0, line!(), "heimdall".to_string(), "decompile".to_string(), vec![shortened_target], "()".to_string());
 
     // parse the output directory
     let mut output_dir: String;
@@ -160,6 +167,8 @@ pub fn decompile(args: DecompilerArgs) {
         };
     }
 
+    trace.add_call(decompile_call, line!(), "heimdall".to_string(), "disassemble".to_string(), vec![format!("{} bytes", contract_bytecode.len()/2usize)], "()".to_string());
+
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
@@ -169,7 +178,7 @@ pub fn decompile(args: DecompilerArgs) {
         rpc_url: args.rpc_url.clone(),
     });
     
-
+    
     // create a new EVM instance
     let evm = VM::new(
         contract_bytecode.clone(),
@@ -180,10 +189,31 @@ pub fn decompile(args: DecompilerArgs) {
         0,
         u128::max_value(),
     );
+    let mut shortened_target = args.target.clone();
+    if shortened_target.len() > 66 {
+        shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+    }
+    let vm_trace = trace.add_creation(decompile_call, line!(), "contract".to_string(), shortened_target, (contract_bytecode.len()/2usize).try_into().unwrap());
 
     // find and resolve all selectors in the bytecode
     let selectors = find_function_selectors(&evm.clone(), disassembled_bytecode);
 
+    // perform EVM analysis    
+    logger.debug(&format!("performing static analysis on '{}' .", &args.target).to_string());
+    for selector in selectors.clone() {
+        
+        let func_analysis_trace = trace.add_call(vm_trace, line!(), "heimdall".to_string(), "analyze".to_string(), vec![format!("0x{}", selector)], "()".to_string());
+
+        // get the function's entry point
+        let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
+        trace.add_debug(func_analysis_trace, function_entry_point.try_into().unwrap(), format!("discovered entry point: {}", function_entry_point).to_string());
+
+        
+        // get a map of possible jump destinations
+        
+    }
+
+    // TODO: add to trace
     if !args.skip_resolving {
         let resolved_selectors = resolve_function_selectors(selectors.clone());
         logger.debug(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
@@ -191,13 +221,7 @@ pub fn decompile(args: DecompilerArgs) {
     else {
         logger.debug(&format!("found {} function selectors.", selectors.len()).to_string());
     }
-    
-    logger.debug(&format!("performing static analysis on '{}' .", &args.target).to_string());
-    for selector in selectors {
-        println!("{:#?}", decompile_selector(&evm.clone(), selector.clone()));
-        //println!("{} {:?}", selector.clone(), tracing_vm.call(selector, 0));
-    }
 
-
+    trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()).to_string());
 }

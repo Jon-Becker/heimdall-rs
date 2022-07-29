@@ -126,7 +126,7 @@ impl TraceFactory {
                     trace.instruction,
                     trace.message.get(0).unwrap()
                 );
-
+            
                 // print the children
                 for child in &trace.children {
                     self.print_trace(
@@ -277,7 +277,7 @@ impl TraceFactory {
             name.green(),
             pointer.green(),
         );
-        self.add("create", parent_index, instruction, vec![contract, size.to_string()])
+        self.add("create", parent_index, instruction, vec![contract, format!("{} bytes", size.to_string())])
     }
 
 
@@ -319,6 +319,17 @@ impl TraceFactory {
         message: String
     ) -> u32 {
         let message = format!("{} {}", "info:".bright_cyan().bold(), message);
+        self.add("message", parent_index, instruction, vec![message])
+    }
+
+    // add debug to the trace
+    pub fn add_debug(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        message: String
+    ) -> u32 {
+        let message = format!("{} {}", "debug:".bright_magenta().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
 
