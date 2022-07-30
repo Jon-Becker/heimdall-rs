@@ -211,8 +211,6 @@ pub fn decompile(args: DecompilerArgs) {
         
         // get a map of possible jump destinations
         let _map = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
-
-        //println!("{:#?}", _map);
     }
 
     // TODO: add to trace

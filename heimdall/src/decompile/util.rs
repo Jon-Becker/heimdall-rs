@@ -8,8 +8,9 @@ use heimdall_common::{
 #[derive(Clone, Debug)]
 pub struct VMTrace {
     pub instruction: u128,
-    pub operations: Vec<String>,
+    pub operations: Vec<Instruction>,
     pub children: Vec<VMTrace>,
+    pub depth: usize,
 }
 
 // Find all function selectors in the given EVM.
@@ -123,10 +124,11 @@ pub fn map_selector(evm: &VM, trace: &TraceFactory, trace_parent: u32, selector:
     }
 
     // the VM is at the function entry point, begin tracing
-    recursive_map(&vm.clone(), trace, trace_parent)
+    let mut handled_jumpdests = Vec::new();
+    recursive_map(&vm.clone(), trace, trace_parent, &mut handled_jumpdests)
 }
 
-pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32) -> VMTrace {
+pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32, handled_jumpdests: &mut Vec<u128>) -> VMTrace {
     let mut vm = evm.clone();
 
     // create a new VMTrace object
@@ -134,39 +136,48 @@ pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32) -> VMTra
         instruction: vm.instruction,
         operations: Vec::new(),
         children: Vec::new(),
+        depth: 0,
     };
 
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction*2+2) as usize {
         let state = vm.step();
-        println!("{:#?}", state);
-
-        //TODO: turn on again
-        //vm_trace.operations.push(format!("{} {}", state.last_instruction.instruction, state.last_instruction.opcode_details.unwrap().name));
+        vm_trace.operations.push(state.last_instruction.clone());
         
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {
-            
+            vm_trace.depth += 1;
+
             // we need to create a trace for the path that wasn't taken.
             if state.last_instruction.inputs[1] == U256::from(0) {
 
                 // the jump was not taken, create a trace for the jump path
-                let mut trace_vm = vm.clone();
-                trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
-                vm_trace.children.push(recursive_map(&trace_vm, trace, trace_parent));
+                // only jump if we haven't already traced this destination
+                // TODO: mark as a loop?
+                if !(handled_jumpdests.contains(&(state.last_instruction.inputs[0].as_u128() + 1))) {
+                    let mut trace_vm = vm.clone();
+                    trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
+                    handled_jumpdests.push(trace_vm.instruction.clone());
+                    vm_trace.children.push(recursive_map(&trace_vm, trace, trace_parent, handled_jumpdests));
+                }
+                
 
                 // push the current path onto the stack
-                vm_trace.children.push(recursive_map(&vm.clone(), trace, trace_parent));
+                vm_trace.children.push(recursive_map(&vm.clone(), trace, trace_parent, handled_jumpdests));
             }
             else {
 
                 // the jump was taken, create a trace for the fallthrough path
-                let mut trace_vm = vm.clone();
-                trace_vm.instruction = state.last_instruction.instruction + 1;
-                vm_trace.children.push(recursive_map(&trace_vm, trace, trace_parent));
+                // only jump if we haven't already traced this destination
+                if !(handled_jumpdests.contains(&(state.last_instruction.instruction + 1))) {
+                    let mut trace_vm = vm.clone();
+                    trace_vm.instruction = state.last_instruction.instruction + 1;
+                    handled_jumpdests.push(trace_vm.instruction.clone());
+                    vm_trace.children.push(recursive_map(&trace_vm, trace, trace_parent, handled_jumpdests));
+                }
 
                 // push the current path onto the stack
-                vm_trace.children.push(recursive_map(&vm.clone(), trace, trace_parent));
+                vm_trace.children.push(recursive_map(&vm.clone(), trace, trace_parent, handled_jumpdests));
 
             }
 
