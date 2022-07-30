@@ -121,9 +121,9 @@ impl TraceFactory {
                 
                 // print the trace title
                 println!(
-                    "{} [{}] {}",
+                    "{} {} {}",
                     replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
-                    trace.instruction,
+                    format!("[{}]", trace.instruction).bold().bright_white(),
                     trace.message.get(0).unwrap()
                 );
             
@@ -140,8 +140,12 @@ impl TraceFactory {
                     "{} ← {}",
                     format!("{}   └─", prefix).bold().bright_white(),
                     match trace.message.get(1) {
-                        Some(message) => message,
-                        None => "()"
+                        Some(message) => format!(
+                                            "{}",
+                                            if message == "()" { message.dimmed() }
+                                            else { message.green() }
+                                        ),
+                        None => "()".dimmed().to_string()
                     }
                 )
 
@@ -212,9 +216,9 @@ impl TraceFactory {
             },
             TraceCategory::Create => {
                 println!(
-                    "{} [{}] create → {}",
+                    "{} {} create → {}",
                     replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
-                    trace.instruction,
+                    format!("[{}]", trace.instruction).bold().bright_white(),
                     trace.message.get(0).unwrap()
                 );
 
@@ -230,7 +234,7 @@ impl TraceFactory {
                 println!(
                     "{} ← {}",
                     format!("{}   └─", prefix).bold().bright_white(),
-                    trace.message.get(1).unwrap()
+                    trace.message.get(1).unwrap().bold().green()
                 )
             }
         }
