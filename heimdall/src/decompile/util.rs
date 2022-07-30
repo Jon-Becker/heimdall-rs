@@ -143,7 +143,7 @@ pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32, handled_
     while vm.bytecode.len() >= (vm.instruction*2+2) as usize {
         let state = vm.step();
         vm_trace.operations.push(state.last_instruction.clone());
-        
+
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {
             vm_trace.depth += 1;
@@ -160,6 +160,9 @@ pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32, handled_
                     handled_jumpdests.push(trace_vm.instruction.clone());
                     vm_trace.children.push(recursive_map(&trace_vm, trace, trace_parent, handled_jumpdests));
                 }
+                else {
+                    break;
+                }
                 
 
                 // push the current path onto the stack
@@ -174,6 +177,9 @@ pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32, handled_
                     trace_vm.instruction = state.last_instruction.instruction + 1;
                     handled_jumpdests.push(trace_vm.instruction.clone());
                     vm_trace.children.push(recursive_map(&trace_vm, trace, trace_parent, handled_jumpdests));
+                }
+                else {
+                    break;
                 }
 
                 // push the current path onto the stack

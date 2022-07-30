@@ -233,7 +233,12 @@ impl VM {
                     let numerator = self.stack.pop();
                     let denominator = self.stack.pop();
 
-                    self.stack.push(numerator.div(denominator).encode_hex().as_str());
+                    if denominator == U256::from(0) {
+                        self.stack.push(U256::from(0).encode_hex().as_str());
+                    }
+                    else {
+                        self.stack.push(numerator.div(denominator).encode_hex().as_str());
+                    }
                 }
 
 
@@ -242,7 +247,12 @@ impl VM {
                     let numerator = self.stack.pop();
                     let denominator = self.stack.pop();
 
-                    self.stack.push(sign_uint(numerator).div(sign_uint(denominator)).encode_hex().as_str());
+                    if denominator == U256::from(0) {
+                        self.stack.push(U256::from(0).encode_hex().as_str());
+                    }
+                    else {
+                        self.stack.push(sign_uint(numerator).div(sign_uint(denominator)).encode_hex().as_str());
+                    }
                 }
 
 
@@ -1132,7 +1142,7 @@ impl VM {
 
 
                 // DELEGATECALL, STATICCALL
-                if op == 244 || op == 246 {
+                if op == 244 || op == 250 {
                     self.stack.pop_n(6);
 
                     self.stack.push("0x01");

@@ -48,7 +48,9 @@ impl Memory {
             if offset > 65536 { offset = 65536; }
 
             // extend the value to 32 bytes
-            value.insert_str(0, &"00".repeat(size - value.len() / 2));
+            if value.len() / 2 < size {
+                value.insert_str(0, &"00".repeat(size - value.len() / 2));
+            }
             
             // extend the memory to allocate for the new space
             // byte offset is the str offset where we start writing
