@@ -1,10 +1,16 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{str::FromStr, collections::HashMap};
 
 use ethers::{prelude::{rand::{self, Rng}, U256}, abi::AbiEncode};
 use heimdall_common::{
-    ether::{evm::vm::VM, signatures::{ResolvedFunction, resolve_signature}}
+    ether::{evm::vm::{VM, Instruction}, signatures::{ResolvedFunction, resolve_signature}}, io::logging::TraceFactory
 };
 
+#[derive(Clone, Debug)]
+pub struct VMTrace {
+    pub instruction: u128,
+    pub operations: Vec<String>,
+    pub children: Vec<VMTrace>,
+}
 
 // Find all function selectors in the given EVM.
 pub fn find_function_selectors(evm: &VM, assembly: String) -> Vec<String> {
@@ -89,7 +95,7 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
 
             // it's safe to convert here because we know max bytecode length is ~25kb, way less than 2^64
             function_entry_point = call.last_instruction.inputs[0].as_u64();
-            break;
+            break
         }
 
         if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
@@ -98,4 +104,78 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
     }
 
     function_entry_point
+}
+
+
+// build a map of function jump possibilities from the EVM bytecode
+pub fn map_selector(evm: &VM, trace: &TraceFactory, trace_parent: u32, selector: String, entry_point: u64) -> VMTrace {
+    let mut vm = evm.clone();
+    vm.calldata = selector.clone();
+    
+    // step through the bytecode until we reach the entry point
+    while (vm.bytecode.len() >= (vm.instruction*2+2) as usize) && (vm.instruction <= entry_point.into()) {
+        vm.step();
+        
+        // this shouldn't be necessary, but it's safer to have it
+        if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
+            break
+        }
+    }
+
+    // the VM is at the function entry point, begin tracing
+    recursive_map(&vm.clone(), trace, trace_parent)
+}
+
+pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32) -> VMTrace {
+    let mut vm = evm.clone();
+
+    // create a new VMTrace object
+    let mut vm_trace = VMTrace {
+        instruction: vm.instruction,
+        operations: Vec::new(),
+        children: Vec::new(),
+    };
+
+    // step through the bytecode until we find a JUMPI instruction
+    while vm.bytecode.len() >= (vm.instruction*2+2) as usize {
+        let state = vm.step();
+        println!("{:#?}", state);
+
+        //TODO: turn on again
+        //vm_trace.operations.push(format!("{} {}", state.last_instruction.instruction, state.last_instruction.opcode_details.unwrap().name));
+        
+        // if we encounter a JUMPI, create children taking both paths and break
+        if state.last_instruction.opcode == "57" {
+            
+            // we need to create a trace for the path that wasn't taken.
+            if state.last_instruction.inputs[1] == U256::from(0) {
+
+                // the jump was not taken, create a trace for the jump path
+                let mut trace_vm = vm.clone();
+                trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
+                vm_trace.children.push(recursive_map(&trace_vm, trace, trace_parent));
+
+                // push the current path onto the stack
+                vm_trace.children.push(recursive_map(&vm.clone(), trace, trace_parent));
+            }
+            else {
+
+                // the jump was taken, create a trace for the fallthrough path
+                let mut trace_vm = vm.clone();
+                trace_vm.instruction = state.last_instruction.instruction + 1;
+                vm_trace.children.push(recursive_map(&trace_vm, trace, trace_parent));
+
+                // push the current path onto the stack
+                vm_trace.children.push(recursive_map(&vm.clone(), trace, trace_parent));
+
+            }
+
+        }
+
+        if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
+            break
+        }
+    }
+
+    vm_trace
 }
