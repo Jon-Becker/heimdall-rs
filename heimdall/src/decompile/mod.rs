@@ -68,7 +68,13 @@ pub fn decompile(args: DecompilerArgs) {
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
-    let decompile_call = trace.add_call(0, line!(), "heimdall".to_string(), "decompile".to_string(), vec![shortened_target], "()".to_string());
+    let decompile_call = trace.add_call(
+        0, line!(), 
+        "heimdall".to_string(), 
+        "decompile".to_string(), 
+        vec![shortened_target], 
+        "()".to_string()
+    );
 
     // parse the output directory
     let mut output_dir: String;
@@ -167,7 +173,14 @@ pub fn decompile(args: DecompilerArgs) {
         };
     }
 
-    trace.add_call(decompile_call, line!(), "heimdall".to_string(), "disassemble".to_string(), vec![format!("{} bytes", contract_bytecode.len()/2usize)], "()".to_string());
+    trace.add_call(
+        decompile_call, 
+        line!(), 
+        "heimdall".to_string(), 
+        "disassemble".to_string(), 
+        vec![format!("{} bytes", contract_bytecode.len()/2usize)], 
+        "()".to_string()
+    );
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
@@ -202,15 +215,41 @@ pub fn decompile(args: DecompilerArgs) {
     logger.debug(&format!("performing static analysis on '{}' .", &args.target).to_string());
     for selector in selectors.clone() {
         
-        let func_analysis_trace = trace.add_call(vm_trace, line!(), "heimdall".to_string(), "analyze".to_string(), vec![format!("0x{}", selector)], "()".to_string());
+        let func_analysis_trace = trace.add_call(
+            vm_trace, 
+            line!(), 
+            "heimdall".to_string(), 
+            "analyze".to_string(), 
+            vec![format!("0x{}", selector)], 
+            "()".to_string()
+        );
 
         // get the function's entry point
         let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
-        trace.add_debug(func_analysis_trace, function_entry_point.try_into().unwrap(), format!("discovered entry point: {}", function_entry_point).to_string());
+        trace.add_debug(
+            func_analysis_trace, 
+            function_entry_point.try_into().unwrap(), 
+            format!("discovered entry point: {}", function_entry_point).to_string()
+        );
+
+        if function_entry_point == 0 {
+            trace.add_error(
+                func_analysis_trace,
+                line!(), 
+                "selector flagged as false-positive.".to_string()
+            );
+            continue;
+        }
 
         // get a map of possible jump destinations
-        let (map, jumpdests) = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
-        trace.add_debug(func_analysis_trace, function_entry_point.try_into().unwrap(), format!("analysis discovered {} possible execution", jumpdests.len()).to_string());
+        let (_map, jumpdests) = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
+        trace.add_debug(
+            func_analysis_trace,
+            function_entry_point.try_into().unwrap(),
+            format!("execution tree has {} possiblit{}",
+            jumpdests.len(),
+            if jumpdests.len() > 1 {"ies"} else {"y"}).to_string()
+        );
     }
 
     // TODO: add to trace
@@ -225,4 +264,3 @@ pub fn decompile(args: DecompilerArgs) {
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()).to_string());
 }
-// TODO: cleanup traces so they arent one line.

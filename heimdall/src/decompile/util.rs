@@ -2,7 +2,9 @@ use std::{str::FromStr, collections::HashMap};
 
 use ethers::{prelude::{rand::{self, Rng}, U256}, abi::AbiEncode};
 use heimdall_common::{
-    ether::{evm::vm::{VM, Instruction}, signatures::{ResolvedFunction, resolve_signature}}, io::logging::TraceFactory
+    ether::{evm::vm::{VM, Instruction},
+    signatures::{ResolvedFunction, resolve_signature}},
+    io::logging::TraceFactory
 };
 
 #[derive(Clone, Debug)]
