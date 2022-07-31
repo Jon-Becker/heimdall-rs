@@ -135,6 +135,7 @@ pub fn decode(args: DecodeArgs) {
         None => Vec::new()
     };
     let mut matches: Vec<ResolvedFunction> = Vec::new();
+
     for potential_match in &potential_matches {
 
         // convert the string inputs into a vector of decoded types

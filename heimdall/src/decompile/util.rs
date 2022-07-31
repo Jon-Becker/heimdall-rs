@@ -86,8 +86,8 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
 
         // if the opcode is an EQ and it matched the selector, the next jumpi is the entry point
         if call.last_instruction.opcode == "14" && 
-           call.last_instruction.inputs[0].eq(&U256::from_str(&selector.clone()).unwrap()) {
-            
+           call.last_instruction.inputs[0].eq(&U256::from_str(&selector.clone()).unwrap()) &&
+           call.last_instruction.outputs[0].eq(&U256::from_str("1").unwrap()) {
             flag_next_jumpi = true;
         }
 
@@ -109,7 +109,7 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
 
 
 // build a map of function jump possibilities from the EVM bytecode
-pub fn map_selector(evm: &VM, trace: &TraceFactory, trace_parent: u32, selector: String, entry_point: u64) -> VMTrace {
+pub fn map_selector(evm: &VM, trace: &TraceFactory, trace_parent: u32, selector: String, entry_point: u64) -> (VMTrace, Vec<u128>) {
     let mut vm = evm.clone();
     vm.calldata = selector.clone();
     
@@ -125,7 +125,7 @@ pub fn map_selector(evm: &VM, trace: &TraceFactory, trace_parent: u32, selector:
 
     // the VM is at the function entry point, begin tracing
     let mut handled_jumpdests = Vec::new();
-    recursive_map(&vm.clone(), trace, trace_parent, &mut handled_jumpdests)
+    (recursive_map(&vm.clone(), trace, trace_parent, &mut handled_jumpdests), handled_jumpdests)
 }
 
 pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32, handled_jumpdests: &mut Vec<u128>) -> VMTrace {

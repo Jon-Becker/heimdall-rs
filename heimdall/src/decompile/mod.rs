@@ -208,9 +208,9 @@ pub fn decompile(args: DecompilerArgs) {
         let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
         trace.add_debug(func_analysis_trace, function_entry_point.try_into().unwrap(), format!("discovered entry point: {}", function_entry_point).to_string());
 
-        
         // get a map of possible jump destinations
-        let _map = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
+        let (map, jumpdests) = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
+        trace.add_debug(func_analysis_trace, function_entry_point.try_into().unwrap(), format!("analysis discovered {} possible execution", jumpdests.len()).to_string());
     }
 
     // TODO: add to trace
