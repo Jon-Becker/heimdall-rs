@@ -15,6 +15,18 @@ pub struct VMTrace {
     pub depth: usize,
 }
 
+#[derive(Clone, Debug)]
+pub struct Function {
+    pub selector: String,
+    pub entry_point: u64,
+    pub arguments: HashMap<String, String>,
+    pub return_type: String,
+    pub payable: bool,
+    pub visibility: String,
+    pub modifier: String,
+    pub logic: Vec<String>,
+}
+
 // Find all function selectors in the given EVM.
 pub fn find_function_selectors(evm: &VM, assembly: String) -> Vec<String> {
     let mut function_selectors = Vec::new();
@@ -59,7 +71,6 @@ pub fn find_function_selectors(evm: &VM, assembly: String) -> Vec<String> {
 
 // resolve a list of function selectors to their possible signatures
 pub fn resolve_function_selectors(selectors: Vec<String>) -> HashMap<String, Vec<ResolvedFunction>> {
-    
     let mut resolved_functions: HashMap<String, Vec<ResolvedFunction>> = HashMap::new();
 
     for selector in selectors {
@@ -197,4 +208,29 @@ pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32, handled_
     }
 
     vm_trace
+}
+
+
+
+impl VMTrace {
+    
+    // converts a VMTrace to a Funciton
+    pub fn to_function(&self, selector: String, entry_point: u64, mut function: Option<Function>) -> Function {
+        let mut function = match function {
+            Some(f) => f,
+            None => Function {
+                selector: selector.clone(),
+                entry_point: entry_point.clone(),
+                arguments: HashMap::new(),
+                return_type: "".to_string(),
+                visibility: "public".to_string(),
+                payable: false,
+                modifier: "".to_string(),
+                logic: Vec::new()
+            }
+        };
+
+        function
+    }
+    
 }

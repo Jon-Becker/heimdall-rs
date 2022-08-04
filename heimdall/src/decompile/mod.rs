@@ -2,6 +2,8 @@ pub mod util;
 
 use std::env;
 use std::fs;
+use std::time::Duration;
+use indicatif::ProgressBar;
 
 use clap::{AppSettings, Parser};
 use ethers::{
@@ -19,9 +21,7 @@ use heimdall_common::{
     consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::* },
 };
-use crate::decompile::{
-    util::*
-};
+use crate::decompile::util::*;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Decompile EVM bytecode to Solidity",
@@ -202,7 +202,7 @@ pub fn decompile(args: DecompilerArgs) {
         0,
         u128::max_value(),
     );
-    let mut shortened_target = args.target.clone();
+    let mut shortened_target = contract_bytecode.clone();
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
@@ -211,9 +211,23 @@ pub fn decompile(args: DecompilerArgs) {
     // find and resolve all selectors in the bytecode
     let selectors = find_function_selectors(&evm.clone(), disassembled_bytecode);
 
+    // TODO: add to trace
+    if !args.skip_resolving {
+        let resolved_selectors = resolve_function_selectors(selectors.clone());
+        logger.info(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
+    }
+    else {
+        logger.info(&format!("found {} function selectors.", selectors.len()).to_string());
+    }
+    logger.info(&format!("performing static analysis on '{}' .", &args.target).to_string());
+
+    let analysis_progress = ProgressBar::new_spinner();
+    analysis_progress.enable_steady_tick(Duration::from_millis(100));
+    analysis_progress.set_style(logger.info_spinner());
+
     // perform EVM analysis    
-    logger.debug(&format!("performing static analysis on '{}' .", &args.target).to_string());
     for selector in selectors.clone() {
+        analysis_progress.set_message(format!("analyzing '0x{}'", selector));
         
         let func_analysis_trace = trace.add_call(
             vm_trace, 
@@ -226,7 +240,7 @@ pub fn decompile(args: DecompilerArgs) {
 
         // get the function's entry point
         let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
-        trace.add_debug(
+        trace.add_info(
             func_analysis_trace, 
             function_entry_point.try_into().unwrap(), 
             format!("discovered entry point: {}", function_entry_point).to_string()
@@ -242,7 +256,7 @@ pub fn decompile(args: DecompilerArgs) {
         }
 
         // get a map of possible jump destinations
-        let (_map, jumpdests) = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
+        let (map, jumpdests) = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
         trace.add_debug(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
@@ -250,16 +264,14 @@ pub fn decompile(args: DecompilerArgs) {
             jumpdests.len(),
             if jumpdests.len() > 1 {"ies"} else {"y"}).to_string()
         );
-    }
+        
+        // solidify the execution tree
+        let _solidified_function = map.to_function(selector.clone(), function_entry_point, None);
 
-    // TODO: add to trace
-    if !args.skip_resolving {
-        let resolved_selectors = resolve_function_selectors(selectors.clone());
-        logger.debug(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
+        println!("{:#?}", _solidified_function);
     }
-    else {
-        logger.debug(&format!("found {} function selectors.", selectors.len()).to_string());
-    }
+    analysis_progress.finish_and_clear();
+    logger.info("static analysis completed.");
 
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()).to_string());

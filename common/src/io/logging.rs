@@ -1,4 +1,5 @@
 use std::io::{stdout, Write, stdin};
+use indicatif::ProgressStyle;
 
 use colored::*;
 
@@ -449,6 +450,14 @@ impl Logger {
         if self.level >= 2 {
             println!("{}: {}", "debug".bright_magenta().bold(), message);
         }
+    }
+
+    pub fn info_spinner(&self) -> ProgressStyle {
+        ProgressStyle::with_template(&format!("{}: {}", "info".bright_cyan().bold(), "{spinner} {msg}")).unwrap().tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+    }
+
+    pub fn debug_spinner(&self) -> ProgressStyle {
+        ProgressStyle::with_template(&format!("{}: {}", "debug".bright_magenta().bold(), "{spinner} {msg}")).unwrap().tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
     }
 
     pub fn option (&self, function: &str, message: &str, options: Vec<String>, default: Option<u8>, skip: bool) -> u8 {
