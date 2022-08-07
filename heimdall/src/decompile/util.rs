@@ -7,24 +7,14 @@ use heimdall_common::{
     io::logging::TraceFactory
 };
 
+use super::Function;
+
 #[derive(Clone, Debug)]
 pub struct VMTrace {
     pub instruction: u128,
     pub operations: Vec<Instruction>,
     pub children: Vec<VMTrace>,
     pub depth: usize,
-}
-
-#[derive(Clone, Debug)]
-pub struct Function {
-    pub selector: String,
-    pub entry_point: u64,
-    pub arguments: HashMap<String, String>,
-    pub return_type: String,
-    pub payable: bool,
-    pub visibility: String,
-    pub modifier: String,
-    pub logic: Vec<String>,
 }
 
 // Find all function selectors in the given EVM.
@@ -215,20 +205,68 @@ pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32, handled_
 impl VMTrace {
     
     // converts a VMTrace to a Funciton
-    pub fn to_function(&self, selector: String, entry_point: u64, mut function: Option<Function>) -> Function {
-        let mut function = match function {
-            Some(f) => f,
-            None => Function {
-                selector: selector.clone(),
-                entry_point: entry_point.clone(),
-                arguments: HashMap::new(),
-                return_type: "".to_string(),
-                visibility: "public".to_string(),
-                payable: false,
-                modifier: "".to_string(),
-                logic: Vec::new()
+    pub fn analyze(&self, function: Function, trace: &mut TraceFactory, trace_parent: u32,) -> Function {
+
+        // make a clone of the recursed analysis function
+        let mut function = function.clone();
+
+        // perform analysis on the operations of the current VMTrace branch
+        for operation in &self.operations {
+            let opcode_name = operation.opcode_details.clone().unwrap().name;
+
+            // if the instruction is a state-accessing instruction, the function is no longer pure
+            if function.pure &&
+                vec![
+                    "BALANCE", "ORIGIN", "CALLER", "GASPRICE", "EXTCODESIZE",
+                    "EXTCODECOPY", "BLOCKHASH", "COINBASE", "TIMESTAMP", "NUMBER", "DIFFICULTY",
+                    "GASLIMIT", "CHAINID", "SELFBALANCE", "BASEFEE", "SLOAD", "SSTORE", "CREATE",
+                    "SELFDESTRUCT", "CALL", "CALLCODE", "DELEGATECALL", "STATICCALL", "CREATE2"
+               ].contains(&opcode_name.as_str())
+            {
+                function.pure = false;
+                trace.add_info(
+                    trace_parent, 
+                    operation.instruction.try_into().unwrap(), 
+                    format!(
+                        "instruction {} ({}) indicates an non-pure function.",
+                        operation.instruction, 
+                        opcode_name
+                    )
+                );
             }
-        };
+            
+            // if the instruction is a state-setting instruction, the function is no longer a view
+            if function.view &&
+                vec![
+                    "SSTORE", "CREATE", "SELFDESTRUCT", "CALL", "CALLCODE",
+                    "DELEGATECALL", "STATICCALL", "CREATE2"
+                ].contains(&opcode_name.as_str())
+            {
+                function.view = false;
+                trace.add_info(
+                    trace_parent, 
+                    operation.instruction.try_into().unwrap(), 
+                    format!(
+                        "instruction {} ({}) indicates a non-view function.",
+                        operation.instruction, 
+                        opcode_name
+                    )
+                );
+            }
+
+            // add the sstore to the function's storage map
+            if opcode_name == "SSTORE" {
+                let key = operation.inputs[0];
+                let value = operation.inputs[1];
+                function.storage.insert(key, value);
+            }
+
+        }
+
+        // recurse into the children of the VMTrace map
+        for child in &self.children {
+            function = child.analyze(function, trace, trace_parent);
+        }
 
         function
     }
