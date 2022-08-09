@@ -426,6 +426,11 @@ impl Logger {
     pub fn error(&self, message: &str) {
         println!("{}: {}", "error".bright_red().bold(), message);
     }
+
+
+    pub fn fatal(&self, message: &str) {
+        println!("{}: {}", "fatal".bright_white().on_bright_red().bold(), message);
+    }
     
 
     pub fn success(&self, message: &str) {

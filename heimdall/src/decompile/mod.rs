@@ -278,9 +278,9 @@ pub fn decompile(args: DecompilerArgs) {
         trace.add_debug(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
-            format!("execution tree has {} possiblit{}",
+            format!("execution tree has {} branch{}",
             jumpdests.len(),
-            if jumpdests.len() > 1 {"ies"} else {"y"}).to_string()
+            if jumpdests.len() > 1 {"es"} else {""}).to_string()
         );
         
         // solidify the execution tree

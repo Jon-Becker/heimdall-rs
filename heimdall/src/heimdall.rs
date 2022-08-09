@@ -1,10 +1,13 @@
+use std::panic;
+
 mod decode;
 mod decompile;
 
 use clap::{Parser, Subcommand};
 
+use colored::Colorize;
 use heimdall_config::{config, get_config, ConfigArgs};
-use heimdall_common::ether::evm::disassemble::*;
+use heimdall_common::{ether::evm::disassemble::*, io::logging::Logger};
 use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
 
@@ -44,7 +47,25 @@ pub enum Subcommands {
 }
 
 fn main() {
+
     let args = Arguments::parse();
+
+    // handle catching panics with 
+    panic::set_hook(
+        Box::new(|panic_info| {
+            let (logger, _)= Logger::new("TRACE");
+            logger.fatal(
+                &format!(
+                    "thread 'main' encountered a fatal error: '{}' at '/src/{}:{}'!", 
+                    panic_info.to_string().split("'").collect::<Vec<&str>>()[1]
+                        .to_lowercase().bright_white().on_bright_red().bold(),
+                    panic_info.location().unwrap().file().split("/src/")
+                        .collect::<Vec<&str>>()[1],
+                    panic_info.location().unwrap().line()
+                )
+            );
+        }
+    ));
 
     let configuration = get_config();
     match args.sub {
