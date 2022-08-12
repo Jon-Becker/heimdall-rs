@@ -1,4 +1,5 @@
-use std::panic;
+use std::{panic};
+use backtrace::Backtrace;
 
 mod decode;
 mod decompile;
@@ -7,7 +8,7 @@ use clap::{Parser, Subcommand};
 
 use colored::Colorize;
 use heimdall_config::{config, get_config, ConfigArgs};
-use heimdall_common::{ether::evm::disassemble::*, io::logging::Logger};
+use heimdall_common::{ether::evm::disassemble::*, io::{logging::Logger}};
 use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
 
@@ -50,9 +51,10 @@ fn main() {
 
     let args = Arguments::parse();
 
-    // handle catching panics with 
+    // handle catching panics with
     panic::set_hook(
         Box::new(|panic_info| {
+            let backtrace = Backtrace::new();
             let (logger, _)= Logger::new("TRACE");
             logger.fatal(
                 &format!(
@@ -64,6 +66,7 @@ fn main() {
                     panic_info.location().unwrap().line()
                 )
             );
+            logger.fatal(&format!("Stack Trace:\n\n{:#?}", backtrace));
         }
     ));
 

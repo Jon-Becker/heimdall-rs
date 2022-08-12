@@ -146,6 +146,7 @@ pub fn recursive_map(evm: &VM, trace: &TraceFactory, trace_parent: u32, handled_
     while vm.bytecode.len() >= (vm.instruction*2+2) as usize {
         let state = vm.step();
         vm_trace.operations.push(state.last_instruction.clone());
+        println!("{:?}", state);
 
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {
