@@ -261,7 +261,12 @@ impl VM {
                     let a = self.stack.pop();
                     let modulus = self.stack.pop();
 
-                    self.stack.push(a.rem(modulus).encode_hex().as_str());
+                    if modulus == U256::from(0) {
+                        self.stack.push(U256::from(0).encode_hex().as_str());
+                    }
+                    else {
+                        self.stack.push(a.rem(modulus).encode_hex().as_str());
+                    }
                 }
 
 
@@ -270,7 +275,12 @@ impl VM {
                     let a = self.stack.pop();
                     let modulus = self.stack.pop();
 
-                    self.stack.push(sign_uint(a).rem(sign_uint(modulus)).encode_hex().as_str());
+                    if modulus == U256::from(0) {
+                        self.stack.push(U256::from(0).encode_hex().as_str());
+                    }
+                    else {
+                        self.stack.push(sign_uint(a).rem(sign_uint(modulus)).encode_hex().as_str());
+                    }
                 }
 
 
@@ -280,7 +290,12 @@ impl VM {
                     let b = self.stack.pop();
                     let modulus = self.stack.pop();
 
-                    self.stack.push(a.overflowing_add(b).0.rem(modulus).encode_hex().as_str());
+                    if modulus == U256::from(0) {
+                        self.stack.push(U256::from(0).encode_hex().as_str());
+                    }
+                    else {
+                        self.stack.push(a.overflowing_add(b).0.rem(modulus).encode_hex().as_str());
+                    }
                 }
 
 
@@ -289,8 +304,13 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
                     let modulus = self.stack.pop();
-
-                    self.stack.push(a.overflowing_mul(b).0.rem(modulus).encode_hex().as_str());
+                    
+                    if modulus == U256::from(0) {
+                        self.stack.push(U256::from(0).encode_hex().as_str());
+                    }
+                    else {
+                        self.stack.push(a.overflowing_mul(b).0.rem(modulus).encode_hex().as_str());
+                    }
                 }
 
 

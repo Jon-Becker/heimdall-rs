@@ -43,14 +43,26 @@ impl Stack {
 
 
     // Swap the top value and the nth value on the stack.
-    pub fn swap(&mut self, n: usize) {
-        self.stack.swap(0, n)
+    pub fn swap(&mut self, n: usize) -> bool {
+        match self.stack.get(n) {
+            Some(_) => {
+                self.stack.swap(0, n);
+                return true
+            },
+            None => return false
+        }
     }
 
     
     // Duplicate the nth value on the stack.
-    pub fn dup(&mut self, n: usize) {
-        self.stack.push_front(self.stack[n-1]);
+    pub fn dup(&mut self, n: usize) -> bool {
+        match self.stack.get(n-1) {
+            Some(_) => {
+                self.stack.push_front(self.stack[n-1]);
+                return true
+            },
+            None => return false
+        }
     }
 
 

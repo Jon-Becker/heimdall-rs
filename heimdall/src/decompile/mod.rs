@@ -278,9 +278,13 @@ pub fn decompile(args: DecompilerArgs) {
         trace.add_debug(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
-            format!("execution tree has {} branch{}",
-            jumpdests.len(),
-            if jumpdests.len() > 1 {"es"} else {""}).to_string()
+            format!("execution tree {}",
+            
+            match jumpdests.len() {
+                0 => "appears to be linear".to_string(),
+                _ => format!("has {} branches", jumpdests.len()+1)
+            }
+            ).to_string()
         );
         
         // solidify the execution tree
