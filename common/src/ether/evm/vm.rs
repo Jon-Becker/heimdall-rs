@@ -136,7 +136,7 @@ impl VM {
 
         // REVERT if out of gas
         // TODO: make this call the REVERT instruction
-        if amount > self.gas_remaining { return false; }
+        if amount > self.gas_remaining { return false }
 
         self.gas_remaining = self.gas_remaining.saturating_sub(amount);
         self.gas_used = self.gas_used.saturating_add(amount);
@@ -172,6 +172,7 @@ impl VM {
         match self.consume_gas(gas_cost.into()) {
             true => {},
             false => {
+                self.exit(0, "0x");
                 return Instruction {
                     instruction: last_instruction,
                     opcode: opcode,
@@ -981,7 +982,20 @@ impl VM {
                         },
                     };
 
-                    self.instruction = pc + 1;
+                    // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
+                    if (((pc + 1)*2+2) as usize <= self.bytecode.len()) && (self.bytecode[((pc + 1)*2) as usize..((pc + 1)*2+2) as usize].to_string() != "5b") {
+                        self.exit(790, "0x");
+                        return Instruction {
+                            instruction: last_instruction,
+                            opcode: opcode,
+                            opcode_details: Some(opcode_details),
+                            inputs: inputs,
+                            outputs: Vec::new(),
+                        };
+                    }
+                    else {
+                        self.instruction = pc + 1;
+                    }
                 }
 
 
@@ -1006,7 +1020,21 @@ impl VM {
                     };
 
                     if !condition.eq(&U256::from(0u8)) {
-                        self.instruction = pc + 1;
+
+                        // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
+                        if (((pc + 1)*2+2) as usize <= self.bytecode.len()) && (self.bytecode[((pc + 1)*2) as usize..((pc + 1)*2+2) as usize].to_string() != "5b") {
+                            self.exit(790, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                            };
+                        }
+                        else {
+                            self.instruction = pc + 1;
+                        }
                     }
                 }
 
