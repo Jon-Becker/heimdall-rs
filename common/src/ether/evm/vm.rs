@@ -166,7 +166,7 @@ impl VM {
                 let op = _opcode.as_usize();
 
                 // STOP
-                if op == 0 {
+                if op == 0x00 {
                     self.exit(0, "0x");
                     return Instruction {
                         instruction: last_instruction,
@@ -178,7 +178,7 @@ impl VM {
                 }
 
                 // ADD
-                if op == 1 {
+                if op == 0x01 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -187,7 +187,7 @@ impl VM {
                 }
 
                 // MUL
-                if op == 2 {
+                if op == 0x02 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -196,7 +196,7 @@ impl VM {
                 }
 
                 // SUB
-                if op == 3 {
+                if op == 0x03 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -205,7 +205,7 @@ impl VM {
                 }
 
                 // DIV
-                if op == 4 {
+                if op == 0x04 {
                     let numerator = self.stack.pop();
                     let denominator = self.stack.pop();
 
@@ -218,7 +218,7 @@ impl VM {
                 }
 
                 // SDIV
-                if op == 5 {
+                if op == 0x05 {
                     let numerator = self.stack.pop();
                     let denominator = self.stack.pop();
 
@@ -235,7 +235,7 @@ impl VM {
                 }
 
                 // MOD
-                if op == 6 {
+                if op == 0x06 {
                     let a = self.stack.pop();
                     let modulus = self.stack.pop();
 
@@ -247,7 +247,7 @@ impl VM {
                 }
 
                 // SMOD
-                if op == 7 {
+                if op == 0x07 {
                     let a = self.stack.pop();
                     let modulus = self.stack.pop();
 
@@ -260,7 +260,7 @@ impl VM {
                 }
 
                 // ADDMOD
-                if op == 8 {
+                if op == 0x08 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
                     let modulus = self.stack.pop();
@@ -274,7 +274,7 @@ impl VM {
                 }
 
                 // MULMOD
-                if op == 9 {
+                if op == 0x09 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
                     let modulus = self.stack.pop();
@@ -288,7 +288,7 @@ impl VM {
                 }
 
                 // EXP
-                if op == 10 {
+                if op == 0x0A {
                     let a = self.stack.pop();
                     let exponent = self.stack.pop();
 
@@ -297,7 +297,7 @@ impl VM {
                 }
 
                 // SIGNEXTEND
-                if op == 11 {
+                if op == 0x0B {
                     let x = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -315,7 +315,7 @@ impl VM {
                 }
 
                 // LT
-                if op == 16 {
+                if op == 0x10 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -326,7 +326,7 @@ impl VM {
                 }
 
                 // GT
-                if op == 17 {
+                if op == 0x11 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -337,7 +337,7 @@ impl VM {
                 }
 
                 // SLT
-                if op == 18 {
+                if op == 0x12 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -348,7 +348,7 @@ impl VM {
                 }
 
                 // SGT
-                if op == 19 {
+                if op == 0x13 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -359,7 +359,7 @@ impl VM {
                 }
 
                 // EQ
-                if op == 20 {
+                if op == 0x14 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -370,7 +370,7 @@ impl VM {
                 }
 
                 // ISZERO
-                if op == 21 {
+                if op == 0x15 {
                     let a = self.stack.pop();
 
                     match a.eq(&U256::from(0u8)) {
@@ -380,7 +380,7 @@ impl VM {
                 }
 
                 // AND
-                if op == 22 {
+                if op == 0x16 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -388,7 +388,7 @@ impl VM {
                 }
 
                 // OR
-                if op == 23 {
+                if op == 0x17 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -396,7 +396,7 @@ impl VM {
                 }
 
                 // XOR
-                if op == 24 {
+                if op == 0x18 {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -404,14 +404,14 @@ impl VM {
                 }
 
                 // NOT
-                if op == 25 {
+                if op == 0x19 {
                     let a = self.stack.pop();
 
                     self.stack.push((!a).encode_hex().as_str());
                 }
 
                 // BYTE
-                if op == 26 {
+                if op == 0x1A {
                     let b = self.stack.pop();
                     let a = self.stack.pop();
 
@@ -429,7 +429,7 @@ impl VM {
                 }
 
                 // SHL
-                if op == 27 {
+                if op == 0x1B {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -437,7 +437,7 @@ impl VM {
                 }
 
                 // SHR
-                if op == 28 {
+                if op == 0x1C {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -445,7 +445,7 @@ impl VM {
                 }
 
                 // SAR
-                if op == 29 {
+                if op == 0x1D {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
@@ -454,7 +454,7 @@ impl VM {
                 }
 
                 // SHA3
-                if op == 32 {
+                if op == 0x20 {
                     let offset = self.stack.pop();
                     let size = self.stack.pop();
 
@@ -495,12 +495,12 @@ impl VM {
                 }
 
                 // ADDRESS
-                if op == 48 {
+                if op == 0x30 {
                     self.stack.push(self.address.as_str());
                 }
 
                 // BALANCE
-                if op == 49 {
+                if op == 0x31 {
                     self.stack.pop();
 
                     // balance is set to 1 wei because we won't run into div by 0 errors
@@ -508,22 +508,22 @@ impl VM {
                 }
 
                 // ORIGIN
-                if op == 50 {
+                if op == 0x32 {
                     self.stack.push(self.origin.as_str());
                 }
 
                 // CALLER
-                if op == 51 {
+                if op == 0x33 {
                     self.stack.push(self.caller.as_str());
                 }
 
                 // CALLVALUE
-                if op == 52 {
+                if op == 0x34 {
                     self.stack.push(self.value.encode_hex().as_str());
                 }
 
                 // CALLDATALOAD
-                if op == 53 {
+                if op == 0x35 {
                     let i = self.stack.pop();
 
                     // Safely convert U256 to usize
@@ -563,7 +563,7 @@ impl VM {
                 }
 
                 // CALLDATASIZE
-                if op == 54 {
+                if op == 0x36 {
                     self.stack.push(
                         U256::from(&self.calldata.len() / 2usize)
                             .encode_hex()
@@ -572,7 +572,7 @@ impl VM {
                 }
 
                 // CALLDATACOPY
-                if op == 55 {
+                if op == 0x37 {
                     let dest_offset = self.stack.pop();
                     let offset = self.stack.pop();
                     let size = self.stack.pop();
@@ -637,7 +637,7 @@ impl VM {
                 }
 
                 // CODESIZE
-                if op == 56 {
+                if op == 0x38 {
                     self.stack.push(
                         U256::from(&self.bytecode.len() / 2usize)
                             .encode_hex()
@@ -646,7 +646,7 @@ impl VM {
                 }
 
                 // CODECOPY
-                if op == 57 {
+                if op == 0x39 {
                     let dest_offset = self.stack.pop();
                     let offset = self.stack.pop();
                     let size = self.stack.pop();
@@ -711,18 +711,18 @@ impl VM {
                 }
 
                 // GASPRICE
-                if op == 58 {
+                if op == 0x3A {
                     self.stack.push("0x01");
                 }
 
                 // EXTCODESIZE
-                if op == 59 {
+                if op == 0x3B {
                     self.stack.pop();
                     self.stack.push("0x01");
                 }
 
                 // EXTCODECOPY
-                if op == 60 {
+                if op == 0x3C {
                     self.stack.pop();
                     let dest_offset = self.stack.pop();
                     self.stack.pop();
@@ -760,14 +760,14 @@ impl VM {
                 }
 
                 // RETURNDATASIZE
-                if op == 61 {
+                if op == 0x3D {
                     self.stack.pop();
 
                     self.stack.push("0x00");
                 }
 
                 // RETURNDATACOPY
-                if op == 62 {
+                if op == 0x3E {
                     let dest_offset = self.stack.pop();
                     self.stack.pop();
                     let size = self.stack.pop();
@@ -804,20 +804,20 @@ impl VM {
                 }
 
                 // EXTCODEHASH and BLOCKHASH
-                if op == 63 || op == 64 {
+                if op == 0x3F || op == 0x40 {
                     self.stack.pop();
 
                     self.stack.push("0x00");
                 }
 
                 // COINBASE
-                if op == 65 {
+                if op == 0x41 {
                     self.stack
                         .push("0x6865696d64616c6c00000000636f696e62617365");
                 }
 
                 // TIMESTAMP
-                if op == 66 {
+                if op == 0x42 {
                     let timestamp = SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
@@ -827,17 +827,17 @@ impl VM {
                 }
 
                 // NUMBER -> BASEFEE
-                if op >= 67 && op <= 72 {
+                if op >= 0x43 && op <= 0x48 {
                     self.stack.push("0x01");
                 }
 
                 // POP
-                if op == 80 {
+                if op == 0x50 {
                     self.stack.pop();
                 }
 
                 // MLOAD
-                if op == 81 {
+                if op == 0x51 {
                     let i = self.stack.pop();
 
                     // Safely convert U256 to usize
@@ -864,7 +864,7 @@ impl VM {
                 }
 
                 // MSTORE
-                if op == 82 {
+                if op == 0x52 {
                     let offset = self.stack.pop();
                     let value = self.stack.pop().encode_hex().replace("0x", "");
 
@@ -887,7 +887,7 @@ impl VM {
                 }
 
                 // MSTORE8
-                if op == 83 {
+                if op == 0x53 {
                     let offset = self.stack.pop();
                     let value = self.stack.pop().encode_hex().replace("0x", "");
 
@@ -910,14 +910,14 @@ impl VM {
                 }
 
                 // SLOAD
-                if op == 84 {
+                if op == 0x54 {
                     let key = self.stack.pop().encode_hex().replace("0x", "");
 
                     self.stack.push(&self.storage.load(key))
                 }
 
                 // SSTORE
-                if op == 85 {
+                if op == 0x55 {
                     let key = self.stack.pop().encode_hex().replace("0x", "");
                     let value = self.stack.pop().encode_hex().replace("0x", "");
 
@@ -925,7 +925,7 @@ impl VM {
                 }
 
                 // JUMP
-                if op == 86 {
+                if op == 0x56 {
                     let pc = self.stack.pop();
 
                     // Safely convert U256 to u128
@@ -963,7 +963,7 @@ impl VM {
                 }
 
                 // JUMPI
-                if op == 87 {
+                if op == 0x57 {
                     let pc = self.stack.pop();
                     let condition = self.stack.pop();
 
@@ -1004,25 +1004,25 @@ impl VM {
                 }
 
                 // PC
-                if op == 88 {
+                if op == 0x58 {
                     self.stack
                         .push(U256::from(self.instruction).encode_hex().as_str());
                 }
 
                 // MSIZE
-                if op == 89 {
+                if op == 0x59 {
                     self.stack
                         .push(U256::from(self.memory.size()).encode_hex().as_str());
                 }
 
                 // GAS
-                if op == 90 {
+                if op == 0x5a {
                     self.stack
                         .push(U256::from(self.gas_remaining).encode_hex().as_str());
                 }
 
                 // PUSH1 -> PUSH32
-                if op >= 96 && op <= 127 {
+                if op >= 0x60 && op <= 0x7F {
                     // Get the number of bytes to push
                     let num_bytes = (op - 95) as u128;
 
@@ -1036,7 +1036,7 @@ impl VM {
                 }
 
                 // DUP1 -> DUP16
-                if op >= 128 && op <= 143 {
+                if op >= 0x80 && op <= 0x8F {
                     // Get the number of items to swap
                     let index = (op - 127) as usize;
 
@@ -1045,7 +1045,7 @@ impl VM {
                 }
 
                 // SWAP1 -> SWAP16
-                if op >= 144 && op <= 159 {
+                if op >= 0x90 && op <= 0x9F {
                     // Get the number of items to swap
                     let index = (op - 143) as usize;
 
@@ -1054,7 +1054,7 @@ impl VM {
                 }
 
                 // LOG0 -> LOG4
-                if op >= 160 && op <= 164 {
+                if op >= 0xA0 && op <= 0xA4 {
                     let topic_count = (op - 160) as usize;
                     let offset = self.stack.pop();
                     let size = self.stack.pop();
@@ -1099,7 +1099,7 @@ impl VM {
                 }
 
                 // CREATE
-                if op == 240 {
+                if op == 0xF0 {
                     self.stack.pop_n(3);
 
                     self.stack
@@ -1107,14 +1107,14 @@ impl VM {
                 }
 
                 // CALL, CALLCODE
-                if op == 241 || op == 242 {
+                if op == 0xF1 || op == 0xF2 {
                     self.stack.pop_n(7);
 
                     self.stack.push("0x01");
                 }
 
                 // RETURN
-                if op == 243 {
+                if op == 0xF3 {
                     let offset = self.stack.pop();
                     let size = self.stack.pop();
 
@@ -1150,14 +1150,14 @@ impl VM {
                 }
 
                 // DELEGATECALL, STATICCALL
-                if op == 244 || op == 250 {
+                if op == 0xF4 || op == 0xFA {
                     self.stack.pop_n(6);
 
                     self.stack.push("0x01");
                 }
 
                 // CREATE2
-                if op == 245 {
+                if op == 0xF5 {
                     self.stack.pop_n(4);
 
                     self.stack
@@ -1165,7 +1165,7 @@ impl VM {
                 }
 
                 // REVERT
-                if op == 253 {
+                if op == 0xFD {
                     let offset = self.stack.pop();
                     let size = self.stack.pop();
 
@@ -1201,7 +1201,7 @@ impl VM {
                 }
 
                 // INVALID & SELFDESTRUCT
-                if op >= 254 {
+                if op >= 0xFE {
                     self.consume_gas(self.gas_remaining);
                     self.exit(1, "0x");
                 }

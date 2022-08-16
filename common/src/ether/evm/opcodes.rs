@@ -1,3 +1,7 @@
+use std::fmt::{Display, Formatter, Result};
+
+use ethers::types::U256;
+
 #[derive(Clone, Debug)]
 pub struct Opcode {
     pub name: String,
@@ -159,4 +163,64 @@ pub fn opcode(code: &str) -> Opcode {
             outputs: 0,
         },
     };
+}
+
+// enum allows for Wrapped Opcodes to contain both raw U256 and Opcodes as inputs
+#[derive(Clone, Debug)]
+pub enum WrappedInput {
+    Raw(U256),
+    Opcode(WrappedOpcode),
+}
+
+// represents an opcode with its direct inputs as WrappedInputs
+#[derive(Clone, Debug)]
+pub struct WrappedOpcode {
+    pub opcode: Opcode,
+    pub inputs: Vec<WrappedInput>,
+}
+
+impl WrappedOpcode {
+
+    // creates a new WrappedOpcode from a set of raw inputs
+    pub fn new(opcode_int: usize, inputs: Vec<WrappedInput>) -> WrappedOpcode {
+        let mut opcode_str = format!("{:x}", opcode_int);
+        if opcode_str.len() == 1 {
+            opcode_str.insert(0, '0');
+        };
+
+        WrappedOpcode {
+            opcode: opcode(&opcode_str),
+            inputs: inputs,
+        }
+    }
+}
+
+// implements pretty printing for WrappedOpcodes
+impl Display for WrappedOpcode {
+
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(f, "{}({})", self.opcode.name, self.inputs.clone().into_iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", "))
+    }
+
+}
+
+impl Display for WrappedInput {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            WrappedInput::Raw(u256) => write!(f, "{}", u256),
+            WrappedInput::Opcode(opcode) => write!(f, "{}", opcode),
+        }
+    }
+}
+
+#[test]
+fn test_wrapping_opcodes() {
+    
+    // wraps an ADD operation with 2 raw inputs
+    let add_operation_wrapped = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(U256::from(1u8)), WrappedInput::Raw(U256::from(2u8))]);
+    println!("{}", add_operation_wrapped);
+
+    // wraps a CALLDATALOAD operation
+    let calldataload_wrapped = WrappedOpcode::new(0x35, vec![WrappedInput::Opcode(add_operation_wrapped)]);
+    println!("{}", calldataload_wrapped);
 }
