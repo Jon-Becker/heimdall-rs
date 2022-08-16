@@ -9,7 +9,7 @@ use ethers::{
 };
 use heimdall_common::{
     ether::{
-        evm::vm::{Instruction, VM},
+        evm::{vm::{VM, State}},
         signatures::{resolve_signature, ResolvedFunction},
     },
     io::logging::TraceFactory,
@@ -20,7 +20,7 @@ use super::Function;
 #[derive(Clone, Debug)]
 pub struct VMTrace {
     pub instruction: u128,
-    pub operations: Vec<Instruction>,
+    pub operations: Vec<State>,
     pub children: Vec<VMTrace>,
     pub depth: usize,
 }
@@ -173,7 +173,7 @@ pub fn recursive_map(
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
         let state = vm.step();
-        vm_trace.operations.push(state.last_instruction.clone());
+        vm_trace.operations.push(state.clone());
 
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {
@@ -253,9 +253,8 @@ impl VMTrace {
         let mut function = function.clone();
 
         // perform analysis on the operations of the current VMTrace branch
-        for operation in &self.operations {
-            println!("{:?}", operation);
-            let opcode_name = operation.opcode_details.clone().unwrap().name;
+        for operation in &self.operations { 
+            let opcode_name = operation.last_instruction.opcode_details.clone().unwrap().name;
 
             // if the instruction is a state-accessing instruction, the function is no longer pure
             if function.pure
@@ -290,10 +289,10 @@ impl VMTrace {
                 function.pure = false;
                 trace.add_info(
                     trace_parent,
-                    operation.instruction.try_into().unwrap(),
+                    operation.last_instruction.instruction.try_into().unwrap(),
                     format!(
                         "instruction {} ({}) indicates an non-pure function.",
-                        operation.instruction, opcode_name
+                        operation.last_instruction.instruction, opcode_name
                     ),
                 );
             }
@@ -315,18 +314,18 @@ impl VMTrace {
                 function.view = false;
                 trace.add_info(
                     trace_parent,
-                    operation.instruction.try_into().unwrap(),
+                    operation.last_instruction.instruction.try_into().unwrap(),
                     format!(
                         "instruction {} ({}) indicates a non-view function.",
-                        operation.instruction, opcode_name
+                        operation.last_instruction.instruction, opcode_name
                     ),
                 );
             }
 
             // add the sstore to the function's storage map
             if opcode_name == "SSTORE" {
-                let key = operation.inputs[0];
-                let value = operation.inputs[1];
+                let key = operation.last_instruction.inputs[0];
+                let value = operation.last_instruction.inputs[1];
                 function.storage.insert(key, value);
             }
         }
