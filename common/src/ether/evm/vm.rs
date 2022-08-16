@@ -7,7 +7,7 @@ use std::{
 use ethers::{abi::AbiEncode, prelude::U256, utils::keccak256};
 
 use crate::{
-    ether::evm::opcodes::Opcode,
+    ether::evm::opcodes::{Opcode, WrappedInput, WrappedOpcode},
     utils::strings::{decode_hex, sign_uint},
 };
 
@@ -30,7 +30,6 @@ pub struct VM {
     pub events: Vec<Log>,
     pub returndata: String,
     pub exitcode: u128,
-
     pub timestamp: Instant,
 }
 
@@ -63,6 +62,8 @@ pub struct Instruction {
     pub opcode_details: Option<Opcode>,
     pub inputs: Vec<U256>,
     pub outputs: Vec<U256>,
+    pub input_operations: Vec<WrappedOpcode>,
+    pub output_operations: Vec<WrappedOpcode>,
 }
 
 impl VM {
@@ -96,7 +97,6 @@ impl VM {
             events: Vec::new(),
             returndata: String::new(),
             exitcode: 255,
-
             timestamp: Instant::now(),
         }
     }
@@ -131,6 +131,8 @@ impl VM {
                 opcode_details: None,
                 inputs: Vec::new(),
                 outputs: Vec::new(),
+                input_operations: Vec::new(),
+                output_operations: Vec::new(),
             };
         }
 
@@ -143,7 +145,12 @@ impl VM {
 
         // add the opcode to the trace
         let opcode_details = crate::ether::evm::opcodes::opcode(opcode.replace("0x", "").as_str());
-        let inputs = self.stack.peek_n(opcode_details.inputs as usize);
+        let input_frames = self.stack.peek_n(opcode_details.inputs as usize);
+        let input_operations = input_frames
+            .iter()
+            .map(|x| x.operation.clone())
+            .collect::<Vec<WrappedOpcode>>();
+        let inputs = input_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
 
         // Consume the minimum gas for the opcode
         let gas_cost = opcode_details.mingas;
@@ -157,6 +164,8 @@ impl VM {
                     opcode_details: Some(opcode_details),
                     inputs: inputs,
                     outputs: Vec::new(),
+                    input_operations: input_operations,
+                    output_operations: Vec::new(),
                 };
             }
         }
@@ -164,6 +173,15 @@ impl VM {
         match U256::from_str(&opcode) {
             Ok(_opcode) => {
                 let op = _opcode.as_usize();
+
+                // convert inputs to WrappedInputs
+                let wrapped_inputs = input_operations
+                    .iter()
+                    .map(|x| WrappedInput::Opcode(x.to_owned()))
+                    .collect::<Vec<WrappedInput>>();
+                let mut operation = WrappedOpcode::new(op, wrapped_inputs);
+
+                // execute the opcode
 
                 // STOP
                 if op == 0x00 {
@@ -174,132 +192,150 @@ impl VM {
                         opcode_details: Some(opcode_details),
                         inputs: inputs,
                         outputs: Vec::new(),
+                        input_operations: input_operations,
+                        output_operations: Vec::new(),
                     };
                 }
 
                 // ADD
                 if op == 0x01 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     self.stack
-                        .push(a.overflowing_add(b).0.encode_hex().as_str());
+                        .push(a.overflowing_add(b).0.encode_hex().as_str(), operation.clone());
                 }
 
                 // MUL
                 if op == 0x02 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     self.stack
-                        .push(a.overflowing_mul(b).0.encode_hex().as_str());
+                        .push(a.overflowing_mul(b).0.encode_hex().as_str(), operation.clone());
                 }
 
                 // SUB
                 if op == 0x03 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     self.stack
-                        .push(a.overflowing_sub(b).0.encode_hex().as_str());
+                        .push(a.overflowing_sub(b).0.encode_hex().as_str(), operation.clone());
                 }
 
                 // DIV
                 if op == 0x04 {
-                    let numerator = self.stack.pop();
-                    let denominator = self.stack.pop();
+                    let numerator = self.stack.pop().value;
+                    let denominator = self.stack.pop().value;
 
                     if denominator == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str());
+                        self.stack
+                            .push(U256::from(0).encode_hex().as_str(), operation.clone());
                     } else {
                         self.stack
-                            .push(numerator.div(denominator).encode_hex().as_str());
+                            .push(numerator.div(denominator).encode_hex().as_str(), operation.clone());
                     }
                 }
 
                 // SDIV
                 if op == 0x05 {
-                    let numerator = self.stack.pop();
-                    let denominator = self.stack.pop();
+                    let numerator = self.stack.pop().value;
+                    let denominator = self.stack.pop().value;
 
                     if denominator == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str());
+                        self.stack
+                            .push(U256::from(0).encode_hex().as_str(), operation.clone());
                     } else {
                         self.stack.push(
                             sign_uint(numerator)
                                 .div(sign_uint(denominator))
                                 .encode_hex()
                                 .as_str(),
+                            operation.clone(),
                         );
                     }
                 }
 
                 // MOD
                 if op == 0x06 {
-                    let a = self.stack.pop();
-                    let modulus = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let modulus = self.stack.pop().value;
 
                     if modulus == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str());
+                        self.stack
+                            .push(U256::from(0).encode_hex().as_str(), operation.clone());
                     } else {
-                        self.stack.push(a.rem(modulus).encode_hex().as_str());
+                        self.stack
+                            .push(a.rem(modulus).encode_hex().as_str(), operation.clone());
                     }
                 }
 
                 // SMOD
                 if op == 0x07 {
-                    let a = self.stack.pop();
-                    let modulus = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let modulus = self.stack.pop().value;
 
                     if modulus == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str());
-                    } else {
                         self.stack
-                            .push(sign_uint(a).rem(sign_uint(modulus)).encode_hex().as_str());
+                            .push(U256::from(0).encode_hex().as_str(), operation.clone());
+                    } else {
+                        self.stack.push(
+                            sign_uint(a).rem(sign_uint(modulus)).encode_hex().as_str(),
+                            operation.clone(),
+                        );
                     }
                 }
 
                 // ADDMOD
                 if op == 0x08 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
-                    let modulus = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
+                    let modulus = self.stack.pop().value;
 
                     if modulus == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str());
-                    } else {
                         self.stack
-                            .push(a.overflowing_add(b).0.rem(modulus).encode_hex().as_str());
+                            .push(U256::from(0).encode_hex().as_str(), operation.clone());
+                    } else {
+                        self.stack.push(
+                            a.overflowing_add(b).0.rem(modulus).encode_hex().as_str(),
+                            operation.clone(),
+                        );
                     }
                 }
 
                 // MULMOD
                 if op == 0x09 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
-                    let modulus = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
+                    let modulus = self.stack.pop().value;
 
                     if modulus == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str());
-                    } else {
                         self.stack
-                            .push(a.overflowing_mul(b).0.rem(modulus).encode_hex().as_str());
+                            .push(U256::from(0).encode_hex().as_str(), operation.clone());
+                    } else {
+                        self.stack.push(
+                            a.overflowing_mul(b).0.rem(modulus).encode_hex().as_str(),
+                            operation.clone(),
+                        );
                     }
                 }
 
                 // EXP
                 if op == 0x0A {
-                    let a = self.stack.pop();
-                    let exponent = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let exponent = self.stack.pop().value;
 
-                    self.stack
-                        .push(a.overflowing_pow(exponent).0.encode_hex().as_str());
+                    self.stack.push(
+                        a.overflowing_pow(exponent).0.encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // SIGNEXTEND
                 if op == 0x0B {
-                    let x = self.stack.pop();
-                    let b = self.stack.pop();
+                    let x = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     let t = x * U256::from(8u32) + U256::from(7u32);
                     let sign_bit = U256::from(1u32) << t;
@@ -311,118 +347,120 @@ impl VM {
                             .0)
                             .encode_hex()
                             .as_str(),
+                        operation.clone(),
                     )
                 }
 
                 // LT
                 if op == 0x10 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     match a.lt(&b) {
-                        true => self.stack.push("0x01"),
-                        false => self.stack.push("0x00"),
+                        true => self.stack.push("0x01", operation.clone()),
+                        false => self.stack.push("0x00", operation.clone()),
                     }
                 }
 
                 // GT
                 if op == 0x11 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     match a.gt(&b) {
-                        true => self.stack.push("0x01"),
-                        false => self.stack.push("0x00"),
+                        true => self.stack.push("0x01", operation.clone()),
+                        false => self.stack.push("0x00", operation.clone()),
                     }
                 }
 
                 // SLT
                 if op == 0x12 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     match sign_uint(a).lt(&sign_uint(b)) {
-                        true => self.stack.push("0x01"),
-                        false => self.stack.push("0x00"),
+                        true => self.stack.push("0x01", operation.clone()),
+                        false => self.stack.push("0x00", operation.clone()),
                     }
                 }
 
                 // SGT
                 if op == 0x13 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     match sign_uint(a).gt(&sign_uint(b)) {
-                        true => self.stack.push("0x01"),
-                        false => self.stack.push("0x00"),
+                        true => self.stack.push("0x01", operation.clone()),
+                        false => self.stack.push("0x00", operation.clone()),
                     }
                 }
 
                 // EQ
                 if op == 0x14 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
                     match a.eq(&b) {
-                        true => self.stack.push("0x01"),
-                        false => self.stack.push("0x00"),
+                        true => self.stack.push("0x01", operation.clone()),
+                        false => self.stack.push("0x00", operation.clone()),
                     }
                 }
 
                 // ISZERO
                 if op == 0x15 {
-                    let a = self.stack.pop();
+                    let a = self.stack.pop().value;
 
                     match a.eq(&U256::from(0u8)) {
-                        true => self.stack.push("0x01"),
-                        false => self.stack.push("0x00"),
+                        true => self.stack.push("0x01", operation.clone()),
+                        false => self.stack.push("0x00", operation.clone()),
                     }
                 }
 
                 // AND
                 if op == 0x16 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
-                    self.stack.push((a & b).encode_hex().as_str());
+                    self.stack.push((a & b).encode_hex().as_str(), operation.clone());
                 }
 
                 // OR
                 if op == 0x17 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
-                    self.stack.push((a | b).encode_hex().as_str());
+                    self.stack.push((a | b).encode_hex().as_str(), operation.clone());
                 }
 
                 // XOR
                 if op == 0x18 {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
-                    self.stack.push((a ^ b).encode_hex().as_str());
+                    self.stack.push((a ^ b).encode_hex().as_str(), operation.clone());
                 }
 
                 // NOT
                 if op == 0x19 {
-                    let a = self.stack.pop();
+                    let a = self.stack.pop().value;
 
-                    self.stack.push((!a).encode_hex().as_str());
+                    self.stack.push((!a).encode_hex().as_str(), operation.clone());
                 }
 
                 // BYTE
                 if op == 0x1A {
-                    let b = self.stack.pop();
-                    let a = self.stack.pop();
+                    let b = self.stack.pop().value;
+                    let a = self.stack.pop().value;
 
                     match b >= U256::from(32u32) {
-                        true => self.stack.push("0x00"),
+                        true => self.stack.push("0x00", operation.clone()),
                         false => {
                             self.stack.push(
                                 ((a / (U256::from(256u32).pow(U256::from(31u32) - b)))
                                     % U256::from(256u32))
                                 .encode_hex()
                                 .as_str(),
+                                operation.clone(),
                             );
                         }
                     }
@@ -430,33 +468,35 @@ impl VM {
 
                 // SHL
                 if op == 0x1B {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
-                    self.stack.push(b.shl(a).encode_hex().as_str());
+                    self.stack.push(b.shl(a).encode_hex().as_str(), operation.clone());
                 }
 
                 // SHR
                 if op == 0x1C {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
-                    self.stack.push(b.shr(a).encode_hex().as_str());
+                    self.stack.push(b.shr(a).encode_hex().as_str(), operation.clone());
                 }
 
                 // SAR
                 if op == 0x1D {
-                    let a = self.stack.pop();
-                    let b = self.stack.pop();
+                    let a = self.stack.pop().value;
+                    let b = self.stack.pop().value;
 
-                    self.stack
-                        .push(sign_uint(b).shr(sign_uint(a)).encode_hex().as_str());
+                    self.stack.push(
+                        sign_uint(b).shr(sign_uint(a)).encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // SHA3
                 if op == 0x20 {
-                    let offset = self.stack.pop();
-                    let size = self.stack.pop();
+                    let offset = self.stack.pop().value;
+                    let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -469,6 +509,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -482,6 +524,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -491,40 +535,41 @@ impl VM {
                         keccak256(decode_hex(data.as_str()).unwrap())
                             .encode_hex()
                             .as_str(),
+                        operation.clone(),
                     );
                 }
 
                 // ADDRESS
                 if op == 0x30 {
-                    self.stack.push(self.address.as_str());
+                    self.stack.push(self.address.as_str(), operation.clone());
                 }
 
                 // BALANCE
                 if op == 0x31 {
-                    self.stack.pop();
+                    self.stack.pop().value;
 
                     // balance is set to 1 wei because we won't run into div by 0 errors
-                    self.stack.push("0x01");
+                    self.stack.push("0x01", operation.clone());
                 }
 
                 // ORIGIN
                 if op == 0x32 {
-                    self.stack.push(self.origin.as_str());
+                    self.stack.push(self.origin.as_str(), operation.clone());
                 }
 
                 // CALLER
                 if op == 0x33 {
-                    self.stack.push(self.caller.as_str());
+                    self.stack.push(self.caller.as_str(), operation.clone());
                 }
 
                 // CALLVALUE
                 if op == 0x34 {
-                    self.stack.push(self.value.encode_hex().as_str());
+                    self.stack.push(self.value.encode_hex().as_str(), operation.clone());
                 }
 
                 // CALLDATALOAD
                 if op == 0x35 {
-                    let i = self.stack.pop();
+                    let i = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let i: usize = match i.try_into() {
@@ -537,6 +582,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -550,14 +597,17 @@ impl VM {
                         }
 
                         value.push_str(&"00".repeat(32 - value.len() / 2));
-                        self.stack
-                            .push(U256::from_str(&value).unwrap().encode_hex().as_str());
+                        self.stack.push(
+                            U256::from_str(&value).unwrap().encode_hex().as_str(),
+                            operation.clone(),
+                        );
                     } else {
                         self.stack.push(
                             U256::from_str(&self.calldata[i * 2..(i + 32) * 2])
                                 .unwrap()
                                 .encode_hex()
                                 .as_str(),
+                            operation.clone(),
                         );
                     }
                 }
@@ -568,14 +618,15 @@ impl VM {
                         U256::from(&self.calldata.len() / 2usize)
                             .encode_hex()
                             .as_str(),
+                        operation.clone(),
                     );
                 }
 
                 // CALLDATACOPY
                 if op == 0x37 {
-                    let dest_offset = self.stack.pop();
-                    let offset = self.stack.pop();
-                    let size = self.stack.pop();
+                    let dest_offset = self.stack.pop().value;
+                    let offset = self.stack.pop().value;
+                    let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
@@ -588,6 +639,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -601,6 +654,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -614,6 +669,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -642,14 +699,15 @@ impl VM {
                         U256::from(&self.bytecode.len() / 2usize)
                             .encode_hex()
                             .as_str(),
+                        operation.clone(),
                     );
                 }
 
                 // CODECOPY
                 if op == 0x39 {
-                    let dest_offset = self.stack.pop();
-                    let offset = self.stack.pop();
-                    let size = self.stack.pop();
+                    let dest_offset = self.stack.pop().value;
+                    let offset = self.stack.pop().value;
+                    let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
@@ -662,6 +720,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -675,6 +735,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -688,6 +750,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -712,21 +776,21 @@ impl VM {
 
                 // GASPRICE
                 if op == 0x3A {
-                    self.stack.push("0x01");
+                    self.stack.push("0x01", operation.clone());
                 }
 
                 // EXTCODESIZE
                 if op == 0x3B {
-                    self.stack.pop();
-                    self.stack.push("0x01");
+                    self.stack.pop().value;
+                    self.stack.push("0x01", operation.clone());
                 }
 
                 // EXTCODECOPY
                 if op == 0x3C {
-                    self.stack.pop();
-                    let dest_offset = self.stack.pop();
-                    self.stack.pop();
-                    let size = self.stack.pop();
+                    self.stack.pop().value;
+                    let dest_offset = self.stack.pop().value;
+                    self.stack.pop().value;
+                    let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
@@ -739,6 +803,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -752,6 +818,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -761,16 +829,16 @@ impl VM {
 
                 // RETURNDATASIZE
                 if op == 0x3D {
-                    self.stack.pop();
+                    self.stack.pop().value;
 
-                    self.stack.push("0x00");
+                    self.stack.push("0x00", operation.clone());
                 }
 
                 // RETURNDATACOPY
                 if op == 0x3E {
-                    let dest_offset = self.stack.pop();
-                    self.stack.pop();
-                    let size = self.stack.pop();
+                    let dest_offset = self.stack.pop().value;
+                    self.stack.pop().value;
+                    let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let dest_offset: usize = match dest_offset.try_into() {
@@ -783,6 +851,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -796,6 +866,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -805,15 +877,15 @@ impl VM {
 
                 // EXTCODEHASH and BLOCKHASH
                 if op == 0x3F || op == 0x40 {
-                    self.stack.pop();
+                    self.stack.pop().value;
 
-                    self.stack.push("0x00");
+                    self.stack.push("0x00", operation.clone());
                 }
 
                 // COINBASE
                 if op == 0x41 {
                     self.stack
-                        .push("0x6865696d64616c6c00000000636f696e62617365");
+                        .push("0x6865696d64616c6c00000000636f696e62617365", operation.clone());
                 }
 
                 // TIMESTAMP
@@ -823,22 +895,23 @@ impl VM {
                         .unwrap()
                         .as_secs();
 
-                    self.stack.push(U256::from(timestamp).encode_hex().as_str());
+                    self.stack
+                        .push(U256::from(timestamp).encode_hex().as_str(), operation.clone());
                 }
 
                 // NUMBER -> BASEFEE
                 if op >= 0x43 && op <= 0x48 {
-                    self.stack.push("0x01");
+                    self.stack.push("0x01", operation.clone());
                 }
 
                 // POP
                 if op == 0x50 {
-                    self.stack.pop();
+                    self.stack.pop().value;
                 }
 
                 // MLOAD
                 if op == 0x51 {
-                    let i = self.stack.pop();
+                    let i = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let i: usize = match i.try_into() {
@@ -851,6 +924,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -860,13 +935,14 @@ impl VM {
                             .unwrap()
                             .encode_hex()
                             .as_str(),
+                        operation.clone(),
                     );
                 }
 
                 // MSTORE
                 if op == 0x52 {
-                    let offset = self.stack.pop();
-                    let value = self.stack.pop().encode_hex().replace("0x", "");
+                    let offset = self.stack.pop().value;
+                    let value = self.stack.pop().value.encode_hex().replace("0x", "");
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -879,6 +955,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -888,8 +966,8 @@ impl VM {
 
                 // MSTORE8
                 if op == 0x53 {
-                    let offset = self.stack.pop();
-                    let value = self.stack.pop().encode_hex().replace("0x", "");
+                    let offset = self.stack.pop().value;
+                    let value = self.stack.pop().value.encode_hex().replace("0x", "");
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -902,6 +980,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -911,22 +991,22 @@ impl VM {
 
                 // SLOAD
                 if op == 0x54 {
-                    let key = self.stack.pop().encode_hex().replace("0x", "");
+                    let key = self.stack.pop().value.encode_hex().replace("0x", "");
 
-                    self.stack.push(&self.storage.load(key))
+                    self.stack.push(&self.storage.load(key), operation.clone())
                 }
 
                 // SSTORE
                 if op == 0x55 {
-                    let key = self.stack.pop().encode_hex().replace("0x", "");
-                    let value = self.stack.pop().encode_hex().replace("0x", "");
+                    let key = self.stack.pop().value.encode_hex().replace("0x", "");
+                    let value = self.stack.pop().value.encode_hex().replace("0x", "");
 
                     self.storage.store(key, value);
                 }
 
                 // JUMP
                 if op == 0x56 {
-                    let pc = self.stack.pop();
+                    let pc = self.stack.pop().value;
 
                     // Safely convert U256 to u128
                     let pc: u128 = match pc.try_into() {
@@ -939,6 +1019,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -956,6 +1038,8 @@ impl VM {
                             opcode_details: Some(opcode_details),
                             inputs: inputs,
                             outputs: Vec::new(),
+                            input_operations: input_operations,
+                            output_operations: Vec::new(),
                         };
                     } else {
                         self.instruction = pc + 1;
@@ -964,8 +1048,8 @@ impl VM {
 
                 // JUMPI
                 if op == 0x57 {
-                    let pc = self.stack.pop();
-                    let condition = self.stack.pop();
+                    let pc = self.stack.pop().value;
+                    let condition = self.stack.pop().value;
 
                     // Safely convert U256 to u128
                     let pc: u128 = match pc.try_into() {
@@ -978,6 +1062,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -996,6 +1082,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         } else {
                             self.instruction = pc + 1;
@@ -1005,20 +1093,26 @@ impl VM {
 
                 // PC
                 if op == 0x58 {
-                    self.stack
-                        .push(U256::from(self.instruction).encode_hex().as_str());
+                    self.stack.push(
+                        U256::from(self.instruction).encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // MSIZE
                 if op == 0x59 {
-                    self.stack
-                        .push(U256::from(self.memory.size()).encode_hex().as_str());
+                    self.stack.push(
+                        U256::from(self.memory.size()).encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // GAS
                 if op == 0x5a {
-                    self.stack
-                        .push(U256::from(self.gas_remaining).encode_hex().as_str());
+                    self.stack.push(
+                        U256::from(self.gas_remaining).encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // PUSH1 -> PUSH32
@@ -1031,8 +1125,13 @@ impl VM {
                         ..((self.instruction + num_bytes) * 2) as usize];
                     self.instruction += num_bytes;
 
+                    // update the operation's inputs
+                    let new_operation_inputs = vec![WrappedInput::Raw(U256::from_str(bytes).unwrap())];
+                    
+                    operation.inputs = new_operation_inputs;
+
                     // Push the bytes to the stack
-                    self.stack.push(bytes);
+                    self.stack.push(bytes, operation.clone());
                 }
 
                 // DUP1 -> DUP16
@@ -1056,9 +1155,9 @@ impl VM {
                 // LOG0 -> LOG4
                 if op >= 0xA0 && op <= 0xA4 {
                     let topic_count = (op - 160) as usize;
-                    let offset = self.stack.pop();
-                    let size = self.stack.pop();
-                    let topics = self.stack.pop_n(topic_count);
+                    let offset = self.stack.pop().value;
+                    let size = self.stack.pop().value;
+                    let topics = self.stack.pop_n(topic_count).iter().map(|x| x.value).collect();
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -1071,6 +1170,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -1084,6 +1185,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -1103,20 +1206,20 @@ impl VM {
                     self.stack.pop_n(3);
 
                     self.stack
-                        .push("0x6865696d64616c6c000000000000637265617465");
+                        .push("0x6865696d64616c6c000000000000637265617465", operation.clone());
                 }
 
                 // CALL, CALLCODE
                 if op == 0xF1 || op == 0xF2 {
                     self.stack.pop_n(7);
 
-                    self.stack.push("0x01");
+                    self.stack.push("0x01", operation.clone());
                 }
 
                 // RETURN
                 if op == 0xF3 {
-                    let offset = self.stack.pop();
-                    let size = self.stack.pop();
+                    let offset = self.stack.pop().value;
+                    let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -1129,6 +1232,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -1142,6 +1247,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -1153,7 +1260,7 @@ impl VM {
                 if op == 0xF4 || op == 0xFA {
                     self.stack.pop_n(6);
 
-                    self.stack.push("0x01");
+                    self.stack.push("0x01", operation.clone());
                 }
 
                 // CREATE2
@@ -1161,13 +1268,13 @@ impl VM {
                     self.stack.pop_n(4);
 
                     self.stack
-                        .push("0x6865696d64616c6c000000000063726561746532");
+                        .push("0x6865696d64616c6c000000000063726561746532", operation.clone());
                 }
 
                 // REVERT
                 if op == 0xFD {
-                    let offset = self.stack.pop();
-                    let size = self.stack.pop();
+                    let offset = self.stack.pop().value;
+                    let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -1180,6 +1287,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -1193,6 +1302,8 @@ impl VM {
                                 opcode_details: Some(opcode_details),
                                 inputs: inputs,
                                 outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
                             };
                         }
                     };
@@ -1207,7 +1318,15 @@ impl VM {
                 }
 
                 // get outputs
-                let outputs = self.stack.peek_n(opcode_details.outputs as usize);
+                let output_frames = self.stack.peek_n(opcode_details.outputs as usize);
+                let output_operations = output_frames
+                    .iter()
+                    .map(|x| x.operation.clone())
+                    .collect::<Vec<WrappedOpcode>>();
+                let outputs = output_frames
+                    .iter()
+                    .map(|x| x.value)
+                    .collect::<Vec<U256>>();
 
                 return Instruction {
                     instruction: last_instruction,
@@ -1215,6 +1334,8 @@ impl VM {
                     opcode_details: Some(opcode_details),
                     inputs: inputs,
                     outputs: outputs,
+                    input_operations: input_operations,
+                    output_operations: output_operations,
                 };
             }
             _ => {
@@ -1226,6 +1347,8 @@ impl VM {
                     opcode_details: Some(opcode_details),
                     inputs: inputs,
                     outputs: Vec::new(),
+                    input_operations: input_operations,
+                    output_operations: Vec::new(),
                 };
             }
         }

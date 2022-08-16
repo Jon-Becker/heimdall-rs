@@ -2,12 +2,20 @@ use std::{collections::VecDeque, str::FromStr};
 
 use ethers::prelude::U256;
 
+use super::opcodes::WrappedOpcode;
+
 // This implemtation is a simple, (hopefully lightweight) LIFO stack.
 // Supports simple push/pop operations, with further helper operations
 // such as peek and is_empty.
 #[derive(Clone, Debug)]
 pub struct Stack {
-    pub stack: VecDeque<U256>,
+    pub stack: VecDeque<StackFrame>,
+}
+
+#[derive(Clone, Debug)]
+pub struct StackFrame {
+    pub value: U256,
+    pub operation: WrappedOpcode,
 }
 
 // TODO: handle panics
@@ -19,20 +27,25 @@ impl Stack {
     }
 
     // Push a value onto the stack.
-    pub fn push(&mut self, value: &str) {
-        self.stack.push_front(U256::from_str(&value).unwrap());
+    pub fn push(&mut self, value: &str, operation: WrappedOpcode) {
+        self.stack.push_front(
+            StackFrame {
+                value: U256::from_str(&value).unwrap(),
+                operation,
+            }
+        );
     }
 
     // Pop a value off the stack.
-    pub fn pop(&mut self) -> U256 {
+    pub fn pop(&mut self) -> StackFrame {
         match self.stack.pop_front() {
             Some(value) => value,
-            None => U256::from(0 as u8),
+            None => StackFrame { value: U256::from(0u8), operation: WrappedOpcode::default() },
         }
     }
 
     // Pop n values off the stack.
-    pub fn pop_n(&mut self, n: usize) -> Vec<U256> {
+    pub fn pop_n(&mut self, n: usize) -> Vec<StackFrame> {
         let mut values = Vec::new();
         for _ in 0..n {
             values.push(self.pop());
@@ -55,7 +68,7 @@ impl Stack {
     pub fn dup(&mut self, n: usize) -> bool {
         match self.stack.get(n - 1) {
             Some(_) => {
-                self.stack.push_front(self.stack[n - 1]);
+                self.stack.push_front(self.stack[n - 1].clone());
                 return true;
             }
             None => return false,
@@ -63,14 +76,14 @@ impl Stack {
     }
 
     // Peek at the top value on the stack.
-    pub fn peek(&self, index: usize) -> U256 {
+    pub fn peek(&self, index: usize) -> StackFrame {
         match self.stack.get(index) {
             Some(value) => value.to_owned(),
-            None => U256::from(0 as u8),
+            None => StackFrame { value: U256::from(0u8), operation: WrappedOpcode::default() },
         }
     }
 
-    pub fn peek_n(&self, n: usize) -> Vec<U256> {
+    pub fn peek_n(&self, n: usize) -> Vec<StackFrame> {
         let mut values = Vec::new();
         for i in 0..n {
             values.push(self.peek(i));

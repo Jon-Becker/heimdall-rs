@@ -193,6 +193,18 @@ impl WrappedOpcode {
             inputs: inputs,
         }
     }
+
+    pub fn default() -> WrappedOpcode {
+        WrappedOpcode {
+            opcode: Opcode {
+                name: String::from("unknown"),
+                mingas: 0,
+                inputs: 0,
+                outputs: 0,
+            },
+            inputs: Vec::new(),
+        }
+    }
 }
 
 // implements pretty printing for WrappedOpcodes
