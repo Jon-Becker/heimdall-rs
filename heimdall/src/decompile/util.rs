@@ -254,7 +254,11 @@ impl VMTrace {
 
         // perform analysis on the operations of the current VMTrace branch
         for operation in &self.operations { 
-            let opcode_name = operation.last_instruction.opcode_details.clone().unwrap().name;
+            let instruction = operation.last_instruction.clone();
+            let storage = operation.storage.clone();
+            let memory = operation.memory.clone();
+
+            let opcode_name = instruction.opcode_details.clone().unwrap().name;
 
             // if the instruction is a state-accessing instruction, the function is no longer pure
             if function.pure
@@ -289,10 +293,10 @@ impl VMTrace {
                 function.pure = false;
                 trace.add_info(
                     trace_parent,
-                    operation.last_instruction.instruction.try_into().unwrap(),
+                    instruction.instruction.try_into().unwrap(),
                     format!(
                         "instruction {} ({}) indicates an non-pure function.",
-                        operation.last_instruction.instruction, opcode_name
+                        instruction.instruction, opcode_name
                     ),
                 );
             }
@@ -314,18 +318,34 @@ impl VMTrace {
                 function.view = false;
                 trace.add_info(
                     trace_parent,
-                    operation.last_instruction.instruction.try_into().unwrap(),
+                    instruction.instruction.try_into().unwrap(),
                     format!(
                         "instruction {} ({}) indicates a non-view function.",
-                        operation.last_instruction.instruction, opcode_name
+                        instruction.instruction, opcode_name
                     ),
                 );
             }
 
+            if opcode_name == "REVERT" {
+
+                // Safely convert U256 to usize
+                let offset: usize = match instruction.inputs[0].try_into() {
+                    Ok(x) => x,
+                    Err(_) => 0
+                };
+                let size: usize = match instruction.inputs[1].try_into() {
+                    Ok(x) => x,
+                    Err(_) => 0
+                };
+
+                let revert_data = memory.read(offset, size);
+                println!("revert({})", revert_data)
+            }
+
             // add the sstore to the function's storage map
             if opcode_name == "SSTORE" {
-                let key = operation.last_instruction.inputs[0];
-                let value = operation.last_instruction.inputs[1];
+                let key = instruction.inputs[0];
+                let value = instruction.inputs[1];
                 function.storage.insert(key, value);
             }
         }
