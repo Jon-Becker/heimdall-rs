@@ -339,6 +339,13 @@ impl VMTrace {
                 };
 
                 let revert_data = memory.read(offset, size);
+
+                // (1) if revert_data starts with 0x08c379a0, the folling is an error string abiencoded
+                // (2) if revert_data starts with any other 4byte selector, it is a custom error and should
+                //     be resolved and added to the generated ABI
+                // (3) if revert_data is empty, it is an empty revert. Ex:
+                //       - if (true != false) { revert() };
+                //       - require(true == false)
                 println!("revert({})", revert_data)
             }
 
