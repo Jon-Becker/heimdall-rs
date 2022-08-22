@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use ethers::{
-    abi::AbiEncode,
+    abi::{AbiEncode, ParamType, decode},
     prelude::{
         rand::{self, Rng},
         U256,
@@ -12,7 +12,7 @@ use heimdall_common::{
         evm::{vm::{VM, State}},
         signatures::{resolve_signature, ResolvedFunction},
     },
-    io::logging::TraceFactory,
+    io::logging::TraceFactory, utils::strings::decode_hex,
 };
 
 use super::Function;
@@ -346,7 +346,39 @@ impl VMTrace {
                 // (3) if revert_data is empty, it is an empty revert. Ex:
                 //       - if (true != false) { revert() };
                 //       - require(true == false)
-                println!("revert({})", revert_data)
+
+                let revert_logic;
+
+                // handle case with error string abiencoded
+                if revert_data.starts_with("08c379a0") {
+                    let revert_string = match revert_data.get(8..) {
+                        Some(data) => {
+                            match decode_hex(data) {
+                                Ok(hex_data) => {
+                                    match decode(&[ParamType::String], &hex_data) {
+                                        Ok(revert) => revert[0].to_string(),
+                                        Err(_) => "decoding error".to_string()
+                                    }
+                                },
+                                Err(_) => "decoding error".to_string()
+                            }
+                        },
+                        None => "".to_string()
+                    };
+
+                    revert_logic = format!("revert(\"{}\");", revert_string);
+                }
+
+                // handle case with custom error OR empty revert
+                else {
+                    let custom_error_placeholder = match revert_data.get(0..8) {
+                        Some(selector) => format!(" CustomError_{}", selector),
+                        None => "()".to_string()
+                    };
+                    revert_logic = format!("revert{};", custom_error_placeholder);
+                }
+
+                function.logic.push(revert_logic);
             }
 
             // add the sstore to the function's storage map
