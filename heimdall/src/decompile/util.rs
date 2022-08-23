@@ -1,7 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use ethers::{
-    abi::{AbiEncode, ParamType, decode},
+    abi::{decode, AbiEncode, ParamType},
     prelude::{
         rand::{self, Rng},
         U256,
@@ -9,10 +9,11 @@ use ethers::{
 };
 use heimdall_common::{
     ether::{
-        evm::{vm::{VM, State}},
+        evm::vm::{State, VM},
         signatures::{resolve_signature, ResolvedFunction},
     },
-    io::logging::TraceFactory, utils::strings::decode_hex,
+    io::logging::TraceFactory,
+    utils::strings::decode_hex,
 };
 
 use super::Function;
@@ -253,12 +254,13 @@ impl VMTrace {
         let mut function = function.clone();
 
         // perform analysis on the operations of the current VMTrace branch
-        for operation in &self.operations { 
+        for operation in &self.operations {
             let instruction = operation.last_instruction.clone();
             let storage = operation.storage.clone();
             let memory = operation.memory.clone();
 
             let opcode_name = instruction.opcode_details.clone().unwrap().name;
+            let opcode_number = U256::from_str(&instruction.opcode).unwrap().as_usize();
 
             // if the instruction is a state-accessing instruction, the function is no longer pure
             if function.pure
@@ -326,16 +328,49 @@ impl VMTrace {
                 );
             }
 
-            if opcode_name == "REVERT" {
+            // LOG0, LOG1, LOG2, LOG3, LOG4
+            if opcode_number >= 0xA0 && opcode_number <= 0xA4 {
+                let logged_event = operation.events.last().unwrap().to_owned();
 
+                // check to see if the event is a duplicate
+
+                if !function.events.iter().any(|log| {
+                    log.index == logged_event.index
+                        && log.topics.first().unwrap() == logged_event.topics.first().unwrap()
+                }) {
+                    // add the event to the function
+                    function.events.push(logged_event.clone());
+
+                    // add the event emission to the function's logic
+                    // will be decoded during post-processing
+                    function.logic.push(format!(
+                        "emit Event_{}({}{});",
+                        match &logged_event.topics.first() {
+                            Some(topic) => topic.get(0..8).unwrap(),
+                            None => "00000000",
+                        },
+                        match logged_event.topics.get(1..) {
+                            Some(topics) => match logged_event.data.len() > 0 && topics.len() > 0
+                            {
+                                true => format!("{}, ", topics.join(", ")),
+                                false => topics.join(", "),
+                            },
+                            None => "".to_string(),
+                        },
+                        logged_event.data
+                    ));
+                }
+            }
+
+            if opcode_name == "REVERT" {
                 // Safely convert U256 to usize
                 let offset: usize = match instruction.inputs[0].try_into() {
                     Ok(x) => x,
-                    Err(_) => 0
+                    Err(_) => 0,
                 };
                 let size: usize = match instruction.inputs[1].try_into() {
                     Ok(x) => x,
-                    Err(_) => 0
+                    Err(_) => 0,
                 };
 
                 let revert_data = memory.read(offset, size);
@@ -352,28 +387,23 @@ impl VMTrace {
                 // handle case with error string abiencoded
                 if revert_data.starts_with("08c379a0") {
                     let revert_string = match revert_data.get(8..) {
-                        Some(data) => {
-                            match decode_hex(data) {
-                                Ok(hex_data) => {
-                                    match decode(&[ParamType::String], &hex_data) {
-                                        Ok(revert) => revert[0].to_string(),
-                                        Err(_) => "decoding error".to_string()
-                                    }
-                                },
-                                Err(_) => "decoding error".to_string()
-                            }
+                        Some(data) => match decode_hex(data) {
+                            Ok(hex_data) => match decode(&[ParamType::String], &hex_data) {
+                                Ok(revert) => revert[0].to_string(),
+                                Err(_) => "decoding error".to_string(),
+                            },
+                            Err(_) => "decoding error".to_string(),
                         },
-                        None => "".to_string()
+                        None => "".to_string(),
                     };
 
                     revert_logic = format!("revert(\"{}\");", revert_string);
                 }
-
                 // handle case with custom error OR empty revert
                 else {
                     let custom_error_placeholder = match revert_data.get(0..8) {
                         Some(selector) => format!(" CustomError_{}", selector),
-                        None => "()".to_string()
+                        None => "()".to_string(),
                     };
                     revert_logic = format!("revert{};", custom_error_placeholder);
                 }

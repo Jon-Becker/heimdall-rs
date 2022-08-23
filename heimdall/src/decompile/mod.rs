@@ -5,6 +5,7 @@ use std::env;
 use std::fs;
 use std::time::Duration;
 use ethers::types::U256;
+use heimdall_common::ether::evm::log::Log;
 use indicatif::ProgressBar;
 
 use clap::{AppSettings, Parser};
@@ -66,6 +67,7 @@ pub struct Function {
     pub storage: HashMap<U256, U256>,
     pub returns: Option<String>,
     pub logic: Vec<String>,
+    pub events: Vec<Log>,
 
     // modifiers
     pub pure: bool,
@@ -237,15 +239,15 @@ pub fn decompile(args: DecompilerArgs) {
     else {
         logger.info(&format!("found {} function selectors.", selectors.len()).to_string());
     }
-    logger.info(&format!("performing static analysis on '{}' .", &args.target).to_string());
+    logger.info(&format!("performing symbolic execution on '{}' .", &args.target).to_string());
 
-    let analysis_progress = ProgressBar::new_spinner();
-    analysis_progress.enable_steady_tick(Duration::from_millis(100));
-    analysis_progress.set_style(logger.info_spinner());
+    let decompilation_progress = ProgressBar::new_spinner();
+    decompilation_progress.enable_steady_tick(Duration::from_millis(100));
+    decompilation_progress.set_style(logger.info_spinner());
 
     // perform EVM analysis    
     for selector in selectors.clone() {
-        analysis_progress.set_message(format!("analyzing '0x{}'", selector));
+        decompilation_progress.set_message(format!("executing '0x{}'", selector));
         
         let func_analysis_trace = trace.add_call(
             vm_trace, 
@@ -287,6 +289,8 @@ pub fn decompile(args: DecompilerArgs) {
             ).to_string()
         );
         
+        decompilation_progress.set_message(format!("analyzing '0x{}'", selector));
+
         // solidify the execution tree
         let analyzed_function = map.analyze(
             Function {
@@ -296,7 +300,7 @@ pub fn decompile(args: DecompilerArgs) {
                 storage: HashMap::new(),
                 returns: None,
                 logic: Vec::new(),
-
+                events: Vec::new(),
                 pure: true,
                 view: true,
                 payable: false,
@@ -307,10 +311,10 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
         );
 
-        println!("{:#?}", analyzed_function);
+        println!("{:#?}", analyzed_function.logic);
     }
-    analysis_progress.finish_and_clear();
-    logger.info("static analysis completed.");
+    decompilation_progress.finish_and_clear();
+    logger.info("symbolic execution completed.");
 
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()).to_string());
