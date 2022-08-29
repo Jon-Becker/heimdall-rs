@@ -202,8 +202,10 @@ impl VM {
                     let a = self.stack.pop().value;
                     let b = self.stack.pop().value;
 
-                    self.stack
-                        .push(a.overflowing_add(b).0.encode_hex().as_str(), operation.clone());
+                    self.stack.push(
+                        a.overflowing_add(b).0.encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // MUL
@@ -211,8 +213,10 @@ impl VM {
                     let a = self.stack.pop().value;
                     let b = self.stack.pop().value;
 
-                    self.stack
-                        .push(a.overflowing_mul(b).0.encode_hex().as_str(), operation.clone());
+                    self.stack.push(
+                        a.overflowing_mul(b).0.encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // SUB
@@ -220,8 +224,10 @@ impl VM {
                     let a = self.stack.pop().value;
                     let b = self.stack.pop().value;
 
-                    self.stack
-                        .push(a.overflowing_sub(b).0.encode_hex().as_str(), operation.clone());
+                    self.stack.push(
+                        a.overflowing_sub(b).0.encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // DIV
@@ -233,8 +239,10 @@ impl VM {
                         self.stack
                             .push(U256::from(0).encode_hex().as_str(), operation.clone());
                     } else {
-                        self.stack
-                            .push(numerator.div(denominator).encode_hex().as_str(), operation.clone());
+                        self.stack.push(
+                            numerator.div(denominator).encode_hex().as_str(),
+                            operation.clone(),
+                        );
                     }
                 }
 
@@ -421,7 +429,8 @@ impl VM {
                     let a = self.stack.pop().value;
                     let b = self.stack.pop().value;
 
-                    self.stack.push((a & b).encode_hex().as_str(), operation.clone());
+                    self.stack
+                        .push((a & b).encode_hex().as_str(), operation.clone());
                 }
 
                 // OR
@@ -429,7 +438,8 @@ impl VM {
                     let a = self.stack.pop().value;
                     let b = self.stack.pop().value;
 
-                    self.stack.push((a | b).encode_hex().as_str(), operation.clone());
+                    self.stack
+                        .push((a | b).encode_hex().as_str(), operation.clone());
                 }
 
                 // XOR
@@ -437,14 +447,16 @@ impl VM {
                     let a = self.stack.pop().value;
                     let b = self.stack.pop().value;
 
-                    self.stack.push((a ^ b).encode_hex().as_str(), operation.clone());
+                    self.stack
+                        .push((a ^ b).encode_hex().as_str(), operation.clone());
                 }
 
                 // NOT
                 if op == 0x19 {
                     let a = self.stack.pop().value;
 
-                    self.stack.push((!a).encode_hex().as_str(), operation.clone());
+                    self.stack
+                        .push((!a).encode_hex().as_str(), operation.clone());
                 }
 
                 // BYTE
@@ -471,7 +483,8 @@ impl VM {
                     let a = self.stack.pop().value;
                     let b = self.stack.pop().value;
 
-                    self.stack.push(b.shl(a).encode_hex().as_str(), operation.clone());
+                    self.stack
+                        .push(b.shl(a).encode_hex().as_str(), operation.clone());
                 }
 
                 // SHR
@@ -479,7 +492,8 @@ impl VM {
                     let a = self.stack.pop().value;
                     let b = self.stack.pop().value;
 
-                    self.stack.push(b.shr(a).encode_hex().as_str(), operation.clone());
+                    self.stack
+                        .push(b.shr(a).encode_hex().as_str(), operation.clone());
                 }
 
                 // SAR
@@ -564,7 +578,8 @@ impl VM {
 
                 // CALLVALUE
                 if op == 0x34 {
-                    self.stack.push(self.value.encode_hex().as_str(), operation.clone());
+                    self.stack
+                        .push(self.value.encode_hex().as_str(), operation.clone());
                 }
 
                 // CALLDATALOAD
@@ -884,8 +899,10 @@ impl VM {
 
                 // COINBASE
                 if op == 0x41 {
-                    self.stack
-                        .push("0x6865696d64616c6c00000000636f696e62617365", operation.clone());
+                    self.stack.push(
+                        "0x6865696d64616c6c00000000636f696e62617365",
+                        operation.clone(),
+                    );
                 }
 
                 // TIMESTAMP
@@ -895,8 +912,10 @@ impl VM {
                         .unwrap()
                         .as_secs();
 
-                    self.stack
-                        .push(U256::from(timestamp).encode_hex().as_str(), operation.clone());
+                    self.stack.push(
+                        U256::from(timestamp).encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // NUMBER -> BASEFEE
@@ -1069,6 +1088,7 @@ impl VM {
                     };
 
                     if !condition.eq(&U256::from(0u8)) {
+                        
                         // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
                         if (((pc + 1) * 2 + 2) as usize <= self.bytecode.len())
                             && (self.bytecode[((pc + 1) * 2) as usize..((pc + 1) * 2 + 2) as usize]
@@ -1126,8 +1146,9 @@ impl VM {
                     self.instruction += num_bytes;
 
                     // update the operation's inputs
-                    let new_operation_inputs = vec![WrappedInput::Raw(U256::from_str(bytes).unwrap())];
-                    
+                    let new_operation_inputs =
+                        vec![WrappedInput::Raw(U256::from_str(bytes).unwrap())];
+
                     operation.inputs = new_operation_inputs;
 
                     // Push the bytes to the stack
@@ -1157,7 +1178,12 @@ impl VM {
                     let topic_count = (op - 160) as usize;
                     let offset = self.stack.pop().value;
                     let size = self.stack.pop().value;
-                    let topics = self.stack.pop_n(topic_count).iter().map(|x| x.value).collect();
+                    let topics = self
+                        .stack
+                        .pop_n(topic_count)
+                        .iter()
+                        .map(|x| x.value)
+                        .collect();
 
                     // Safely convert U256 to usize
                     let offset: usize = match offset.try_into() {
@@ -1205,8 +1231,10 @@ impl VM {
                 if op == 0xF0 {
                     self.stack.pop_n(3);
 
-                    self.stack
-                        .push("0x6865696d64616c6c000000000000637265617465", operation.clone());
+                    self.stack.push(
+                        "0x6865696d64616c6c000000000000637265617465",
+                        operation.clone(),
+                    );
                 }
 
                 // CALL, CALLCODE
@@ -1267,8 +1295,10 @@ impl VM {
                 if op == 0xF5 {
                     self.stack.pop_n(4);
 
-                    self.stack
-                        .push("0x6865696d64616c6c000000000063726561746532", operation.clone());
+                    self.stack.push(
+                        "0x6865696d64616c6c000000000063726561746532",
+                        operation.clone(),
+                    );
                 }
 
                 // REVERT
@@ -1323,10 +1353,7 @@ impl VM {
                     .iter()
                     .map(|x| x.operation.clone())
                     .collect::<Vec<WrappedOpcode>>();
-                let outputs = output_frames
-                    .iter()
-                    .map(|x| x.value)
-                    .collect::<Vec<U256>>();
+                let outputs = output_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
 
                 return Instruction {
                     instruction: last_instruction,

@@ -4,8 +4,6 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::time::Duration;
-use ethers::types::U256;
-use heimdall_common::ether::evm::log::Log;
 use indicatif::ProgressBar;
 
 use clap::{AppSettings, Parser};
@@ -57,24 +55,6 @@ pub struct DecompilerArgs {
     #[clap(long="skip-resolving")]
     pub skip_resolving: bool,
 
-}
-
-#[derive(Clone, Debug)]
-pub struct Function {
-    pub selector: String,
-    pub entry_point: u64,
-    pub arguments: HashMap<String, String>,
-    pub storage: HashMap<U256, U256>,
-    pub returns: Option<String>,
-    pub logic: Vec<String>,
-    pub events: Vec<Log>,
-
-    // modifiers
-    pub pure: bool,
-    pub view: bool,
-    pub payable: bool,
-    pub constant: bool,
-    pub external: bool,
 }
 
 pub fn decompile(args: DecompilerArgs) {
@@ -298,6 +278,7 @@ pub fn decompile(args: DecompilerArgs) {
                 entry_point: function_entry_point.clone(),
                 arguments: HashMap::new(),
                 storage: HashMap::new(),
+                memory: HashMap::new(),
                 returns: None,
                 logic: Vec::new(),
                 events: Vec::new(),
@@ -311,7 +292,7 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
         );
 
-        println!("{:#?}", analyzed_function.logic);
+        //println!("{}", analyzed_function.write());
     }
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
