@@ -413,14 +413,14 @@ impl VMTrace {
                 }
             }
 
-            if opcode_name == "JUMPI" {
+            else if opcode_name == "JUMPI" {
                 //println!("{}", instruction.input_operations.get(1).unwrap());
 
                 // add closing braces to the function's logic
                 function.logic.push("if (true) {".to_string());
             }
 
-            if opcode_name == "REVERT" {
+            else if opcode_name == "REVERT" {
 
                 // Safely convert U256 to usize
                 let offset: usize = match instruction.inputs[0].try_into() {
@@ -470,7 +470,7 @@ impl VMTrace {
                 function.logic.push(revert_logic);
             }
 
-            if opcode_name == "RETURN" {
+            else if opcode_name == "RETURN" {
 
                 // Safely convert U256 to usize
                 let offset: usize = match instruction.inputs[0].try_into() {
@@ -487,13 +487,13 @@ impl VMTrace {
                 );
             }
 
-            if opcode_name == "INVALID" {
+            else if opcode_name == "INVALID" {
                 function.logic.push(
                     "invalid();".to_string()
                 );
             }
 
-            if opcode_name == "SELDFESTRUCT" {
+            else if opcode_name == "SELDFESTRUCT" {
 
                 let addr = match decode_hex(&instruction.inputs[0].encode_hex()) {
                     Ok(hex_data) => match decode(&[ParamType::Address], &hex_data) {
@@ -508,7 +508,7 @@ impl VMTrace {
                 );
             }
 
-            if opcode_name == "SSTORE" {
+            else if opcode_name == "SSTORE" {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
 
@@ -517,7 +517,7 @@ impl VMTrace {
                 function.logic.push(format!("storage[{}] = {};", key, value));
             }
 
-            if opcode_name == "MSTORE" {
+            else if opcode_name == "MSTORE" {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
 
@@ -526,7 +526,7 @@ impl VMTrace {
                 function.logic.push(format!("memory[{}] = {};", key, value));
             }
             
-            if opcode_name == "STATICCALL" {
+            else if opcode_name == "STATICCALL" {
                 println!("{:?}", instruction.inputs);
                 for input in instruction.input_operations.clone() {
                     println!("{}", input);
