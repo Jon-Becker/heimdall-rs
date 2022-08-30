@@ -21,8 +21,8 @@ pub struct Function {
     pub selector: String,
     pub entry_point: u64,
     pub arguments: HashMap<String, String>,
-    pub storage: HashMap<U256, U256>,
-    pub memory: HashMap<U256, U256>,
+    pub storage: HashMap<U256, StorageFrame>,
+    pub memory: HashMap<U256, StorageFrame>,
     pub returns: Option<String>,
     pub logic: Vec<String>,
     pub events: Vec<Log>,
@@ -33,6 +33,12 @@ pub struct Function {
     pub payable: bool,
     pub constant: bool,
     pub external: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct StorageFrame {
+    pub value: U256,
+    pub operations: WrappedOpcode,
 }
 
 impl Function {
@@ -511,18 +517,20 @@ impl VMTrace {
             else if opcode_name == "SSTORE" {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
+                let operations = instruction.input_operations[1].clone();
 
                 // add the sstore to the function's storage map
-                function.storage.insert(key, value);
+                function.storage.insert(key, StorageFrame { value: value, operations: operations });
                 function.logic.push(format!("storage[{}] = {};", key, value));
             }
 
             else if opcode_name == "MSTORE" {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
+                let operations = instruction.input_operations[1].clone();
 
                 // add the mstore to the function's memory map
-                function.storage.insert(key, value);
+                function.storage.insert(key, StorageFrame { value: value, operations: operations });
                 function.logic.push(format!("memory[{}] = {};", key, value));
             }
             
