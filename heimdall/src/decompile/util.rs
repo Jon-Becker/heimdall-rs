@@ -9,7 +9,11 @@ use ethers::{
 };
 use heimdall_common::{
     ether::{
-        evm::{vm::{State, VM}, log::Log, opcodes::WrappedOpcode},
+        evm::{
+            log::Log,
+            opcodes::WrappedOpcode,
+            vm::{State, VM},
+        },
         signatures::{resolve_signature, ResolvedFunction},
     },
     io::logging::TraceFactory,
@@ -42,36 +46,7 @@ pub struct StorageFrame {
 }
 
 impl Function {
-    
     // format and return the function's logic
-    pub fn write(&self) -> String {
-        let mut logic = String::new();
-        let mut indent = 0;
-
-        for line in &self.logic {
-
-            // if the line starts with a close brace, decrease indent
-            if line.starts_with("}") && indent > 0 {
-                indent -= 1;
-            }
-
-            logic.push_str(
-                format!(
-                    "{}{}\n",
-                    " ".repeat(indent * 2),
-                    line
-                ).as_str()
-            );
-
-            // if the line ends with an open brace, increase indent
-            if line.ends_with("{") {
-                indent += 1;
-            }
-        }
-
-        logic
-    }
-
 }
 
 #[derive(Clone, Debug)]
@@ -312,7 +287,7 @@ impl VMTrace {
         // perform analysis on the operations of the current VMTrace branch
         for operation in &self.operations {
             let instruction = operation.last_instruction.clone();
-            let storage = operation.storage.clone();
+            let _storage = operation.storage.clone();
             let memory = operation.memory.clone();
 
             let opcode_name = instruction.opcode_details.clone().unwrap().name;
@@ -385,7 +360,6 @@ impl VMTrace {
             }
 
             if opcode_number >= 0xA0 && opcode_number <= 0xA4 {
-               
                 // LOG0, LOG1, LOG2, LOG3, LOG4
                 let logged_event = operation.events.last().unwrap().to_owned();
 
@@ -407,8 +381,7 @@ impl VMTrace {
                             None => "00000000",
                         },
                         match logged_event.topics.get(1..) {
-                            Some(topics) => match logged_event.data.len() > 0 && topics.len() > 0
-                            {
+                            Some(topics) => match logged_event.data.len() > 0 && topics.len() > 0 {
                                 true => format!("{}, ", topics.join(", ")),
                                 false => topics.join(", "),
                             },
@@ -417,17 +390,12 @@ impl VMTrace {
                         logged_event.data
                     ));
                 }
-            }
-
-            else if opcode_name == "JUMPI" {
+            } else if opcode_name == "JUMPI" {
                 //println!("{}", instruction.input_operations.get(1).unwrap());
 
                 // add closing braces to the function's logic
                 function.logic.push("if (true) {".to_string());
-            }
-
-            else if opcode_name == "REVERT" {
-
+            } else if opcode_name == "REVERT" {
                 // Safely convert U256 to usize
                 let offset: usize = match instruction.inputs[0].try_into() {
                     Ok(x) => x,
@@ -474,10 +442,7 @@ impl VMTrace {
                 }
 
                 function.logic.push(revert_logic);
-            }
-
-            else if opcode_name == "RETURN" {
-
+            } else if opcode_name == "RETURN" {
                 // Safely convert U256 to usize
                 let offset: usize = match instruction.inputs[0].try_into() {
                     Ok(x) => x,
@@ -488,19 +453,10 @@ impl VMTrace {
                     Err(_) => 0,
                 };
 
-                function.logic.push(
-                    format!("return({});", memory.read(offset, size))
-                );
-            }
-
-            else if opcode_name == "INVALID" {
-                function.logic.push(
-                    "invalid();".to_string()
-                );
-            }
-
-            else if opcode_name == "SELDFESTRUCT" {
-
+                function
+                    .logic
+                    .push(format!("return({});", memory.read(offset, size)));
+            } else if opcode_name == "SELDFESTRUCT" {
                 let addr = match decode_hex(&instruction.inputs[0].encode_hex()) {
                     Ok(hex_data) => match decode(&[ParamType::Address], &hex_data) {
                         Ok(addr) => addr[0].to_string(),
@@ -509,54 +465,95 @@ impl VMTrace {
                     _ => "".to_string(),
                 };
 
-                function.logic.push(
-                    format!("selfdestruct({addr});")
-                );
-            }
-
-            else if opcode_name == "SSTORE" {
+                function.logic.push(format!("selfdestruct({addr});"));
+            } else if opcode_name == "SSTORE" {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
                 let operations = instruction.input_operations[1].clone();
 
                 // add the sstore to the function's storage map
-                function.storage.insert(key, StorageFrame { value: value, operations: operations });
-                function.logic.push(format!("storage[{}] = {};", key, value));
-            }
-
-            else if opcode_name == "MSTORE" {
+                function.storage.insert(
+                    key,
+                    StorageFrame {
+                        value: value,
+                        operations: operations,
+                    },
+                );
+                function
+                    .logic
+                    .push(format!("storage[{}] = {};", key, value));
+            } else if opcode_name == "MSTORE" {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
                 let operations = instruction.input_operations[1].clone();
 
                 // add the mstore to the function's memory map
-                function.storage.insert(key, StorageFrame { value: value, operations: operations });
+                function.storage.insert(
+                    key,
+                    StorageFrame {
+                        value: value,
+                        operations: operations,
+                    },
+                );
                 function.logic.push(format!("memory[{}] = {};", key, value));
-            }
-            
-            else if opcode_name == "STATICCALL" {
-                println!("{:?}", instruction.inputs);
-                for input in instruction.input_operations.clone() {
-                    println!("{}", input);
-                }
-
+            } else if opcode_name == "STATICCALL" {
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
-                let modifier = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
-                    true => format!("{{ gas: {} }}", instruction.input_operations[0]),
+                let modifier =
+                    match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
+                        true => format!("{{ gas: {} }}", instruction.input_operations[0]),
+                        false => String::from(""),
+                    };
+
+                let address = instruction.input_operations[1].clone();
+                let data_memory_offset = instruction.input_operations[2].clone();
+                let data_memory_size = instruction.input_operations[3].clone();
+
+                function.logic.push(format!(
+                    "(bool success, bytes ret0) = address({}).staticcall{}(memory[{}:{}]);",
+                    address, modifier, data_memory_offset, data_memory_size
+                ));
+            } else if opcode_name == "DELEGATECALL" {
+                // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
+                let modifier =
+                    match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
+                        true => format!("{{ gas: {} }}", instruction.input_operations[0]),
+                        false => String::from(""),
+                    };
+
+                let address = instruction.input_operations[1].clone();
+                let data_memory_offset = instruction.input_operations[2].clone();
+                let data_memory_size = instruction.input_operations[3].clone();
+
+                function.logic.push(format!(
+                    "(bool success, bytes ret0) = address({}).delegatecall{}(memory[{}:{}]);",
+                    address, modifier, data_memory_offset, data_memory_size
+                ));
+            } else if opcode_name == "CALL" || opcode_name == "CALLCODE" {
+                // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
+                let gas = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![])
+                {
+                    true => format!("gas: {}", instruction.input_operations[0]),
+                    false => String::from(""),
+                };
+                let value =
+                    match instruction.input_operations[2] != WrappedOpcode::new(0x5A, vec![]) {
+                        true => format!("gas: {}", instruction.input_operations[2]),
+                        false => String::from(""),
+                    };
+                let modifier = match gas.len() > 0 || value.len() > 0 {
+                    true => format!("{{ {}, {} }}", gas, value),
                     false => String::from(""),
                 };
 
-                let address = match decode_hex(&instruction.inputs[1].encode_hex()) {
-                    Ok(hex_data) => match decode(&[ParamType::Address], &hex_data) {
-                        Ok(addr) => addr[0].to_string(),
-                        Err(_) => "decoding error".to_string(),
-                    },
-                    _ => "".to_string(),
-                };
+                let address = instruction.input_operations[1].clone();
+                let data_memory_offset = instruction.input_operations[3].clone();
+                let data_memory_size = instruction.input_operations[4].clone();
 
-                println!("{}.staticcall{}", address, modifier);
+                function.logic.push(format!(
+                    "(bool success, bytes ret0) = address({}).call{}(memory[{}:{}]);",
+                    address, modifier, data_memory_offset, data_memory_size
+                ));
             }
-        
         }
 
         // recurse into the children of the VMTrace map

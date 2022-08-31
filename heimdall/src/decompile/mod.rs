@@ -272,7 +272,7 @@ pub fn decompile(args: DecompilerArgs) {
         decompilation_progress.set_message(format!("analyzing '0x{}'", selector));
 
         // solidify the execution tree
-        let analyzed_function = map.analyze(
+        let _analyzed_function = map.analyze(
             Function {
                 selector: selector.clone(),
                 entry_point: function_entry_point.clone(),
@@ -292,7 +292,7 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
         );
 
-        println!("{:#?}", analyzed_function);
+        //println!("{:#?}", analyzed_function);
     }
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
