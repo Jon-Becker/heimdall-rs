@@ -24,7 +24,7 @@ use heimdall_common::{
 pub struct Function {
     pub selector: String,
     pub entry_point: u64,
-    pub arguments: HashMap<String, String>,
+    pub arguments: HashMap<U256, String>,
     pub storage: HashMap<U256, StorageFrame>,
     pub memory: HashMap<U256, StorageFrame>,
     pub returns: Option<String>,
@@ -394,7 +394,7 @@ impl VMTrace {
                 //println!("{}", instruction.input_operations.get(1).unwrap());
 
                 // add closing braces to the function's logic
-                function.logic.push("if (true) {".to_string());
+                //function.logic.push("if (true) {".to_string());
             } else if opcode_name == "REVERT" {
                 // Safely convert U256 to usize
                 let offset: usize = match instruction.inputs[0].try_into() {
@@ -452,10 +452,16 @@ impl VMTrace {
                     Ok(x) => x,
                     Err(_) => 0,
                 };
+                let _return_data_raw = memory.read(offset, size);
 
                 function
                     .logic
-                    .push(format!("return({});", memory.read(offset, size)));
+                    .push(
+                        format!(
+                            "return(memory[{}]);",
+                            offset,
+                        )
+                    );
             } else if opcode_name == "SELDFESTRUCT" {
                 let addr = match decode_hex(&instruction.inputs[0].encode_hex()) {
                     Ok(hex_data) => match decode(&[ParamType::Address], &hex_data) {
@@ -482,7 +488,7 @@ impl VMTrace {
                 function
                     .logic
                     .push(format!("storage[{}] = {};", key, value));
-            } else if opcode_name == "MSTORE" {
+            } else if opcode_name.contains("MSTORE") {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
                 let operations = instruction.input_operations[1].clone();
@@ -496,6 +502,49 @@ impl VMTrace {
                     },
                 );
                 function.logic.push(format!("memory[{}] = {};", key, value));
+            } else if opcode_name.contains("CALLDATACOPY") {
+                function.logic.extend(vec![
+                    "".to_string(),
+                    "assembly {".to_string(),
+                    format!(
+                        "memory[{}] := calldatacopy({}, {}, {})",
+                        instruction.input_operations[0].clone(),
+                        instruction.input_operations[0].clone(),
+                        instruction.input_operations[1].clone(),
+                        instruction.input_operations[2].clone(),
+                    ),
+                    "}".to_string(),
+                    "".to_string()
+                ]);
+            } else if opcode_name.contains("CODECOPY") {
+                function.logic.extend(vec![
+                    "".to_string(),
+                    "assembly {".to_string(),
+                    format!(
+                        "memory[{}] := codecopy({}, {}, {})",
+                        instruction.input_operations[0].clone(),
+                        instruction.input_operations[0].clone(),
+                        instruction.input_operations[1].clone(),
+                        instruction.input_operations[2].clone(),
+                    ),
+                    "}".to_string(),
+                    "".to_string()
+                ]);
+            } else if opcode_name.contains("EXTCODECOPY") {
+                function.logic.extend(vec![
+                    "".to_string(),
+                    "assembly {".to_string(),
+                    format!(
+                        "memory[{}] := extcodecopy({}, {}, {}, {})",
+                        instruction.input_operations[0].clone(),
+                        instruction.input_operations[1].clone(),
+                        instruction.input_operations[1].clone(),
+                        instruction.input_operations[2].clone(),
+                        instruction.input_operations[3].clone(),
+                    ),
+                    "}".to_string(),
+                    "".to_string()
+                ]);
             } else if opcode_name == "STATICCALL" {
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
                 let modifier =
@@ -506,11 +555,10 @@ impl VMTrace {
 
                 let address = instruction.input_operations[1].clone();
                 let data_memory_offset = instruction.input_operations[2].clone();
-                let data_memory_size = instruction.input_operations[3].clone();
 
                 function.logic.push(format!(
-                    "(bool success, bytes ret0) = address({}).staticcall{}(memory[{}:{}]);",
-                    address, modifier, data_memory_offset, data_memory_size
+                    "(bool success, bytes ret0) = address({}).staticcall{}(memory[{}]);",
+                    address, modifier, data_memory_offset
                 ));
             } else if opcode_name == "DELEGATECALL" {
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
@@ -522,11 +570,10 @@ impl VMTrace {
 
                 let address = instruction.input_operations[1].clone();
                 let data_memory_offset = instruction.input_operations[2].clone();
-                let data_memory_size = instruction.input_operations[3].clone();
 
                 function.logic.push(format!(
-                    "(bool success, bytes ret0) = address({}).delegatecall{}(memory[{}:{}]);",
-                    address, modifier, data_memory_offset, data_memory_size
+                    "(bool success, bytes ret0) = address({}).delegatecall{}(memory[{}]);",
+                    address, modifier, data_memory_offset
                 ));
             } else if opcode_name == "CALL" || opcode_name == "CALLCODE" {
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
@@ -550,16 +597,46 @@ impl VMTrace {
                 let data_memory_size = instruction.input_operations[4].clone();
 
                 function.logic.push(format!(
-                    "(bool success, bytes ret0) = address({}).call{}(memory[{}:{}]);",
-                    address, modifier, data_memory_offset, data_memory_size
+                    "(bool success, bytes ret0) = address({}).call{}(memory[{}]);",
+                    address, modifier, data_memory_offset
                 ));
+            } else if opcode_name == "CREATE" {
+
+                function.logic.extend(vec![
+                    "".to_string(),
+                    "assembly {".to_string(),
+                    format!(
+                        "addr := create({}, {}, {})",
+                        instruction.input_operations[0].clone(),
+                        instruction.input_operations[1].clone(),
+                        instruction.input_operations[2].clone(),
+                    ),
+                    "}".to_string(),
+                    "".to_string()
+                ]);
+            } else if opcode_name == "CREATE2" {
+
+                function.logic.extend(vec![
+                    "".to_string(),
+                    "assembly {".to_string(),
+                    format!(
+                        "addr := create2({}, {}, {}, {})",
+                        instruction.input_operations[0].clone(),
+                        instruction.input_operations[1].clone(),
+                        instruction.input_operations[2].clone(),
+                        instruction.input_operations[3].clone(),
+                    ),
+                    "}".to_string(),
+                    "".to_string()
+                ]);
             }
+            
         }
 
         // recurse into the children of the VMTrace map
         for child in &self.children {
             function = child.analyze(function, trace, trace_parent);
-            function.logic.push("}".to_string());
+            //function.logic.push("}".to_string());
         }
 
         function

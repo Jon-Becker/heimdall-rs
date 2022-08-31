@@ -292,7 +292,7 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
         );
 
-        //println!("{:#?}", analyzed_function);
+        println!("{:#?}", _analyzed_function.logic);
     }
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
