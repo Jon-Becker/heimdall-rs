@@ -22,13 +22,36 @@ use heimdall_common::{
 
 #[derive(Clone, Debug)]
 pub struct Function {
+    // the function's 4byte selector
     pub selector: String,
+
+    // the function's entry point in the code.
+    // the entry point is the instruction the dispatcher JUMPs to when called.
     pub entry_point: u64,
-    pub arguments: HashMap<U256, String>,
+
+    // argument structure:
+    //   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
+    //   - value : tuple of ({value: U256, input_operation: WrappedOpcode}, potential_type)
+    pub arguments: HashMap<U256, (CalldataFrame, String)>,
+
+    // storage structure:
+    //   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
+    //   - value : tuple of ({value: U256, operation: WrappedOpcode})
     pub storage: HashMap<U256, StorageFrame>,
+
+    // memory structure:
+    //   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
+    //   - value : tuple of ({value: U256, operation: WrappedOpcode})
     pub memory: HashMap<U256, StorageFrame>,
+
+    // returns the return type for the function.
     pub returns: Option<String>,
+
+    // holds function logic to be written to the output solidity file.
     pub logic: Vec<String>,
+
+    // holds all emitted events. used to generate solidity event definitions
+    // as well as ABI specifications.
     pub events: Vec<Log>,
 
     // modifiers
@@ -43,6 +66,12 @@ pub struct Function {
 pub struct StorageFrame {
     pub value: U256,
     pub operations: WrappedOpcode,
+}
+
+#[derive(Clone, Debug)]
+pub struct CalldataFrame {
+    pub value: String,
+    pub input_operation: WrappedOpcode,
 }
 
 impl Function {
@@ -213,6 +242,7 @@ pub fn recursive_map(
 
             // we need to create a trace for the path that wasn't taken.
             if state.last_instruction.inputs[1] == U256::from(0) {
+
                 // the jump was not taken, create a trace for the jump path
                 // only jump if we haven't already traced this destination
                 // TODO: mark as a loop?
@@ -239,6 +269,7 @@ pub fn recursive_map(
                     handled_jumpdests,
                 ));
             } else {
+
                 // the jump was taken, create a trace for the fallthrough path
                 // only jump if we haven't already traced this destination
                 if !(handled_jumpdests.contains(&(state.last_instruction.instruction + 1))) {
@@ -274,6 +305,7 @@ pub fn recursive_map(
 }
 
 impl VMTrace {
+    
     // converts a VMTrace to a Funciton
     pub fn analyze(
         &self,
@@ -281,6 +313,7 @@ impl VMTrace {
         trace: &mut TraceFactory,
         trace_parent: u32,
     ) -> Function {
+
         // make a clone of the recursed analysis function
         let mut function = function.clone();
 
@@ -360,11 +393,11 @@ impl VMTrace {
             }
 
             if opcode_number >= 0xA0 && opcode_number <= 0xA4 {
+
                 // LOG0, LOG1, LOG2, LOG3, LOG4
                 let logged_event = operation.events.last().unwrap().to_owned();
 
                 // check to see if the event is a duplicate
-
                 if !function.events.iter().any(|log| {
                     log.index == logged_event.index
                         && log.topics.first().unwrap() == logged_event.topics.first().unwrap()
@@ -390,12 +423,16 @@ impl VMTrace {
                         logged_event.data
                     ));
                 }
+
             } else if opcode_name == "JUMPI" {
+
                 //println!("{}", instruction.input_operations.get(1).unwrap());
 
                 // add closing braces to the function's logic
                 //function.logic.push("if (true) {".to_string());
+
             } else if opcode_name == "REVERT" {
+
                 // Safely convert U256 to usize
                 let offset: usize = match instruction.inputs[0].try_into() {
                     Ok(x) => x,
@@ -432,6 +469,7 @@ impl VMTrace {
 
                     revert_logic = format!("revert(\"{}\");", revert_string);
                 }
+
                 // handle case with custom error OR empty revert
                 else {
                     let custom_error_placeholder = match revert_data.get(0..8) {
@@ -442,7 +480,9 @@ impl VMTrace {
                 }
 
                 function.logic.push(revert_logic);
+
             } else if opcode_name == "RETURN" {
+
                 // Safely convert U256 to usize
                 let offset: usize = match instruction.inputs[0].try_into() {
                     Ok(x) => x,
@@ -454,15 +494,12 @@ impl VMTrace {
                 };
                 let _return_data_raw = memory.read(offset, size);
 
-                function
-                    .logic
-                    .push(
-                        format!(
-                            "return(memory[{}]);",
-                            offset,
-                        )
-                    );
+                // TODO: push return type to function.returns
+
+                function.logic.push(format!("return(memory[{}]);", offset,));
+
             } else if opcode_name == "SELDFESTRUCT" {
+
                 let addr = match decode_hex(&instruction.inputs[0].encode_hex()) {
                     Ok(hex_data) => match decode(&[ParamType::Address], &hex_data) {
                         Ok(addr) => addr[0].to_string(),
@@ -472,6 +509,7 @@ impl VMTrace {
                 };
 
                 function.logic.push(format!("selfdestruct({addr});"));
+
             } else if opcode_name == "SSTORE" {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
@@ -485,67 +523,25 @@ impl VMTrace {
                         operations: operations,
                     },
                 );
-                function
-                    .logic
-                    .push(format!("storage[{}] = {};", key, value));
+                function.logic.push(format!("storage[{}] = {};", key, value));
+
             } else if opcode_name.contains("MSTORE") {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
-                let operations = instruction.input_operations[1].clone();
+                let operation = instruction.input_operations[1].clone();
 
                 // add the mstore to the function's memory map
                 function.storage.insert(
                     key,
                     StorageFrame {
                         value: value,
-                        operations: operations,
+                        operations: operation.clone(),
                     },
                 );
-                function.logic.push(format!("memory[{}] = {};", key, value));
-            } else if opcode_name.contains("CALLDATACOPY") {
-                function.logic.extend(vec![
-                    "".to_string(),
-                    "assembly {".to_string(),
-                    format!(
-                        "memory[{}] := calldatacopy({}, {}, {})",
-                        instruction.input_operations[0].clone(),
-                        instruction.input_operations[0].clone(),
-                        instruction.input_operations[1].clone(),
-                        instruction.input_operations[2].clone(),
-                    ),
-                    "}".to_string(),
-                    "".to_string()
-                ]);
-            } else if opcode_name.contains("CODECOPY") {
-                function.logic.extend(vec![
-                    "".to_string(),
-                    "assembly {".to_string(),
-                    format!(
-                        "memory[{}] := codecopy({}, {}, {})",
-                        instruction.input_operations[0].clone(),
-                        instruction.input_operations[0].clone(),
-                        instruction.input_operations[1].clone(),
-                        instruction.input_operations[2].clone(),
-                    ),
-                    "}".to_string(),
-                    "".to_string()
-                ]);
-            } else if opcode_name.contains("EXTCODECOPY") {
-                function.logic.extend(vec![
-                    "".to_string(),
-                    "assembly {".to_string(),
-                    format!(
-                        "memory[{}] := extcodecopy({}, {}, {}, {})",
-                        instruction.input_operations[0].clone(),
-                        instruction.input_operations[1].clone(),
-                        instruction.input_operations[1].clone(),
-                        instruction.input_operations[2].clone(),
-                        instruction.input_operations[3].clone(),
-                    ),
-                    "}".to_string(),
-                    "".to_string()
-                ]);
+                function.logic.push(format!("memory[{}] = {};", key, operation));
+
             } else if opcode_name == "STATICCALL" {
+
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
                 let modifier =
                     match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
@@ -554,13 +550,15 @@ impl VMTrace {
                     };
 
                 let address = instruction.input_operations[1].clone();
-                let data_memory_offset = instruction.input_operations[2].clone();
+                let data_memory_offset = instruction.inputs[2].clone();
 
                 function.logic.push(format!(
                     "(bool success, bytes ret0) = address({}).staticcall{}(memory[{}]);",
                     address, modifier, data_memory_offset
                 ));
+
             } else if opcode_name == "DELEGATECALL" {
+
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
                 let modifier =
                     match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
@@ -569,13 +567,15 @@ impl VMTrace {
                     };
 
                 let address = instruction.input_operations[1].clone();
-                let data_memory_offset = instruction.input_operations[2].clone();
+                let data_memory_offset = instruction.inputs[2].clone();
 
                 function.logic.push(format!(
                     "(bool success, bytes ret0) = address({}).delegatecall{}(memory[{}]);",
                     address, modifier, data_memory_offset
                 ));
+
             } else if opcode_name == "CALL" || opcode_name == "CALLCODE" {
+
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
                 let gas = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![])
                 {
@@ -593,13 +593,13 @@ impl VMTrace {
                 };
 
                 let address = instruction.input_operations[1].clone();
-                let data_memory_offset = instruction.input_operations[3].clone();
-                let data_memory_size = instruction.input_operations[4].clone();
+                let data_memory_offset = instruction.inputs[3].clone();
 
                 function.logic.push(format!(
                     "(bool success, bytes ret0) = address({}).call{}(memory[{}]);",
                     address, modifier, data_memory_offset
                 ));
+
             } else if opcode_name == "CREATE" {
 
                 function.logic.extend(vec![
@@ -612,8 +612,9 @@ impl VMTrace {
                         instruction.input_operations[2].clone(),
                     ),
                     "}".to_string(),
-                    "".to_string()
+                    "".to_string(),
                 ]);
+
             } else if opcode_name == "CREATE2" {
 
                 function.logic.extend(vec![
@@ -627,10 +628,19 @@ impl VMTrace {
                         instruction.input_operations[3].clone(),
                     ),
                     "}".to_string(),
-                    "".to_string()
+                    "".to_string(),
                 ]);
+            } else if ["SHL", "SHR", "AND"].contains(&opcode_name.as_str()) {
+                if instruction.input_operations.iter().any(|operation| {
+                    operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
+                }) {
+                    println!(
+                        "{} <=> {}",
+                        instruction.input_operations[0],
+                        instruction.input_operations[1]
+                    );
+                }
             }
-            
         }
 
         // recurse into the children of the VMTrace map
