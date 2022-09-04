@@ -1,7 +1,9 @@
 use colored::Colorize;
-use ethers::abi::{ParamType, Token};
+use ethers::abi::{ParamType, Token, AbiEncode};
 
 use crate::utils::strings::replace_last;
+
+use super::vm::Instruction;
 
 // decode a string into an ethereum type
 pub fn parse_function_parameters(function_signature: String) -> Option<Vec<ParamType>> {
@@ -184,12 +186,51 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
 }
 
 
+// converts a bit mask into it's potential types
+pub fn convert_bitmask(instruction: Instruction) -> Vec<String> {
+    let mask = instruction.output_operations[0].clone();
+    let mut potential_types = Vec::new();
+
+    // use 32 as the default size, as it is the default word size in the EVM
+    let mut type_byte_size = 32;
+
+    // determine which input contains the bitmask
+    for (i, input) in mask.inputs.iter().enumerate() {
+        match input {
+            crate::ether::evm::opcodes::WrappedInput::Raw(_) => continue,
+            crate::ether::evm::opcodes::WrappedInput::Opcode(opcode) => {   
+                if !(opcode.opcode.name == "CALLDATALOAD" || opcode.opcode.name ==  "CALLDATACOPY") {
+                    
+                    if mask.opcode.name == "AND" {
+                        type_byte_size = instruction.inputs[i].encode_hex().matches("ff").count();
+                    }
+                    else if mask.opcode.name == "OR" {
+                        type_byte_size = instruction.inputs[i].encode_hex().matches("00").count();
+                    }
+                    else if mask.opcode.name == "SHL" || mask.opcode.name == "SHR" {
+                        
+                        // mask is a shifting operation
+                        println!("{} >> {}", mask, instruction.inputs[i].as_usize());
+                        
+                    }
+                
+                }
+            },
+        };
+    }
+
+    // determine the solidity type based on the resulting size of the masked data
+    println!("mask {}: {} bytes", mask.opcode.name, type_byte_size);
+
+    potential_types
+}
+
 #[cfg(test)]
-mod tests {
+mod test_signature_decoder {
     use super::*;
 
     #[test]
-    fn test_simple() {
+    fn test_simple_signature() {
         let solidity_type = "test(uint256)".to_string();
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
@@ -203,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn test_mul() {
+    fn test_multiple_signature() {
         let solidity_type = "test(uint256,string)".to_string();
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
@@ -218,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn test_array() {
+    fn test_array_signature() {
         let solidity_type = "test(uint256,string[],uint256)".to_string();
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
@@ -236,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn test_complex() {
+    fn test_complex_signature() {
         let solidity_type = "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))".to_string();
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
@@ -263,7 +304,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tuple() {
+    fn test_tuple_signature() {
         let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))".to_string();
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
@@ -288,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn test_nested_tuple() {
+    fn test_nested_tuple_signature() {
         let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))".to_string();
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
@@ -316,14 +357,6 @@ mod tests {
                 ]
             )
         );
-    }
-
-    #[test]
-    fn test_wtf() {
-        let solidity_type = "marketBuyOrdersWithEth((address,address,address,address,uint256,uint256,uint256,uint256,uint256,uint256,bytes,bytes,bytes,bytes)[],uint256,bytes[],uint256[],address[])".to_string();
-        let param_type = parse_function_parameters(solidity_type);
-
-        println!("{:#?}", param_type)
     }
 
 }

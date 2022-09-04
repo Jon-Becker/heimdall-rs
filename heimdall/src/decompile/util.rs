@@ -12,7 +12,7 @@ use heimdall_common::{
         evm::{
             log::Log,
             opcodes::WrappedOpcode,
-            vm::{State, VM},
+            vm::{State, VM}, types::convert_bitmask,
         },
         signatures::{resolve_signature, ResolvedFunction},
     },
@@ -630,17 +630,16 @@ impl VMTrace {
                     "}".to_string(),
                     "".to_string(),
                 ]);
-            } else if ["SHL", "SHR", "AND"].contains(&opcode_name.as_str()) {
+            } else if ["SHL", "SHR", "AND", "OR"].contains(&opcode_name.as_str()) {
                 if instruction.input_operations.iter().any(|operation| {
                     operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
                 }) {
-                    println!(
-                        "{} <=> {}",
-                        instruction.input_operations[0],
-                        instruction.input_operations[1]
-                    );
+
+                    // convert the bitmask to it's potential solidity types
+                    let _potential_types = convert_bitmask(instruction.clone());
                 }
             }
+
         }
 
         // recurse into the children of the VMTrace map
