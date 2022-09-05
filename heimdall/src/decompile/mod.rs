@@ -173,15 +173,6 @@ pub fn decompile(args: DecompilerArgs) {
         };
     }
 
-    trace.add_call(
-        decompile_call, 
-        line!(), 
-        "heimdall".to_string(), 
-        "disassemble".to_string(), 
-        vec![format!("{} bytes", contract_bytecode.len()/2usize)], 
-        "()".to_string()
-    );
-
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
@@ -190,8 +181,26 @@ pub fn decompile(args: DecompilerArgs) {
         output: args.output.clone(),
         rpc_url: args.rpc_url.clone(),
     });
+    trace.add_call(
+        decompile_call, 
+        line!(), 
+        "heimdall".to_string(), 
+        "disassemble".to_string(),
+        vec![format!("{} bytes", contract_bytecode.len()/2usize)], 
+        "()".to_string()
+    );
     
-    
+    // perform versioning and compiler heuristics
+    let (compiler, version) = detect_compiler(contract_bytecode.clone());
+    trace.add_call(
+        decompile_call, 
+        line!(), 
+        "heimdall".to_string(), 
+        "detect_compiler".to_string(),
+        vec![format!("{} bytes", contract_bytecode.len()/2usize)], 
+        format!("({}, {})", compiler, version)
+    );
+
     // create a new EVM instance
     let evm = VM::new(
         contract_bytecode.clone(),

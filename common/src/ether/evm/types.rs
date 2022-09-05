@@ -207,12 +207,6 @@ pub fn convert_bitmask(instruction: Instruction) -> Vec<String> {
                     else if mask.opcode.name == "OR" {
                         type_byte_size = instruction.inputs[i].encode_hex().matches("00").count();
                     }
-                    else if mask.opcode.name == "SHL" || mask.opcode.name == "SHR" {
-                        
-                        // mask is a shifting operation
-                        println!("{} >> {}", mask, instruction.inputs[i].as_usize());
-                        
-                    }
                 
                 }
             },
@@ -220,7 +214,7 @@ pub fn convert_bitmask(instruction: Instruction) -> Vec<String> {
     }
 
     // determine the solidity type based on the resulting size of the masked data
-    println!("mask {}: {} bytes", mask.opcode.name, type_byte_size);
+    // println!("mask {}: {} bytes", mask.opcode.name, type_byte_size);
 
     potential_types
 }
