@@ -30,9 +30,9 @@ pub struct Function {
     pub entry_point: u64,
 
     // argument structure:
-    //   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
-    //   - value : tuple of ({value: U256, input_operation: WrappedOpcode}, potential_type)
-    pub arguments: HashMap<U256, (CalldataFrame, String)>,
+    //   - key : slot operations of the argument.
+    //   - value : tuple of ({slot: U256, mask: usize}, potential_types)
+    pub arguments: HashMap<String, (CalldataFrame, Vec<String>)>,
 
     // storage structure:
     //   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
@@ -70,8 +70,8 @@ pub struct StorageFrame {
 
 #[derive(Clone, Debug)]
 pub struct CalldataFrame {
-    pub value: String,
-    pub input_operation: WrappedOpcode,
+    pub slot: usize,
+    pub mask_size: usize,
 }
 
 impl Function {
@@ -717,20 +717,107 @@ impl VMTrace {
                     "}".to_string(),
                     "".to_string(),
                 ]);
-            } else if opcode_name == "ISZERO" {
+            } else if opcode_name == "CALLDATALOAD" {
 
-                // check if this is a potential boolean cast
-                if ["CALLDATALOAD", "CALLDATACOPY"].contains(&instruction.input_operations[0].opcode.name.as_str()) {
-                    //println!("{:#?}", instruction.input_operations[0].inputs);
-                }
+                function.arguments.insert(
+                    format!("{}", instruction.input_operations[0].clone()),
+                    (
+                        CalldataFrame {
+                            slot: (instruction.inputs[0].as_usize() - 4) / 32,
+                            mask_size: 32,
+                        },
+                        vec!["bytes".to_string(),
+                             "uint256".to_string(),
+                             "int256".to_string(),
+                             "string".to_string(),
+                             "bytes32".to_string(),
+                             "uint".to_string(),
+                             "int".to_string(),
+                        ],
+                    ),
+                );
                 
+            } else if opcode_name == "ISZERO" {
+                if instruction.input_operations.iter().any(|operation| {
+                    operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
+                }) {
+
+                    // find the calldata slot in the function's arguments
+                    let calldata_slot_operation = instruction.input_operations.iter().find(|operation| {
+                        operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
+                    }).unwrap().clone();
+
+                    match function.arguments.get(
+                        format!("{}", calldata_slot_operation.inputs[0].clone()).as_str()
+                    ) {
+                        Some(arg) => {
+
+                            // copy the current potential types to a new vector and remove duplicates
+                            let mut potential_types = 
+                                vec![
+                                    "bool".to_string(),
+                                    "bytes1".to_string(),
+                                    "uint8".to_string(),
+                                    "int8".to_string(),
+                                ];
+                            potential_types.append(&mut arg.1.clone());
+                            potential_types.sort();
+                            potential_types.dedup();
+                            
+                            // replace mask size and potential types
+                            function.arguments.insert(
+                                format!("{}", calldata_slot_operation.inputs[0].clone()).as_str().to_string(),
+                                (
+                                    CalldataFrame {
+                                        slot: arg.0.slot,
+                                        mask_size: 1,
+                                    },
+                                    potential_types
+                                ),
+                            );
+
+                        },
+                        None => {}
+                    }
+                }
             } else if ["AND", "OR"].contains(&opcode_name.as_str()) {
                 if instruction.input_operations.iter().any(|operation| {
                     operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
                 }) {
 
                     // convert the bitmask to it's potential solidity types
-                    let _potential_types = convert_bitmask(instruction.clone());
+                    let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
+                    
+                    // find the calldata slot in the function's arguments
+                    let calldata_slot_operation = instruction.input_operations.iter().find(|operation| {
+                        operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
+                    }).unwrap().clone();
+
+                    match function.arguments.get(
+                        format!("{}", calldata_slot_operation.inputs[0].clone()).as_str()
+                    ) {
+                        Some(arg) => {
+
+                            // append the current potential types to the new vector and remove duplicates
+                            potential_types.append(&mut arg.1.clone());
+                            potential_types.sort();
+                            potential_types.dedup();
+                            
+                            // replace mask size and potential types
+                            function.arguments.insert(
+                                format!("{}", calldata_slot_operation.inputs[0].clone()).as_str().to_string(),
+                                (
+                                    CalldataFrame {
+                                        slot: arg.0.slot,
+                                        mask_size: mask_size_bytes,
+                                    },
+                                    potential_types,
+                                ),
+                            );
+
+                        },
+                        None => {}
+                    }
                 }
             }
 

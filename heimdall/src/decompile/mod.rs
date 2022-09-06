@@ -201,6 +201,13 @@ pub fn decompile(args: DecompilerArgs) {
         format!("({}, {})", compiler, version)
     );
 
+    if compiler == "solc" {
+        logger.debug(&format!("detected compiler {} {}.", compiler, version));
+    }
+    else {
+        logger.warn(&format!("detected compiler {} {} is not supported by heimdall.", compiler, version));
+    }
+
     // create a new EVM instance
     let evm = VM::new(
         contract_bytecode.clone(),
@@ -301,7 +308,7 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
         );
 
-        //println!("{:#?}", _analyzed_function.arguments);
+        println!("{:#?}",_analyzed_function.arguments);
     }
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
