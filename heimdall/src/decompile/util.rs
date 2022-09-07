@@ -740,87 +740,82 @@ impl VMTrace {
                     );
                 }      
             } else if opcode_name == "ISZERO" {
-                if instruction.input_operations.iter().any(|operation| {
+
+                match instruction.input_operations.iter().find(|operation| {
                     operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
                 }) {
+                    Some(calldata_slot_operation) => {
 
-                    // find the calldata slot in the function's arguments
-                    let calldata_slot_operation = instruction.input_operations.iter().find(|operation| {
-                        operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
-                    }).unwrap().clone();
-
-                    match function.arguments.get(
-                        format!("{}", calldata_slot_operation.inputs[0].clone()).as_str()
-                    ) {
-                        Some(arg) => {
-
-                            // copy the current potential types to a new vector and remove duplicates
-                            let mut potential_types = 
-                                vec![
-                                    "bool".to_string(),
-                                    "bytes1".to_string(),
-                                    "uint8".to_string(),
-                                    "int8".to_string(),
-                                ];
-                            potential_types.append(&mut arg.1.clone());
-                            potential_types.sort();
-                            potential_types.dedup();
-                            
-                            // replace mask size and potential types
-                            function.arguments.insert(
-                                format!("{}", calldata_slot_operation.inputs[0].clone()).as_str().to_string(),
-                                (
-                                    CalldataFrame {
-                                        slot: arg.0.slot,
-                                        mask_size: 1,
-                                    },
-                                    potential_types
-                                ),
-                            );
-
-                        },
-                        None => {}
-                    }
-                }
+                        match function.arguments.get(
+                            format!("{}", calldata_slot_operation.inputs[0].clone()).as_str()
+                        ) {
+                            Some(arg) => {
+    
+                                // copy the current potential types to a new vector and remove duplicates
+                                let mut potential_types = 
+                                    vec![
+                                        "bool".to_string(),
+                                        "bytes1".to_string(),
+                                        "uint8".to_string(),
+                                        "int8".to_string(),
+                                    ];
+                                potential_types.append(&mut arg.1.clone());
+                                potential_types.sort();
+                                potential_types.dedup();
+                                
+                                // replace mask size and potential types
+                                function.arguments.insert(
+                                    format!("{}", calldata_slot_operation.inputs[0].clone()).as_str().to_string(),
+                                    (
+                                        arg.0.clone(),
+                                        potential_types
+                                    ),
+                                );
+    
+                            },
+                            None => {}
+                        }
+                    },
+                    None => {},
+                };
             } else if ["AND", "OR"].contains(&opcode_name.as_str()) {
-                if instruction.input_operations.iter().any(|operation| {
+
+                match instruction.input_operations.iter().find(|operation| {
                     operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
                 }) {
-
-                    // convert the bitmask to it's potential solidity types
-                    let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
-                    
-                    // find the calldata slot in the function's arguments
-                    let calldata_slot_operation = instruction.input_operations.iter().find(|operation| {
-                        operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
-                    }).unwrap().clone();
-
-                    match function.arguments.get(
-                        format!("{}", calldata_slot_operation.inputs[0].clone()).as_str()
-                    ) {
-                        Some(arg) => {
-
-                            // append the current potential types to the new vector and remove duplicates
-                            potential_types.append(&mut arg.1.clone());
-                            potential_types.sort();
-                            potential_types.dedup();
-                            
-                            // replace mask size and potential types
-                            function.arguments.insert(
-                                format!("{}", calldata_slot_operation.inputs[0].clone()).as_str().to_string(),
-                                (
-                                    CalldataFrame {
-                                        slot: arg.0.slot,
-                                        mask_size: mask_size_bytes,
-                                    },
-                                    potential_types,
-                                ),
-                            );
-
-                        },
-                        None => {}
+                    Some(calldata_slot_operation) => {
+                        
+                        // convert the bitmask to it's potential solidity types
+                        let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
+                        
+                        match function.arguments.get(
+                            format!("{}", calldata_slot_operation.inputs[0].clone()).as_str()
+                        ) {
+                            Some(arg) => {
+    
+                                // append the current potential types to the new vector and remove duplicates
+                                potential_types.append(&mut arg.1.clone());
+                                potential_types.sort();
+                                potential_types.dedup();
+                                
+                                // replace mask size and potential types
+                                function.arguments.insert(
+                                    format!("{}", calldata_slot_operation.inputs[0].clone()).as_str().to_string(),
+                                    (
+                                        CalldataFrame {
+                                            slot: arg.0.slot,
+                                            mask_size: mask_size_bytes,
+                                        },
+                                        potential_types,
+                                    ),
+                                );
+    
+                            },
+                            None => {}
+                        }
                     }
-                }
+                    None => {}
+                };
             }
 
         }

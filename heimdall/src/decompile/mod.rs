@@ -316,7 +316,7 @@ pub fn decompile(args: DecompilerArgs) {
                 line!(),
                 format!("discovered and analyzed {} function parameters", argument_count).to_string()
             );
-            for (_, (frame, potential_types)) in analyzed_function.arguments.iter() {
+            for (_, (frame, _)) in analyzed_function.arguments.iter() {
                 trace.add_message(
                     l,
                     line!(),
