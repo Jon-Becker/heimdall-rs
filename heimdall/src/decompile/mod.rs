@@ -288,7 +288,7 @@ pub fn decompile(args: DecompilerArgs) {
         decompilation_progress.set_message(format!("analyzing '0x{}'", selector));
 
         // solidify the execution tree
-        let _analyzed_function = map.analyze(
+        let analyzed_function = map.analyze(
             Function {
                 selector: selector.clone(),
                 entry_point: function_entry_point.clone(),
@@ -308,7 +308,29 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
         );
 
-        println!("{:#?}",_analyzed_function.arguments);
+        let argument_count = analyzed_function.arguments.len();
+
+        if argument_count != 0 {
+            let l = trace.add_debug(
+                func_analysis_trace,
+                line!(),
+                format!("discovered and analyzed {} function parameters", argument_count).to_string()
+            );
+            for (_, (frame, potential_types)) in analyzed_function.arguments.iter() {
+                trace.add_message(
+                    l,
+                    line!(),
+                    vec![
+                        format!(
+                            "parameter {} {} {} bytes.",
+                            frame.slot,
+                            if frame.mask_size == 32 { "has size of" } else { "is masked to" },
+                            frame.mask_size
+                        ).to_string()
+                    ]
+                );
+            }
+        }
     }
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");

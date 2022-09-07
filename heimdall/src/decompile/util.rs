@@ -718,25 +718,27 @@ impl VMTrace {
                     "".to_string(),
                 ]);
             } else if opcode_name == "CALLDATALOAD" {
-
-                function.arguments.insert(
-                    format!("{}", instruction.input_operations[0].clone()),
-                    (
-                        CalldataFrame {
-                            slot: (instruction.inputs[0].as_usize() - 4) / 32,
-                            mask_size: 32,
-                        },
-                        vec!["bytes".to_string(),
-                             "uint256".to_string(),
-                             "int256".to_string(),
-                             "string".to_string(),
-                             "bytes32".to_string(),
-                             "uint".to_string(),
-                             "int".to_string(),
-                        ],
-                    ),
-                );
-                
+                if !function.arguments.iter().any(|(_, (frame, _))| {
+                    frame.slot == (instruction.inputs[0].as_usize() - 4) / 32
+                }) {
+                    function.arguments.insert(
+                        format!("{}", instruction.input_operations[0].clone()),
+                        (
+                            CalldataFrame {
+                                slot: (instruction.inputs[0].as_usize() - 4) / 32,
+                                mask_size: 32,
+                            },
+                            vec!["bytes".to_string(),
+                                 "uint256".to_string(),
+                                 "int256".to_string(),
+                                 "string".to_string(),
+                                 "bytes32".to_string(),
+                                 "uint".to_string(),
+                                 "int".to_string(),
+                            ],
+                        ),
+                    );
+                }      
             } else if opcode_name == "ISZERO" {
                 if instruction.input_operations.iter().any(|operation| {
                     operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"

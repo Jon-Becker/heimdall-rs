@@ -193,7 +193,11 @@ impl TraceFactory {
                     let message = trace.message.get(message_index).unwrap();
                     println!(
                         "{} {}",
-                        if message_index == 0 {
+                        if prefix.ends_with("└─") {
+                            prefix.to_string()
+                                .bold()
+                                .bright_white()
+                        } else if message_index == 0 {
                             replace_last(prefix.to_string(), "│ ", " ├─")
                                 .bold()
                                 .bright_white()
@@ -207,11 +211,20 @@ impl TraceFactory {
                 }
 
                 // print the children
-                for child in &trace.children {
-                    self.print_trace(
-                        &format!("{}   │", prefix).bold().bright_white(),
-                        *child as usize - 1,
-                    );
+                for (i, child) in trace.children.iter().enumerate() {
+
+                    if i == trace.children.len() - 1 {
+                        self.print_trace(
+                            &format!("{}   └─", prefix).bold().bright_white(),
+                            *child as usize - 1,
+                        );
+                    } else {
+                        self.print_trace(
+                            &format!("{}   │", prefix).bold().bright_white(),
+                            *child as usize - 1,
+                        );
+                    }
+                    
                 }
             }
             TraceCategory::Empty => {
