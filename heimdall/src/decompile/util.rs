@@ -72,6 +72,7 @@ pub struct StorageFrame {
 pub struct CalldataFrame {
     pub slot: usize,
     pub mask_size: usize,
+    pub heuristics: Vec<String>,
 }
 
 impl Function {
@@ -727,6 +728,7 @@ impl VMTrace {
                             CalldataFrame {
                                 slot: (instruction.inputs[0].as_usize() - 4) / 32,
                                 mask_size: 32,
+                                heuristics: Vec::new(),
                             },
                             vec!["bytes".to_string(),
                                  "uint256".to_string(),
@@ -805,6 +807,7 @@ impl VMTrace {
                                         CalldataFrame {
                                             slot: arg.0.slot,
                                             mask_size: mask_size_bytes,
+                                            heuristics: Vec::new(),
                                         },
                                         potential_types,
                                     ),
@@ -816,6 +819,75 @@ impl VMTrace {
                     }
                     None => {}
                 };
+            } else if [
+                    "ADD",
+                    "SUB",
+                    "MUL",
+                    "MULMOD",
+                    "ADDMOD",
+                    "SMOD",
+                    "MOD",
+                    "DIV",
+                    "SDIV",
+                    "EXP",
+                    "LT",
+                    "GT",
+                    "SLT",
+                    "SGT"
+                ].contains(&opcode_name.as_str()) {
+
+                // get the calldata slot operation
+                match function.arguments.iter().find(|(key, (frame, _))| {
+                    instruction.output_operations.iter().any(|operation| {
+                        operation.to_string().contains(key.as_str()) &&
+                        !frame.heuristics.contains(&"integer".to_string())
+                    })
+                }) {
+                   Some ((key, (frame, potential_types))) => {
+                        function.arguments.insert(
+                            key.clone(),
+                            (
+                                CalldataFrame {
+                                    slot: frame.slot,
+                                    mask_size: frame.mask_size,
+                                    heuristics: vec!["integer".to_string()],
+                                },
+                                potential_types.clone().to_owned()
+                            ),
+                        );
+                   },
+                   None => {}
+                }
+            } else if [
+                "SHR",
+                "SHL",
+                "SAR",
+                "XOR",
+                "BYTE",
+            ].contains(&opcode_name.as_str()) {
+
+                // get the calldata slot operation
+                match function.arguments.iter().find(|(key, (frame, _))| {
+                    instruction.output_operations.iter().any(|operation| {
+                        operation.to_string().contains(key.as_str()) &&
+                        !frame.heuristics.contains(&"bytes".to_string())
+                    })
+                }) {
+                Some ((key, (frame, potential_types))) => {
+                        function.arguments.insert(
+                            key.clone(),
+                            (
+                                CalldataFrame {
+                                    slot: frame.slot,
+                                    mask_size: frame.mask_size,
+                                    heuristics: vec!["bytes".to_string()],
+                                },
+                                potential_types.clone().to_owned()
+                            ),
+                        );
+                },
+                None => {}
+                }
             }
 
         }

@@ -311,21 +311,34 @@ pub fn decompile(args: DecompilerArgs) {
         let argument_count = analyzed_function.arguments.len();
 
         if argument_count != 0 {
-            let l = trace.add_debug(
+            let parameter_trace_parent = trace.add_debug(
                 func_analysis_trace,
                 line!(),
                 format!("discovered and analyzed {} function parameters", argument_count).to_string()
             );
-            for (_, (frame, _)) in analyzed_function.arguments.iter() {
+
+            let mut parameter_vec = Vec::new();
+            for (_, value) in analyzed_function.arguments {
+                parameter_vec.push(value);
+            }
+            parameter_vec.sort_by(|a, b| a.0.slot.cmp(&b.0.slot));
+
+
+            for (frame, _) in parameter_vec {
                 trace.add_message(
-                    l,
+                    parameter_trace_parent,
                     line!(),
                     vec![
                         format!(
-                            "parameter {} {} {} bytes.",
+                            "parameter {} {} {} bytes. {}",
                             frame.slot,
                             if frame.mask_size == 32 { "has size of" } else { "is masked to" },
-                            frame.mask_size
+                            frame.mask_size,
+                            if frame.heuristics.len() > 0 {
+                                format!("heuristics suggest param used as '{}'", frame.heuristics[0])
+                            } else {
+                                "".to_string()
+                            }
                         ).to_string()
                     ]
                 );
