@@ -32,7 +32,7 @@ pub struct Function {
     // argument structure:
     //   - key : slot operations of the argument.
     //   - value : tuple of ({slot: U256, mask: usize}, potential_types)
-    pub arguments: HashMap<String, (CalldataFrame, Vec<String>)>,
+    pub arguments: HashMap<usize, (CalldataFrame, Vec<String>)>,
 
     // storage structure:
     //   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
@@ -71,6 +71,7 @@ pub struct StorageFrame {
 #[derive(Clone, Debug)]
 pub struct CalldataFrame {
     pub slot: usize,
+    pub operation: String,
     pub mask_size: usize,
     pub heuristics: Vec<String>,
 }
@@ -719,39 +720,44 @@ impl VMTrace {
                     "".to_string(),
                 ]);
             } else if opcode_name == "CALLDATALOAD" {
-                if !function.arguments.iter().any(|(_, (frame, _))| {
-                    frame.slot == (instruction.inputs[0].as_usize() - 4) / 32
-                }) {
-                    function.arguments.insert(
-                        format!("{}", instruction.input_operations[0].clone()),
-                        (
-                            CalldataFrame {
-                                slot: (instruction.inputs[0].as_usize() - 4) / 32,
-                                mask_size: 32,
-                                heuristics: Vec::new(),
-                            },
-                            vec!["bytes".to_string(),
-                                 "uint256".to_string(),
-                                 "int256".to_string(),
-                                 "string".to_string(),
-                                 "bytes32".to_string(),
-                                 "uint".to_string(),
-                                 "int".to_string(),
-                            ],
-                        ),
-                    );
-                }      
+
+                let calldata_slot = (instruction.inputs[0].as_usize() - 4) / 32;
+                match function.arguments.get(&calldata_slot) {
+                    Some(_) => {}
+                    None => {
+                        function.arguments.insert(
+                            calldata_slot,
+                            (
+                                CalldataFrame {
+                                    slot: (instruction.inputs[0].as_usize() - 4) / 32,
+                                    operation: instruction.input_operations[0].clone().to_string(),
+                                    mask_size: 32,
+                                    heuristics: Vec::new(),
+                                },
+                                vec!["bytes".to_string(),
+                                     "uint256".to_string(),
+                                     "int256".to_string(),
+                                     "string".to_string(),
+                                     "bytes32".to_string(),
+                                     "uint".to_string(),
+                                     "int".to_string(),
+                                ],
+                            ),
+                        );
+                    }
+                }
+                  
             } else if opcode_name == "ISZERO" {
 
                 match instruction.input_operations.iter().find(|operation| {
-                    operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
+                    operation.opcode.name == "CALLDATALOAD"
                 }) {
                     Some(calldata_slot_operation) => {
 
-                        match function.arguments.get(
-                            format!("{}", calldata_slot_operation.inputs[0].clone()).as_str()
-                        ) {
-                            Some(arg) => {
+                        match function.arguments.iter().find(|(_, (frame, _))| {
+                            frame.operation == calldata_slot_operation.inputs[0].clone().to_string()
+                        }) {
+                            Some((calldata_slot, arg)) => {
     
                                 // copy the current potential types to a new vector and remove duplicates
                                 let mut potential_types = 
@@ -767,7 +773,7 @@ impl VMTrace {
                                 
                                 // replace mask size and potential types
                                 function.arguments.insert(
-                                    format!("{}", calldata_slot_operation.inputs[0].clone()).as_str().to_string(),
+                                    *calldata_slot,
                                     (
                                         arg.0.clone(),
                                         potential_types
@@ -790,10 +796,10 @@ impl VMTrace {
                         // convert the bitmask to it's potential solidity types
                         let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
                         
-                        match function.arguments.get(
-                            format!("{}", calldata_slot_operation.inputs[0].clone()).as_str()
-                        ) {
-                            Some(arg) => {
+                        match function.arguments.iter().find(|(_, (frame, _))| {
+                            frame.operation == calldata_slot_operation.inputs[0].clone().to_string()
+                        }) {
+                            Some((calldata_slot, arg)) => {
     
                                 // append the current potential types to the new vector and remove duplicates
                                 potential_types.append(&mut arg.1.clone());
@@ -802,10 +808,11 @@ impl VMTrace {
                                 
                                 // replace mask size and potential types
                                 function.arguments.insert(
-                                    format!("{}", calldata_slot_operation.inputs[0].clone()).as_str().to_string(),
+                                    *calldata_slot,
                                     (
                                         CalldataFrame {
                                             slot: arg.0.slot,
+                                            operation: arg.0.operation.clone(),
                                             mask_size: mask_size_bytes,
                                             heuristics: Vec::new(),
                                         },
@@ -819,9 +826,10 @@ impl VMTrace {
                     }
                     None => {}
                 };
-            } else if [
-                    "ADD",
-                    "SUB",
+            }
+
+            // handle type heuristics
+            if [
                     "MUL",
                     "MULMOD",
                     "ADDMOD",
@@ -833,13 +841,14 @@ impl VMTrace {
                     "LT",
                     "GT",
                     "SLT",
-                    "SGT"
+                    "SGT",
+                    "SIGNEXTEND",
                 ].contains(&opcode_name.as_str()) {
 
                 // get the calldata slot operation
-                match function.arguments.iter().find(|(key, (frame, _))| {
+                match function.arguments.iter().find(|(_, (frame, _))| {
                     instruction.output_operations.iter().any(|operation| {
-                        operation.to_string().contains(key.as_str()) &&
+                        operation.to_string().contains(frame.operation.as_str()) &&
                         !frame.heuristics.contains(&"integer".to_string())
                     })
                 }) {
@@ -849,6 +858,7 @@ impl VMTrace {
                             (
                                 CalldataFrame {
                                     slot: frame.slot,
+                                    operation: frame.operation.clone(),
                                     mask_size: frame.mask_size,
                                     heuristics: vec!["integer".to_string()],
                                 },
@@ -867,26 +877,27 @@ impl VMTrace {
             ].contains(&opcode_name.as_str()) {
 
                 // get the calldata slot operation
-                match function.arguments.iter().find(|(key, (frame, _))| {
+                match function.arguments.iter().find(|(_, (frame, _))| {
                     instruction.output_operations.iter().any(|operation| {
-                        operation.to_string().contains(key.as_str()) &&
+                        operation.to_string().contains(frame.operation.as_str()) &&
                         !frame.heuristics.contains(&"bytes".to_string())
                     })
                 }) {
-                Some ((key, (frame, potential_types))) => {
-                        function.arguments.insert(
-                            key.clone(),
-                            (
-                                CalldataFrame {
-                                    slot: frame.slot,
-                                    mask_size: frame.mask_size,
-                                    heuristics: vec!["bytes".to_string()],
-                                },
-                                potential_types.clone().to_owned()
-                            ),
-                        );
-                },
-                None => {}
+                    Some ((key, (frame, potential_types))) => {
+                            function.arguments.insert(
+                                key.clone(),
+                                (
+                                    CalldataFrame {
+                                        slot: frame.slot,
+                                        operation: frame.operation.clone(),
+                                        mask_size: frame.mask_size,
+                                        heuristics: vec!["bytes".to_string()],
+                                    },
+                                    potential_types.clone().to_owned()
+                                ),
+                            );
+                    },
+                    None => {}
                 }
             }
 
