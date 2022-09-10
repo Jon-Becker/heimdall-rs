@@ -603,6 +603,7 @@ impl VMTrace {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
                 let operations = instruction.input_operations[1].clone();
+                println!("{:?}", operations);
 
                 // add the sstore to the function's storage map
                 function.storage.insert(
@@ -612,7 +613,13 @@ impl VMTrace {
                         operations: operations,
                     },
                 );
-                function.logic.push(format!("storage[{}] = {};", key, value));
+                function.logic.push(
+                    format!(
+                        "{} = {};",
+                        instruction.input_operations[0].clone(),
+                        instruction.input_operations[1].clone()
+                    )
+                );
 
             } else if opcode_name.contains("MSTORE") {
                 let key = instruction.inputs[0];

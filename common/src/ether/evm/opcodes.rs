@@ -156,7 +156,7 @@ pub fn opcode(code: &str) -> Opcode {
         "fd" => Opcode { name: String::from("REVERT"), mingas: 0, inputs: 2, outputs: 0 },
         "fe" => Opcode { name: String::from("INVALID"), mingas: 0, inputs: 0, outputs: 0 },
         "ff" => Opcode { name: String::from("SELFDESTRUCT"), mingas: 5000, inputs: 1, outputs: 0 },
-        _    => Opcode { name: String::from("unknown"), mingas: 0, inputs: 0, outputs: 0, },
+           _ => Opcode { name: String::from("unknown"), mingas: 0, inputs: 0, outputs: 0, },
     };
 }
 
@@ -218,16 +218,4 @@ impl Display for WrappedInput {
             WrappedInput::Opcode(opcode) => write!(f, "{}", opcode),
         }
     }
-}
-
-#[test]
-fn test_wrapping_opcodes() {
-    
-    // wraps an ADD operation with 2 raw inputs
-    let add_operation_wrapped = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(U256::from(1u8)), WrappedInput::Raw(U256::from(2u8))]);
-    println!("{}", add_operation_wrapped);
-
-    // wraps a CALLDATALOAD operation
-    let calldataload_wrapped = WrappedOpcode::new(0x35, vec![WrappedInput::Opcode(add_operation_wrapped)]);
-    println!("{}", calldataload_wrapped);
 }

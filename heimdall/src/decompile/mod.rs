@@ -343,6 +343,8 @@ pub fn decompile(args: DecompilerArgs) {
                     ]
                 );
             }
+
+            println!("{:#?}", analyzed_function.logic);
         }
     }
     decompilation_progress.finish_and_clear();

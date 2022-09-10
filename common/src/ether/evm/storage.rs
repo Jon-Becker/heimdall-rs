@@ -50,22 +50,3 @@ impl Storage {
     }
 
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_sstore_sload() {
-        let mut storage = Storage::new();
-
-        storage.store(String::from("01"), String::from("01"));
-        assert_eq!(storage.load(String::from("01")), String::from("0000000000000000000000000000000000000000000000000000000000000001"));
-
-        storage.store(String::from("ff"), String::from("11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff"));
-        assert_eq!(storage.load(String::from("ff")), String::from("11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff"));
-
-        assert_eq!(storage.load(String::from("00")), String::from("0000000000000000000000000000000000000000000000000000000000000000"));
-    }
-
-}
