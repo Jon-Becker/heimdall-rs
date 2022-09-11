@@ -174,34 +174,6 @@ pub struct WrappedOpcode {
     pub inputs: Vec<WrappedInput>,
 }
 
-impl WrappedOpcode {
-
-    // creates a new WrappedOpcode from a set of raw inputs
-    pub fn new(opcode_int: usize, inputs: Vec<WrappedInput>) -> WrappedOpcode {
-        let mut opcode_str = format!("{:x}", opcode_int);
-        if opcode_str.len() == 1 {
-            opcode_str.insert(0, '0');
-        };
-
-        WrappedOpcode {
-            opcode: opcode(&opcode_str),
-            inputs: inputs,
-        }
-    }
-
-    pub fn default() -> WrappedOpcode {
-        WrappedOpcode {
-            opcode: Opcode {
-                name: String::from("unknown"),
-                mingas: 0,
-                inputs: 0,
-                outputs: 0,
-            },
-            inputs: Vec::new(),
-        }
-    }
-}
-
 // implements pretty printing for WrappedOpcodes
 impl Display for WrappedOpcode {
 

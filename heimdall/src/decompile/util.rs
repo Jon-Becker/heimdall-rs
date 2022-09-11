@@ -395,7 +395,7 @@ pub fn recursive_map(
 
 impl VMTrace {
     
-    // converts a VMTrace to a Funciton
+    // converts a VMTrace to a Function which can be written to the decompiled output
     pub fn analyze(
         &self,
         function: Function,
@@ -562,7 +562,7 @@ impl VMTrace {
                 // handle case with custom error OR empty revert
                 else {
                     let custom_error_placeholder = match revert_data.get(0..8) {
-                        Some(selector) => format!(" CustomError_{}", selector),
+                        Some(selector) => format!(" CustomError_{}()", selector),
                         None => "()".to_string(),
                     };
                     revert_logic = format!("revert{};", custom_error_placeholder);
@@ -583,9 +583,10 @@ impl VMTrace {
                 };
                 let _return_data_raw = memory.read(offset, size);
 
+                // TODO: detect return type
                 // TODO: push return type to function.returns
 
-                function.logic.push(format!("return(memory[{}]);", offset,));
+                function.logic.push(format!("return(memory[{}:{}]);", offset, offset + size));
 
             } else if opcode_name == "SELDFESTRUCT" {
 
@@ -603,7 +604,6 @@ impl VMTrace {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
                 let operations = instruction.input_operations[1].clone();
-                println!("{:?}", operations);
 
                 // add the sstore to the function's storage map
                 function.storage.insert(
@@ -615,9 +615,9 @@ impl VMTrace {
                 );
                 function.logic.push(
                     format!(
-                        "{} = {};",
-                        instruction.input_operations[0].clone(),
-                        instruction.input_operations[1].clone()
+                        "storage[{}] = {};",
+                        instruction.input_operations[0].solidify(),
+                        instruction.input_operations[1].solidify(),
                     )
                 );
 
@@ -631,10 +631,10 @@ impl VMTrace {
                     key,
                     StorageFrame {
                         value: value,
-                        operations: operation.clone(),
+                        operations: operation,
                     },
                 );
-                function.logic.push(format!("memory[{}] = {};", key, operation));
+                function.logic.push(format!("memory[{}] = {};", key, instruction.input_operations[1].solidify()));
 
             } else if opcode_name == "STATICCALL" {
 
@@ -645,12 +645,12 @@ impl VMTrace {
                         false => String::from(""),
                     };
 
-                let address = instruction.input_operations[1].clone();
-                let data_memory_offset = instruction.inputs[2].clone();
+                let address = &instruction.input_operations[1];
+                let data_memory_offset = instruction.inputs[2];
 
                 function.logic.push(format!(
                     "(bool success, bytes ret0) = address({}).staticcall{}(memory[{}]);",
-                    address, modifier, data_memory_offset
+                    address.solidify(), modifier, data_memory_offset
                 ));
 
             } else if opcode_name == "DELEGATECALL" {
@@ -662,12 +662,12 @@ impl VMTrace {
                         false => String::from(""),
                     };
 
-                let address = instruction.input_operations[1].clone();
-                let data_memory_offset = instruction.inputs[2].clone();
+                let address = &instruction.input_operations[1];
+                let data_memory_offset = instruction.inputs[2];
 
                 function.logic.push(format!(
                     "(bool success, bytes ret0) = address({}).delegatecall{}(memory[{}]);",
-                    address, modifier, data_memory_offset
+                    address.solidify(), modifier, data_memory_offset
                 ));
 
             } else if opcode_name == "CALL" || opcode_name == "CALLCODE" {
@@ -688,12 +688,12 @@ impl VMTrace {
                     false => String::from(""),
                 };
 
-                let address = instruction.input_operations[1].clone();
-                let data_memory_offset = instruction.inputs[3].clone();
+                let address = &instruction.input_operations[1];
+                let data_memory_offset = instruction.inputs[3];
 
                 function.logic.push(format!(
                     "(bool success, bytes ret0) = address({}).call{}(memory[{}]);",
-                    address, modifier, data_memory_offset
+                    address.solidify(), modifier, data_memory_offset
                 ));
 
             } else if opcode_name == "CREATE" {
@@ -703,9 +703,9 @@ impl VMTrace {
                     "assembly {".to_string(),
                     format!(
                         "addr := create({}, {}, {})",
-                        instruction.input_operations[0].clone(),
-                        instruction.input_operations[1].clone(),
-                        instruction.input_operations[2].clone(),
+                        instruction.input_operations[0].solidify(),
+                        instruction.input_operations[1].solidify(),
+                        instruction.input_operations[2].solidify(),
                     ),
                     "}".to_string(),
                     "".to_string(),
@@ -718,10 +718,10 @@ impl VMTrace {
                     "assembly {".to_string(),
                     format!(
                         "addr := create2({}, {}, {}, {})",
-                        instruction.input_operations[0].clone(),
-                        instruction.input_operations[1].clone(),
-                        instruction.input_operations[2].clone(),
-                        instruction.input_operations[3].clone(),
+                        instruction.input_operations[0].solidify(),
+                        instruction.input_operations[1].solidify(),
+                        instruction.input_operations[2].solidify(),
+                        instruction.input_operations[3].solidify(),
                     ),
                     "}".to_string(),
                     "".to_string(),
@@ -737,7 +737,7 @@ impl VMTrace {
                             (
                                 CalldataFrame {
                                     slot: (instruction.inputs[0].as_usize() - 4) / 32,
-                                    operation: instruction.input_operations[0].clone().to_string(),
+                                    operation: instruction.input_operations[0].to_string(),
                                     mask_size: 32,
                                     heuristics: Vec::new(),
                                 },
@@ -762,7 +762,7 @@ impl VMTrace {
                     Some(calldata_slot_operation) => {
 
                         match function.arguments.iter().find(|(_, (frame, _))| {
-                            frame.operation == calldata_slot_operation.inputs[0].clone().to_string()
+                            frame.operation == calldata_slot_operation.inputs[0].to_string()
                         }) {
                             Some((calldata_slot, arg)) => {
     
@@ -804,7 +804,7 @@ impl VMTrace {
                         let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
                         
                         match function.arguments.iter().find(|(_, (frame, _))| {
-                            frame.operation == calldata_slot_operation.inputs[0].clone().to_string()
+                            frame.operation == calldata_slot_operation.inputs[0].to_string()
                         }) {
                             Some((calldata_slot, arg)) => {
     
@@ -869,7 +869,7 @@ impl VMTrace {
                                     mask_size: frame.mask_size,
                                     heuristics: vec!["integer".to_string()],
                                 },
-                                potential_types.clone().to_owned()
+                                potential_types.to_owned()
                             ),
                         );
                    },
@@ -900,7 +900,7 @@ impl VMTrace {
                                         mask_size: frame.mask_size,
                                         heuristics: vec!["bytes".to_string()],
                                     },
-                                    potential_types.clone().to_owned()
+                                    potential_types.to_owned()
                                 ),
                             );
                     },
