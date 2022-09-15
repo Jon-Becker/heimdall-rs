@@ -1,4 +1,12 @@
 pub mod util;
+pub mod output;
+pub mod analyze;
+pub mod resolve;
+pub mod constants;
+
+use crate::decompile::util::*;
+use crate::decompile::output::*;
+use crate::decompile::resolve::*;
 
 use std::collections::HashMap;
 use std::env;
@@ -22,7 +30,6 @@ use heimdall_common::{
     consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::* },
 };
-use crate::decompile::util::*;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Decompile EVM bytecode to Solidity",
@@ -111,7 +118,7 @@ pub fn decompile(args: DecompilerArgs) {
 
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
-                logger.error("disassembling an on-chain contract requires an RPC provider. Use `heimdall disassemble --help` for more information.");
+                logger.error("decompiling an on-chain contract requires an RPC provider. Use `heimdall decompile --help` for more information.");
                 std::process::exit(1);
             }
 
@@ -228,8 +235,9 @@ pub fn decompile(args: DecompilerArgs) {
     let selectors = find_function_selectors(&evm.clone(), disassembled_bytecode);
 
     // TODO: add to trace
+    let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
-        let resolved_selectors = resolve_function_selectors(selectors.clone());
+        resolved_selectors = resolve_function_selectors(selectors.clone(), &logger);
         logger.info(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
     }
     else {
@@ -241,7 +249,8 @@ pub fn decompile(args: DecompilerArgs) {
     decompilation_progress.enable_steady_tick(Duration::from_millis(100));
     decompilation_progress.set_style(logger.info_spinner());
 
-    // perform EVM analysis    
+    // perform EVM analysis
+    let mut analyzed_functions = Vec::new();
     for selector in selectors.clone() {
         decompilation_progress.set_message(format!("executing '0x{}'", selector));
         
@@ -288,7 +297,7 @@ pub fn decompile(args: DecompilerArgs) {
         decompilation_progress.set_message(format!("analyzing '0x{}'", selector));
 
         // solidify the execution tree
-        let analyzed_function = map.analyze(
+        let mut analyzed_function = map.analyze(
             Function {
                 selector: selector.clone(),
                 entry_point: function_entry_point.clone(),
@@ -298,12 +307,12 @@ pub fn decompile(args: DecompilerArgs) {
                 returns: None,
                 logic: Vec::new(),
                 events: Vec::new(),
+                resolved_function: None,
                 pure: true,
                 view: true,
                 payable: false,
-                constant: true,
-                external: false,
             },
+            0,
             &mut trace,
             func_analysis_trace,
         );
@@ -318,7 +327,7 @@ pub fn decompile(args: DecompilerArgs) {
             );
 
             let mut parameter_vec = Vec::new();
-            for (_, value) in analyzed_function.arguments {
+            for (_, value) in analyzed_function.arguments.clone() {
                 parameter_vec.push(value);
             }
             parameter_vec.sort_by(|a, b| a.0.slot.cmp(&b.0.slot));
@@ -343,12 +352,93 @@ pub fn decompile(args: DecompilerArgs) {
                     ]
                 );
             }
-
-            println!("{:#?}", analyzed_function.logic);
         }
+
+        if !args.skip_resolving {
+            
+            let resolved_functions = match resolved_selectors.get(&selector) {
+                Some(func) => func.clone(),
+                None => {
+                    trace.add_error(
+                        func_analysis_trace,
+                        line!(),
+                        "failed to resolve function.".to_string()
+                    );
+                    continue;
+                }
+            };
+
+            let matched_resolved_functions = match_parameters(resolved_functions, &analyzed_function);
+            
+            trace.br(func_analysis_trace);
+            if matched_resolved_functions.len() == 0 {
+                trace.add_warn(
+                    func_analysis_trace,
+                    line!(),
+                    "no resolved signatures matched this function's parameters".to_string()
+                );
+            }
+            else {
+                
+                let mut selected_function_index: u8 = 0;
+                if matched_resolved_functions.len() > 1 {
+                    decompilation_progress.suspend(|| {
+                        selected_function_index = logger.option(
+                            "warn", "multiple possible matches found. select an option below",
+                            matched_resolved_functions.iter()
+                            .map(|x| x.signature.clone()).collect(),
+                            Some(*&(matched_resolved_functions.len()-1) as u8),
+                            args.default
+                        );
+                    });
+                }
+
+                let selected_match = match matched_resolved_functions.get(selected_function_index as usize) {
+                    Some(selected_match) => selected_match,
+                    None => {
+                        logger.error("invalid selection.");
+                        std::process::exit(1)
+                    }
+                };
+
+                analyzed_function.resolved_function = Some(selected_match.clone());
+
+                let match_trace = trace.add_info(
+                    func_analysis_trace,
+                    line!(),
+                    format!(
+                        "{} resolved signature{} matched this function's parameters",
+                        matched_resolved_functions.len(),
+                        if matched_resolved_functions.len() > 1 { "s" } else { "" }
+                    ).to_string()
+                );
+
+                for resolved_function in matched_resolved_functions {
+                    trace.add_message(
+                        match_trace,
+                        line!(),
+                        vec![resolved_function.signature]
+                    );
+                }
+
+            }
+        }
+
+        analyzed_functions.push(analyzed_function.clone());
+
     }
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
+    logger.info("building decompilation output.");
+    // create the decompiled source output
+    build_output(
+        &args,
+        output_dir,
+        analyzed_functions,
+        &logger,
+        &mut trace,
+        decompile_call,
+    );
 
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()).to_string());
