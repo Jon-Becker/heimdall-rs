@@ -271,7 +271,7 @@ impl VMTrace {
                 let operation = instruction.input_operations[1].clone();
 
                 // add the mstore to the function's memory map
-                function.storage.insert(
+                function.memory.insert(
                     key,
                     StorageFrame {
                         value: value,
@@ -408,7 +408,7 @@ impl VMTrace {
                 }) {
                     Some(calldata_slot_operation) => {
 
-                        match function.arguments.iter().find(|(_, (frame, _))| {
+                        match function.arguments.clone().iter().find(|(_, (frame, _))| {
                             frame.operation == calldata_slot_operation.inputs[0].to_string()
                         }) {
                             Some((calldata_slot, arg)) => {
@@ -450,7 +450,7 @@ impl VMTrace {
                         // convert the bitmask to it's potential solidity types
                         let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
                         
-                        match function.arguments.iter().find(|(_, (frame, _))| {
+                        match function.arguments.clone().iter().find(|(_, (frame, _))| {
                             frame.operation == calldata_slot_operation.inputs[0].to_string()
                         }) {
                             Some((calldata_slot, arg)) => {
@@ -500,7 +500,7 @@ impl VMTrace {
                 ].contains(&opcode_name.as_str()) {
 
                 // get the calldata slot operation
-                match function.arguments.iter().find(|(_, (frame, _))| {
+                match function.arguments.clone().iter().find(|(_, (frame, _))| {
                     instruction.output_operations.iter().any(|operation| {
                         operation.to_string().contains(frame.operation.as_str()) &&
                         !frame.heuristics.contains(&"integer".to_string())
@@ -531,7 +531,7 @@ impl VMTrace {
             ].contains(&opcode_name.as_str()) {
 
                 // get the calldata slot operation
-                match function.arguments.iter().find(|(_, (frame, _))| {
+                match function.arguments.clone().iter().find(|(_, (frame, _))| {
                     instruction.output_operations.iter().any(|operation| {
                         operation.to_string().contains(frame.operation.as_str()) &&
                         !frame.heuristics.contains(&"bytes".to_string())
