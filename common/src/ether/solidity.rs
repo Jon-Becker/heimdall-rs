@@ -327,6 +327,18 @@ impl WrappedOpcode {
                     "memory.length"
                 );
             },
+            "CALL" => {
+                solidified_wrapped_opcode.push_str("ret0");
+            }
+            "CALLCODE" => {
+                solidified_wrapped_opcode.push_str("ret0");
+            }
+            "DELEGATECALL" => {
+                solidified_wrapped_opcode.push_str("ret0");
+            }
+            "STATICCALL" => {
+                solidified_wrapped_opcode.push_str("ret0");
+            }
             opcode => {
 
                 if opcode.starts_with("PUSH") {

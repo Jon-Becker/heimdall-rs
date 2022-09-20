@@ -47,7 +47,7 @@ pub fn build_output(
     let mut abi = Vec::new();
 
     // build the ABI for each function
-    for function in functions.clone() {
+    for function in &functions {
         progress_bar.set_message(format!("writing ABI for '0x{}'", function.selector));
 
         // get the function's name and parameters for both resolved and unresolved functions
@@ -55,7 +55,7 @@ pub fn build_output(
             function_name,
             function_inputs,
             function_outputs,
-        ) = match function.resolved_function {
+        ) = match &function.resolved_function {
             Some(resolved_function) => {
 
                 // get the function's name and parameters from the resolved function
@@ -70,7 +70,7 @@ pub fn build_output(
                     });
                 }
 
-                match function.returns {
+                match &function.returns {
                     Some(returns) => {
                         outputs.push(ABIToken {
                             name: "ret0".to_owned(),
@@ -81,7 +81,7 @@ pub fn build_output(
                     None => {}
                 }
 
-                (resolved_function.name, inputs, outputs)
+                (resolved_function.name.clone(), inputs, outputs)
             },
             None => {
 
@@ -97,7 +97,7 @@ pub fn build_output(
                     });
                 }
 
-                match function.returns {
+                match &function.returns {
                     Some(returns) => {
                         outputs.push(ABIToken {
                             name: "ret0".to_owned(),
@@ -230,19 +230,17 @@ pub fn build_output(
 
         // build the function's body
         // TODO
-        decompiled_output.append(function.logic.clone().as_mut());
+        decompiled_output.extend(function.logic);
 
         decompiled_output.push(String::from("}"));
     }
 
     decompiled_output.push(String::from("}"));
 
-
-    // add indentation to the decompiled source
-    let mut indentation = 0;
+    let mut indentation: usize = 0;
     for line in decompiled_output.iter_mut() {
         if line.starts_with("}") {
-            indentation -= 1;
+            indentation = indentation.saturating_sub(1);
         }
 
         *line = format!(
@@ -257,6 +255,8 @@ pub fn build_output(
         
     }
 
-    // write the output to the file
-    write_lines_to_file(&decompiled_output_path, decompiled_output)
+    write_lines_to_file(
+        &decompiled_output_path,
+        decompiled_output
+    );
 }
