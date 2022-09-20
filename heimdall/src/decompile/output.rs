@@ -230,6 +230,7 @@ pub fn build_output(
 
         // build the function's body
         // TODO
+        decompiled_output.append(function.logic.clone().as_mut());
 
         decompiled_output.push(String::from("}"));
     }
@@ -238,6 +239,23 @@ pub fn build_output(
 
 
     // add indentation to the decompiled source
+    let mut indentation = 0;
+    for line in decompiled_output.iter_mut() {
+        if line.starts_with("}") {
+            indentation -= 1;
+        }
+
+        *line = format!(
+            "{}{}",
+            " ".repeat(indentation*4),
+            line
+        );
+        
+        if line.ends_with("{") {
+            indentation += 1;
+        }
+        
+    }
 
     // write the output to the file
     write_lines_to_file(&decompiled_output_path, decompiled_output)

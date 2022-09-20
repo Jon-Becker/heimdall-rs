@@ -76,7 +76,35 @@ pub struct CalldataFrame {
 }
 
 impl Function {
-    // format and return the function's logic
+    // get a specific memory slot
+
+    pub fn get_memory_range(&self, _offset: U256, _size: U256) -> Vec<StorageFrame> {
+        let mut memory_slice: Vec<StorageFrame> = Vec::new();
+
+        // Safely convert U256 to usize
+        let mut offset: usize = match _offset.try_into() {
+            Ok(x) => x,
+            Err(_) => 0,
+        };
+        let mut size: usize = match _size.try_into() {
+            Ok(x) => x,
+            Err(_) => 0,
+        };
+
+        // get the memory range
+        while size > 0 {
+            match self.memory.get(&U256::from(offset)) {
+                Some(memory) => {
+                    memory_slice.push(memory.clone());
+                }
+                None => {}
+            }
+            offset += 32;
+            size = size.saturating_sub(32);
+        }
+
+        memory_slice
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -110,6 +138,10 @@ pub fn detect_compiler(bytecode: String) -> (String, String) {
     else if bytecode.starts_with("341561000a") {
         compiler = "vyper".to_string();
         version = "0.2.5-0.2.8".to_string();
+    }
+    else if bytecode.starts_with("731bf797") {
+        compiler = "solc".to_string();
+        version = "0.4.10-0.4.24".to_string();
     }
     else if bytecode.starts_with("6080604052") {
         compiler = "solc".to_string();

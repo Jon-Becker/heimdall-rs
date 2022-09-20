@@ -18,7 +18,6 @@ pub struct StackFrame {
     pub operation: WrappedOpcode,
 }
 
-// TODO: handle panics
 impl Stack {
     pub fn new() -> Stack {
         Stack {

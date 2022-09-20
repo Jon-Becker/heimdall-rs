@@ -109,8 +109,8 @@ impl VM {
     }
 
     pub fn consume_gas(&mut self, amount: u128) -> bool {
+       
         // REVERT if out of gas
-        // TODO: make this call the REVERT instruction
         if amount > self.gas_remaining {
             return false;
         }

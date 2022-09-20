@@ -3,6 +3,7 @@ pub mod output;
 pub mod analyze;
 pub mod resolve;
 pub mod constants;
+pub mod precompile;
 
 use crate::decompile::util::*;
 use crate::decompile::output::*;
@@ -234,7 +235,6 @@ pub fn decompile(args: DecompilerArgs) {
     // find and resolve all selectors in the bytecode
     let selectors = find_function_selectors(&evm.clone(), disassembled_bytecode);
 
-    // TODO: add to trace
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
         resolved_selectors = resolve_function_selectors(selectors.clone(), &logger);
@@ -430,6 +430,7 @@ pub fn decompile(args: DecompilerArgs) {
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
     logger.info("building decompilation output.");
+    
     // create the decompiled source output
     build_output(
         &args,

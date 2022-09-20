@@ -1,3 +1,4 @@
+
 use std::{str::FromStr};
 
 use ethers::{
@@ -17,7 +18,7 @@ use heimdall_common::{
     utils::strings::decode_hex,
 };
 
-use super::util::*;
+use super::{util::*, precompile::decode_precompile};
 
 impl VMTrace {
     
@@ -124,8 +125,8 @@ impl VMTrace {
                     // add the event emission to the function's logic
                     // will be decoded during post-processing
                     function.logic.push(format!(
-                        "{}emit Event_{}({}{});",
-                        " ".repeat(depth * 4),
+                        "emit Event_{}({}{});",
+                        
                         match &logged_event.topics.first() {
                             Some(topic) => topic.get(0..8).unwrap(),
                             None => "00000000",
@@ -148,8 +149,8 @@ impl VMTrace {
                 // add closing braces to the function's logic
                 function.logic.push(
                     format!(
-                        "{}if ({}) {{",
-                        " ".repeat(depth * 4),
+                        "if ({}) {{",
+                        
                         instruction.input_operations[1].solidify()
                     ).to_string()
                 );
@@ -203,25 +204,20 @@ impl VMTrace {
                 }
 
                 function.logic.push(
-                    format!("{}{}",
-                    " ".repeat(depth * 4),
+                    format!("{}",
+                    
                     revert_logic)
                 );
 
             } else if opcode_name == "RETURN" {
 
                 // Safely convert U256 to usize
-                let offset: usize = match instruction.inputs[0].try_into() {
-                    Ok(x) => x,
-                    Err(_) => 0,
-                };
                 let size: usize = match instruction.inputs[1].try_into() {
                     Ok(x) => x,
                     Err(_) => 0,
                 };
-                let _return_data_raw = memory.read(offset, size);
-
-                println!("{:#?}", function.memory);
+                
+                let return_memory_operations = function.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
 
                 // if the return data is > 32 bytes, we append "memory" to the return type
                 function.returns = match size > 32 {
@@ -229,7 +225,7 @@ impl VMTrace {
                     false => Some(format!("{}", "uint256")),
                 };
 
-                function.logic.push(format!("{}return(memory[{}:{}]);", " ".repeat(depth * 4), offset, offset + size));
+                function.logic.push(format!("return({});", return_memory_operations.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + ")));
 
             } else if opcode_name == "SELDFESTRUCT" {
 
@@ -241,7 +237,7 @@ impl VMTrace {
                     _ => "".to_string(),
                 };
 
-                function.logic.push(format!("{}selfdestruct({addr});", " ".repeat(depth * 4)));
+                function.logic.push(format!("selfdestruct({addr});", ));
 
             } else if opcode_name == "SSTORE" {
                 let key = instruction.inputs[0];
@@ -258,8 +254,8 @@ impl VMTrace {
                 );
                 function.logic.push(
                     format!(
-                        "{}storage[{}] = {};",
-                        " ".repeat(depth * 4),
+                        "storage[{}] = {};",
+                        
                         instruction.input_operations[0].solidify(),
                         instruction.input_operations[1].solidify(),
                     )
@@ -278,83 +274,119 @@ impl VMTrace {
                         operations: operation,
                     },
                 );
-                function.logic.push(format!("{}memory[{}] = {};", " ".repeat(depth * 4), key, instruction.input_operations[1].solidify()));
+                function.logic.push(format!("memory[{}] = {};",  key, instruction.input_operations[1].solidify()));
 
             } else if opcode_name == "STATICCALL" {
 
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
                 let modifier =
                     match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
-                        true => format!("{{ gas: {} }}", instruction.input_operations[0]),
+                        true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
                         false => String::from(""),
                     };
 
                 let address = &instruction.input_operations[1];
-                let data_memory_offset = instruction.inputs[2];
+                let extcalldata_memory = function.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
 
-                function.logic.push(format!(
-                    "{}(bool success, bytes ret0) = address({}).staticcall{}(memory[{}]);",
-                    " ".repeat(depth * 4),
-                    address.solidify(),
-                    modifier,
-                    data_memory_offset
-                ));
+                // check if the external call is a precompiled contract
+                match decode_precompile(
+                    instruction.inputs[1],
+                    extcalldata_memory.clone()
+                ) {
+                    (true, precompile_logic) => {
+                        function.logic.push(precompile_logic);
+                    },
+                    _ => {
+                        function.logic.push(format!(
+                            "(bool success, bytes memory ret0) = address({}).staticcall{}({});",
+                            
+                            address.solidify(),
+                            modifier,
+                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + "),
+
+                        ));
+                    }
+                }
 
             } else if opcode_name == "DELEGATECALL" {
 
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
                 let modifier =
                     match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
-                        true => format!("{{ gas: {} }}", instruction.input_operations[0]),
+                        true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
                         false => String::from(""),
                     };
 
                 let address = &instruction.input_operations[1];
-                let data_memory_offset = instruction.inputs[2];
+                let extcalldata_memory = function.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
 
-                function.logic.push(format!(
-                    "{}(bool success, bytes ret0) = address({}).delegatecall{}(memory[{}]);",
-                    " ".repeat(depth * 4),
-                    address.solidify(),
-                    modifier,
-                    data_memory_offset
-                ));
+                // check if the external call is a precompiled contract
+                match decode_precompile(
+                    instruction.inputs[1],
+                    extcalldata_memory.clone()
+                ) {
+                    (true, precompile_logic) => {
+                        function.logic.push(precompile_logic);
+                    },
+                    _ => {
+                        function.logic.push(format!(
+                            "(bool success, bytes memory ret0) = address({}).delegatecall{}(memory[{}]);",
+                            
+                            address.solidify(),
+                            modifier,
+                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + "),
+
+                        ));
+                    }
+                }
 
             } else if opcode_name == "CALL" || opcode_name == "CALLCODE" {
 
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
                 let gas = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![])
                 {
-                    true => format!("gas: {}", instruction.input_operations[0]),
+                    true => format!("gas: {}, ", instruction.input_operations[0].solidify()),
                     false => String::from(""),
                 };
                 let value =
                     match instruction.input_operations[2] != WrappedOpcode::new(0x5A, vec![]) {
-                        true => format!("gas: {}", instruction.input_operations[2]),
+                        true => format!("value: {}", instruction.input_operations[2].solidify()),
                         false => String::from(""),
                     };
                 let modifier = match gas.len() > 0 || value.len() > 0 {
-                    true => format!("{{ {}, {} }}", gas, value),
+                    true => format!("{{ {}{} }}", gas, value),
                     false => String::from(""),
                 };
 
                 let address = &instruction.input_operations[1];
-                let data_memory_offset = instruction.inputs[3];
+                let extcalldata_memory = function.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
 
-                function.logic.push(format!(
-                    "{}(bool success, bytes ret0) = address({}).call{}(memory[{}]);",
-                    " ".repeat(depth * 4),
-                    address.solidify(),
-                    modifier,
-                    data_memory_offset
-                ));
-
+                // check if the external call is a precompiled contract
+                match decode_precompile(
+                    instruction.inputs[1],
+                    extcalldata_memory.clone()
+                ) {
+                    (is_precompile, precompile_logic) if is_precompile=> {
+                        function.logic.push(precompile_logic);
+                    },
+                    _ => {
+                        function.logic.push(format!(
+                            "(bool success, bytes memory ret0) = address({}).call{}({});",
+                            
+                            address.solidify(),
+                            modifier,
+                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + ")),
+        
+                        );
+                    }
+                }
+                
             } else if opcode_name == "CREATE" {
 
                 function.logic.push(
                     format!(
-                        "{}assembly {{ addr := create({}, {}, {}) }}",
-                        " ".repeat(depth * 4),
+                        "assembly {{ addr := create({}, {}, {}) }}",
+                        
                         instruction.input_operations[0].solidify(),
                         instruction.input_operations[1].solidify(),
                         instruction.input_operations[2].solidify(),
@@ -365,8 +397,8 @@ impl VMTrace {
 
                 function.logic.push(
                     format!(
-                        "{}assembly {{ addr := create({}, {}, {}, {}) }}",
-                        " ".repeat(depth * 4),
+                        "assembly {{ addr := create({}, {}, {}, {}) }}",
+                        
                         instruction.input_operations[0].solidify(),
                         instruction.input_operations[1].solidify(),
                         instruction.input_operations[2].solidify(),
