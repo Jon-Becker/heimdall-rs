@@ -20,21 +20,21 @@ pub fn decode_precompile(
         1 => {
             is_ext_call_precompile = true;
             ext_call_logic = format!(
-                "ecrecover({})",
+                "address ret0 = ecrecover({})",
                 extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
             );
         }
         2 => {
             is_ext_call_precompile = true;
             ext_call_logic = format!(
-                "sha256({})",
+                "bytes ret0 = sha256({})",
                 extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
             );
         }
         3 => {
             is_ext_call_precompile = true;
             ext_call_logic = format!(
-                "ripemd160({})",
+                "bytes ret0 = ripemd160({})",
                 extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
             );
         }
