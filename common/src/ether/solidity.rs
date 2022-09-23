@@ -363,6 +363,7 @@ impl WrappedOpcode {
         solidified_wrapped_opcode
     }
 
+
     // creates a new WrappedOpcode from a set of raw inputs
     pub fn new(opcode_int: usize, inputs: Vec<WrappedInput>) -> WrappedOpcode {
         let mut opcode_str = format!("{:x}", opcode_int);
@@ -390,6 +391,7 @@ impl WrappedOpcode {
     }
 
 }
+
 
 impl WrappedInput {
 
