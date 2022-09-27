@@ -1,3 +1,5 @@
+use crate::utils::strings::encode_hex_reduced;
+
 use super::evm::opcodes::*;
 
 impl WrappedOpcode {
@@ -55,7 +57,7 @@ impl WrappedOpcode {
             "MOD" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "{} % ({})",
+                            "{} % {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -64,7 +66,7 @@ impl WrappedOpcode {
             "SMOD" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) % ({})",
+                            "{} % {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -73,7 +75,7 @@ impl WrappedOpcode {
             "ADDMOD" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({} + {}) % {}",
+                            "{} + {} % {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify(),
                             self.inputs[2]._solidify()
@@ -93,7 +95,7 @@ impl WrappedOpcode {
             "EXP" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) ** ({})",
+                            "{} ** {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -102,7 +104,7 @@ impl WrappedOpcode {
             "LT" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) < ({})",
+                            "{} < {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -111,7 +113,7 @@ impl WrappedOpcode {
             "GT" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) > ({})",
+                            "{} > {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -120,7 +122,7 @@ impl WrappedOpcode {
             "SLT" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) < ({})",
+                            "{} < {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -129,7 +131,7 @@ impl WrappedOpcode {
             "SGT" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) > ({})",
+                            "{} > {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -138,24 +140,39 @@ impl WrappedOpcode {
             "EQ" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) == ({})",
+                            "{} == {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
                 );
             },
             "ISZERO" => {
-                solidified_wrapped_opcode.push_str(
-                    format!(
-                            "({}) == 0",
-                            self.inputs[0]._solidify()
-                    ).as_str()
-                );
+                let solidified_input = self.inputs[0]._solidify();
+
+                match solidified_input.contains(" ") {
+                    true => {
+                        solidified_wrapped_opcode.push_str(
+                            format!(
+                                    "({}) == 0",
+                                    self.inputs[0]._solidify()
+                            ).as_str()
+                        );
+                    }
+                    false => {
+                        solidified_wrapped_opcode.push_str(
+                            format!(
+                                    "{} == 0",
+                                    self.inputs[0]._solidify()
+                            ).as_str()
+                        );
+                    }
+                }
+                
             },
             "AND" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) & ({})",
+                            "{} & {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -164,7 +181,7 @@ impl WrappedOpcode {
             "OR" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) | ({})",
+                            "{} | {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -173,7 +190,7 @@ impl WrappedOpcode {
             "XOR" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) ^ ({})",
+                            "{} ^ {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -190,7 +207,7 @@ impl WrappedOpcode {
             "SHL" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) << ({})",
+                            "{} << {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -199,7 +216,7 @@ impl WrappedOpcode {
             "SHR" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) >> ({})",
+                            "{} >> {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -208,12 +225,15 @@ impl WrappedOpcode {
             "SAR" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "({}) >> ({})",
+                            "{} >> {}",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
                 );
             },
+            "BYTE" => {
+                solidified_wrapped_opcode.push_str(self.inputs[1]._solidify().as_str());
+            }
             "SHA3" => {
                 // TODO: use memory from function
                 solidified_wrapped_opcode.push_str("keccak256()");
@@ -402,16 +422,27 @@ impl WrappedInput {
         match self {
             WrappedInput::Raw(u256) => {
                 solidified_wrapped_input.push_str(
-                    u256.to_string().as_str()
+                    &encode_hex_reduced(*u256)
                 );
             }
             WrappedInput::Opcode(opcode) => {
-                solidified_wrapped_input.push_str(
-                    format!(
-                        "{}",
-                        opcode.solidify()
-                    ).as_str()
-                );
+
+                let solidified_opcode = opcode.solidify();
+
+                if solidified_opcode.contains(" ") {
+                    solidified_wrapped_input.push_str(
+                        format!(
+                                "({})",
+                                solidified_opcode
+                        ).as_str()
+                    );
+                }
+                else {
+                    solidified_wrapped_input.push_str(
+                        solidified_opcode.as_str()
+                    );
+                }
+    
             },
         }
 

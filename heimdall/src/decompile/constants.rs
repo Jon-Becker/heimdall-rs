@@ -1,4 +1,13 @@
-pub const DECOMPILED_SOURCE_HEADER: &str = 
+use regex::Regex;
+use lazy_static::lazy_static;
+
+
+lazy_static! {
+
+    // The following regex is used as a detector for AND bitmasks
+    pub static ref AND_BITMASK_REGEX: Regex = Regex::new(r"0x[0-9a-fA-F]* & ").unwrap();
+
+    pub static ref DECOMPILED_SOURCE_HEADER: String = 
 "// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
@@ -18,4 +27,6 @@ pragma solidity >=0.8.0;
 /// @custom:donations Heimdall is open source and will always be free to use, so 
 ///                     donations are always appreciated if you find it helpful.
 ///                     0x6666666b0B46056247E7D6cbdb78287F4D12574d   OR   jbecker.eth
-";
+".to_string();
+
+}

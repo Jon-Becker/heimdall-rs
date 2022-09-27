@@ -4,6 +4,7 @@ pub mod analyze;
 pub mod resolve;
 pub mod constants;
 pub mod precompile;
+pub mod postprocess;
 
 use crate::decompile::util::*;
 use crate::decompile::output::*;
@@ -312,7 +313,6 @@ pub fn decompile(args: DecompilerArgs) {
                 view: true,
                 payable: false,
             },
-            0,
             &mut trace,
             func_analysis_trace,
         );

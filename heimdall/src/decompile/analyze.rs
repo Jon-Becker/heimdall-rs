@@ -26,7 +26,6 @@ impl VMTrace {
     pub fn analyze(
         &self,
         function: Function,
-        depth: usize,
         trace: &mut TraceFactory,
         trace_parent: u32,
     ) -> Function {
@@ -143,13 +142,12 @@ impl VMTrace {
                 }
 
             } else if opcode_name == "JUMPI" {
-
-                //println!("{}", instruction.input_operations.get(1).unwrap());
-
+            
                 // add closing braces to the function's logic
+                // TODO: add braces
                 function.logic.push(
                     format!(
-                        "if ({}) {{",
+                        "if ({}) ",
                         
                         instruction.input_operations[1].solidify()
                     ).to_string()
@@ -203,11 +201,7 @@ impl VMTrace {
                     revert_logic = format!("revert{};", custom_error_placeholder);
                 }
 
-                function.logic.push(
-                    format!("{}",
-                    
-                    revert_logic)
-                );
+                function.logic.push(revert_logic);
 
             } else if opcode_name == "RETURN" {
 
@@ -274,7 +268,7 @@ impl VMTrace {
                         operations: operation,
                     },
                 );
-                function.logic.push(format!("memory[{}] = {};",  key, instruction.input_operations[1].solidify()));
+                function.logic.push(format!("memory[{}] = {};", key, instruction.input_operations[1].solidify()));
 
             } else if opcode_name == "STATICCALL" {
 
@@ -591,9 +585,12 @@ impl VMTrace {
 
         // recurse into the children of the VMTrace map
         for child in &self.children {
-            function = child.analyze(function, depth+1, trace, trace_parent);
-            //function.logic.push("}".to_string());
+
+            function = child.analyze(function, trace, trace_parent);
+
         }
+
+        // TODO: indentation
 
         function
     }

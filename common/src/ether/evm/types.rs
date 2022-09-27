@@ -189,7 +189,6 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
 // converts a bit mask into it's potential types
 pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
     let mask = instruction.output_operations[0].clone();
-    let mut potential_types = Vec::new();
 
     // use 32 as the default size, as it is the default word size in the EVM
     let mut type_byte_size = 32;
@@ -214,17 +213,23 @@ pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
     }
 
     // determine the solidity type based on the resulting size of the masked data
-    match type_byte_size {
+    byte_size_to_type(type_byte_size)
+}
+
+pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
+    let mut potential_types = Vec::new();
+
+    match byte_size {
         1 => potential_types.push("bool".to_string()),
         20 => potential_types.push("address".to_string()),
         _ => {}
     }
 
     // push arbitrary types to the array
-    potential_types.push(format!("uint{}", type_byte_size * 8));
-    potential_types.push(format!("bytes{}", type_byte_size));
-    potential_types.push(format!("int{}", type_byte_size * 8));
+    potential_types.push(format!("uint{}", byte_size * 8));
+    potential_types.push(format!("bytes{}", byte_size));
+    potential_types.push(format!("int{}", byte_size * 8));
 
     // return list of potential type castings, sorted by likelihood descending
-    (type_byte_size, potential_types)
+    (byte_size, potential_types)
 }

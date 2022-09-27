@@ -3,7 +3,7 @@ use std::time::Duration;
 use heimdall_common::io::{logging::{TraceFactory, Logger}, file::{short_path, write_lines_to_file, write_file}};
 use indicatif::ProgressBar;
 
-use super::{DecompilerArgs, util::Function, constants::DECOMPILED_SOURCE_HEADER};
+use super::{DecompilerArgs, util::Function, constants::DECOMPILED_SOURCE_HEADER, postprocess::postprocess};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -208,7 +208,7 @@ pub fn build_output(
                             else { "" },
 
                             index
-                    )
+                        )
                     }).collect::<Vec<String>>().join(", "),
 
                     function_modifiers,
@@ -217,9 +217,29 @@ pub fn build_output(
                 )
             },
             None => {
+                
+                // sort arguments by their calldata index
+                let mut sorted_arguments: Vec<_> = function.arguments.into_iter().collect();
+                sorted_arguments.sort_by(|x,y| x.0.cmp(&y.0));
+
                 format!(
-                    "function Unresolved_{}() {}{}",
+                    "function Unresolved_{}({}) {}{}",
                     function.selector,
+
+                    sorted_arguments.iter().map(|(index, (_, potential_types))| {
+                        format!(
+                            "{} {}arg{}",
+                            potential_types[0],
+
+                            if potential_types[0].contains("[]") || 
+                            potential_types[0].contains("(") || 
+                               ["string", "bytes"].contains(&potential_types[0].as_str()) {"memory "} 
+                            else { "" },
+
+                            index
+                        )
+                    }).collect::<Vec<String>>().join(", "),
+
                     function_modifiers,
                     if function.returns.is_some() { function_returns }
                     else { String::from("{") },
@@ -239,16 +259,20 @@ pub fn build_output(
 
     let mut indentation: usize = 0;
     for line in decompiled_output.iter_mut() {
+
+        // dedent due to closing braces
         if line.starts_with("}") {
             indentation = indentation.saturating_sub(1);
         }
-
+        
+        // apply postprocessing and indentation
         *line = format!(
             "{}{}",
             " ".repeat(indentation*4),
-            line
+            postprocess(line.to_string())
         );
         
+        // indent due to opening braces
         if line.ends_with("{") {
             indentation += 1;
         }
