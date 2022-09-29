@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use heimdall_common::io::{logging::{TraceFactory, Logger}, file::{short_path, write_lines_to_file, write_file}};
+use heimdall_common::io::{logging::{TraceFactory, Logger}, file::{short_path, write_file}};
 use indicatif::ProgressBar;
 
 use super::{DecompilerArgs, util::Function, constants::DECOMPILED_SOURCE_HEADER, postprocess::postprocess};
@@ -395,8 +395,8 @@ pub fn build_output(
         
     }
 
-    write_lines_to_file(
-        &decompiled_output_path,
-        decompiled_output
-    );
+    // write_lines_to_file(
+    //     &decompiled_output_path,
+    //     decompiled_output
+    // );
 }
