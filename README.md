@@ -26,6 +26,10 @@ _Having trouble? Check out the [Troubleshooting](https://jbecker.dev/r/heimdall-
 
 Documentation for all of heimdall-rs is available in the [wiki](https://jbecker.dev/r/heimdall-rs/wiki).
 
+## Documentation
+
+Examples for heimdall-rs modules are available in the [wiki](https://jbecker.dev/r/heimdall-rs/wiki/examples).
+
 ## Contributing
 
 If you'd like to contribute to Heimdall or add a module, please open a pull-request with your changes, as well as detailed information on what is changed, added, or improved.
