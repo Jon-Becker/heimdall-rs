@@ -11,14 +11,14 @@ use heimdall_common::{
     ether::{
         evm::{
             opcodes::WrappedOpcode,
-            types::convert_bitmask,
+            types::{convert_bitmask, byte_size_to_type},
         },
     },
     io::logging::TraceFactory,
-    utils::strings::decode_hex,
+    utils::strings::{decode_hex, encode_hex_reduced},
 };
 
-use super::{util::*, precompile::decode_precompile};
+use super::{util::*, precompile::decode_precompile, constants::AND_BITMASK_REGEX};
 
 impl VMTrace {
     
@@ -212,14 +212,41 @@ impl VMTrace {
                 };
                 
                 let return_memory_operations = function.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
+                let return_memory_operations_solidified = return_memory_operations.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + ");
 
-                // if the return data is > 32 bytes, we append "memory" to the return type
-                function.returns = match size > 32 {
-                    true => Some(format!("{} memory", "bytes")),
-                    false => Some(format!("{}", "uint256")),
-                };
+                // we don't want to overwrite the return value if it's already been set
+                if function.returns == Some(String::from("uint256")) || function.returns == None {
 
-                function.logic.push(format!("return({});", return_memory_operations.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + ")));
+                    // if the return operation == ISZERO, this is a boolean return
+                    if return_memory_operations.len() == 1 && return_memory_operations[0].operations.opcode.name == "ISZERO" {
+                        function.returns = Some(String::from("bool"));
+                    }
+                    else {
+                        function.returns = match size > 32 {
+
+                            // if the return data is > 32 bytes, we append "memory" to the return type
+                            true => Some(format!("{} memory", "bytes")),
+                            false => {
+        
+                                // attempt to find a return type within the return memory operations
+                                let byte_size = match AND_BITMASK_REGEX.find(&return_memory_operations_solidified) {
+                                    Some(bitmask) => {
+                                        let cast = bitmask.as_str();
+
+                                        cast.matches("ff").count()
+                                    },
+                                    None => 32
+                                };
+        
+                                // convert the cast size to a string
+                                let (_, cast_types) = byte_size_to_type(byte_size);
+                                Some(format!("{}", cast_types[0]))
+                            },
+                        };
+                    }
+                }
+
+                function.logic.push(format!("return({});", return_memory_operations_solidified));
 
             } else if opcode_name == "SELDFESTRUCT" {
 
@@ -268,7 +295,7 @@ impl VMTrace {
                         operations: operation,
                     },
                 );
-                function.logic.push(format!("memory[{}] = {};", key, instruction.input_operations[1].solidify()));
+                function.logic.push(format!("memory[{}] = {};", encode_hex_reduced(key), instruction.input_operations[1].solidify()));
 
             } else if opcode_name == "STATICCALL" {
 
@@ -324,7 +351,7 @@ impl VMTrace {
                     },
                     _ => {
                         function.logic.push(format!(
-                            "(bool success, bytes memory ret0) = address({}).delegatecall{}(memory[{}]);",
+                            "(bool success, bytes memory ret0) = address({}).delegatecall{}({});",
                             
                             address.solidify(),
                             modifier,

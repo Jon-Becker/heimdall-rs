@@ -6,6 +6,7 @@ lazy_static! {
 
     // The following regex is used as a detector for AND bitmasks
     pub static ref AND_BITMASK_REGEX: Regex = Regex::new(r"0x[0-9a-fA-F]* & ").unwrap();
+    pub static ref AND_BITMASK_REGEX_2: Regex = Regex::new(r" & 0x[0-9a-fA-F]*").unwrap();
 
     pub static ref DECOMPILED_SOURCE_HEADER: String = 
 "// SPDX-License-Identifier: MIT

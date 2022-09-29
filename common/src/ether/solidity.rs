@@ -461,7 +461,7 @@ mod tests {
 
         // wraps an ADD operation with 2 raw inputs
         let add_operation_wrapped = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(U256::from(1u8)), WrappedInput::Raw(U256::from(2u8))]);
-        assert_eq!(add_operation_wrapped.solidify(), "1 + 2");
+        assert_eq!(add_operation_wrapped.solidify(), "0x01 + 0x02");
         
     }
 
@@ -471,7 +471,7 @@ mod tests {
         // wraps an ADD operation with 2 raw inputs
         let add_operation_wrapped = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(U256::from(1u8)), WrappedInput::Raw(U256::from(2u8))]);
         let complex_add_operation = WrappedOpcode::new(0x01, vec![WrappedInput::Opcode(add_operation_wrapped), WrappedInput::Raw(U256::from(3u8))]);
-        assert_eq!(complex_add_operation.solidify(), "1 + 2 + 3");
+        assert_eq!(complex_add_operation.solidify(), "(0x01 + 0x02) + 0x03");
         
     }
 }
