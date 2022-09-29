@@ -18,9 +18,9 @@ Once you have installed `bifrost`, you can use it to install Heimdall using the 
 bifrost
 ```
 
-After compilation, the `heimdall` command will be available to use from a new terminal. For advanced options, see the [bifrost documentation]().
+After compilation, the `heimdall` command will be available to use from a new terminal. For advanced options, see the [bifrost documentation](https://jbecker.dev/r/heimdall-rs/wiki/installation).
 
-_Having trouble? Check out the [Troubleshooting]() section in the wiki._
+_Having trouble? Check out the [Troubleshooting](https://jbecker.dev/r/heimdall-rs/wiki/troubleshooting) section in the wiki._
 
 ## Documentation
 
@@ -30,7 +30,7 @@ Documentation for all of heimdall-rs is available in the [wiki](https://jbecker.
 
 If you'd like to contribute to Heimdall or add a module, please open a pull-request with your changes, as well as detailed information on what is changed, added, or improved.
 
-For more detailed information, see the [contributing guide]().
+For more detailed information, see the [contributing guide](https://jbecker.dev/r/heimdall-rs/wiki/contributing).
 
 ## Issues
 
@@ -39,4 +39,4 @@ If you've found an issue or have a question, please open an issue [here](https:/
 ## Credits
 - Jonathan Becker \<jonathan@jbecker.dev>
 
-A list of all [contributors](https://jbecker.dev/r/heimdall-rs/wiki) can be found in the wiki.
+A list of all [contributors](https://jbecker.dev/r/heimdall-rs/wiki/contributors) can be found in the wiki.

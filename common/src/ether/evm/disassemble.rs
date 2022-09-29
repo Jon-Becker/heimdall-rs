@@ -121,6 +121,9 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         });
         
     }
+    else if BYTECODE_REGEX.is_match(&args.target) {
+        contract_bytecode = args.target.clone();
+    }
     else {
 
         // push the address to the output directory

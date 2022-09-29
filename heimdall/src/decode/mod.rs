@@ -110,6 +110,12 @@ pub fn decode(args: DecodeArgs) {
         calldata = args.target.clone().replace("0x", "");
     }
 
+    // check if calldata is present
+    if calldata.len() == 0 {
+        logger.error(&format!("empty calldata found at '{}' .", &args.target));
+        std::process::exit(1);
+    }
+
     // check if the calldata length is a standard length
     if calldata.len() % 2 != 0 {
         logger.error("calldata is not a valid hex string.");
@@ -160,7 +166,6 @@ pub fn decode(args: DecodeArgs) {
                         internal_type: None,
                     });
                 }
-                
                 // build the decoded function to verify it's a match
                 let decoded_function_call = Function {
                     name: potential_match.name.to_string(),
@@ -226,7 +231,11 @@ pub fn decode(args: DecodeArgs) {
                     "{} {}:{}{}",
                     if i == 0 { "input" } else { "     " },
                     i,
-                    " ".repeat(3 - i.to_string().len()),
+                    if i.to_string().len() <= 3 { 
+                        " ".repeat(3 - i.to_string().len()) 
+                    } else { 
+                        "".to_string() 
+                    },
                     input
                 ).to_string()
             )
