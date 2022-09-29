@@ -26,7 +26,7 @@ _Having trouble? Check out the [Troubleshooting](https://jbecker.dev/r/heimdall-
 
 Documentation for all of heimdall-rs is available in the [wiki](https://jbecker.dev/r/heimdall-rs/wiki).
 
-## Documentation
+## Examples
 
 Examples for heimdall-rs modules are available in the [wiki](https://jbecker.dev/r/heimdall-rs/wiki/examples).
 
