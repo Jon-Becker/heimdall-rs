@@ -2,7 +2,7 @@ use heimdall_common::ether::evm::types::byte_size_to_type;
 
 use crate::decompile::util::find_balanced_parentheses;
 
-use super::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2};
+use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2}};
 
 fn convert_bitmask_to_casting(line: String) -> String {
     let mut cleaned = line;
@@ -70,7 +70,6 @@ fn convert_bitmask_to_casting(line: String) -> String {
                     // attempt to find matching parentheses
                     let subject_indices = find_balanced_parentheses(subject.to_string());
 
-                    println!("subject: {}, indices: {:?}", subject, subject_indices);
                     subject = match subject_indices.2 {
                         true => {
         
@@ -92,7 +91,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
                             }
                         },
                     };
-                    println!("{}{}", subject, cast);
+
                     // apply the cast to the subject
                     cleaned = cleaned.replace(
                         &format!("{}{}", subject, cast),
@@ -119,10 +118,10 @@ fn convert_bitmask_to_casting(line: String) -> String {
 }
 
 fn simplify_casts(line: String) -> String {
-    let mut cleaned = line;
+    let cleaned = line;
 
     // remove unnecessary casts
-    
+
     
     cleaned
 }
@@ -136,6 +135,8 @@ fn convert_iszero_logic_flip(line: String) -> String {
 
     cleaned
 }
+
+
 
 pub fn postprocess(line: String) -> String {
     let mut cleaned = line;

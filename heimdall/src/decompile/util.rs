@@ -13,7 +13,7 @@ use heimdall_common::{
             log::Log,
             opcodes::WrappedOpcode,
             vm::{State, VM}
-        }, signatures::ResolvedFunction,
+        }, signatures::{ResolvedFunction, ResolvedError, ResolvedLog},
     },
     io::logging::{TraceFactory},
 };
@@ -50,7 +50,11 @@ pub struct Function {
 
     // holds all emitted events. used to generate solidity event definitions
     // as well as ABI specifications.
-    pub events: Vec<Log>,
+    pub events: HashMap<String, (Option<ResolvedLog>, Log)>,
+
+    // holds all found custom errors used to generate solidity error definitions
+    // as well as ABI specifications.
+    pub errors: HashMap<String, Option<ResolvedError>>,
 
     // stores the matched resolved function for this Functon
     pub resolved_function: Option<ResolvedFunction>,

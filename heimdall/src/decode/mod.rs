@@ -14,7 +14,7 @@ use heimdall_common::{
     consts::TRANSACTION_HASH_REGEX,
     utils::{
         strings::decode_hex,
-    }, ether::{evm::types::{parse_function_parameters, display}, signatures::{resolve_signature, ResolvedFunction}}
+    }, ether::{evm::types::{parse_function_parameters, display}, signatures::{resolve_function_signature, ResolvedFunction}}
 };
 
 use strsim::normalized_damerau_levenshtein as similarity;
@@ -136,7 +136,7 @@ pub fn decode(args: DecodeArgs) {
     };
 
     // get the function signature possibilities
-    let potential_matches = match resolve_signature(&function_selector) {
+    let potential_matches = match resolve_function_signature(&function_selector) {
         Some(signatures) => signatures,
         None => Vec::new()
     };

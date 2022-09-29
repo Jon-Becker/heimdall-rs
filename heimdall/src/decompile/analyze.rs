@@ -114,12 +114,11 @@ impl VMTrace {
                 let logged_event = operation.events.last().unwrap().to_owned();
 
                 // check to see if the event is a duplicate
-                if !function.events.iter().any(|log| {
-                    log.index == logged_event.index
-                        && log.topics.first().unwrap() == logged_event.topics.first().unwrap()
+                if !function.events.iter().any(|(selector, _)| {
+                    selector == logged_event.topics.first().unwrap()
                 }) {
                     // add the event to the function
-                    function.events.push(logged_event.clone());
+                    function.events.insert(logged_event.topics.first().unwrap().to_string(), (None, logged_event.clone()));
 
                     // add the event emission to the function's logic
                     // will be decoded during post-processing
@@ -195,7 +194,10 @@ impl VMTrace {
                 // handle case with custom error OR empty revert
                 else {
                     let custom_error_placeholder = match revert_data.get(0..8) {
-                        Some(selector) => format!(" CustomError_{}()", selector),
+                        Some(selector) => {
+                            function.errors.insert(selector.to_string(), None);
+                            format!(" CustomError_{}()", selector)
+                        },
                         None => "()".to_string(),
                     };
                     revert_logic = format!("revert{};", custom_error_placeholder);

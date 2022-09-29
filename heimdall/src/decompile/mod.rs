@@ -29,6 +29,7 @@ use heimdall_common::{
         },
         vm::VM
     },
+    ether::signatures::*,
     consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::* },
 };
@@ -307,7 +308,8 @@ pub fn decompile(args: DecompilerArgs) {
                 memory: HashMap::new(),
                 returns: None,
                 logic: Vec::new(),
-                events: Vec::new(),
+                events: HashMap::new(),
+                errors: HashMap::new(),
                 resolved_function: None,
                 pure: true,
                 view: true,
@@ -424,7 +426,110 @@ pub fn decompile(args: DecompilerArgs) {
             }
         }
 
+
+        if !args.skip_resolving {
+
+            // resolve custom error signatures
+            let mut resolved_counter = 0;
+            for (error_selector, _) in analyzed_function.errors.clone() {
+                decompilation_progress.set_message(format!("resolving error 0x{}", &error_selector));
+
+                let resolved_error_selectors = resolve_error_signature(&error_selector);
+
+                // only continue if we have matches
+                match resolved_error_selectors {
+                    Some(resolved_error_selectors) => {
+
+                        let mut selected_error_index: u8 = 0;
+                        if resolved_error_selectors.len() > 1 {
+                            decompilation_progress.suspend(|| {
+                                selected_error_index = logger.option(
+                                    "warn", "multiple possible matches found. select an option below",
+                                    resolved_error_selectors.iter()
+                                    .map(|x| x.signature.clone()).collect(),
+                                    Some(*&(resolved_error_selectors.len()-1) as u8),
+                                    args.default
+                                );
+                            });
+                        }
+        
+                        let selected_match = match resolved_error_selectors.get(selected_error_index as usize) {
+                            Some(selected_match) => selected_match,
+                            None => {
+                                logger.error("invalid selection.");
+                                std::process::exit(1)
+                            }
+                        };
+                        
+                        resolved_counter += 1;
+                        analyzed_function.errors.insert(error_selector, Some(selected_match.clone()));
+                    },
+                    None => {}
+                }
+               
+            }
+
+            if resolved_counter > 0 {
+                trace.br(func_analysis_trace);
+                trace.add_info(
+                    func_analysis_trace,
+                    line!(),
+                    format!("resolved {} error signatures from {} selectors.", resolved_counter, analyzed_function.errors.len()).to_string()
+                );
+            }
+
+            // resolve custom event signatures
+            resolved_counter = 0;
+            for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
+                decompilation_progress.set_message(format!("resolving event 0x{}", &event_selector));
+
+
+                let resolved_event_selectors = resolve_event_signature(&event_selector.get(0..8).unwrap().to_string());
+
+                // only continue if we have matches
+                match resolved_event_selectors {
+                    Some(resolved_event_selectors) => {
+
+                        let mut selected_event_index: u8 = 0;
+                        if resolved_event_selectors.len() > 1 {
+                            decompilation_progress.suspend(|| {
+                                selected_event_index = logger.option(
+                                    "warn", "multiple possible matches found. select an option below",
+                                    resolved_event_selectors.iter()
+                                    .map(|x| x.signature.clone()).collect(),
+                                    Some(*&(resolved_event_selectors.len()-1) as u8),
+                                    args.default
+                                );
+                            });
+                        }
+        
+                        let selected_match = match resolved_event_selectors.get(selected_event_index as usize) {
+                            Some(selected_match) => selected_match,
+                            None => {
+                                logger.error("invalid selection.");
+                                std::process::exit(1)
+                            }
+                        };
+                        
+                        resolved_counter += 1;
+                        analyzed_function.events.insert(event_selector, (Some(selected_match.clone()), raw_event));
+                    },
+                    None => {}
+                }
+               
+            }
+
+            if resolved_counter > 0 {
+                trace.add_info(
+                    func_analysis_trace,
+                    line!(),
+                    format!("resolved {} event signatures from {} selectors.", resolved_counter, analyzed_function.events.len()).to_string()
+                );
+            }
+        }
+
         analyzed_functions.push(analyzed_function.clone());
+
 
     }
     decompilation_progress.finish_and_clear();

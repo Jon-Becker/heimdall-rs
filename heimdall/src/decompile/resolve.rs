@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use heimdall_common::{
-    ether::signatures::{resolve_signature, ResolvedFunction},
+    ether::signatures::{resolve_function_signature, ResolvedFunction},
     io::logging::Logger,
 };
 use indicatif::ProgressBar;
@@ -21,7 +21,7 @@ pub fn resolve_function_selectors(
 
     for selector in selectors {
         resolve_progress.set_message(format!("resolving '0x{}'", selector));
-        match resolve_signature(&selector) {
+        match resolve_function_signature(&selector) {
             Some(function) => {
                 resolved_functions.insert(selector, function);
             }

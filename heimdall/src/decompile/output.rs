@@ -27,6 +27,29 @@ struct FunctionABI {
     constant: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+struct ErrorABI {
+    #[serde(rename = "type")]
+    type_: String,
+    name: String,
+    inputs: Vec<ABIToken>
+}
+
+
+#[derive(Serialize, Deserialize)]
+struct EventABI {
+    #[serde(rename = "type")]
+    type_: String,
+    name: String,
+    inputs: Vec<ABIToken>
+}
+
+#[derive(Serialize, Deserialize)]
+enum ABIStructure {
+    Function(FunctionABI),
+    Error(ErrorABI),
+    Event(EventABI)
+}
 
 pub fn build_output(
     args: &DecompilerArgs,
@@ -44,7 +67,7 @@ pub fn build_output(
     let decompiled_output_path = format!("{}/decompiled.sol", output_dir);
 
     // build the decompiled contract's ABI
-    let mut abi = Vec::new();
+    let mut abi: Vec<ABIStructure> = Vec::new();
 
     // build the ABI for each function
     for function in &functions {
@@ -109,7 +132,7 @@ pub fn build_output(
                 }
 
                 (format!("Unresolved_{}", function.selector), inputs, outputs)
-            }
+            }            
         };
 
         // determine the state mutability of the function
@@ -127,14 +150,103 @@ pub fn build_output(
         let constant = state_mutability == "pure" && function_inputs.len() == 0;
 
         // add the function to the ABI
-        abi.push(FunctionABI {
-            type_: "function".to_string(),
-            name: function_name,
-            inputs: function_inputs,
-            outputs: function_outputs,
-            state_mutability: state_mutability.to_string(),
-            constant: constant,
-        });
+        abi.push(
+            ABIStructure::Function(
+                FunctionABI {
+                    type_: "function".to_string(),
+                    name: function_name,
+                    inputs: function_inputs,
+                    outputs: function_outputs,
+                    state_mutability: state_mutability.to_string(),
+                    constant: constant,
+                }
+            )
+        );
+
+        
+        // write the function's custom errors
+        for (error_selector, resolved_error) in &function.errors {
+            progress_bar.set_message(format!("writing ABI for '0x{}'", error_selector));
+
+            match resolved_error {
+                Some(resolved_error) => {
+                    let mut inputs = Vec::new();
+
+                    for (index, input) in resolved_error.inputs.iter().enumerate() {
+                        if input != "" {
+                            inputs.push(ABIToken {
+                                name: format!("arg{}", index),
+                                internal_type: input.to_owned(),
+                                type_: input.to_owned(),
+                            });
+                        }
+                    }
+
+                    abi.push(
+                        ABIStructure::Error(
+                            ErrorABI {
+                                type_: "error".to_string(),
+                                name: resolved_error.name.clone(),
+                                inputs: inputs,
+                            }
+                        )
+                    );
+                },
+                None => {
+                    abi.push(
+                        ABIStructure::Error(
+                            ErrorABI {
+                                type_: "error".to_string(),
+                                name: format!("CustomError_{}", error_selector),
+                                inputs: Vec::new(),
+                            }
+                        )
+                    );
+                }
+            }
+        }
+
+        // write the function's events
+        for (event_selector, (resolved_event, _)) in &function.events {
+            progress_bar.set_message(format!("writing ABI for '0x{}'", event_selector));
+
+            match resolved_event {
+                Some(resolved_event) => {
+                    let mut inputs = Vec::new();
+
+                    for (index, input) in resolved_event.inputs.iter().enumerate() {
+                        if input != "" {
+                            inputs.push(ABIToken {
+                                name: format!("arg{}", index),
+                                internal_type: input.to_owned(),
+                                type_: input.to_owned(),
+                            });
+                        }
+                    }
+
+                    abi.push(
+                        ABIStructure::Error(
+                            ErrorABI {
+                                type_: "event".to_string(),
+                                name: resolved_event.name.clone(),
+                                inputs: inputs,
+                            }
+                        )
+                    );
+                },
+                None => {
+                    abi.push(
+                        ABIStructure::Error(
+                            ErrorABI {
+                                type_: "event".to_string(),
+                                name: format!("Event_{}", event_selector.get(0..8).unwrap()),
+                                inputs: Vec::new(),
+                            }
+                        )
+                    );
+                }
+            }
+        }
     }
 
     // write the ABI to a file
@@ -143,7 +255,11 @@ pub fn build_output(
         &format!(
             "[{}]",
             abi.iter().map(|x| {
-                serde_json::to_string_pretty(x).unwrap()
+                match x {
+                    ABIStructure::Function(x) => serde_json::to_string_pretty(x).unwrap(),
+                    ABIStructure::Error(x) => serde_json::to_string_pretty(x).unwrap(),
+                    ABIStructure::Event(x) => serde_json::to_string_pretty(x).unwrap(),
+                }
             }).collect::<Vec<String>>().join(",\n")
         )
     );
