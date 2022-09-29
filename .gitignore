@@ -9,5 +9,8 @@ out.json
 .idea
 .DS_STORE
 
-output/*
 output
+output/*
+*/output
+*.evm
+*.asm

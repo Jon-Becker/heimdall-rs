@@ -2,8 +2,17 @@ use super::logging::Logger;
 
 use std::{
     fs::File,
-    io::{Write, Read}
+    io::{Write, Read}, env
 };
+
+
+pub fn short_path(path: &str) -> String {
+    let current_dir = match env::current_dir() {
+        Ok(dir) => dir.into_os_string().into_string().unwrap(),
+        Err(_) => std::process::exit(1)
+    };
+    return format!("{}", path.replace(&current_dir, "."));
+}
 
 
 pub fn write_file(_path: &String, contents: &String) -> String {
@@ -31,6 +40,9 @@ pub fn write_file(_path: &String, contents: &String) -> String {
     return _path.to_string();
 }
 
+pub fn write_lines_to_file(_path: &String, contents: Vec<String>) {
+    write_file(_path, &contents.join("\n"));
+}
 
 pub fn read_file(_path: &String) -> String {
     let path = std::path::Path::new(_path);

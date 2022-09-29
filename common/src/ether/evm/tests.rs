@@ -1,5 +1,6 @@
+
 #[cfg(test)]
-mod tests {
+mod vm_tests {
 
     use std::str::FromStr;
 
@@ -45,8 +46,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a017fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600101");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x14").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x14").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -54,8 +55,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a027fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600202");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x64").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x64").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe").unwrap());
     }
 
     #[test]
@@ -63,8 +64,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a036001600003");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x00").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap());
     }
 
     #[test]
@@ -72,8 +73,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a046002600104");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -81,8 +82,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a057fFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7fFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE05");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x02").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x02").unwrap());
     }
 
     #[test]
@@ -90,8 +91,8 @@ mod tests {
         let mut vm = new_test_vm("0x6003600a066005601106");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x02").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x02").unwrap());
     }
 
     #[test]
@@ -99,8 +100,8 @@ mod tests {
         let mut vm = new_test_vm("0x6003600a077ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff807");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe").unwrap());
     }
 
     #[test]
@@ -108,8 +109,8 @@ mod tests {
         let mut vm = new_test_vm("0x6008600a600a08600260027fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff08");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x04").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x04").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x01").unwrap());
     }
 
     #[test]
@@ -117,8 +118,8 @@ mod tests {
         let mut vm = new_test_vm("0x6008600a600a09600c7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff09");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x04").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x04").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x01").unwrap());
     }
 
     #[test]
@@ -126,8 +127,8 @@ mod tests {
         let mut vm = new_test_vm("0x6002600a0a600260020a");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x64").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x04").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x64").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x04").unwrap());
     }
 
     #[test]
@@ -135,8 +136,8 @@ mod tests {
         let mut vm = new_test_vm("0x60ff60000b607f60000b");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x7f").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x7f").unwrap());
     }
 
     #[test]
@@ -144,8 +145,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600910600a600a10");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -153,8 +154,8 @@ mod tests {
         let mut vm = new_test_vm("0x6009600a11600a600a10");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -162,8 +163,8 @@ mod tests {
         let mut vm = new_test_vm("0x60097fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff12600a600a12");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -171,8 +172,8 @@ mod tests {
         let mut vm = new_test_vm("0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff600913600a600a13");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -180,8 +181,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a14600a600514");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -189,8 +190,8 @@ mod tests {
         let mut vm = new_test_vm("0x600015600a15");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -198,8 +199,8 @@ mod tests {
         let mut vm = new_test_vm("0x600f600f16600060ff1600");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x0F").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x0F").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -207,8 +208,8 @@ mod tests {
         let mut vm = new_test_vm("0x600f60f01760ff60ff17");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0xff").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xff").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xff").unwrap());
     }
 
     #[test]
@@ -216,8 +217,8 @@ mod tests {
         let mut vm = new_test_vm("0x600f60f01860ff60ff18");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0xff").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -225,7 +226,7 @@ mod tests {
         let mut vm = new_test_vm("0x600019");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff").unwrap());
     }
 
     #[test]
@@ -233,8 +234,8 @@ mod tests {
         let mut vm = new_test_vm("0x60ff601f1a61ff00601e1a");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0xff").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xff").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xff").unwrap());
     }
 
     #[test]
@@ -242,8 +243,8 @@ mod tests {
         let mut vm = new_test_vm("0x600160011b0x7fFF0000000000000000000000000000000000000000000000000000000000000060041b");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x02").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xF000000000000000000000000000000000000000000000000000000000000000").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x02").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xF000000000000000000000000000000000000000000000000000000000000000").unwrap());
     }
 
     #[test]
@@ -251,8 +252,8 @@ mod tests {
         let mut vm = new_test_vm("600260011c60ff60041c");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x01").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x0f").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x0f").unwrap());
     }
 
     #[test]
@@ -260,7 +261,7 @@ mod tests {
         let mut vm = new_test_vm("600260011d");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x01").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x01").unwrap());
     }
 
     #[test]
@@ -268,7 +269,7 @@ mod tests {
         let mut vm = new_test_vm("0x7fffffffff000000000000000000000000000000000000000000000000000000006000526004600020");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x29045A592007D0C246EF02C2223570DA9522D0CF0F73282C79A1BC8F0BB2C238").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x29045A592007D0C246EF02C2223570DA9522D0CF0F73282C79A1BC8F0BB2C238").unwrap());
     }
 
     #[test]
@@ -276,8 +277,8 @@ mod tests {
         let mut vm = new_test_vm("600035601f35");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xFF00000000000000000000000000000000000000000000000000000000000000").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xFF00000000000000000000000000000000000000000000000000000000000000").unwrap());
     }
 
     #[test]
@@ -285,7 +286,7 @@ mod tests {
         let mut vm = new_test_vm("0x36");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x20").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x20").unwrap());
     }
 
     #[test]
@@ -301,8 +302,8 @@ mod tests {
         let mut vm = new_test_vm("0x7f00000000000000000000000000000000000000000000000000000000000000FF600052600051600151");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0xff").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0xff00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xff00").unwrap());
     }
 
     #[test]
@@ -310,8 +311,8 @@ mod tests {
         let mut vm = new_test_vm("0x602e600055600054600154");
         vm.execute();
 
-        assert_eq!(vm.stack.peek(1), U256::from_str("0x2e").unwrap());
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x2e").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").unwrap());
     }
 
     #[test]
@@ -335,7 +336,7 @@ mod tests {
         assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0x07").unwrap());
         
         // PC test
-        assert_eq!(vm.stack.peek(0), U256::from_str("0x07").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x07").unwrap());
     }
 
     #[test]
@@ -353,4 +354,244 @@ mod tests {
 
         println!("{:#?}", vm.execute());
     }
+}
+
+
+#[cfg(test)]
+mod opcode_tests {
+    use ethers::types::U256;
+
+    use crate::ether::evm::opcodes::*;
+
+    #[test]
+    fn test_wrapping_opcodes() {
+        
+        // wraps an ADD operation with 2 raw inputs
+        let add_operation_wrapped = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(U256::from(1u8)), WrappedInput::Raw(U256::from(2u8))]);
+        println!("{}", add_operation_wrapped);
+
+        // wraps a CALLDATALOAD operation
+        let calldataload_wrapped = WrappedOpcode::new(0x35, vec![WrappedInput::Opcode(add_operation_wrapped)]);
+        println!("{}", calldataload_wrapped);
+    }
+}
+
+
+#[cfg(test)]
+mod memory_tests {
+    use crate::ether::evm::memory::Memory;
+
+
+    #[test]
+    fn test_mstore() {
+        let mut memory = Memory::new();
+
+        memory.store(4, 32, String::from("ff"));
+        assert_eq!(memory.memory, "0000000000000000000000000000000000000000000000000000000000000000000000ff00000000000000000000000000000000000000000000000000000000");
+
+        let mut memory = Memory::new();
+        memory.store(0, 32, String::from("ff"));
+        assert_eq!(
+            memory.memory,
+            "00000000000000000000000000000000000000000000000000000000000000ff"
+        );
+
+        let mut memory = Memory::new();
+        memory.store(34, 32, String::from("ff"));
+        assert_eq!(memory.memory, "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff000000000000000000000000000000000000000000000000000000000000");
+
+        let mut memory = Memory::new();
+        memory.store(0, 1, String::from("ff"));
+        assert_eq!(
+            memory.memory,
+            "ff00000000000000000000000000000000000000000000000000000000000000"
+        );
+
+        let mut memory = Memory::new();
+        memory.store(255, 32, String::from("ff"));
+        assert_eq!(memory.memory, "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff00");
+    }
+
+    #[test]
+    fn test_mload() {
+        let mut memory = Memory::new();
+        memory.store(
+            0,
+            32,
+            String::from("11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff"),
+        );
+
+        assert_eq!(
+            memory.read(0, 32),
+            "11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff"
+        );
+        assert_eq!(
+            memory.read(1, 32),
+            "223344556677889900aabbccddeeff11223344556677889900aabbccddeeff00"
+        );
+        assert_eq!(
+            memory.read(31, 32),
+            "ff00000000000000000000000000000000000000000000000000000000000000"
+        );
+    }
+}
+
+#[cfg(test)]
+mod storage_tests {
+    use crate::ether::evm::storage::Storage;
+
+
+    #[test]
+    fn test_sstore_sload() {
+        let mut storage = Storage::new();
+
+        storage.store(String::from("01"), String::from("01"));
+        assert_eq!(storage.load(String::from("01")), String::from("0000000000000000000000000000000000000000000000000000000000000001"));
+
+        storage.store(String::from("ff"), String::from("11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff"));
+        assert_eq!(storage.load(String::from("ff")), String::from("11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff"));
+
+        assert_eq!(storage.load(String::from("00")), String::from("0000000000000000000000000000000000000000000000000000000000000000"));
+    }
+
+}
+
+
+#[cfg(test)]
+mod types_tests {
+    use ethers::abi::ParamType;
+
+    use crate::ether::evm::types::parse_function_parameters;
+
+
+    #[test]
+    fn test_simple_signature() {
+        let solidity_type = "test(uint256)".to_string();
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(
+                vec![
+                    ParamType::Uint(256)
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn test_multiple_signature() {
+        let solidity_type = "test(uint256,string)".to_string();
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(
+                vec![
+                    ParamType::Uint(256),
+                    ParamType::String
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn test_array_signature() {
+        let solidity_type = "test(uint256,string[],uint256)".to_string();
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(
+                vec![
+                    ParamType::Uint(256),
+                    ParamType::Array(
+                        Box::new(ParamType::String)
+                    ),
+                    ParamType::Uint(256)
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn test_complex_signature() {
+        let solidity_type = "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))".to_string();
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(
+                vec![
+                    ParamType::Uint(256),
+                    ParamType::String,
+                    ParamType::Tuple(
+                        vec![
+                            ParamType::Address,
+                            ParamType::Address,
+                            ParamType::Uint(24),
+                            ParamType::Address,
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Uint(160)
+                        ]
+                    )
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn test_tuple_signature() {
+        let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))".to_string();
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(
+                vec![
+                    ParamType::Tuple(
+                        vec![
+                            ParamType::Address,
+                            ParamType::Address,
+                            ParamType::Uint(24),
+                            ParamType::Address,
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Uint(160)
+                        ]
+                    )
+                ]
+            )
+        );
+    }
+
+    #[test]
+    fn test_nested_tuple_signature() {
+        let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))".to_string();
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(
+                vec![
+                    ParamType::Tuple(
+                        vec![
+                            ParamType::Address,
+                            ParamType::Address,
+                            ParamType::Uint(24),
+                            ParamType::Address,
+                            ParamType::Uint(256),
+                            ParamType::Array(
+                                Box::new(ParamType::Tuple(
+                                    vec![
+                                        ParamType::Uint(256),
+                                        ParamType::Uint(256)
+                                    ]
+                                ))
+                            ),
+                            ParamType::Uint(160)
+                        ]
+                    )
+                ]
+            )
+        );
+    }
+
 }

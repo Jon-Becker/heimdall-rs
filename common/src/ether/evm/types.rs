@@ -1,7 +1,9 @@
 use colored::Colorize;
-use ethers::abi::{ParamType, Token};
+use ethers::abi::{ParamType, Token, AbiEncode};
 
 use crate::utils::strings::replace_last;
+
+use super::vm::Instruction;
 
 // decode a string into an ethereum type
 pub fn parse_function_parameters(function_signature: String) -> Option<Vec<ParamType>> {
@@ -184,146 +186,50 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
 }
 
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// converts a bit mask into it's potential types
+pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
+    let mask = instruction.output_operations[0].clone();
 
-    #[test]
-    fn test_simple() {
-        let solidity_type = "test(uint256)".to_string();
-        let param_type = parse_function_parameters(solidity_type);
-        assert_eq!(
-            param_type,
-            Some(
-                vec![
-                    ParamType::Uint(256)
-                ]
-            )
-        );
+    // use 32 as the default size, as it is the default word size in the EVM
+    let mut type_byte_size = 32;
+
+    // determine which input contains the bitmask
+    for (i, input) in mask.inputs.iter().enumerate() {
+        match input {
+            crate::ether::evm::opcodes::WrappedInput::Raw(_) => continue,
+            crate::ether::evm::opcodes::WrappedInput::Opcode(opcode) => {   
+                if !(opcode.opcode.name == "CALLDATALOAD" || opcode.opcode.name ==  "CALLDATACOPY") {
+                    
+                    if mask.opcode.name == "AND" {
+                        type_byte_size = instruction.inputs[i].encode_hex().matches("ff").count();
+                    }
+                    else if mask.opcode.name == "OR" {
+                        type_byte_size = instruction.inputs[i].encode_hex().matches("00").count();
+                    }
+                
+                }
+            },
+        };
     }
 
-    #[test]
-    fn test_mul() {
-        let solidity_type = "test(uint256,string)".to_string();
-        let param_type = parse_function_parameters(solidity_type);
-        assert_eq!(
-            param_type,
-            Some(
-                vec![
-                    ParamType::Uint(256),
-                    ParamType::String
-                ]
-            )
-        );
+    // determine the solidity type based on the resulting size of the masked data
+    byte_size_to_type(type_byte_size)
+}
+
+pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
+    let mut potential_types = Vec::new();
+
+    match byte_size {
+        1 => potential_types.push("bool".to_string()),
+        20 => potential_types.push("address".to_string()),
+        _ => {}
     }
 
-    #[test]
-    fn test_array() {
-        let solidity_type = "test(uint256,string[],uint256)".to_string();
-        let param_type = parse_function_parameters(solidity_type);
-        assert_eq!(
-            param_type,
-            Some(
-                vec![
-                    ParamType::Uint(256),
-                    ParamType::Array(
-                        Box::new(ParamType::String)
-                    ),
-                    ParamType::Uint(256)
-                ]
-            )
-        );
-    }
+    // push arbitrary types to the array
+    potential_types.push(format!("uint{}", byte_size * 8));
+    potential_types.push(format!("bytes{}", byte_size));
+    potential_types.push(format!("int{}", byte_size * 8));
 
-    #[test]
-    fn test_complex() {
-        let solidity_type = "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))".to_string();
-        let param_type = parse_function_parameters(solidity_type);
-        assert_eq!(
-            param_type,
-            Some(
-                vec![
-                    ParamType::Uint(256),
-                    ParamType::String,
-                    ParamType::Tuple(
-                        vec![
-                            ParamType::Address,
-                            ParamType::Address,
-                            ParamType::Uint(24),
-                            ParamType::Address,
-                            ParamType::Uint(256),
-                            ParamType::Uint(256),
-                            ParamType::Uint(256),
-                            ParamType::Uint(160)
-                        ]
-                    )
-                ]
-            )
-        );
-    }
-
-    #[test]
-    fn test_tuple() {
-        let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))".to_string();
-        let param_type = parse_function_parameters(solidity_type);
-        assert_eq!(
-            param_type,
-            Some(
-                vec![
-                    ParamType::Tuple(
-                        vec![
-                            ParamType::Address,
-                            ParamType::Address,
-                            ParamType::Uint(24),
-                            ParamType::Address,
-                            ParamType::Uint(256),
-                            ParamType::Uint(256),
-                            ParamType::Uint(256),
-                            ParamType::Uint(160)
-                        ]
-                    )
-                ]
-            )
-        );
-    }
-
-    #[test]
-    fn test_nested_tuple() {
-        let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))".to_string();
-        let param_type = parse_function_parameters(solidity_type);
-        assert_eq!(
-            param_type,
-            Some(
-                vec![
-                    ParamType::Tuple(
-                        vec![
-                            ParamType::Address,
-                            ParamType::Address,
-                            ParamType::Uint(24),
-                            ParamType::Address,
-                            ParamType::Uint(256),
-                            ParamType::Array(
-                                Box::new(ParamType::Tuple(
-                                    vec![
-                                        ParamType::Uint(256),
-                                        ParamType::Uint(256)
-                                    ]
-                                ))
-                            ),
-                            ParamType::Uint(160)
-                        ]
-                    )
-                ]
-            )
-        );
-    }
-
-    #[test]
-    fn test_wtf() {
-        let solidity_type = "marketBuyOrdersWithEth((address,address,address,address,uint256,uint256,uint256,uint256,uint256,uint256,bytes,bytes,bytes,bytes)[],uint256,bytes[],uint256[],address[])".to_string();
-        let param_type = parse_function_parameters(solidity_type);
-
-        println!("{:#?}", param_type)
-    }
-
+    // return list of potential type castings, sorted by likelihood descending
+    (byte_size, potential_types)
 }

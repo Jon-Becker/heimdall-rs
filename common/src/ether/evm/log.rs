@@ -1,4 +1,4 @@
-use ethers::prelude::U256;
+use ethers::{prelude::U256, abi::AbiEncode};
 
 
 #[derive(Clone, Debug)]
@@ -18,7 +18,7 @@ impl Log {
         let mut topics_as_strings = Vec::new();
         
         for topic in topics {
-            topics_as_strings.push(topic.to_string());
+            topics_as_strings.push(topic.encode_hex().replace("0x", ""));
         }
 
         Log {

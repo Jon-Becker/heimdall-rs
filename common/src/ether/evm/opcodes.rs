@@ -1,4 +1,8 @@
-#[derive(Clone, Debug)]
+use std::fmt::{Display, Formatter, Result};
+
+use ethers::types::U256;
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Opcode {
     pub name: String,
     pub mingas: u16,
@@ -152,11 +156,38 @@ pub fn opcode(code: &str) -> Opcode {
         "fd" => Opcode { name: String::from("REVERT"), mingas: 0, inputs: 2, outputs: 0 },
         "fe" => Opcode { name: String::from("INVALID"), mingas: 0, inputs: 0, outputs: 0 },
         "ff" => Opcode { name: String::from("SELFDESTRUCT"), mingas: 5000, inputs: 1, outputs: 0 },
-        _ => Opcode {
-            name: String::from("unknown"),
-            mingas: 0,
-            inputs: 0,
-            outputs: 0,
-        },
+           _ => Opcode { name: String::from("unknown"), mingas: 0, inputs: 0, outputs: 0, },
     };
+}
+
+// enum allows for Wrapped Opcodes to contain both raw U256 and Opcodes as inputs
+#[derive(Clone, Debug, PartialEq)]
+pub enum WrappedInput {
+    Raw(U256),
+    Opcode(WrappedOpcode),
+}
+
+// represents an opcode with its direct inputs as WrappedInputs
+#[derive(Clone, Debug, PartialEq)]
+pub struct WrappedOpcode {
+    pub opcode: Opcode,
+    pub inputs: Vec<WrappedInput>,
+}
+
+// implements pretty printing for WrappedOpcodes
+impl Display for WrappedOpcode {
+
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        write!(f, "{}({})", self.opcode.name, self.inputs.clone().into_iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", "))
+    }
+
+}
+
+impl Display for WrappedInput {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            WrappedInput::Raw(u256) => write!(f, "{}", u256),
+            WrappedInput::Opcode(opcode) => write!(f, "{}", opcode),
+        }
+    }
 }

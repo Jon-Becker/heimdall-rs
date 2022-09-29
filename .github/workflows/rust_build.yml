@@ -17,4 +17,7 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       working-directory: ./heimdall
-      run: cargo test --verbose
+      run: |
+        cargo test --package heimdall
+        cargo test --package heimdall-config
+        cargo test --package heimdall-common

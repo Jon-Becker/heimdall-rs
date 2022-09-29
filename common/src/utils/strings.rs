@@ -1,7 +1,9 @@
 
 use std::{num::ParseIntError};
 
-use ethers::{prelude::{I256, U256}};
+use ethers::{prelude::{I256, U256}, abi::AbiEncode};
+
+use crate::consts::REDUCE_HEX_REGEX;
 
 
 // Convert an unsigned integer into a signed one
@@ -16,6 +18,18 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
         .step_by(2)
         .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
         .collect()
+}
+
+
+// convert a U256 to hex without leading 0s
+pub fn encode_hex_reduced(s: U256) -> String {
+
+    if s > U256::from(0) {
+        REDUCE_HEX_REGEX.replace(&s.clone().encode_hex(), "0x").to_string()
+    }
+    else {
+        String::from("0")
+    }
 }
 
 

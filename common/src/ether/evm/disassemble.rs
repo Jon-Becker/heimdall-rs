@@ -19,7 +19,8 @@ use crate::{
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall disassemble <TARGET> [OPTIONS]")]
 pub struct DisassemblerArgs {
-    /// The target to decompile, either a file, bytecode, contract address, or ENS name.
+    
+    /// The target to disassemble, either a file, bytecode, contract address, or ENS name.
     #[clap(required=true)]
     pub target: String,
 
@@ -27,7 +28,7 @@ pub struct DisassemblerArgs {
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
     
-    /// The output directory to write the decompiled files to
+    /// The output directory to write the disassembled bytecode to
     #[clap(long="output", short, default_value = "", hide_default_value = true)]
     pub output: String,
 
@@ -42,7 +43,7 @@ pub struct DisassemblerArgs {
 }
 
 
-pub fn disassemble(args: DisassemblerArgs) {
+pub fn disassemble(args: DisassemblerArgs) -> String {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -65,7 +66,10 @@ pub fn disassemble(args: DisassemblerArgs) {
     }
 
     let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target) {
+    if BYTECODE_REGEX.is_match(&args.target) {
+        contract_bytecode = args.target.clone().replacen("0x", "", 1);
+    }
+    else if ADDRESS_REGEX.is_match(&args.target) {
 
         // push the address to the output directory
         if &output_dir != &args.output {
@@ -78,7 +82,7 @@ pub fn disassemble(args: DisassemblerArgs) {
             .build()
             .unwrap();
 
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
+        // We are disassembling a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
 
             // make sure the RPC provider isn't empty
@@ -127,7 +131,7 @@ pub fn disassemble(args: DisassemblerArgs) {
             output_dir.push_str("/local");
         }
 
-        // We are decompiling a file, so we need to read the bytecode from the file.
+        // We are disassembling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {                
                 if BYTECODE_REGEX.is_match(&contents) && contents.len() % 2 == 0 {
@@ -179,11 +183,11 @@ pub fn disassemble(args: DisassemblerArgs) {
 
     logger.success(&format!("disassembled {} bytes successfully.", program_counter).to_string());
 
-    write_file(&String::from(format!("{}/bytecode.evm", &output_dir)), &contract_bytecode);    
+    write_file(&String::from(format!("{}/bytecode.evm", &output_dir)), &contract_bytecode);
     let file_path = write_file(&String::from(format!("{}/disassembled.asm", &output_dir)), &output);
     logger.info(&format!("wrote disassembled bytecode to '{}' .", file_path).to_string());
 
-    let elapsed = now.elapsed();
-    logger.debug(&format!("disassembly completed in {} ms.", elapsed.as_millis()).to_string());
-    return
+    logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()).to_string());
+    
+    return output
 }
