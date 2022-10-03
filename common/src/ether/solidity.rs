@@ -1,4 +1,4 @@
-use crate::utils::strings::encode_hex_reduced;
+use crate::{utils::strings::encode_hex_reduced, consts::WORD_REGEX};
 
 use super::evm::opcodes::*;
 
@@ -259,12 +259,33 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str("msg.value");
             },
             "CALLDATALOAD" => {
-                solidified_wrapped_opcode.push_str(
-                    format!(
-                            "msg.data[{}]",
-                            self.inputs[0]._solidify()
-                    ).as_str()
-                );
+                let solidified_slot = self.inputs[0]._solidify();
+
+                // are dealing with a slot that is a constant, we can just use the slot directly
+                if WORD_REGEX.is_match(&solidified_slot) {
+                    
+                    // convert to usize
+                    let slot = match usize::from_str_radix(
+                        &solidified_slot.replace("0x", ""),
+                        16
+                    ) {
+                        Ok(slot) => slot,
+                        Err(_) => usize::MAX
+                    };
+
+                    solidified_wrapped_opcode.push_str(
+                        format!( "arg{}", (slot-4)/32 ).as_str()
+                    );
+
+                }
+                else {
+                    solidified_wrapped_opcode.push_str(
+                        format!(
+                                "msg.data[{}]",
+                                solidified_slot
+                        ).as_str()
+                    );
+                }
             },
             "CALLDATASIZE" => {
                 solidified_wrapped_opcode.push_str("msg.data.length",);

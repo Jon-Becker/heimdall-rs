@@ -16,4 +16,7 @@ lazy_static! {
 
     // The following regex is used to reduce null byte prefixes
     pub static ref REDUCE_HEX_REGEX: Regex = Regex::new(r"^0x(00)*").unwrap();
+
+    // The following regex is used as a search pattern for words
+    pub static ref WORD_REGEX: Regex = Regex::new(r"0x[0-9a-fA-F]{0,64}").unwrap();
 }
