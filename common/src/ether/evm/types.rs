@@ -1,7 +1,7 @@
 use colored::Colorize;
 use ethers::abi::{ParamType, Token, AbiEncode};
 
-use crate::utils::strings::replace_last;
+use crate::{utils::strings::{replace_last, find_balanced_parentheses}, consts::TYPE_CAST_REGEX};
 
 use super::vm::Instruction;
 
@@ -232,4 +232,25 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 
     // return list of potential type castings, sorted by likelihood descending
     (byte_size, potential_types)
+}
+
+pub fn find_cast(line: String) -> (usize, usize) {
+    let mut start = 0;
+    let mut end = 0;
+
+    // find the start of the cast
+    match TYPE_CAST_REGEX.find(&line) {
+        Some(m) => {
+            start = m.start();
+            end = m.end() - 1;
+
+            // find where the cast ends
+            find_balanced_parentheses(line[end..].to_string());
+
+            println!("found cast at {} - {}: {}", start, end, &line[end..]);
+        },
+        None => return (0, 0),
+    }
+
+    (start, end)
 }

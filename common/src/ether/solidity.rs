@@ -153,7 +153,7 @@ impl WrappedOpcode {
                     true => {
                         solidified_wrapped_opcode.push_str(
                             format!(
-                                    "({}) == 0",
+                                    "!({})",
                                     self.inputs[0]._solidify()
                             ).as_str()
                         );
@@ -161,7 +161,7 @@ impl WrappedOpcode {
                     false => {
                         solidified_wrapped_opcode.push_str(
                             format!(
-                                    "{} == 0",
+                                    "!{}",
                                     self.inputs[0]._solidify()
                             ).as_str()
                         );
@@ -172,7 +172,7 @@ impl WrappedOpcode {
             "AND" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "{} & {}",
+                            "({}) & ({})",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -265,17 +265,32 @@ impl WrappedOpcode {
                 if WORD_REGEX.is_match(&solidified_slot) {
                     
                     // convert to usize
-                    let slot = match usize::from_str_radix(
+                    match usize::from_str_radix(
                         &solidified_slot.replace("0x", ""),
                         16
                     ) {
-                        Ok(slot) => slot,
-                        Err(_) => usize::MAX
+                        Ok(slot) => {
+                            solidified_wrapped_opcode.push_str(
+                                format!( "arg{}", (slot-4)/32 ).as_str()
+                            );
+                        },
+                        Err(_) => {
+                            if solidified_slot.contains("0x04 + ") ||
+                               solidified_slot.contains("+ 0x04")
+                            {
+                                solidified_wrapped_opcode.push_str(
+                                    solidified_slot.replace("0x04 + ", "").replace("+ 0x04", "").as_str()
+                                );
+                            }
+                            else {
+                                solidified_wrapped_opcode.push_str(
+                                    format!( "msg.data[{}]", solidified_slot).as_str()
+                                );
+                            }
+                        }
                     };
 
-                    solidified_wrapped_opcode.push_str(
-                        format!( "arg{}", (slot-4)/32 ).as_str()
-                    );
+                    
 
                 }
                 else {

@@ -1,6 +1,4 @@
-use heimdall_common::ether::evm::types::byte_size_to_type;
-
-use crate::decompile::util::find_balanced_parentheses;
+use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_parentheses, find_balanced_parentheses_backwards}};
 
 use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2}};
 
@@ -21,33 +19,21 @@ fn convert_bitmask_to_casting(line: String) -> String {
             subject = match subject_indices.2 {
                 true => {
 
-                    // get the matched subject
-                    match subject.get(subject_indices.0..subject_indices.1) {
-                        Some(subject) => subject.to_string(),
-                        None => match subject.split(")").collect::<Vec<&str>>().first() {
-                            Some(subject) => subject.to_string(),
-                            None => subject
-                        },
-                    }
+                    // get the subject as hte substring between the balanced parentheses found in unbalanced subject
+                    subject[subject_indices.0..subject_indices.1].to_string()
                 },
                 false => {
-                    
-                    // subject doesn't contain parentheses, so surround it in some
-                    subject.split(")").collect::<Vec<&str>>()[0].to_string()
+
+                    // this shouldn't happen, but if it does, just return the subject.
+                    //TODO add this to verbose logs
+                    subject
                 },
             };
 
             // apply the cast to the subject
             cleaned = cleaned.replace(
                 &format!("{}{}", cast, subject),
-                &format!(
-                    "{}({})",
-                    cast_types[0],
-                    match subject.split(")").collect::<Vec<&str>>().first() {
-                        Some(subject) => subject.to_string(),
-                        None => subject
-                    }
-                )
+                &format!("{}{}", cast_types[0], subject),
             );
 
             // attempt to cast again
@@ -66,43 +52,28 @@ fn convert_bitmask_to_casting(line: String) -> String {
                         Some(subject) => subject.to_string(),
                         None => cleaned.get(0..bitmask.start()).unwrap().replace(";",  "").to_string(),
                     };
-                    
+
                     // attempt to find matching parentheses
-                    let subject_indices = find_balanced_parentheses(subject.to_string());
+                    let subject_indices = find_balanced_parentheses_backwards(subject.to_string());
 
                     subject = match subject_indices.2 {
                         true => {
         
-                            // get the matched subject
-                            match subject.get(subject_indices.0..subject_indices.1) {
-                                Some(subject) => subject.to_string(),
-                                None => match subject.split("(").collect::<Vec<&str>>().last() {
-                                    Some(subject) => subject.to_string(),
-                                    None => subject
-                                },
-                            }
+                            // get the subject as hte substring between the balanced parentheses found in unbalanced subject
+                            subject[subject_indices.0..subject_indices.1].to_string()
                         },
                         false => {
                             
-                            // subject doesn't contain parentheses, so surround it in some
-                            match subject.split("(").collect::<Vec<&str>>().last() {
-                                Some(subject) => subject.to_string(),
-                                None => subject
-                            }
+                            // this shouldn't happen, but if it does, just return the subject.
+                            //TODO add this to verbose logs
+                            subject
                         },
                     };
 
                     // apply the cast to the subject
                     cleaned = cleaned.replace(
                         &format!("{}{}", subject, cast),
-                        &format!(
-                            "{}({})",
-                            cast_types[0],
-                            match subject.split("(").collect::<Vec<&str>>().last() {
-                                Some(subject) => subject.to_string(),
-                                None => subject
-                            }
-                        )
+                        &format!("{}{}", cast_types[0], subject),
                     );
         
                     // attempt to cast again
@@ -121,7 +92,7 @@ fn simplify_casts(line: String) -> String {
     let cleaned = line;
 
     // remove unnecessary casts
-
+    find_cast(cleaned.clone());
     
     cleaned
 }
@@ -145,7 +116,7 @@ pub fn postprocess(line: String) -> String {
     cleaned = convert_bitmask_to_casting(cleaned);
 
     // Remove all repetitive casts
-    cleaned = simplify_casts(cleaned);
+    // cleaned = simplify_casts(cleaned);
 
     // Find and flip == / != signs for all instances of ISZERO
     cleaned = convert_iszero_logic_flip(cleaned);

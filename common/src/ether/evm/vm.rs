@@ -67,6 +67,7 @@ pub struct Instruction {
 }
 
 impl VM {
+    
     // Creates a new VM instance
     pub fn new(
         bytecode: String,

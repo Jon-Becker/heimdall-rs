@@ -38,3 +38,50 @@ pub fn replace_last(s: String, old: &str, new: &str) -> String {
     let new = new.chars().rev().collect::<String>();
     s.chars().rev().collect::<String>().replacen(old, &new, 1).chars().rev().collect::<String>()
 }
+
+
+// find balanced parentheses in a string
+pub fn find_balanced_parentheses(s: String) -> (usize, usize, bool) {
+    let mut open = 0;
+    let mut close = 0;
+    let mut start = 0;
+    let mut end = 0;
+    for (i, c) in s.chars().enumerate() {
+        if c == '(' {
+            if open == 0 {
+                start = i;
+            }
+            open += 1;
+        } else if c == ')' {
+            close += 1;
+        }
+        if open == close {
+            end = i;
+            break;
+        }
+    }
+    (start, end + 1, (open == close && end > start && open > 0))
+}
+
+// find balanced parentheses in a string, but backwards
+pub fn find_balanced_parentheses_backwards(s: String) -> (usize, usize, bool) {
+    let mut open = 0;
+    let mut close = 0;
+    let mut start = 0;
+    let mut end = 0;
+    for (i, c) in s.chars().rev().enumerate() {
+        if c == ')' {
+            if open == 0 {
+                start = i;
+            }
+            open += 1;
+        } else if c == '(' {
+            close += 1;
+        }
+        if open == close {
+            end = i;
+            break;
+        }
+    }
+    (s.len() - end - 1, s.len() - start, (open == close && end > start && open > 0))
+}
