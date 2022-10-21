@@ -234,23 +234,19 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
     (byte_size, potential_types)
 }
 
-pub fn find_cast(line: String) -> (usize, usize) {
-    let mut start = 0;
-    let mut end = 0;
+pub fn find_cast(line: String) -> (usize, usize, Option<String>) {
 
     // find the start of the cast
     match TYPE_CAST_REGEX.find(&line) {
         Some(m) => {
-            start = m.start();
-            end = m.end() - 1;
+            let start = m.start();
+            let end = m.end() - 1;
+            let cast_type = line[start..].split("(").collect::<Vec<&str>>()[0].to_string();
 
             // find where the cast ends
-            find_balanced_parentheses(line[end..].to_string());
-
-            println!("found cast at {} - {}: {}", start, end, &line[end..]);
+            let (a, b, _) = find_balanced_parentheses(line[end..].to_string());
+            return (end+a, end+b, Some(cast_type))
         },
-        None => return (0, 0),
+        None => return (0, 0, None),
     }
-
-    (start, end)
 }

@@ -5,8 +5,9 @@ use lazy_static::lazy_static;
 lazy_static! {
 
     // The following regex is used as a detector for AND bitmasks
-    pub static ref AND_BITMASK_REGEX: Regex = Regex::new(r"\(0x([0fF][0fF]){1,32}\) & ").unwrap();
-    pub static ref AND_BITMASK_REGEX_2: Regex = Regex::new(r" & \(0x([0fF][0fF]){1,32}\)").unwrap();
+    pub static ref AND_BITMASK_REGEX: Regex = Regex::new(r"\(0x([a-fA-F0-9]{2}){1,32}\) & ").unwrap();
+    pub static ref AND_BITMASK_REGEX_2: Regex = Regex::new(r" & \(0x([a-fA-F0-9]{2}){1,32}\)").unwrap();
+    pub static ref NON_ZERO_BYTE_REGEX: Regex = Regex::new(r"[a-fA-F0-9][a-fA-F1-9]").unwrap();
 
     pub static ref DECOMPILED_SOURCE_HEADER: String = 
 "// SPDX-License-Identifier: MIT
