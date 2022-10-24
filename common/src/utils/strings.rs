@@ -55,7 +55,7 @@ pub fn find_balanced_parentheses(s: String) -> (usize, usize, bool) {
         } else if c == ')' {
             close += 1;
         }
-        if open == close {
+        if open == close && open > 0 {
             end = i;
             break;
         }
@@ -78,7 +78,7 @@ pub fn find_balanced_parentheses_backwards(s: String) -> (usize, usize, bool) {
         } else if c == '(' {
             close += 1;
         }
-        if open == close {
+        if open == close && open > 0 {
             end = i;
             break;
         }

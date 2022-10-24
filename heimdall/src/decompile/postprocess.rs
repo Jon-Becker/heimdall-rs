@@ -1,5 +1,7 @@
 use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_parentheses, find_balanced_parentheses_backwards}};
 
+use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
+
 use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX}};
 
 fn convert_bitmask_to_casting(line: String) -> String {
@@ -88,7 +90,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
     cleaned
 }
 
-fn simplify_casts(line: String, outer_cast: Option<String>) -> String {
+fn simplify_casts(line: String) -> String {
     let mut cleaned = line;
 
     // remove unnecessary casts
@@ -110,7 +112,7 @@ fn simplify_casts(line: String, outer_cast: Option<String>) -> String {
                     // a cast is remaining, simplify it
                     let mut recursive_cleaned = format!("{}{}", cleaned_cast_pre, cleaned_cast);
                     recursive_cleaned.push_str(
-                        simplify_casts(cleaned_cast_post, None).as_str()
+                        simplify_casts(cleaned_cast_post).as_str()
                     );
                     cleaned = recursive_cleaned;
                 },
@@ -118,6 +120,117 @@ fn simplify_casts(line: String, outer_cast: Option<String>) -> String {
             }
         },
         None => {}
+    }
+
+    cleaned
+}
+
+fn are_parentheses_unnecessary(expression: String) -> bool {
+
+    // safely grab the first and last chars
+    let first_char = match expression.get(0..1) {
+        Some(x) => x,
+        None => "",
+    };
+    let last_char = match expression.get(expression.len() - 1..expression.len()) {
+        Some(x) => x,
+        None => "",
+    };
+
+    // if there is a negation of an expression, remove the parentheses
+    // helps with double negation
+    if first_char == "!" && last_char == ")" { return true; }
+
+    // parens required if:
+    //  - expression is a cast
+    //  - expression is a function call
+    //  - expression is the surrounding parens of a conditional
+    if first_char != "(" { return false; }
+    else if last_char == ")" { return true; }
+
+    // don't include instantiations
+    if expression.contains("memory ret") { return false; }
+
+    // handle the inside of the expression
+    let inside = match expression.get(2..expression.len() - 2) {
+        Some(x) => {
+            ENCLOSED_EXPRESSION_REGEX
+                .replace(x, "x").to_string()
+        },
+        None => "".to_string(),
+    };
+
+    if inside.len() > 0 {
+        let expression_parts = inside.split(|x| ['*', '/', '=', '>', '<', '|', '&', '!']
+            .contains(&x))
+            .filter(|x| x.len() > 0).collect::<Vec<&str>>();    
+
+        return expression_parts.len() == 1
+    }
+    else {
+        return false
+    }
+}
+
+fn simplify_parentheses(line: String, paren_index: usize) -> String {
+    let mut cleaned = line;
+
+    if cleaned.contains("function") { return cleaned; }
+
+    // get the nth index of the first open paren
+    let nth_paren_index = match cleaned.match_indices("(").nth(paren_index) {
+        Some(x) => x.0,
+        None => return cleaned,
+    };
+
+    //find it's matching close paren
+    let (paren_start, paren_end, found_match) = find_balanced_parentheses(cleaned[nth_paren_index..].to_string());
+
+    // add the nth open paren to the start of the paren_start
+    let paren_start = paren_start + nth_paren_index;
+    let paren_end = paren_end + nth_paren_index;
+
+    // if a match was found, check if the parens are unnecessary
+    match found_match {
+        true => {
+            
+            // get the logical expression including the char before the parentheses (to detect casts)
+            let logical_expression = match paren_start {
+                0 => match cleaned.get(paren_start..paren_end+1) {
+                    Some(expression) => expression.to_string(),
+                    None => cleaned[paren_start..paren_end].to_string(),
+                },
+                _ => match cleaned.get(paren_start - 1..paren_end+1) {
+                    Some(expression) => expression.to_string(),
+                    None => cleaned[paren_start - 1..paren_end].to_string(),
+                }
+            };
+
+            // check if the parentheses are unnecessary and remove them if so
+            if are_parentheses_unnecessary(logical_expression.clone()) {
+                
+                cleaned.replace_range(
+                    paren_start..paren_end,
+                    match logical_expression.get(2..logical_expression.len() - 2) {
+                        Some(x) => x,
+                        None => "",
+                    }
+                );
+
+                // recurse into the next set of parentheses
+                // don't increment the paren_index because we just removed a set
+                cleaned = simplify_parentheses(cleaned, paren_index);
+            }
+            else {
+
+                // recurse into the next set of parentheses
+                cleaned = simplify_parentheses(cleaned, paren_index + 1);
+            }
+        },
+        _ => {
+            
+            // if you're reading this you're a nerd
+        }
     }
 
     cleaned
@@ -142,7 +255,10 @@ pub fn postprocess(line: String) -> String {
     cleaned = convert_bitmask_to_casting(cleaned);
 
     // Remove all repetitive casts
-    cleaned = simplify_casts(cleaned, None);
+    cleaned = simplify_casts(cleaned);
+
+    // Remove all unnecessary parentheses
+    cleaned = simplify_parentheses(cleaned, 0);
 
     // Find and flip == / != signs for all instances of ISZERO
     cleaned = convert_iszero_logic_flip(cleaned);
