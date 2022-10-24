@@ -125,56 +125,62 @@ fn simplify_casts(line: String) -> String {
     cleaned
 }
 
-fn are_parentheses_unnecessary(expression: String) -> bool {
-
-    // safely grab the first and last chars
-    let first_char = match expression.get(0..1) {
-        Some(x) => x,
-        None => "",
-    };
-    let last_char = match expression.get(expression.len() - 1..expression.len()) {
-        Some(x) => x,
-        None => "",
-    };
-
-    // if there is a negation of an expression, remove the parentheses
-    // helps with double negation
-    if first_char == "!" && last_char == ")" { return true; }
-
-    // parens required if:
-    //  - expression is a cast
-    //  - expression is a function call
-    //  - expression is the surrounding parens of a conditional
-    if first_char != "(" { return false; }
-    else if last_char == ")" { return true; }
-
-    // don't include instantiations
-    if expression.contains("memory ret") { return false; }
-
-    // handle the inside of the expression
-    let inside = match expression.get(2..expression.len() - 2) {
-        Some(x) => {
-            ENCLOSED_EXPRESSION_REGEX
-                .replace(x, "x").to_string()
-        },
-        None => "".to_string(),
-    };
-
-    if inside.len() > 0 {
-        let expression_parts = inside.split(|x| ['*', '/', '=', '>', '<', '|', '&', '!']
-            .contains(&x))
-            .filter(|x| x.len() > 0).collect::<Vec<&str>>();    
-
-        return expression_parts.len() == 1
-    }
-    else {
-        return false
-    }
-}
-
 fn simplify_parentheses(line: String, paren_index: usize) -> String {
+
+    // helper function to determine if parentheses are necessary
+    fn are_parentheses_unnecessary(expression: String) -> bool {
+
+        // safely grab the first and last chars
+        let first_char = match expression.get(0..1) {
+            Some(x) => x,
+            None => "",
+        };
+        let last_char = match expression.get(expression.len() - 1..expression.len()) {
+            Some(x) => x,
+            None => "",
+        };
+
+        // if there is a negation of an expression, remove the parentheses
+        // helps with double negation
+        if first_char == "!" && last_char == ")" { return true; }
+
+        // remove the parentheses if the expression is within brackets
+        if first_char == "[" && last_char == "]" { return true; }
+
+        // parens required if:
+        //  - expression is a cast
+        //  - expression is a function call
+        //  - expression is the surrounding parens of a conditional
+        if first_char != "(" { return false; }
+        else if last_char == ")" { return true; }
+
+        // don't include instantiations
+        if expression.contains("memory ret") { return false; }
+
+        // handle the inside of the expression
+        let inside = match expression.get(2..expression.len() - 2) {
+            Some(x) => {
+                ENCLOSED_EXPRESSION_REGEX
+                    .replace(x, "x").to_string()
+            },
+            None => "".to_string(),
+        };
+
+        if inside.len() > 0 {
+            let expression_parts = inside.split(|x| ['*', '/', '=', '>', '<', '|', '&', '!']
+                .contains(&x))
+                .filter(|x| x.len() > 0).collect::<Vec<&str>>();    
+
+            return expression_parts.len() == 1
+        }
+        else {
+            return false
+        }
+    }
+
     let mut cleaned = line;
 
+    // skip lines that are defining a function
     if cleaned.contains("function") { return cleaned; }
 
     // get the nth index of the first open paren
@@ -217,6 +223,11 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
                     }
                 );
 
+                // remove double negation, if one was created
+                if cleaned.contains("!!") {
+                    cleaned = cleaned.replace("!!", "");
+                }
+
                 // recurse into the next set of parentheses
                 // don't increment the paren_index because we just removed a set
                 cleaned = simplify_parentheses(cleaned, paren_index);
@@ -246,8 +257,6 @@ fn convert_iszero_logic_flip(line: String) -> String {
     cleaned
 }
 
-
-
 pub fn postprocess(line: String) -> String {
     let mut cleaned = line;
 
@@ -257,11 +266,11 @@ pub fn postprocess(line: String) -> String {
     // Remove all repetitive casts
     cleaned = simplify_casts(cleaned);
 
-    // Remove all unnecessary parentheses
-    cleaned = simplify_parentheses(cleaned, 0);
-
     // Find and flip == / != signs for all instances of ISZERO
     cleaned = convert_iszero_logic_flip(cleaned);
+
+    // Remove all unnecessary parentheses
+    cleaned = simplify_parentheses(cleaned, 0);
 
     cleaned
 }
