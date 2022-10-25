@@ -1,3 +1,6 @@
+[profile.release]
+lto = true
+
 [package]
 description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
 edition = "2021"

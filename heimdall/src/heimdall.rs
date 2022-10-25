@@ -12,7 +12,6 @@ use heimdall_common::{ether::evm::disassemble::*, io::{logging::Logger}};
 use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
 
-
 #[derive(Debug, Parser)]
 #[clap(
     name = "heimdall",

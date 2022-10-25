@@ -289,10 +289,10 @@ fn convert_memory_to_variable(line: String) -> String {
                 None => {
 
                     // add the memory location to the map
-                    let mut idex = mem_map.len() + 1;
+                    let idex = mem_map.len() + 1;
 
                     // get the variable name
-                    let mut variable_name = base26_encode(idex);
+                    let variable_name = base26_encode(idex);
 
                     // add the variable to the map
                     mem_map.insert(memloc.clone(), variable_name.clone());

@@ -12,12 +12,20 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Build
+    - name: Compile
       working-directory: ./heimdall
       run: cargo build --verbose
-    - name: Run tests
+
+    - name: Run Tests
       working-directory: ./heimdall
       run: |
-        cargo test --package heimdall
-        cargo test --package heimdall-config
-        cargo test --package heimdall-common
+        cargo test --package heimdall -- test_ --nocapture
+        cargo test --package heimdall-config -- test_ --nocapture
+        cargo test --package heimdall-common -- test_ --nocapture
+
+    - name: Run Benchmarks
+      working-directory: ./heimdall
+      run: |
+        cargo test --release --package heimdall -- benchmark_ --nocapture
+        cargo test --release --package heimdall-config -- benchmark_ --nocapture
+        cargo test --release --package heimdall-common -- benchmark_ --nocapture

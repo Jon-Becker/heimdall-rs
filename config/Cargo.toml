@@ -1,3 +1,6 @@
+[profile.release]
+lto = true
+
 [package]
 name = "heimdall-config"
 version = "0.1.4"
