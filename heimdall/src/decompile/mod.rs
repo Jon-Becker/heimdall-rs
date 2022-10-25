@@ -1,3 +1,5 @@
+mod tests;
+
 pub mod util;
 pub mod output;
 pub mod analyze;
