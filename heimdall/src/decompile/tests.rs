@@ -35,7 +35,7 @@ mod benchmark_module {
             time += end_time;
         }
 
-        println!("benchmark_decompile_simple: {}ms [{}ms - {}ms]", time / 25, min, max);
+        println!("benchmark_decompile_simple: {}ms [{}ms - {}ms] with 25 runs", time / 25, min, max);
     }
 
     #[test]
@@ -66,7 +66,7 @@ mod benchmark_module {
             time += end_time;
         }
 
-        println!("benchmark_decompile_simple: {}ms [{}ms - {}ms]", time / 25, min, max);
+        println!("benchmark_decompile_complex: {}ms [{}ms - {}ms] with 25 runs", time / 25, min, max);
     }
 
 }
