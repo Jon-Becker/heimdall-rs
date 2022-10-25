@@ -25,7 +25,7 @@ mod benchmark_module {
 
         thread::sleep(std::time::Duration::from_secs(3));
 
-        for _ in 0..10 {
+        for _ in 0..25 {
             let start_time = Instant::now();
             let _ = crate::decompile::decompile(args.clone());
             let end_time = start_time.elapsed().as_millis() as usize;
