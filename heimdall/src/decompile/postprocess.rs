@@ -2,7 +2,7 @@ use std::{
     sync::Mutex,
     collections::HashMap
 };
-use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards}};
+use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards, base26_encode}};
 use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
 use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX, MEM_ACCESS_REGEX}};
 use lazy_static::lazy_static;
@@ -292,20 +292,7 @@ fn convert_memory_to_variable(line: String) -> String {
                     let mut idex = mem_map.len() + 1;
 
                     // get the variable name
-                    let mut variable_name = String::new();
-                    if idex <= 26 {
-                        variable_name.push((idex + 96) as u8 as char);
-                    }
-                    else {
-                        while idex != 0 {
-                            let remainder = idex % 26;
-                            idex = idex / 26;
-
-                            if remainder == 0 { idex -= 1; }
-
-                            variable_name.push((remainder + 97) as u8 as char);
-                        }
-                    }
+                    let mut variable_name = base26_encode(idex);
 
                     // add the variable to the map
                     mem_map.insert(memloc.clone(), variable_name.clone());

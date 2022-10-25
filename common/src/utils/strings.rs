@@ -41,18 +41,18 @@ pub fn replace_last(s: String, old: &str, new: &str) -> String {
 
 
 // find balanced parentheses in a string
-pub fn find_balanced_parentheses(s: String) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator(s: String, encap: (char, char)) -> (usize, usize, bool) {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
     let mut end = 0;
     for (i, c) in s.chars().enumerate() {
-        if c == '(' {
+        if c == encap.0 {
             if open == 0 {
                 start = i;
             }
             open += 1;
-        } else if c == ')' {
+        } else if c == encap.1 {
             close += 1;
         }
         if open == close && open > 0 {
@@ -64,18 +64,18 @@ pub fn find_balanced_parentheses(s: String) -> (usize, usize, bool) {
 }
 
 // find balanced parentheses in a string, but backwards
-pub fn find_balanced_parentheses_backwards(s: String) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator_backwards(s: String, encap: (char, char)) -> (usize, usize, bool) {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
     let mut end = 0;
     for (i, c) in s.chars().rev().enumerate() {
-        if c == ')' {
+        if c == encap.1 {
             if open == 0 {
                 start = i;
             }
             open += 1;
-        } else if c == '(' {
+        } else if c == encap.0 {
             close += 1;
         }
         if open == close && open > 0 {
@@ -84,4 +84,16 @@ pub fn find_balanced_parentheses_backwards(s: String) -> (usize, usize, bool) {
         }
     }
     (s.len() - end - 1, s.len() - start, (open == close && end > start && open > 0))
+}
+
+// convert a number into it's base26 encoded form
+pub fn base26_encode(n: usize) -> String {
+    let mut s = String::new();
+    let mut n = n;
+    while n > 0 {
+        n -= 1;
+        s.push((b'A' + (n % 26) as u8) as char);
+        n /= 26;
+    }
+    s.to_lowercase().chars().rev().collect()
 }

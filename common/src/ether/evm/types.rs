@@ -1,7 +1,7 @@
 use colored::Colorize;
 use ethers::abi::{ParamType, Token, AbiEncode};
 
-use crate::{utils::strings::{replace_last, find_balanced_parentheses}, consts::TYPE_CAST_REGEX};
+use crate::{utils::strings::{replace_last, find_balanced_encapsulator}, consts::TYPE_CAST_REGEX};
 
 use super::vm::Instruction;
 
@@ -244,7 +244,7 @@ pub fn find_cast(line: String) -> (usize, usize, Option<String>) {
             let cast_type = line[start..].split("(").collect::<Vec<&str>>()[0].to_string();
 
             // find where the cast ends
-            let (a, b, _) = find_balanced_parentheses(line[end..].to_string());
+            let (a, b, _) = find_balanced_encapsulator(line[end..].to_string(), ('(', ')'));
             return (end+a, end+b, Some(cast_type))
         },
         None => return (0, 0, None),
