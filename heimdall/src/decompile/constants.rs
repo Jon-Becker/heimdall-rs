@@ -13,6 +13,9 @@ lazy_static! {
 
     // detects a parenthesis enclosed expression
     pub static ref ENCLOSED_EXPRESSION_REGEX: Regex = Regex::new(r"\(.*\)").unwrap();
+
+    // detects a memory access
+    pub static ref MEM_ACCESS_REGEX: Regex = Regex::new(r"memory\[.*\]").unwrap();
     
     pub static ref DECOMPILED_SOURCE_HEADER: String = 
 "// SPDX-License-Identifier: MIT

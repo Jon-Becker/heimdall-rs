@@ -373,30 +373,8 @@ pub fn build_output(
 
     decompiled_output.push(String::from("}"));
 
-    let mut indentation: usize = 0;
-    for line in decompiled_output.iter_mut() {
-
-        // dedent due to closing braces
-        if line.starts_with("}") {
-            indentation = indentation.saturating_sub(1);
-        }
-        
-        // apply postprocessing and indentation
-        *line = format!(
-            "{}{}",
-            " ".repeat(indentation*4),
-            postprocess(line.to_string())
-        );
-        
-        // indent due to opening braces
-        if line.ends_with("{") {
-            indentation += 1;
-        }
-        
-    }
-
     write_lines_to_file(
         &decompiled_output_path,
-        decompiled_output
+        postprocess(decompiled_output)
     );
 }

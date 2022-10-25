@@ -1,8 +1,15 @@
-use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_parentheses, find_balanced_parentheses_backwards}};
-
+use std::{
+    sync::Mutex,
+    collections::HashMap
+};
+use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards}};
 use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
+use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX, MEM_ACCESS_REGEX}};
+use lazy_static::lazy_static;
 
-use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX}};
+lazy_static! {
+    static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+}
 
 fn convert_bitmask_to_casting(line: String) -> String {
     let mut cleaned = line;
@@ -17,7 +24,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
             let mut subject = cleaned.get(bitmask.end()..).unwrap().replace(";",  "");
             
             // attempt to find matching parentheses
-            let subject_indices = find_balanced_parentheses(subject.to_string());
+            let subject_indices = find_balanced_encapsulator(subject.to_string(), ('(', ')'));
             subject = match subject_indices.2 {
                 true => {
 
@@ -56,7 +63,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
                     };
 
                     // attempt to find matching parentheses
-                    let subject_indices = find_balanced_parentheses_backwards(subject.to_string());
+                    let subject_indices = find_balanced_encapsulator_backwards(subject.to_string(), ('(', ')'));
 
                     subject = match subject_indices.2 {
                         true => {
@@ -190,7 +197,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
     };
 
     //find it's matching close paren
-    let (paren_start, paren_end, found_match) = find_balanced_parentheses(cleaned[nth_paren_index..].to_string());
+    let (paren_start, paren_end, found_match) = find_balanced_encapsulator(cleaned[nth_paren_index..].to_string(), ('(', ')'));
 
     // add the nth open paren to the start of the paren_start
     let paren_start = paren_start + nth_paren_index;
@@ -257,7 +264,71 @@ fn convert_iszero_logic_flip(line: String) -> String {
     cleaned
 }
 
-pub fn postprocess(line: String) -> String {
+fn convert_memory_to_variable(line: String) -> String {
+    let mut cleaned = line;
+
+    // find a memory access
+    let memory_access = match MEM_ACCESS_REGEX.find(&cleaned) {
+        Some(x) => x.as_str(),
+        None => return cleaned,
+    };
+
+    // since the regex is greedy, match the memory brackets
+    let matched_loc = find_balanced_encapsulator(memory_access.to_string(), ('[', ']'));
+    match matched_loc.2 {
+        true => {
+            let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
+
+            // safe to unwrap since we know these indices exist
+            let memloc = format!("memory{}", memory_access.get(matched_loc.0..matched_loc.1).unwrap()).to_string();
+
+            let variable_name = match mem_map.get(&memloc) {
+                Some(loc) => {
+                    loc.to_owned()
+                },
+                None => {
+
+                    // add the memory location to the map
+                    let mut idex = mem_map.len() + 1;
+
+                    // get the variable name
+                    let mut variable_name = String::new();
+                    if idex <= 26 {
+                        variable_name.push((idex + 96) as u8 as char);
+                    }
+                    else {
+                        while idex != 0 {
+                            let remainder = idex % 26;
+                            idex = idex / 26;
+
+                            if remainder == 0 { idex -= 1; }
+
+                            variable_name.push((remainder + 97) as u8 as char);
+                        }
+                    }
+
+                    // add the variable to the map
+                    mem_map.insert(memloc.clone(), variable_name.clone());
+                    variable_name
+                }
+            };
+
+            // unlock the map
+            drop(mem_map);
+
+            // upadte the memory name
+            cleaned = cleaned.replace(memloc.as_str(), &variable_name);
+
+            // recurse to replace any other memory accesses
+            cleaned = convert_memory_to_variable(cleaned);
+        },
+        _ => return cleaned
+    }
+
+    cleaned
+}
+
+fn cleanup(line: String) -> String {
     let mut cleaned = line;
 
     // Find and convert all castings
@@ -272,5 +343,36 @@ pub fn postprocess(line: String) -> String {
     // Remove all unnecessary parentheses
     cleaned = simplify_parentheses(cleaned, 0);
 
+    // Convert all memory[] accesses to variables
+    cleaned = convert_memory_to_variable(cleaned);
+
     cleaned
+}
+
+pub fn postprocess(lines: Vec<String>) -> Vec<String> {
+    let mut indentation: usize = 0;
+    let mut cleaned_lines: Vec<String> = lines.clone();
+
+    for line in cleaned_lines.iter_mut() {
+
+        // dedent due to closing braces
+        if line.starts_with("}") {
+            indentation = indentation.saturating_sub(1);
+        }
+        
+        // apply postprocessing and indentation
+        *line = format!(
+            "{}{}",
+            " ".repeat(indentation*4),
+            cleanup(line.to_string())
+        );
+        
+        // indent due to opening braces
+        if line.ends_with("{") {
+            indentation += 1;
+        }
+        
+    }
+
+    cleaned_lines
 }
