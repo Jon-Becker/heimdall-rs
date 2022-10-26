@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod benchmark_module {
+mod benchmark {
     use clap_verbosity_flag::Verbosity;
     use heimdall_common::testing::benchmarks::benchmark;
 

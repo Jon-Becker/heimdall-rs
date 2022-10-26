@@ -178,11 +178,11 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         program_counter += 1;
     }
 
-    logger.success(&format!("disassembled {} bytes successfully.", program_counter).to_string());
+    logger.info(&format!("disassembled {} bytes successfully.", program_counter).to_string());
 
     write_file(&String::from(format!("{}/bytecode.evm", &output_dir)), &contract_bytecode);
     let file_path = write_file(&String::from(format!("{}/disassembled.asm", &output_dir)), &output);
-    logger.info(&format!("wrote disassembled bytecode to '{}' .", file_path).to_string());
+    logger.success(&format!("wrote disassembled bytecode to '{}' .", file_path).to_string());
 
     logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()).to_string());
     

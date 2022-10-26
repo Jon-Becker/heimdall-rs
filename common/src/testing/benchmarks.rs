@@ -1,4 +1,4 @@
-use std::{time::Instant, thread};
+use std::{time::Instant, thread, io, io::Write};
 
 pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
     let mut time = 0usize;
@@ -18,12 +18,13 @@ pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
         time += end_time;
     }
 
-    println!(
-        "{}: ~{}ms [{}ms - {}ms] with {} runs",
-        benchmark_name,
-        time / 25,
-        min,
-        max,
-        runs
+    let _ = io::stdout().write_all(
+        format!(
+            "  {}:\n    {}ms ± {}ms per run ( with {} runs ).\n\n",
+            benchmark_name,
+            time / runs,
+            std::cmp::max(max, min),
+            runs
+        ).as_bytes()
     );
 }
