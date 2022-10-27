@@ -1,4 +1,4 @@
-use crate::{utils::strings::encode_hex_reduced, consts::WORD_REGEX};
+use crate::{utils::strings::encode_hex_reduced, consts::{WORD_REGEX, MEMLEN_REGEX}};
 
 use super::evm::opcodes::*;
 
@@ -386,12 +386,24 @@ impl WrappedOpcode {
                         );
                     }
                     else {
-                        solidified_wrapped_opcode.push_str(
-                            format!(
-                                    "memory[{}]",
-                                    memloc
-                            ).as_str()
-                        );
+                        match MEMLEN_REGEX.find(&format!("memory[{}]", memloc)) {
+                            Some(_) => {
+                                solidified_wrapped_opcode.push_str(
+                                    format!(
+                                            "{}.length",
+                                            memloc
+                                    ).as_str()
+                                );
+                            },
+                            None => {
+                                solidified_wrapped_opcode.push_str(
+                                    format!(
+                                            "memory[{}]",
+                                            memloc
+                                    ).as_str()
+                                );
+                            }
+                        }
                     }
                 }
                 else {

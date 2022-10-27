@@ -298,6 +298,13 @@ fn convert_iszero_logic_flip(line: String) -> String {
 fn convert_memory_to_variable(line: String) -> String {
     let mut cleaned = line;
 
+    // reset the mem_map if the line is a function definition
+    if cleaned.contains("function") {
+        let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
+        *mem_map = HashMap::new();
+        drop(mem_map);
+    }
+
     // find a memory access
     let memory_access = match MEM_ACCESS_REGEX.find(&cleaned) {
         Some(x) => x.as_str(),
@@ -323,7 +330,7 @@ fn convert_memory_to_variable(line: String) -> String {
                     let idex = mem_map.len() + 1;
 
                     // get the variable name
-                    let variable_name = base26_encode(idex);
+                    let variable_name = format!("var_{}", base26_encode(idex));
 
                     // add the variable to the map
                     mem_map.insert(memloc.clone(), variable_name.clone());
@@ -346,6 +353,14 @@ fn convert_memory_to_variable(line: String) -> String {
     cleaned
 }
 
+fn remove_unused_assignments(line: String) -> String {
+    let mut cleaned = line;
+
+
+
+    cleaned
+}
+
 fn cleanup(line: String) -> String {
     let mut cleaned = line;
 
@@ -363,6 +378,9 @@ fn cleanup(line: String) -> String {
 
     // Convert all memory[] accesses to variables
     cleaned = convert_memory_to_variable(cleaned);
+
+    // Remove all unused assignments
+    cleaned = remove_unused_assignments(cleaned);
 
     cleaned
 }

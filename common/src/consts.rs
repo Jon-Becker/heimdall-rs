@@ -22,4 +22,7 @@ lazy_static! {
 
     // The following regex is used to find type castings
     pub static ref TYPE_CAST_REGEX: Regex = Regex::new(r"(address\(|string\(|bool\(|bytes(\d*)\(|uint(\d*)\(|int(\d*)\()").unwrap();
+
+    // The following regex is used to find memory accesses
+    pub static ref MEMLEN_REGEX: Regex = Regex::new(r"memory\[memory\[[0-9x]*\]\]").unwrap();
 }
