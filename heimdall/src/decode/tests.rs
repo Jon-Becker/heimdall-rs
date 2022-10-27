@@ -18,7 +18,7 @@ mod benchmark {
             crate::decode::decode(args.clone())
         }
 
-        benchmark("bench_decode_seaport_simple", 10, bench)
+        benchmark("bench_decode_seaport_simple", 50, bench)
     }
 
     #[test]
@@ -34,7 +34,7 @@ mod benchmark {
             crate::decode::decode(args.clone())
         }
 
-        benchmark("benchmark_decode_seaport_complex", 10, bench)
+        benchmark("benchmark_decode_seaport_complex", 50, bench)
     }
 
 }

@@ -1,4 +1,5 @@
 use ethers::types::U256;
+use heimdall_common::ether::evm::opcodes::WrappedOpcode;
 
 use super::util::StorageFrame;
 
@@ -6,6 +7,7 @@ use super::util::StorageFrame;
 pub fn decode_precompile(
     precompile_address: U256,
     extcalldata_memory: Vec<StorageFrame>,
+    return_data_offset: WrappedOpcode,
 ) -> (bool, String) {
 
     // safely convert the precompile address to a usize.
@@ -20,21 +22,24 @@ pub fn decode_precompile(
         1 => {
             is_ext_call_precompile = true;
             ext_call_logic = format!(
-                "address ret0 = ecrecover({});",
+                "address memory[{}] = ecrecover({});",
+                return_data_offset.solidify(),
                 extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
             );
         }
         2 => {
             is_ext_call_precompile = true;
             ext_call_logic = format!(
-                "bytes ret0 = sha256({});",
+                "bytes memory[{}] = sha256({});",
+                return_data_offset.solidify(),
                 extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
             );
         }
         3 => {
             is_ext_call_precompile = true;
             ext_call_logic = format!(
-                "bytes ret0 = ripemd160({});",
+                "bytes memory[{}] = ripemd160({});",
+                return_data_offset.solidify(),
                 extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
             );
         }

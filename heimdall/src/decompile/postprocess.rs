@@ -39,10 +39,23 @@ fn convert_bitmask_to_casting(line: String) -> String {
                 },
             };
 
+            // if the cast is a bool, check if the line is a conditional
+            let solidity_type = match cast_types[0].as_str() {
+                "bool" => {
+                    if cleaned.contains("if") {
+                        String::new()
+                    }
+                    else {
+                        "bytes1".to_string()
+                    }
+                },
+                _ => cast_types[0].to_owned()
+            };
+
             // apply the cast to the subject
             cleaned = cleaned.replace(
                 &format!("{}{}", cast, subject),
-                &format!("{}{}", cast_types[0], subject),
+                &format!("{}{}", solidity_type, subject),
             );
 
             // attempt to cast again
@@ -78,11 +91,24 @@ fn convert_bitmask_to_casting(line: String) -> String {
                             subject
                         },
                     };
+                    
+                    // if the cast is a bool, check if the line is a conditional
+                    let solidity_type = match cast_types[0].as_str() {
+                        "bool" => {
+                            if cleaned.contains("if") {
+                                String::new()
+                            }
+                            else {
+                                "bytes1".to_string()
+                            }
+                        },
+                        _ => cast_types[0].to_owned()
+                    };
 
                     // apply the cast to the subject
                     cleaned = cleaned.replace(
                         &format!("{}{}", subject, cast),
-                        &format!("{}{}", cast_types[0], subject),
+                        &format!("{}{}", solidity_type, subject),
                     );
         
                     // attempt to cast again
@@ -240,6 +266,11 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
                 cleaned = simplify_parentheses(cleaned, paren_index);
             }
             else {
+
+                // remove double negation, if one exists
+                if cleaned.contains("!!") {
+                    cleaned = cleaned.replace("!!", "");
+                }
 
                 // recurse into the next set of parentheses
                 cleaned = simplify_parentheses(cleaned, paren_index + 1);

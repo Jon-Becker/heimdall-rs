@@ -20,7 +20,7 @@ mod benchmark {
             crate::decompile::decompile(args.clone())
         }
 
-        benchmark("benchmark_decompile_complex", 25, bench)
+        benchmark("benchmark_decompile_complex", 100, bench)
     }
 
     #[test]
@@ -38,7 +38,7 @@ mod benchmark {
             crate::decompile::decompile(args.clone())
         }
 
-        benchmark("benchmark_decompile_simple", 25, bench)
+        benchmark("benchmark_decompile_simple", 100, bench)
     }
 
 }

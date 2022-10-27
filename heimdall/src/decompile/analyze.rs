@@ -314,7 +314,8 @@ impl VMTrace {
                 // check if the external call is a precompiled contract
                 match decode_precompile(
                     instruction.inputs[1],
-                    extcalldata_memory.clone()
+                    extcalldata_memory.clone(),
+                    instruction.input_operations[2].clone()
                 ) {
                     (true, precompile_logic) => {
                         function.logic.push(precompile_logic);
@@ -346,7 +347,8 @@ impl VMTrace {
                 // check if the external call is a precompiled contract
                 match decode_precompile(
                     instruction.inputs[1],
-                    extcalldata_memory.clone()
+                    extcalldata_memory.clone(),
+                    instruction.input_operations[2].clone()
                 ) {
                     (true, precompile_logic) => {
                         function.logic.push(precompile_logic);
@@ -387,7 +389,8 @@ impl VMTrace {
                 // check if the external call is a precompiled contract
                 match decode_precompile(
                     instruction.inputs[1],
-                    extcalldata_memory.clone()
+                    extcalldata_memory.clone(),
+                    instruction.input_operations[5].clone()
                 ) {
                     (is_precompile, precompile_logic) if is_precompile=> {
                         function.logic.push(precompile_logic);

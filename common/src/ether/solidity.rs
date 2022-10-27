@@ -371,12 +371,39 @@ impl WrappedOpcode {
                 );
             },
             "MLOAD" => {
-                solidified_wrapped_opcode.push_str(
-                    format!(
-                            "memory[{}]",
-                            self.inputs[0]._solidify()
-                    ).as_str()
-                );
+                let memloc = self.inputs[0]._solidify();
+                
+                if memloc.contains("memory") {
+                    if memloc.contains("+") {
+                        let parts = memloc.split(" + ").collect::<Vec<&str>>();
+
+                        solidified_wrapped_opcode.push_str(
+                            format!(
+                                    "memory[{}][{}]",
+                                    parts[0].replace("memory[", "").replace("]", ""),
+                                    parts[1].replace("memory[", "").replace("]", ""),
+                            ).as_str()
+                        );
+                    }
+                    else {
+                        solidified_wrapped_opcode.push_str(
+                            format!(
+                                    "memory[{}]",
+                                    memloc
+                            ).as_str()
+                        );
+                    }
+                }
+                else {
+                    solidified_wrapped_opcode.push_str(
+                        format!(
+                                "memory[{}]",
+                                memloc
+                        ).as_str()
+                    );
+                }
+                
+
             },
             "MSIZE" => {
                 solidified_wrapped_opcode.push_str(
