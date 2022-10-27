@@ -23,7 +23,7 @@ pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
             "  {}:\n    {}ms ± {}ms per run ( with {} runs ).\n\n",
             benchmark_name,
             time / runs,
-            std::cmp::max(max, min),
+            std::cmp::max(max-(time / runs), (time / runs)-min),
             runs
         ).as_bytes()
     );

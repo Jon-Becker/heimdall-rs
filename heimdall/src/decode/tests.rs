@@ -6,7 +6,7 @@ mod benchmark {
     use crate::{decode::DecodeArgs};
 
     #[test]
-    fn bench_decode_seaport_simple() {
+    fn benchmark_decode_seaport_simple() {
 
         fn bench() {
             let args = DecodeArgs {
@@ -18,7 +18,7 @@ mod benchmark {
             crate::decode::decode(args.clone())
         }
 
-        benchmark("bench_decode_seaport_simple", 50, bench)
+        benchmark("benchmark_decode_seaport_simple", 50, bench)
     }
 
     #[test]
