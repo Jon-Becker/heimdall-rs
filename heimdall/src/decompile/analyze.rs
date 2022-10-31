@@ -616,11 +616,13 @@ impl VMTrace {
         }
 
         // recurse into the children of the VMTrace map
+        function.logic.push("{".to_string());
         for child in &self.children {
 
             function = child.analyze(function, trace, trace_parent);
 
         }
+        function.logic.push("}".to_string());
 
         // TODO: indentation
 

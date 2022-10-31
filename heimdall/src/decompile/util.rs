@@ -402,7 +402,7 @@ pub fn recursive_map(
             }
         }
 
-        if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
+        if vm.exitcode != 255 || vm.returndata.len() > 0 {
             break;
         }
     }
