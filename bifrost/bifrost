@@ -15,6 +15,14 @@ main() {
     case $1 in
       --)               shift; break;;
 
+      -u|--upgrade|--update)
+        echo "bifrost: removing old binaries"
+
+        rm -rf "$BIFROST_PATH"
+
+        ensure curl -L https://raw.githubusercontent.com/Jon-Becker/heimdall-rs/main/bifrost/install | bash
+        exit 0
+        ;;
       -v|--version)     shift; TARGET_VERSION=$1;;
       -b|--bench)
         echo "bifrost: fetching..."
@@ -191,6 +199,7 @@ USAGE:
 
 OPTIONS:
     -h, --help      Print help information
+    -u, --update    Update bifrost to the latest version
     -v, --version   Install a specific version
     -l, --list      List all available versions
     -b, --bench     Install and run benchmarks
