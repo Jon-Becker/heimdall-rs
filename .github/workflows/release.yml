@@ -7,8 +7,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: '-C target-cpu=native'
-  CARGO_PROFILE_RELEASE_LTO: true
 
 jobs:
   build:
