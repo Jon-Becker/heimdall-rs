@@ -88,7 +88,7 @@ main() {
     echo "bifrost: Fetching binary."
   
     ensure cd $BIFROST_BIN_DIR
-    ensure wget --no-check-certificate --content-disposition "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall"
+    ensure curl "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall" --output heimdall > /dev/null 2>&1
 
     echo "bifrost: Installing binary."
 
