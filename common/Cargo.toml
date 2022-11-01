@@ -1,6 +1,6 @@
 [package]
 name = "heimdall-common"
-version = "0.1.5"
+version = "0.1.7"
 edition = "2021"
 license = "MIT"
 readme = "README.md"

@@ -1,0 +1,28 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - '*'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: '-C target-cpu=native'
+  CARGO_PROFILE_RELEASE_LTO: true
+
+jobs:
+  build:
+    name: Publish Binaries
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build Binaries
+      run:  cargo build --release
+    - name: Upload Binaries
+      uses: svenstaro/upload-release-action@v2
+      with:
+        file: target/release/heimdall
+        asset_name: heimdall
+        tag: ${{ github.ref }}
+        overwrite: true
