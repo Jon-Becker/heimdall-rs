@@ -18,8 +18,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build Binaries
+      working-directory: ./heimdall
       run:  cargo build --release
     - name: Upload Binaries
+      working-directory: ./heimdall
       uses: svenstaro/upload-release-action@v2
       with:
         file: target/release/heimdall
