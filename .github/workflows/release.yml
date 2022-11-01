@@ -21,10 +21,9 @@ jobs:
       working-directory: ./heimdall
       run:  cargo build --release
     - name: Upload Binaries
-      working-directory: ./heimdall
       uses: svenstaro/upload-release-action@v2
       with:
-        file: target/release/heimdall
+        file: ./heimdall/target/release/heimdall
         asset_name: heimdall
         tag: ${{ github.ref }}
         overwrite: true
