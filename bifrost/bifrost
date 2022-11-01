@@ -84,11 +84,18 @@ main() {
   fi
 
   if [ -n "$USE_BINARY" ]; then
-    
-    echo "bifrost: fetching binary."
   
     ensure cd $BIFROST_BIN_DIR
-    ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall" -o heimdall
+    echo "bifrost: fetching binary."
+
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+      ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall-linux-amd64" -o heimdall
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+      ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall-macos-amd64" -o heimdall
+    else
+      echo "bifrost: unsupported operating system: $OSTYPE"
+      exit 1
+    fi
 
     echo "bifrost: installing binary."
 
