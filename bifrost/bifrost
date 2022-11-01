@@ -41,7 +41,7 @@ main() {
         exit 0
         ;;
       *) 
-        echo "bifrost: Option '$1' not recognized\n"
+        echo "bifrost: option '$1' not recognized\n"
         exit 1
         ;;
     esac; shift
@@ -60,8 +60,8 @@ main() {
   ensure rm -rf "$BUILD_PATH/heimdall-rs"
 
   cd $BUILD_PATH
-  
-  ensure git clone "https://github.com/Jon-Becker/heimdall-rs"
+  echo "bifrost: cloning 'Jon-Becker/heimdall-rs'."
+  ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
 
   cd "heimdall-rs"
 
@@ -69,7 +69,7 @@ main() {
   
   # if they specified a version, use that
   if [ -n "$TARGET_VERSION" ]; then
-    echo "bifrost: Installing version $TARGET_VERSION."
+    echo "bifrost: installing version $TARGET_VERSION."
 
     ensure git checkout $TARGET_VERSION > /dev/null 2>&1
   else
@@ -77,7 +77,7 @@ main() {
     # checkout the latest tag
     tag=$(git describe --tags `git rev-list --tags --max-count=1`)
 
-    echo "bifrost: Installing version $tag."
+    echo "bifrost: installing version $tag."
     TARGET_VERSION=$tag
 
     ensure git checkout $tag -b latest > /dev/null 2>&1
@@ -85,12 +85,12 @@ main() {
 
   if [ -n "$USE_BINARY" ]; then
     
-    echo "bifrost: Fetching binary."
+    echo "bifrost: fetching binary."
   
     ensure cd $BIFROST_BIN_DIR
-    ensure curl "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall" --output heimdall > /dev/null 2>&1
+    ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall" -o heimdall
 
-    echo "bifrost: Installing binary."
+    echo "bifrost: installing binary."
 
     # make the binary executable
     ensure chmod +x heimdall
@@ -100,7 +100,7 @@ main() {
     RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./heimdall --bins --locked --force --root $BIFROST_PATH
   fi
 
-  echo "bifrost: Installation complete."
+  echo "bifrost: installation complete."
 }
 
 versions() {
