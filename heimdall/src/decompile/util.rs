@@ -364,6 +364,9 @@ pub fn recursive_map(
                         handled_jumpdests,
                     ));
                 } else {
+
+                    // jump was already taken, destroy this branch
+                    vm_trace.children.pop();
                     break;
                 }
 
@@ -389,6 +392,9 @@ pub fn recursive_map(
                         handled_jumpdests,
                     ));
                 } else {
+
+                    // jump was already taken, destroy this branch
+                    vm_trace.children.pop();
                     break;
                 }
 
