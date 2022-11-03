@@ -434,6 +434,9 @@ impl WrappedOpcode {
             "STATICCALL" => {
                 solidified_wrapped_opcode.push_str("ret0");
             }
+            "RETURNDATASIZE" => {
+                solidified_wrapped_opcode.push_str("ret0.length");
+            }
             opcode => {
 
                 if opcode.starts_with("PUSH") {

@@ -32,6 +32,7 @@ impl VMTrace {
 
         // make a clone of the recursed analysis function
         let mut function = function.clone();
+        let mut branch_jumped = false;
 
         // perform analysis on the operations of the current VMTrace branch
         for operation in &self.operations {
@@ -143,10 +144,11 @@ impl VMTrace {
             } else if opcode_name == "JUMPI" {
             
                 // add closing braces to the function's logic
-                // TODO: add braces
+                branch_jumped = true;
+
                 function.logic.push(
                     format!(
-                        "if ({}) ",
+                        "if ({})",
                         
                         instruction.input_operations[1].solidify()
                     ).to_string()
@@ -616,15 +618,11 @@ impl VMTrace {
         }
 
         // recurse into the children of the VMTrace map
-        function.logic.push("{".to_string());
-        for child in &self.children {
+        for (_, child) in self.children.iter().enumerate() {
 
             function = child.analyze(function, trace, trace_parent);
 
         }
-        function.logic.push("}".to_string());
-
-        // TODO: indentation
 
         function
     }
