@@ -32,7 +32,7 @@ use heimdall_common::{
         vm::VM
     },
     ether::signatures::*,
-    consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
+    constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::* },
 };
 

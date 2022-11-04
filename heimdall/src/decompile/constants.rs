@@ -33,10 +33,6 @@ pragma solidity >=0.8.0;
 ///
 /// @custom:github    You can find the open-source decompiler here:
 ///                       https://github.com/Jon-Becker/heimdall-rs
-///
-/// @custom:donations Heimdall is open source and will always be free to use, so 
-///                     donations are always appreciated if you find it helpful.
-///                     0x6666666b0B46056247E7D6cbdb78287F4D12574d   OR   jbecker.eth
 ".to_string();
 
 }

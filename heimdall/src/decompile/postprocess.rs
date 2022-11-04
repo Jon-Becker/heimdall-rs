@@ -2,13 +2,14 @@ use std::{
     sync::Mutex,
     collections::HashMap
 };
-use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards, base26_encode}};
+use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards, base26_encode}, constants::TYPE_CAST_REGEX};
 use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
 use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX, MEM_ACCESS_REGEX}};
 use lazy_static::lazy_static;
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref VARIABLE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
 fn convert_bitmask_to_casting(line: String) -> String {
@@ -303,6 +304,9 @@ fn convert_memory_to_variable(line: String) -> String {
         let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
         *mem_map = HashMap::new();
         drop(mem_map);
+        let mut var_map = VARIABLE_MAP.lock().unwrap();
+        *var_map = HashMap::new();
+        drop(var_map);
     }
 
     // find a memory access
@@ -350,11 +354,81 @@ fn convert_memory_to_variable(line: String) -> String {
         _ => return cleaned
     }
 
+    // if the memory access is an instantiation, save it
+    if cleaned.contains(" = ") {
+        let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
+
+        let mut var_map = VARIABLE_MAP.lock().unwrap();
+        var_map.insert(instantiation[0].to_string(), instantiation[1].to_string().replace(";", ""));
+        drop(var_map);
+    }
+
+    cleaned
+}
+
+fn move_casts_to_declaration(line: String) -> String {
+    let cleaned = line;
+
+    // if the line doesn't contain an instantiation, return
+    if !cleaned.contains(" = ") { return cleaned; }
+    
+    let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
+
+    // get the outermost cast
+    match TYPE_CAST_REGEX.find(&instantiation[1]) {
+        Some(x) => {
+
+            // the match must occur at index 0
+            if x.start() != 0 { return cleaned; }
+
+            // find the matching close paren
+            let (paren_start, paren_end, _) = find_balanced_encapsulator(instantiation[1].to_string(), ('(', ')'));
+
+            // the close paren must be at the end of the expression
+            if paren_end != instantiation[1].len() - 1 { return cleaned; }
+
+            // get the inside of the parens
+            let cast_expression = instantiation[1].get(paren_start + 1..paren_end-1).unwrap();
+
+            return format!(
+                "{} {} = {};",
+                x.as_str().replace("(", ""),
+                instantiation[0],
+                cast_expression
+            )
+        }
+        None => return cleaned,
+    };
+}
+
+fn replace_expression_with_var(line: String) -> String {
+    let mut cleaned = line;
+
+    let var_map = VARIABLE_MAP.lock().unwrap();
+
+    // skip function definitions
+    if cleaned.contains("function") { return cleaned; }
+
+    // iterate over variable map
+    for (var, expression) in var_map.iter() {
+
+        // skip numeric expressions
+        if expression.parse::<u128>().is_ok() { continue; }
+
+        // replace the expression with the variable
+        if cleaned.contains(expression) && !cleaned.starts_with(var) {
+            cleaned = cleaned.replace(expression, var);
+        }
+    }
+
+    // drop the mutex
+    drop(var_map);
+    
     cleaned
 }
 
 fn remove_unused_assignments(line: String) -> String {
-    let mut cleaned = line;
+    let cleaned = line;
 
 
 
@@ -363,6 +437,9 @@ fn remove_unused_assignments(line: String) -> String {
 
 fn cleanup(line: String) -> String {
     let mut cleaned = line;
+
+    // skip comments
+    if cleaned.starts_with("/") { return cleaned; }
 
     // Find and convert all castings
     cleaned = convert_bitmask_to_casting(cleaned);
@@ -378,6 +455,12 @@ fn cleanup(line: String) -> String {
 
     // Convert all memory[] accesses to variables
     cleaned = convert_memory_to_variable(cleaned);
+
+    // Use variable names where possible
+    cleaned = replace_expression_with_var(cleaned);
+
+    // Move all outer casts in instantiation to the variable declaration
+    cleaned = move_casts_to_declaration(cleaned);
 
     // Remove all unused assignments
     cleaned = remove_unused_assignments(cleaned);

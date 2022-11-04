@@ -1,7 +1,7 @@
 use colored::Colorize;
 use ethers::abi::{ParamType, Token, AbiEncode};
 
-use crate::{utils::strings::{replace_last, find_balanced_encapsulator}, consts::TYPE_CAST_REGEX};
+use crate::{utils::strings::{replace_last, find_balanced_encapsulator}, constants::TYPE_CAST_REGEX};
 
 use super::vm::Instruction;
 

@@ -1,4 +1,4 @@
-use crate::{utils::strings::encode_hex_reduced, consts::{WORD_REGEX, MEMLEN_REGEX}};
+use crate::{utils::strings::encode_hex_reduced, constants::{WORD_REGEX, MEMLEN_REGEX}};
 
 use super::evm::opcodes::*;
 

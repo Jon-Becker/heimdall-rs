@@ -3,7 +3,7 @@ use std::{num::ParseIntError};
 
 use ethers::{prelude::{I256, U256}, abi::AbiEncode};
 
-use crate::consts::REDUCE_HEX_REGEX;
+use crate::constants::REDUCE_HEX_REGEX;
 
 
 // Convert an unsigned integer into a signed one

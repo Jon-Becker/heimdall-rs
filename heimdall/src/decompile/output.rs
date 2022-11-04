@@ -264,7 +264,9 @@ pub fn build_output(
         )
     );
 
-    logger.success(&format!("wrote decompiled ABI to '{}' .", &abi_output_path).to_string());
+    progress_bar.suspend(|| {
+        logger.success(&format!("wrote decompiled ABI to '{}' .", &abi_output_path).to_string());
+    });
 
     // write the decompiled source to file
     let mut decompiled_output: Vec<String> = Vec::new();
@@ -374,6 +376,8 @@ pub fn build_output(
     }
 
     decompiled_output.push(String::from("}"));
+
+    progress_bar.finish_and_clear();
 
     write_lines_to_file(
         &decompiled_output_path,

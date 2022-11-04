@@ -7,7 +7,7 @@ use ethers::{
     providers::{Middleware, Provider, Http},
 };
 use crate::{
-    consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
+    constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::*, file::* },
     ether::evm::{ opcodes::opcode }
 };
