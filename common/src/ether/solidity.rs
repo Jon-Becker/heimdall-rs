@@ -1,6 +1,22 @@
+use std::str::FromStr;
+
+use ethers::types::U256;
+
 use crate::{utils::strings::encode_hex_reduced, constants::{WORD_REGEX, MEMLEN_REGEX}};
 
 use super::evm::opcodes::*;
+
+fn is_ext_call_precompile(precompile_address: U256) -> bool {
+    let address: usize = match precompile_address.try_into() {
+        Ok(x) => x,
+        Err(_) => usize::MAX,
+    };
+
+    match address {
+        1 | 2 | 3 => true,
+        _ => false,
+    }
+}
 
 impl WrappedOpcode {
 
@@ -428,19 +444,69 @@ impl WrappedOpcode {
                 );
             },
             "CALL" => {
-                solidified_wrapped_opcode.push_str("ret0");
+                match U256::from_str(&self.inputs[1]._solidify()) {
+                    Ok(addr) => {
+                        if is_ext_call_precompile(addr) {
+                            solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
+                        }
+                        else {
+                            solidified_wrapped_opcode.push_str(&"ret0");
+
+                        }
+                    },
+                    Err(_) => {
+                        solidified_wrapped_opcode.push_str(&"ret0");
+                    }
+                };
             }
             "CALLCODE" => {
-                solidified_wrapped_opcode.push_str("ret0");
-            }
+                match U256::from_str(&self.inputs[1]._solidify()) {
+                    Ok(addr) => {
+                        if is_ext_call_precompile(addr) {
+                            solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
+                        }
+                        else {
+                            solidified_wrapped_opcode.push_str(&"ret0");
+
+                        }
+                    },
+                    Err(_) => {
+                        solidified_wrapped_opcode.push_str(&"ret0");
+                    }
+                };            }
             "DELEGATECALL" => {
-                solidified_wrapped_opcode.push_str("ret0");
-            }
+                match U256::from_str(&self.inputs[1]._solidify()) {
+                    Ok(addr) => {
+                        if is_ext_call_precompile(addr) {
+                            solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
+                        }
+                        else {
+                            solidified_wrapped_opcode.push_str(&"ret0");
+
+                        }
+                    },
+                    Err(_) => {
+                        solidified_wrapped_opcode.push_str(&"ret0");
+                    }
+                };            }
             "STATICCALL" => {
-                solidified_wrapped_opcode.push_str("ret0");
-            }
+                match U256::from_str(&self.inputs[1]._solidify()) {
+                    Ok(addr) => {
+                        if is_ext_call_precompile(addr) {
+                            solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
+                        }
+                        else {
+                            solidified_wrapped_opcode.push_str(&"ret0");
+
+                        }
+                    },
+                    Err(_) => {
+                        solidified_wrapped_opcode.push_str(&"ret0");
+                    }
+                };            }
             "RETURNDATASIZE" => {
-                solidified_wrapped_opcode.push_str("ret0.length");
+                // TODO
+                solidified_wrapped_opcode.push_str(&"ret0.length");
             }
             opcode => {
 

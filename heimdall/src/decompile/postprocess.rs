@@ -367,6 +367,27 @@ fn convert_memory_to_variable(line: String) -> String {
     cleaned
 }
 
+fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
+
+    // skip lines that don't contain an assignment
+    if !line.contains(" = ") { return false; }
+
+    // get var name
+    let var_name = line.split(" = ").collect::<Vec<&str>>()[0].split(" ").collect::<Vec<&str>>()[line.split(" = ").collect::<Vec<&str>>()[0].split(" ").collect::<Vec<&str>>().len() - 1];
+
+    //remove unused vars
+    for x in lines {
+        if x.contains(var_name) && !x.trim().starts_with(var_name) { return false; }
+        else {
+            
+            // break if the line contains a function definition
+            if x.contains("function") { break; }
+        }
+    }
+
+    true
+}
+
 fn move_casts_to_declaration(line: String) -> String {
     let cleaned = line;
 
@@ -506,27 +527,6 @@ fn cleanup(line: String) -> String {
     cleaned = inherit_infer_type(cleaned);
 
     cleaned
-}
-
-fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
-
-    // skip lines that don't contain an assignment
-    if !line.contains(" = ") { return false; }
-
-    // get var name
-    let var_name = line.split(" = ").collect::<Vec<&str>>()[0].split(" ").collect::<Vec<&str>>()[line.split(" = ").collect::<Vec<&str>>()[0].split(" ").collect::<Vec<&str>>().len() - 1];
-
-    //remove unused vars
-    for x in lines {
-        if x.contains(var_name) && !x.trim().starts_with(var_name) { return false; }
-        else {
-            
-            // break if the line contains a function definition
-            if x.contains("function") { break; }
-        }
-    }
-
-    true
 }
 
 fn finalize(lines: Vec<String>) -> Vec<String> {
