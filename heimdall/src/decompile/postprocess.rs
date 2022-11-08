@@ -10,6 +10,7 @@ use lazy_static::lazy_static;
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref VARIABLE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
 fn convert_bitmask_to_casting(line: String) -> String {
@@ -427,10 +428,49 @@ fn replace_expression_with_var(line: String) -> String {
     cleaned
 }
 
-fn remove_unused_assignments(line: String) -> String {
-    let cleaned = line;
+fn inherit_infer_type(line: String) -> String {
+    let mut cleaned = line.clone();
+    let mut type_map = TYPE_MAP.lock().unwrap();
+    
+    // if the line contains a function definition, wipe the type map and get arg types
+    if line.contains("function") {
+        type_map.clear();
+        let args = line.split("(").collect::<Vec<&str>>()[1].split(")").collect::<Vec<&str>>()[0].split(",").collect::<Vec<&str>>();
+        for arg in args {
+            let arg = arg.trim();
+            
+            // get type and name
+            let arg_type = arg.split(" ").collect::<Vec<&str>>()[..arg.split(" ").collect::<Vec<&str>>().len() - 1].join(" ");
+            let arg_name = arg.split(" ").collect::<Vec<&str>>()[arg.split(" ").collect::<Vec<&str>>().len() - 1];
 
+            // add to type map
+            type_map.insert(arg_name.to_string(), arg_type.to_string());
+        }
+    }
 
+    // if the line contains an instantiation, add the type to the map
+    if line.contains(" = ") {
+        let instantiation = line.split(" = ").collect::<Vec<&str>>();
+        let var_type = instantiation[0].split(" ").collect::<Vec<&str>>()[..instantiation[0].split(" ").collect::<Vec<&str>>().len() - 1].join(" ");
+        let var_name = instantiation[0].split(" ").collect::<Vec<&str>>()[instantiation[0].split(" ").collect::<Vec<&str>>().len() - 1];
+        
+        // add to type map, if the variable is typed
+        if var_type.len() > 0 {
+            type_map.insert(var_name.to_string(), var_type.to_string());
+        }
+        else if !line.starts_with("storage") {
+
+            // infer the type from args and vars in the expression
+            for (var, var_type) in type_map.clone().iter() {
+                if cleaned.contains(var) && !type_map.contains_key(var_name) {
+                    cleaned = format!("{} {}", var_type, cleaned);
+                    type_map.insert(var_name.to_string(), var_type.to_string());
+                    break;
+                }
+            }            
+
+        }
+    }
 
     cleaned
 }
@@ -453,7 +493,7 @@ fn cleanup(line: String) -> String {
     // Remove all unnecessary parentheses
     cleaned = simplify_parentheses(cleaned, 0);
 
-    // Convert all memory[] accesses to variables
+    // Convert all memory[] accesses to variables, also removes unused variables
     cleaned = convert_memory_to_variable(cleaned);
 
     // Use variable names where possible
@@ -462,16 +502,54 @@ fn cleanup(line: String) -> String {
     // Move all outer casts in instantiation to the variable declaration
     cleaned = move_casts_to_declaration(cleaned);
 
-    // Remove all unused assignments
-    cleaned = remove_unused_assignments(cleaned);
+    // Inherit or infer types from expressions
+    cleaned = inherit_infer_type(cleaned);
 
     cleaned
+}
+
+fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
+
+    // skip lines that don't contain an assignment
+    if !line.contains(" = ") { return false; }
+
+    // get var name
+    let var_name = line.split(" = ").collect::<Vec<&str>>()[0].split(" ").collect::<Vec<&str>>()[line.split(" = ").collect::<Vec<&str>>()[0].split(" ").collect::<Vec<&str>>().len() - 1];
+
+    //remove unused vars
+    for x in lines {
+        if x.contains(var_name) && !x.trim().starts_with(var_name) { return false; }
+        else {
+            
+            // break if the line contains a function definition
+            if x.contains("function") { break; }
+        }
+    }
+
+    true
+}
+
+fn finalize(lines: Vec<String>) -> Vec<String> {
+    let mut cleaned_lines: Vec<String> = Vec::new();
+
+    // remove unused assignments
+    for (i, line) in lines.iter().enumerate() {
+
+        // only pass in lines further than the current line
+        if !contains_unnecessary_assignment(line.trim().to_string(), &lines[i..].iter().collect::<Vec<_>>())
+        { 
+            cleaned_lines.push(line.to_string());
+        }
+    }
+
+    cleaned_lines
 }
 
 pub fn postprocess(lines: Vec<String>) -> Vec<String> {
     let mut indentation: usize = 0;
     let mut cleaned_lines: Vec<String> = lines.clone();
 
+    // clean up each line using postprocessing techniques
     for line in cleaned_lines.iter_mut() {
 
         // dedent due to closing braces
@@ -483,7 +561,7 @@ pub fn postprocess(lines: Vec<String>) -> Vec<String> {
         *line = format!(
             "{}{}",
             " ".repeat(indentation*4),
-            cleanup(line.to_string())
+            cleanup(line.to_string()) 
         );
         
         // indent due to opening braces
@@ -493,5 +571,6 @@ pub fn postprocess(lines: Vec<String>) -> Vec<String> {
         
     }
 
-    cleaned_lines
+    // run finalizing postprocessing, which need to operate on cleaned lines
+    finalize(cleaned_lines)
 }

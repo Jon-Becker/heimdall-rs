@@ -352,37 +352,36 @@ pub fn recursive_map(
                 // the jump was not taken, create a trace for the jump path
                 // only jump if we haven't already traced this destination
                 // TODO: mark as a loop?
-                if !(handled_jumpdests.contains(
+                if handled_jumpdests.contains(
                     &format!(
                         "{}->{}",
                         &state.last_instruction.instruction,
                         &(state.last_instruction.inputs[0].as_u128() + 1)
                     )
-                ))
-                {
-                    handled_jumpdests.push(
-                        format!(
-                            "{}->{}",
-                            &state.last_instruction.instruction,
-                            &(state.last_instruction.inputs[0].as_u128() + 1)
-                        )
-                    );
-
-
-                    let mut trace_vm = vm.clone();
-                    trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
-                    vm_trace.children.push(recursive_map(
-                        &trace_vm,
-                        trace,
-                        trace_parent,
-                        handled_jumpdests,
-                    ));
-                } else {
-
+                ) {
+                    
                     // pop off the JUMPI
                     vm_trace.operations.pop();
                     break;
                 }
+
+                handled_jumpdests.push(
+                    format!(
+                        "{}->{}",
+                        &state.last_instruction.instruction,
+                        &(state.last_instruction.inputs[0].as_u128() + 1)
+                    )
+                );
+
+                // push a new vm trace to the children
+                let mut trace_vm = vm.clone();
+                trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
+                vm_trace.children.push(recursive_map(
+                    &trace_vm,
+                    trace,
+                    trace_parent,
+                    handled_jumpdests,
+                ));
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
@@ -395,36 +394,36 @@ pub fn recursive_map(
 
                 // the jump was taken, create a trace for the fallthrough path
                 // only jump if we haven't already traced this destination
-                if !(handled_jumpdests.contains(
+                if handled_jumpdests.contains(
                     &format!(
                         "{}->{}",
                         &state.last_instruction.instruction,
                         &(state.last_instruction.inputs[0].as_u128() + 1)
                     )
-                ))
-                {
-                    handled_jumpdests.push(
-                        format!(
-                            "{}->{}",
-                            &state.last_instruction.instruction,
-                            &(state.last_instruction.inputs[0].as_u128() + 1)
-                        )
-                    );
-
-                    let mut trace_vm = vm.clone();
-                    trace_vm.instruction = state.last_instruction.instruction + 1;
-                    vm_trace.children.push(recursive_map(
-                        &trace_vm,
-                        trace,
-                        trace_parent,
-                        handled_jumpdests,
-                    ));
-                } else {
+                ) {
 
                     // pop off the JUMPI
                     vm_trace.operations.pop();
                     break;
                 }
+
+                handled_jumpdests.push(
+                    format!(
+                        "{}->{}",
+                        &state.last_instruction.instruction,
+                        &(state.last_instruction.inputs[0].as_u128() + 1)
+                    )
+                );
+
+                // push a new vm trace to the children
+                let mut trace_vm = vm.clone();
+                trace_vm.instruction = state.last_instruction.instruction + 1;
+                vm_trace.children.push(recursive_map(
+                    &trace_vm,
+                    trace,
+                    trace_parent,
+                    handled_jumpdests,
+                ));
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(

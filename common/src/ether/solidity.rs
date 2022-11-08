@@ -235,8 +235,13 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str(self.inputs[1]._solidify().as_str());
             }
             "SHA3" => {
-                // TODO: use memory from function
-                solidified_wrapped_opcode.push_str("keccak256()");
+                
+                solidified_wrapped_opcode.push_str(
+                    &format!(
+                        "keccak256(memory[{}])",
+                        self.inputs[0]._solidify().as_str()
+                    )
+                );
             },
             "ADDRESS" => {
                 solidified_wrapped_opcode.push_str("address(this)");
