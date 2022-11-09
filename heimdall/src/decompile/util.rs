@@ -297,7 +297,7 @@ pub fn map_selector(
     trace_parent: u32,
     selector: String,
     entry_point: u64,
-) -> (VMTrace, Vec<String>) {
+) -> (VMTrace, Vec<u128>) {
     let mut vm = evm.clone();
     vm.calldata = selector.clone();
 
@@ -325,7 +325,7 @@ pub fn recursive_map(
     evm: &VM,
     trace: &TraceFactory,
     trace_parent: u32,
-    handled_jumpdests: &mut Vec<String>,
+    handled_jumpdests: &mut Vec<u128>,
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -352,26 +352,14 @@ pub fn recursive_map(
                 // the jump was not taken, create a trace for the jump path
                 // only jump if we haven't already traced this destination
                 // TODO: mark as a loop?
-                if handled_jumpdests.contains(
-                    &format!(
-                        "{}->{}",
-                        &state.last_instruction.instruction,
-                        &(state.last_instruction.inputs[0].as_u128() + 1)
-                    )
-                ) {
+                if handled_jumpdests.contains(&state.last_instruction.instruction) {
                     
                     // pop off the JUMPI
-                    vm_trace.operations.pop();
+                    //vm_trace.operations.pop();
                     break;
                 }
 
-                handled_jumpdests.push(
-                    format!(
-                        "{}->{}",
-                        &state.last_instruction.instruction,
-                        &(state.last_instruction.inputs[0].as_u128() + 1)
-                    )
-                );
+                handled_jumpdests.push(state.last_instruction.instruction);
 
                 // push a new vm trace to the children
                 let mut trace_vm = vm.clone();
@@ -394,26 +382,14 @@ pub fn recursive_map(
 
                 // the jump was taken, create a trace for the fallthrough path
                 // only jump if we haven't already traced this destination
-                if handled_jumpdests.contains(
-                    &format!(
-                        "{}->{}",
-                        &state.last_instruction.instruction,
-                        &(state.last_instruction.inputs[0].as_u128() + 1)
-                    )
-                ) {
+                if handled_jumpdests.contains(&state.last_instruction.instruction) {
 
                     // pop off the JUMPI
-                    vm_trace.operations.pop();
+                    //vm_trace.operations.pop();
                     break;
                 }
 
-                handled_jumpdests.push(
-                    format!(
-                        "{}->{}",
-                        &state.last_instruction.instruction,
-                        &(state.last_instruction.inputs[0].as_u128() + 1)
-                    )
-                );
+                handled_jumpdests.push(state.last_instruction.instruction);
 
                 // push a new vm trace to the children
                 let mut trace_vm = vm.clone();

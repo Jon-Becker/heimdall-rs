@@ -148,7 +148,7 @@ impl VMTrace {
 
                 function.logic.push(
                     format!(
-                        "if ({})",
+                        "if ({}) {{",
                         
                         instruction.input_operations[1].solidify()
                     ).to_string()
@@ -615,6 +615,10 @@ impl VMTrace {
                 }
             }
 
+        }
+
+        if branch_jumped {
+            function.logic.push("}".to_string());
         }
 
         // recurse into the children of the VMTrace map

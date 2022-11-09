@@ -377,11 +377,15 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
 
     //remove unused vars
     for x in lines {
-        if x.contains(var_name) && !x.trim().starts_with(var_name) { return false; }
-        else {
-            
-            // break if the line contains a function definition
-            if x.contains("function") { break; }
+
+        // break if the line contains a function definition
+        if x.contains("function") { break; }
+
+        if x.contains(" = ") {
+            let assignment = x.split(" = ").collect::<Vec<&str>>();
+            if assignment[1].contains(var_name) {
+                return false;
+            }
         }
     }
 
