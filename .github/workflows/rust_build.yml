@@ -19,6 +19,6 @@ jobs:
     - name: Run Tests
       working-directory: ./heimdall
       run: |
-        cargo +nightly test --package heimdall -- test_ --nocapture
-        cargo +nightly test --package heimdall-config -- test_ --nocapture
-        cargo +nightly test --package heimdall-common -- test_ --nocapture
+        cargo test --package heimdall -- test_ --nocapture
+        cargo test --package heimdall-config -- test_ --nocapture
+        cargo test --package heimdall-common -- test_ --nocapture

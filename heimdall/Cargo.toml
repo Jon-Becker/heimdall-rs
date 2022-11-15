@@ -12,7 +12,6 @@ backtrace = "0.3"
 colored = "2"
 clap = { version = "3.1.18", features = ["derive"] }
 clap-verbosity-flag = "1.0.0"
-ethers = { git = "https://github.com/gakonst/ethers-rs" }
 heimdall-common = { path = "./../common" }
 heimdall-config = { path = "./../config" }
 tokio = { version = "1", features = ["full"] }
@@ -22,6 +21,7 @@ indicatif = "0.17.0"
 strsim = "0.10.0"
 regex = "1.1.5"
 lazy_static = "1.4.0"
+ethers = "1.0.0"
 
 [[bin]]
 name = "heimdall"
