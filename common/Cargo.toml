@@ -15,6 +15,6 @@ clap-verbosity-flag = "1.0.0"
 indicatif = "0.17.0"
 tokio = { version = "1", features = ["full"] }
 clap = { version = "3.1.18", features = ["derive"] }
-ethers = { git = "https://github.com/gakonst/ethers-rs" }
+ethers = "1.0.0"
 reqwest = { version = "0.11.11", features = ["blocking"] }
 serde_json = "1.0"
