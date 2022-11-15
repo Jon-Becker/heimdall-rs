@@ -33,6 +33,7 @@ impl VMTrace {
         // make a clone of the recursed analysis function
         let mut function = function.clone();
         let mut branch_jumped = false;
+        let mut revert_conditional: Option<String> = None;
 
         // perform analysis on the operations of the current VMTrace branch
         for operation in &self.operations {
@@ -142,17 +143,23 @@ impl VMTrace {
                 }
 
             } else if opcode_name == "JUMPI" {
-            
-                // add closing braces to the function's logic
-                branch_jumped = true;
 
-                function.logic.push(
-                    format!(
-                        "if ({}) {{",
-                        
-                        instruction.input_operations[1].solidify()
-                    ).to_string()
-                );
+                // if the JUMPI is not taken and the branch reverts, this is a require statement
+                if self.operations.last().unwrap().last_instruction.opcode_details.clone().unwrap().name == "REVERT" {
+                    revert_conditional = Some(instruction.input_operations[1].solidify());
+                }
+                else {
+
+                    // this is an if conditional for the children branches
+                    function.logic.push(
+                        format!(
+                            "if ({}) {{",
+                            
+                            instruction.input_operations[1].solidify()
+                        ).to_string()
+                    );
+                    branch_jumped = true;
+                }
 
             } else if opcode_name == "REVERT" {
 
@@ -169,12 +176,12 @@ impl VMTrace {
                 let revert_data = memory.read(offset, size);
 
                 // (1) if revert_data starts with 0x08c379a0, the folling is an error string abiencoded
-                // (2) if revert_data starts with any other 4byte selector, it is a custom error and should
+                // (2) if revert_data starts with 0x4e487b71, the following is a compiler panic
+                // (3) if revert_data starts with any other 4byte selector, it is a custom error and should
                 //     be resolved and added to the generated ABI
-                // (3) if revert_data is empty, it is an empty revert. Ex:
+                // (4) if revert_data is empty, it is an empty revert. Ex:
                 //       - if (true != false) { revert() };
-                //       - require(true == false)
-
+                //       - require(true != false)
                 let revert_logic;
 
                 // handle case with error string abiencoded
@@ -189,8 +196,26 @@ impl VMTrace {
                         },
                         None => "".to_string(),
                     };
+                    revert_logic = match revert_conditional.clone() {
+                        Some(condition) => {
+                            format!(
+                                "require({}, \"{}\");",
+                                condition,
+                                revert_string
+                            )
+                        }
+                        None => {
+                            format!(
+                                "revert(\"{}\");",
+                                revert_string
+                            )
+                        }
+                    }
+                }
 
-                    revert_logic = format!("revert(\"{}\");", revert_string);
+                // handle case with panics
+                else if revert_data.starts_with("4e487b71") {
+                    continue;
                 }
 
                 // handle case with custom error OR empty revert
@@ -202,7 +227,30 @@ impl VMTrace {
                         },
                         None => "()".to_string(),
                     };
-                    revert_logic = format!("revert{};", custom_error_placeholder);
+
+                    revert_logic = match revert_conditional.clone() {
+                        Some(condition) => {
+
+                            if custom_error_placeholder == "()".to_string() {
+                                format!(
+                                    "require({});",
+                                    condition,
+                                )
+                            }
+                            else {
+                                format!(
+                                    "if (!{}) revert{};",
+                                    condition,
+                                    custom_error_placeholder
+                                )
+                            }
+                        }
+                        None => {
+
+                            // skip empty reverts with no conditionals
+                            continue;   
+                        }
+                    }
                 }
 
                 function.logic.push(revert_logic);
@@ -617,15 +665,15 @@ impl VMTrace {
 
         }
 
-        if branch_jumped {
-            function.logic.push("}".to_string());
-        }
-
         // recurse into the children of the VMTrace map
         for (_, child) in self.children.iter().enumerate() {
 
             function = child.analyze(function, trace, trace_parent);
 
+        }
+
+        if branch_jumped {
+            function.logic.push("}".to_string());
         }
 
         function
