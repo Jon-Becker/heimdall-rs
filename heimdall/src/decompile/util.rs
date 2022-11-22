@@ -1,9 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use ethers::{
-    abi::AbiEncode,
     prelude::{
-        rand::{self, Rng},
         U256,
     },
 };
@@ -211,44 +209,24 @@ pub fn detect_compiler(bytecode: String) -> (String, String) {
 }
 
 // find all function selectors in the given EVM.
-pub fn find_function_selectors(evm: &VM, assembly: String) -> Vec<String> {
+pub fn find_function_selectors(assembly: String) -> Vec<String> {
     let mut function_selectors = Vec::new();
 
-    let mut vm = evm.clone();
-
-    // find a selector not present in the assembly
-    let selector;
-    loop {
-        let num = rand::thread_rng().gen_range(286331153..2147483647);
-        if !vm
-            .bytecode
-            .contains(&format!("63{}", num.encode_hex()[58..].to_string()))
-        {
-            selector = num.encode_hex()[58..].to_string();
-            break;
-        }
-    }
-
-    // execute the EVM call to find the dispatcher revert
-    let dispatcher_revert = vm.call(selector, 0).instruction - 1;
-
-    // search through assembly for PUSH4 instructions up until the dispatcher revert
+    // search through assembly for PUSH4 instructions, optimistically assuming that they are function selectors
     let assembly: Vec<String> = assembly
         .split("\n")
         .map(|line| line.trim().to_string())
         .collect();
     for line in assembly.iter() {
         let instruction_args: Vec<String> = line.split(" ").map(|arg| arg.to_string()).collect();
-        let program_counter: u128 = instruction_args[0].clone().parse().unwrap();
-        let instruction = instruction_args[1].clone();
 
-        if program_counter < dispatcher_revert {
+        if instruction_args.len() >= 2 {
+            let instruction = instruction_args[1].clone();
+
             if instruction == "PUSH4" {
                 let function_selector = instruction_args[2].clone();
                 function_selectors.push(function_selector);
             }
-        } else {
-            break;
         }
     }
     function_selectors.sort();
@@ -316,7 +294,7 @@ pub fn map_selector(
     // the VM is at the function entry point, begin tracing
     let mut handled_jumpdests = Vec::new();
     (
-        recursive_map(&vm.clone(), trace, trace_parent, &mut handled_jumpdests),
+        recursive_map(&vm.clone(), trace, trace_parent, &mut handled_jumpdests, 0, U256::from(0)),
         handled_jumpdests,
     )
 }
@@ -326,6 +304,8 @@ pub fn recursive_map(
     trace: &TraceFactory,
     trace_parent: u32,
     handled_jumpdests: &mut Vec<String>,
+    last_jumpi: u128,
+    last_jumpdest: U256
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -346,17 +326,18 @@ pub fn recursive_map(
         if state.last_instruction.opcode == "57" {
             vm_trace.depth += 1;
 
+            println!("{}, JUMPI: {}", state.last_instruction.instruction, state.last_instruction.inputs[0]);
+
             // we need to create a trace for the path that wasn't taken.
             if state.last_instruction.inputs[1] == U256::from(0) {
 
-                // the jump was not taken, create a trace for the jump path
-                // only jump if we haven't already traced this destination
-                // TODO: mark as a loop?
-                if handled_jumpdests.contains(&format!("{}@{}", vm_trace.depth, state.last_instruction.instruction)) {
+                // break out of and mark loops
+                if last_jumpdest == state.last_instruction.inputs[0] &&
+                   last_jumpi == state.last_instruction.instruction {
                     
                     // pop off the JUMPI
-//                    vm_trace.operations.pop();
-//                    break;
+                    vm_trace.operations.pop();
+                    break;
                 }
 
                 handled_jumpdests.push(format!("{}@{}", vm_trace.depth, state.last_instruction.instruction));
@@ -369,6 +350,8 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
+                    state.last_instruction.instruction,
+                    state.last_instruction.inputs[0],
                 ));
 
                 // push the current path onto the stack
@@ -377,17 +360,19 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
+                    state.last_instruction.instruction,
+                    state.last_instruction.inputs[0],
                 ));
                 break;
             } else {
 
-                // the jump was taken, create a trace for the fallthrough path
-                // only jump if we haven't already traced this destination
-                if handled_jumpdests.contains(&format!("{}@{}", vm_trace.depth, state.last_instruction.instruction)) {
-
+                // break out of and mark loops
+                if last_jumpdest == state.last_instruction.inputs[0] &&
+                   last_jumpi == state.last_instruction.instruction {
+                    
                     // pop off the JUMPI
-//                    vm_trace.operations.pop();
-//                    break;
+                    vm_trace.operations.pop();
+                    break;
                 }
 
                 handled_jumpdests.push(format!("{}@{}", vm_trace.depth, state.last_instruction.instruction));
@@ -400,6 +385,8 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
+                    state.last_instruction.instruction,
+                    state.last_instruction.inputs[0],
                 ));
 
                 // push the current path onto the stack
@@ -408,10 +395,14 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
+                    state.last_instruction.instruction,
+                    state.last_instruction.inputs[0],
                 ));
                 break;
             }
         }
+
+        println!("{} {}", state.last_instruction.instruction, state.last_instruction.opcode);
 
         if vm.exitcode != 255 || vm.returndata.len() > 0 {
             break;

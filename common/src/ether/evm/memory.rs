@@ -18,6 +18,7 @@ impl Memory {
     }
 
     pub fn extend(&mut self, offset: u128, size: u128) {
+        
         // calculate the new size of the memory
         let r = (offset + size) % 32;
         let new_mem_size: u128;
@@ -65,11 +66,7 @@ impl Memory {
     }
 
     // read a value from the memory at the given offset, with a fixed size
-    pub fn read(&self, mut offset: usize, size: usize) -> String {
-        // cap offset to 2**16 for optimization
-        if offset > 65536 {
-            offset = 65536;
-        }
+    pub fn read(&self, offset: usize, size: usize) -> String {
 
         // if the offset + size will be out of bounds, append null bytes until the size is met
         if offset + size > self.size() as usize {

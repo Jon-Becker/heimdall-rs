@@ -90,6 +90,10 @@ impl Stack {
         values
     }
 
+    pub fn size(&self) -> usize {
+        self.stack.len()
+    }
+
     // Check if the stack is empty.
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()

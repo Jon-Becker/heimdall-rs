@@ -237,7 +237,7 @@ pub fn decompile(args: DecompilerArgs) {
     let vm_trace = trace.add_creation(decompile_call, line!(), "contract".to_string(), shortened_target, (contract_bytecode.len()/2usize).try_into().unwrap());
 
     // find and resolve all selectors in the bytecode
-    let selectors = find_function_selectors(&evm.clone(), disassembled_bytecode);
+    let selectors = find_function_selectors(disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
@@ -245,7 +245,7 @@ pub fn decompile(args: DecompilerArgs) {
         logger.info(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
     }
     else {
-        logger.info(&format!("found {} function selectors.", selectors.len()).to_string());
+        logger.info(&format!("found {} possible function selectors.", selectors.len()).to_string());
     }
     logger.info(&format!("performing symbolic execution on '{}' .", &args.target).to_string());
 
@@ -258,6 +258,13 @@ pub fn decompile(args: DecompilerArgs) {
     for selector in selectors.clone() {
         decompilation_progress.set_message(format!("executing '0x{}'", selector));
         
+        // get the function's entry point
+        let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
+
+        if function_entry_point == 0 {
+            continue;
+        }
+
         let func_analysis_trace = trace.add_call(
             vm_trace, 
             line!(), 
@@ -267,22 +274,11 @@ pub fn decompile(args: DecompilerArgs) {
             "()".to_string()
         );
 
-        // get the function's entry point
-        let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
         trace.add_info(
             func_analysis_trace, 
             function_entry_point.try_into().unwrap(), 
             format!("discovered entry point: {}", function_entry_point).to_string()
         );
-
-        if function_entry_point == 0 {
-            trace.add_error(
-                func_analysis_trace,
-                line!(), 
-                "selector flagged as false-positive.".to_string()
-            );
-            continue;
-        }
 
         // get a map of possible jump destinations
         let (map, jumpdests) = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
