@@ -14,3 +14,6 @@ output/*
 */output
 *.evm
 *.asm
+
+heimdall/scripts/update
+heimdall/scripts/git

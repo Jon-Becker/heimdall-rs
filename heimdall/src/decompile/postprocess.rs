@@ -16,7 +16,7 @@ lazy_static! {
 fn convert_bitmask_to_casting(line: String) -> String {
     let mut cleaned = line;
 
-    match AND_BITMASK_REGEX.find(&cleaned) {
+    match AND_BITMASK_REGEX.find(&cleaned).unwrap() {
         Some(bitmask) => {
             let cast = bitmask.as_str();
             let cast_size = NON_ZERO_BYTE_REGEX.find_iter(&cast).count();
@@ -65,7 +65,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
         },
         None => {
 
-            match AND_BITMASK_REGEX_2.find(&cleaned) {
+            match AND_BITMASK_REGEX_2.find(&cleaned).unwrap() {
                 Some(bitmask) => {
                     let cast = bitmask.as_str();
                     let cast_size = NON_ZERO_BYTE_REGEX.find_iter(&cast).count();
@@ -311,7 +311,7 @@ fn convert_memory_to_variable(line: String) -> String {
     }
 
     // find a memory access
-    let memory_access = match MEM_ACCESS_REGEX.find(&cleaned) {
+    let memory_access = match MEM_ACCESS_REGEX.find(&cleaned).unwrap() {
         Some(x) => x.as_str(),
         None => return cleaned,
     };
@@ -401,7 +401,7 @@ fn move_casts_to_declaration(line: String) -> String {
     let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
 
     // get the outermost cast
-    match TYPE_CAST_REGEX.find(&instantiation[1]) {
+    match TYPE_CAST_REGEX.find(&instantiation[1]).unwrap() {
         Some(x) => {
 
             // the match must occur at index 0

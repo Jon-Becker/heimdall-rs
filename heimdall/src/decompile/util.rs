@@ -16,6 +16,8 @@ use heimdall_common::{
     io::logging::{TraceFactory},
 };
 
+use crate::decompile::constants::LOOP_DETECTION_REGEX;
+
 #[derive(Clone, Debug)]
 pub struct Function {
     // the function's 4byte selector
@@ -294,7 +296,13 @@ pub fn map_selector(
     // the VM is at the function entry point, begin tracing
     let mut handled_jumpdests = Vec::new();
     (
-        recursive_map(&vm.clone(), trace, trace_parent, &mut handled_jumpdests, 0, U256::from(0)),
+        recursive_map(
+            &vm.clone(),
+            trace,
+            trace_parent,
+            &mut handled_jumpdests,
+            String::new()
+        ),
         handled_jumpdests,
     )
 }
@@ -304,8 +312,7 @@ pub fn recursive_map(
     trace: &TraceFactory,
     trace_parent: u32,
     handled_jumpdests: &mut Vec<String>,
-    last_jumpi: u128,
-    last_jumpdest: U256
+    path: String,
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -326,15 +333,15 @@ pub fn recursive_map(
         if state.last_instruction.opcode == "57" {
             vm_trace.depth += 1;
 
-            println!("{}, JUMPI: {}", state.last_instruction.instruction, state.last_instruction.inputs[0]);
-
             // we need to create a trace for the path that wasn't taken.
             if state.last_instruction.inputs[1] == U256::from(0) {
 
-                // break out of and mark loops
-                if last_jumpdest == state.last_instruction.inputs[0] &&
-                   last_jumpi == state.last_instruction.instruction {
-                    
+                // break out of loops
+                if LOOP_DETECTION_REGEX.is_match(
+                    &format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0])
+                ).unwrap() {
+                    println!("Loop detected, breaking out of trace.");
+
                     // pop off the JUMPI
                     vm_trace.operations.pop();
                     break;
@@ -350,8 +357,7 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
-                    state.last_instruction.instruction,
-                    state.last_instruction.inputs[0],
+                    format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0]),
                 ));
 
                 // push the current path onto the stack
@@ -360,16 +366,17 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
-                    state.last_instruction.instruction,
-                    state.last_instruction.inputs[0],
+                    format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0]),
                 ));
                 break;
             } else {
 
-                // break out of and mark loops
-                if last_jumpdest == state.last_instruction.inputs[0] &&
-                   last_jumpi == state.last_instruction.instruction {
-                    
+                // break out of loops
+                if LOOP_DETECTION_REGEX.is_match(
+                    &format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0])
+                ).unwrap() {
+                    println!("Loop detected, breaking out of trace.");
+
                     // pop off the JUMPI
                     vm_trace.operations.pop();
                     break;
@@ -385,8 +392,7 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
-                    state.last_instruction.instruction,
-                    state.last_instruction.inputs[0],
+                    format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0]),
                 ));
 
                 // push the current path onto the stack
@@ -395,14 +401,11 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
-                    state.last_instruction.instruction,
-                    state.last_instruction.inputs[0],
+                    format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0]),
                 ));
                 break;
             }
         }
-
-        println!("{} {}", state.last_instruction.instruction, state.last_instruction.opcode);
 
         if vm.exitcode != 255 || vm.returndata.len() > 0 {
             break;

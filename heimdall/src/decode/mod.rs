@@ -53,7 +53,7 @@ pub fn decode(args: DecodeArgs) {
     let calldata: String;
 
     // determine whether or not the target is a transaction hash
-    if TRANSACTION_HASH_REGEX.is_match(&args.target) {
+    if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
 
         // create new runtime block
         let rt = tokio::runtime::Builder::new_current_thread()

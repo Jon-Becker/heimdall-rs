@@ -237,7 +237,7 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 pub fn find_cast(line: String) -> (usize, usize, Option<String>) {
 
     // find the start of the cast
-    match TYPE_CAST_REGEX.find(&line) {
+    match TYPE_CAST_REGEX.find(&line).unwrap() {
         Some(m) => {
             let start = m.start();
             let end = m.end() - 1;

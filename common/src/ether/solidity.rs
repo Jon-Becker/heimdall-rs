@@ -283,7 +283,7 @@ impl WrappedOpcode {
                 let solidified_slot = self.inputs[0]._solidify();
 
                 // are dealing with a slot that is a constant, we can just use the slot directly
-                if WORD_REGEX.is_match(&solidified_slot) {
+                if WORD_REGEX.is_match(&solidified_slot).unwrap() {
                     
                     // convert to usize
                     match usize::from_str_radix(
@@ -407,7 +407,7 @@ impl WrappedOpcode {
                         );
                     }
                     else {
-                        match MEMLEN_REGEX.find(&format!("memory[{}]", memloc)) {
+                        match MEMLEN_REGEX.find(&format!("memory[{}]", memloc)).unwrap() {
                             Some(_) => {
                                 solidified_wrapped_opcode.push_str(
                                     format!(

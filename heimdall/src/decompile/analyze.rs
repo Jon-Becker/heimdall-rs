@@ -281,7 +281,7 @@ impl VMTrace {
                             false => {
         
                                 // attempt to find a return type within the return memory operations
-                                let byte_size = match AND_BITMASK_REGEX.find(&return_memory_operations_solidified) {
+                                let byte_size = match AND_BITMASK_REGEX.find(&return_memory_operations_solidified).unwrap() {
                                     Some(bitmask) => {
                                         let cast = bitmask.as_str();
 
