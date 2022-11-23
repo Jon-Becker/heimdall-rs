@@ -19,7 +19,7 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 indicatif = "0.17.0"
 strsim = "0.10.0"
-regex = "1.1.5"
+fancy-regex = "0.10.0"
 lazy_static = "1.4.0"
 ethers = "1.0.0"
 

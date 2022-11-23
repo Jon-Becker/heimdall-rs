@@ -9,7 +9,7 @@ keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 
 [dependencies]
 colored = "2"
-regex = "1.1.5"
+fancy-regex = "0.10.0"
 lazy_static = "1.4.0"
 clap-verbosity-flag = "1.0.0"
 indicatif = "0.17.0"
@@ -18,3 +18,4 @@ clap = { version = "3.1.18", features = ["derive"] }
 reqwest = { version = "0.11.11", features = ["blocking"] }
 serde_json = "1.0"
 ethers = "1.0.0"
+
