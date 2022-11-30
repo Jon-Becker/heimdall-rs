@@ -151,6 +151,7 @@ impl VMTrace {
                 else {
 
                     // this is an if conditional for the children branches
+                    let conditional = instruction.input_operations[1].solidify();
 
                     // check if there is a conditional before this as well. combine them if so
                     if let Some(last) = function.logic.last_mut() {
@@ -159,18 +160,26 @@ impl VMTrace {
                             if slice.2 {
                                 
                                 // combine the two conditionals
-                                *last = format!("if ({}) {{", format!("({}) && ({})", last.get(slice.0..slice.1).unwrap(), instruction.input_operations[1].solidify()));
+                                *last = format!("if ({}) {{", format!("({}) && ({})", last.get(slice.0..slice.1).unwrap(), conditional));
 
                                 continue;
                             }
                         }
                     }
 
+                    // check if this if statement is added by the compiler
+                    if conditional == "!msg.value" {
+                        
+                        // this is marking the start of a non-payable function
+                        function.payable = false;
+                        continue;
+                    }
+
                     function.logic.push(
                         format!(
                             "if ({}) {{",
                             
-                            instruction.input_operations[1].solidify()
+                            conditional
                         ).to_string()
                     );
                     branch_jumped = true;
@@ -605,7 +614,7 @@ impl VMTrace {
                 };
             }
             else {
-                //function.logic.push(format!("{} not implemented", opcode_name));
+                function.logic.push(format!("{} not implemented", opcode_name));
             }
 
             // handle type heuristics

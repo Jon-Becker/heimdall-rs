@@ -299,7 +299,7 @@ pub fn build_output(
             if function.pure { "pure " }
             else if function.view { "view " }
             else { "" },
-            if function.payable { "payable" }
+            if function.payable { "payable " }
             else { "" },
         );
         let function_returns = format!(

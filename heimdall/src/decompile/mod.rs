@@ -311,7 +311,7 @@ pub fn decompile(args: DecompilerArgs) {
                 resolved_function: None,
                 pure: true,
                 view: true,
-                payable: false,
+                payable: true,
             },
             &mut trace,
             func_analysis_trace,
