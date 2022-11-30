@@ -116,6 +116,7 @@ pub struct VMTrace {
     pub instruction: u128,
     pub operations: Vec<State>,
     pub children: Vec<VMTrace>,
+    pub loop_detected: bool,
     pub depth: usize,
 }
 
@@ -301,7 +302,7 @@ pub fn map_selector(
             trace,
             trace_parent,
             &mut handled_jumpdests,
-            String::new()
+            &mut String::new()
         ),
         handled_jumpdests,
     )
@@ -312,7 +313,7 @@ pub fn recursive_map(
     trace: &TraceFactory,
     trace_parent: u32,
     handled_jumpdests: &mut Vec<String>,
-    path: String,
+    path: &mut String,
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -321,6 +322,7 @@ pub fn recursive_map(
         instruction: vm.instruction,
         operations: Vec::new(),
         children: Vec::new(),
+        loop_detected: false,
         depth: 0,
     };
 
@@ -333,17 +335,14 @@ pub fn recursive_map(
         if state.last_instruction.opcode == "57" {
             vm_trace.depth += 1;
 
+            path.push_str(&format!("{}->{};", state.last_instruction.instruction, state.last_instruction.inputs[0]));
+
             // we need to create a trace for the path that wasn't taken.
             if state.last_instruction.inputs[1] == U256::from(0) {
 
                 // break out of loops
-                if LOOP_DETECTION_REGEX.is_match(
-                    &format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0])
-                ).unwrap() {
-                    println!("Loop detected, breaking out of trace.");
-
-                    // pop off the JUMPI
-                    vm_trace.operations.pop();
+                if LOOP_DETECTION_REGEX.is_match(&path).unwrap() {
+                    vm_trace.loop_detected = true;
                     break;
                 }
 
@@ -357,7 +356,7 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
-                    format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0]),
+                    &mut path.clone()
                 ));
 
                 // push the current path onto the stack
@@ -366,19 +365,14 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
-                    format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0]),
+                    &mut path.clone()
                 ));
                 break;
             } else {
 
                 // break out of loops
-                if LOOP_DETECTION_REGEX.is_match(
-                    &format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0])
-                ).unwrap() {
-                    println!("Loop detected, breaking out of trace.");
-
-                    // pop off the JUMPI
-                    vm_trace.operations.pop();
+                if LOOP_DETECTION_REGEX.is_match(&path).unwrap() {
+                    vm_trace.loop_detected = true;
                     break;
                 }
 
@@ -392,7 +386,7 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
-                    format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0]),
+                    &mut path.clone()
                 ));
 
                 // push the current path onto the stack
@@ -401,7 +395,7 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
-                    format!("{}{}->{};", path, state.last_instruction.instruction, state.last_instruction.inputs[0]),
+                    &mut path.clone()
                 ));
                 break;
             }

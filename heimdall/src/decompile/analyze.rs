@@ -589,6 +589,9 @@ impl VMTrace {
                     None => {}
                 };
             }
+            else {
+                //function.logic.push(format!("{} not implemented", opcode_name));
+            }
 
             // handle type heuristics
             if [
@@ -673,7 +676,15 @@ impl VMTrace {
         }
 
         if branch_jumped {
-            function.logic.push("}".to_string());
+
+            // if the last line is an if statement, this branch is empty and probably stack operations we don't care about
+            if function.logic.last().unwrap().contains("if") {
+                function.logic.pop();
+            }
+            else {
+                println!("{}", function.logic.last().unwrap());
+                function.logic.push("}".to_string());
+            }
         }
 
         function

@@ -3,6 +3,7 @@ use std::{
     collections::HashMap
 };
 use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards, base26_encode}, constants::TYPE_CAST_REGEX};
+use indicatif::ProgressBar;
 use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
 use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX, MEM_ACCESS_REGEX}};
 use lazy_static::lazy_static;
@@ -533,11 +534,13 @@ fn cleanup(line: String) -> String {
     cleaned
 }
 
-fn finalize(lines: Vec<String>) -> Vec<String> {
+fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
     let mut cleaned_lines: Vec<String> = Vec::new();
 
     // remove unused assignments
     for (i, line) in lines.iter().enumerate() {
+        // update progress bar
+        bar.set_message(format!("finalizing line {}/{}", i, lines.len()));
 
         // only pass in lines further than the current line
         if !contains_unnecessary_assignment(line.trim().to_string(), &lines[i..].iter().collect::<Vec<_>>())
@@ -549,12 +552,15 @@ fn finalize(lines: Vec<String>) -> Vec<String> {
     cleaned_lines
 }
 
-pub fn postprocess(lines: Vec<String>) -> Vec<String> {
+pub fn postprocess(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
     let mut indentation: usize = 0;
     let mut cleaned_lines: Vec<String> = lines.clone();
 
     // clean up each line using postprocessing techniques
-    for line in cleaned_lines.iter_mut() {
+    for (i, line) in cleaned_lines.iter_mut().enumerate() {
+
+        // update progress bar
+        bar.set_message(format!("cleaning up line {}/{}", i, lines.len()));
 
         // dedent due to closing braces
         if line.starts_with("}") {
@@ -576,5 +582,5 @@ pub fn postprocess(lines: Vec<String>) -> Vec<String> {
     }
 
     // run finalizing postprocessing, which need to operate on cleaned lines
-    finalize(cleaned_lines)
+    finalize(cleaned_lines, bar)
 }
