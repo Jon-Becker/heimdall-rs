@@ -46,6 +46,8 @@ mod benchmark {
 #[cfg(test)]
 mod postprocess_tests {
 
+    use indicatif::ProgressBar;
+
     use crate::decompile::postprocess::postprocess;
 
     #[test]
@@ -54,7 +56,7 @@ mod postprocess_tests {
             String::from("(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) & (arg0);"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("uint256(arg0);")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("uint256(arg0);")]);
     }
     
     #[test]
@@ -63,7 +65,7 @@ mod postprocess_tests {
             String::from("(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("uint256(arg0);")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("uint256(arg0);")]);
     }
 
     #[test]
@@ -72,7 +74,7 @@ mod postprocess_tests {
             String::from("(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00);"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("uint248(arg0);")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("uint248(arg0);")]);
     }
 
     #[test]
@@ -81,7 +83,7 @@ mod postprocess_tests {
             String::from("uint256(uint256(arg0));"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("uint256(arg0);")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("uint256(arg0);")]);
     }
 
     #[test]
@@ -90,7 +92,7 @@ mod postprocess_tests {
             String::from("ecrecover(uint256(uint256(arg0)), uint256(uint256(arg0)), uint256(uint256(uint256(arg0))));"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("ecrecover(uint256(arg0), uint256(arg0), uint256(arg0));")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("ecrecover(uint256(arg0), uint256(arg0), uint256(arg0));")]);
     }
 
     #[test]
@@ -99,7 +101,7 @@ mod postprocess_tests {
             String::from("if (iszero(arg0)) {"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("if (!arg0) {")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("if (!arg0) {")]);
     }
 
     #[test]
@@ -108,7 +110,7 @@ mod postprocess_tests {
             String::from("if (iszero(iszero(arg0))) {"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("if (arg0) {")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("if (arg0) {")]);
     }
 
     #[test]
@@ -117,7 +119,7 @@ mod postprocess_tests {
             String::from("if (iszero(iszero(iszero(arg0)))) {"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("if (!arg0) {")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("if (!arg0) {")]);
     }
 
     #[test]
@@ -126,7 +128,7 @@ mod postprocess_tests {
             String::from("((arg0))"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("arg0")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("arg0")]);
     }
 
     #[test]
@@ -135,7 +137,7 @@ mod postprocess_tests {
             String::from("if ((cast(((arg0) + 1) / 10))) {"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("if (cast(arg0 + 1 / 10)) {")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("if (cast(arg0 + 1 / 10)) {")]);
     }
 
     #[test]
@@ -144,6 +146,6 @@ mod postprocess_tests {
             String::from("if (((((((((((((((cast(((((((((((arg0 * (((((arg1))))))))))))) + 1)) / 10)))))))))))))))) {"),
         ];
 
-        assert_eq!(postprocess(lines), vec![String::from("if (cast((arg0 * (arg1)) + 1 / 10)) {")]);
+        assert_eq!(postprocess(lines, &ProgressBar::new(128)), vec![String::from("if (cast((arg0 * (arg1)) + 1 / 10)) {")]);
     }
 }

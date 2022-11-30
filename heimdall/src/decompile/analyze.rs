@@ -151,6 +151,9 @@ impl VMTrace {
                 else {
 
                     // this is an if conditional for the children branches
+
+                    // check if there is a conditional before this as well. combine them if so
+                    
                     function.logic.push(
                         format!(
                             "if ({}) {{",
@@ -682,7 +685,6 @@ impl VMTrace {
                 function.logic.pop();
             }
             else {
-                println!("{}", function.logic.last().unwrap());
                 function.logic.push("}".to_string());
             }
         }
