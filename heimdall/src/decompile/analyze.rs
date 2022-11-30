@@ -15,7 +15,7 @@ use heimdall_common::{
         },
     },
     io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced},
+    utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
 };
 
 use super::{util::*, precompile::decode_precompile, constants::AND_BITMASK_REGEX};
@@ -153,7 +153,19 @@ impl VMTrace {
                     // this is an if conditional for the children branches
 
                     // check if there is a conditional before this as well. combine them if so
-                    
+                    if let Some(last) = function.logic.last_mut() {
+                        if last.starts_with("if") {
+                            let slice = find_balanced_encapsulator(last.to_string(), ('(', ')'));
+                            if slice.2 {
+                                
+                                // combine the two conditionals
+                                *last = format!("if ({}) {{", format!("({}) && ({})", last.get(slice.0..slice.1).unwrap(), instruction.input_operations[1].solidify()));
+
+                                continue;
+                            }
+                        }
+                    }
+
                     function.logic.push(
                         format!(
                             "if ({}) {{",
