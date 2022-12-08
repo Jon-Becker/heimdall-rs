@@ -190,7 +190,7 @@ pub fn decompile(args: DecompilerArgs) {
         target: contract_bytecode.clone(),
         default: args.default.clone(),
         verbose: args.verbose.clone(),
-        output: args.output.clone(),
+        output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
     });
     trace.add_call(
