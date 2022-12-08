@@ -8,10 +8,13 @@ use serde_json::Value;
 // make a GET request to the target URL and return the response body as JSON
 pub fn get_json_from_url(url: String) -> Option<Value> {
 
-    let mut res = match get(url) {
+    let mut res = match get(url.clone()) {
         Ok(res) => res,
         Err(_) => {
-            return None
+
+            // wait 1 second and try again
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            return get_json_from_url(url)
         }
     };
     let mut body = String::new();

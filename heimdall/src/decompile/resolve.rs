@@ -15,21 +15,24 @@ pub fn resolve_function_selectors(
     logger: &Logger,
 ) -> HashMap<String, Vec<ResolvedFunction>> {
     let resolved_functions: Arc<Mutex<HashMap<String, Vec<ResolvedFunction>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let resolve_progress: Arc<Mutex<ProgressBar>> = Arc::new(Mutex::new(ProgressBar::new_spinner()));
+
     let mut threads = Vec::new();
-    
-    let resolve_progress = ProgressBar::new_spinner();
-    resolve_progress.enable_steady_tick(Duration::from_millis(100));
-    resolve_progress.set_style(logger.info_spinner());
-    resolve_progress.set_message(format!("resolving {} selectors...", selectors.len()));
+
+    resolve_progress.lock().unwrap().enable_steady_tick(Duration::from_millis(100));
+    resolve_progress.lock().unwrap().set_style(logger.info_spinner());
 
     for selector in selectors {
         let function_clone = resolved_functions.clone();
+        let resolve_progress = resolve_progress.clone();
 
         // create a new thread for each selector
         threads.push(thread::spawn(move || {
             match resolve_function_signature(&selector) {
                 Some(function) => {
                     let mut _resolved_functions = function_clone.lock().unwrap();
+                    let mut _resolve_progress = resolve_progress.lock().unwrap();
+                    _resolve_progress.set_message(format!("resolved {} selectors.", _resolved_functions.len()));
                     _resolved_functions.insert(selector, function);
                 }
                 None => {},
@@ -43,7 +46,7 @@ pub fn resolve_function_selectors(
         thread.join().unwrap();
     }
 
-    resolve_progress.finish_and_clear();
+    resolve_progress.lock().unwrap().finish_and_clear();
 
     let x = resolved_functions.lock().unwrap().clone();
     x

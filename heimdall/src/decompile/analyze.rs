@@ -15,7 +15,7 @@ use heimdall_common::{
         },
     },
     io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
+    utils::strings::{decode_hex, encode_hex_reduced},
 };
 
 use super::{util::*, precompile::decode_precompile, constants::AND_BITMASK_REGEX};
