@@ -1,5 +1,6 @@
 use std::{collections::HashMap, time::Duration};
-
+use std::sync::{Arc, Mutex};
+use std::thread;
 use heimdall_common::{
     ether::signatures::{resolve_function_signature, ResolvedFunction},
     io::logging::Logger,
@@ -13,24 +14,39 @@ pub fn resolve_function_selectors(
     selectors: Vec<String>,
     logger: &Logger,
 ) -> HashMap<String, Vec<ResolvedFunction>> {
-    let mut resolved_functions: HashMap<String, Vec<ResolvedFunction>> = HashMap::new();
-
+    let resolved_functions: Arc<Mutex<HashMap<String, Vec<ResolvedFunction>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let mut threads = Vec::new();
+    
     let resolve_progress = ProgressBar::new_spinner();
     resolve_progress.enable_steady_tick(Duration::from_millis(100));
     resolve_progress.set_style(logger.info_spinner());
+    resolve_progress.set_message(format!("resolving {} selectors...", selectors.len()));
 
     for selector in selectors {
-        resolve_progress.set_message(format!("resolving '0x{}'", selector));
-        match resolve_function_signature(&selector) {
-            Some(function) => {
-                resolved_functions.insert(selector, function);
+        let function_clone = resolved_functions.clone();
+
+        // create a new thread for each selector
+        threads.push(thread::spawn(move || {
+            match resolve_function_signature(&selector) {
+                Some(function) => {
+                    let mut _resolved_functions = function_clone.lock().unwrap();
+                    _resolved_functions.insert(selector, function);
+                }
+                None => {},
             }
-            None => continue,
-        }
+        }));
+        
     }
+
+    // wait for all threads to finish
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
     resolve_progress.finish_and_clear();
 
-    resolved_functions
+    let x = resolved_functions.lock().unwrap().clone();
+    x
 }
 
 // match the ResolvedFunction to a list of Function parameters

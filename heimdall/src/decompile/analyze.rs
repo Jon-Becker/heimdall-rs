@@ -154,23 +154,31 @@ impl VMTrace {
                     let conditional = instruction.input_operations[1].solidify();
 
                     // check if there is a conditional before this as well. combine them if so
-                    if let Some(last) = function.logic.last_mut() {
-                        if last.starts_with("if") {
-                            let slice = find_balanced_encapsulator(last.to_string(), ('(', ')'));
-                            if slice.2 {
+                    // if let Some(last) = function.logic.last_mut() {
+                    //     if last.starts_with("if") {
+                    //         let slice = find_balanced_encapsulator(last.to_string(), ('(', ')'));
+                    //         if slice.2 {
                                 
-                                // combine the two conditionals
-                                *last = format!("if ({}) {{", format!("({}) && ({})", last.get(slice.0..slice.1).unwrap(), conditional));
+                    //             // combine the two conditionals
+                    //             *last = format!("if ({}) {{", format!("({}) && ({})", last.get(slice.0..slice.1).unwrap(), conditional));
 
-                                continue;
-                            }
-                        }
-                    }
+                    //             continue;
+                    //         }
+                    //     }
+                    // }
 
                     // check if this if statement is added by the compiler
                     if conditional == "!msg.value" {
                         
                         // this is marking the start of a non-payable function
+                        trace.add_info(
+                            trace_parent,
+                            instruction.instruction.try_into().unwrap(),
+                            format!(
+                                "conditional at instruction {} indicates an non-payble function.",
+                                instruction.instruction
+                            ),
+                        );
                         function.payable = false;
                         continue;
                     }
@@ -270,9 +278,10 @@ impl VMTrace {
                             }
                         }
                         None => {
-
-                            // skip empty reverts with no conditionals
-                            continue;   
+                            format!(
+                                "revert{};",
+                                custom_error_placeholder
+                            )
                         }
                     }
                 }
@@ -614,7 +623,7 @@ impl VMTrace {
                 };
             }
             else {
-                function.logic.push(format!("{} not implemented", opcode_name));
+                //function.logic.push(format!("{} not implemented", opcode_name));
             }
 
             // handle type heuristics
