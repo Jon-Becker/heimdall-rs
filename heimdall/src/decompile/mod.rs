@@ -480,7 +480,7 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom event signatures
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
-                decompilation_progress.set_message(format!("resolving event 0x{}", &event_selector.get(0..64).unwrap().to_string()));
+                decompilation_progress.set_message(format!("resolving event 0x{}", &event_selector.get(0..8).unwrap().to_string()));
                 let resolved_event_selectors = resolve_event_signature(&event_selector.get(0..64).unwrap().to_string());
 
                 // only continue if we have matches
