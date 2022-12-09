@@ -357,7 +357,7 @@ pub fn decompile(args: DecompilerArgs) {
         }
 
         if !args.skip_resolving {
-            
+
             let resolved_functions = match resolved_selectors.get(&selector) {
                 Some(func) => func.clone(),
                 None => {
@@ -481,7 +481,7 @@ pub fn decompile(args: DecompilerArgs) {
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
                 decompilation_progress.set_message(format!("resolving event 0x{}", &event_selector.get(0..8).unwrap().to_string()));
-                let resolved_event_selectors = resolve_event_signature(&event_selector.get(0..8).unwrap().to_string());
+                let resolved_event_selectors = resolve_event_signature(&event_selector.get(0..64).unwrap().to_string());
 
                 // only continue if we have matches
                 match resolved_event_selectors {
@@ -507,7 +507,7 @@ pub fn decompile(args: DecompilerArgs) {
                                 std::process::exit(1)
                             }
                         };
-                        
+
                         resolved_counter += 1;
                         analyzed_function.events.insert(event_selector, (Some(selected_match.clone()), raw_event));
                     },
