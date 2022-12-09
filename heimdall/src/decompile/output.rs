@@ -377,15 +377,18 @@ pub fn build_output(
 
     decompiled_output.push(String::from("}"));
 
-    write_lines_to_file(
-        &decompiled_output_path,
-        postprocess(
-            decompiled_output,
-            &progress_bar
-        )
-    );
-
-    progress_bar.finish_and_clear();
-
-    logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path).to_string());
+    if args.include_solidity {
+        write_lines_to_file(
+            &decompiled_output_path,
+            postprocess(
+                decompiled_output,
+                &progress_bar
+            )
+        );
+        logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path).to_string());
+        progress_bar.finish_and_clear();
+    }
+    else {
+        progress_bar.finish_and_clear();
+    }
 }

@@ -16,6 +16,7 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
+                include_solidity: true
             };
             crate::decompile::decompile(args.clone())
         }
@@ -34,6 +35,7 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
+                include_solidity: true
             };
             crate::decompile::decompile(args.clone())
         }

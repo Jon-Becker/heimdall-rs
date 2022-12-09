@@ -536,11 +536,15 @@ fn cleanup(line: String) -> String {
 
 fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
     let mut cleaned_lines: Vec<String> = Vec::new();
+    let mut function_count = 0;
 
     // remove unused assignments
     for (i, line) in lines.iter().enumerate() {
         // update progress bar
-        bar.set_message(format!("finalizing line {}/{}", i, lines.len()));
+        if line.contains("function") {
+            function_count += 1;
+            bar.set_message(format!("postprocessed {} functions", function_count));
+        }
 
         // only pass in lines further than the current line
         if !contains_unnecessary_assignment(line.trim().to_string(), &lines[i..].iter().collect::<Vec<_>>())
@@ -554,13 +558,17 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
 
 pub fn postprocess(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
     let mut indentation: usize = 0;
+    let mut function_count = 0;
     let mut cleaned_lines: Vec<String> = lines.clone();
 
     // clean up each line using postprocessing techniques
-    for (i, line) in cleaned_lines.iter_mut().enumerate() {
+    for (_, line) in cleaned_lines.iter_mut().enumerate() {
 
         // update progress bar
-        bar.set_message(format!("cleaning up line {}/{}", i, lines.len()));
+        if line.contains("function") {
+            function_count += 1;
+            bar.set_message(format!("postprocessed {} functions", function_count));
+        }
 
         // dedent due to closing braces
         if line.starts_with("}") {

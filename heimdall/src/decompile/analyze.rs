@@ -238,8 +238,9 @@ impl VMTrace {
                         }
                         None => {
                             format!(
-                                "revert(\"{}\");",
-                                revert_string
+                                "revert(\"{}\"); // {}",
+                                revert_string,
+                                instruction.instruction
                             )
                         }
                     }
@@ -279,8 +280,9 @@ impl VMTrace {
                         }
                         None => {
                             format!(
-                                "revert{};",
-                                custom_error_placeholder
+                                "revert{}; // {}",
+                                custom_error_placeholder,
+                                instruction.instruction
                             )
                         }
                     }

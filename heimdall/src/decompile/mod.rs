@@ -67,6 +67,10 @@ pub struct DecompilerArgs {
     #[clap(long="skip-resolving")]
     pub skip_resolving: bool,
 
+    /// Whether to include solidity source code in the output (in beta).
+    #[clap(long="include-sol")]
+    pub include_solidity: bool,
+
 }
 
 pub fn decompile(args: DecompilerArgs) {
