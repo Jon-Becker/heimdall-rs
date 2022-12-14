@@ -2,7 +2,7 @@ use std::{
     sync::Mutex,
     collections::HashMap
 };
-use heimdall_common::{ether::evm::types::{byte_size_to_type, find_cast}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards, base26_encode}, constants::TYPE_CAST_REGEX};
+use heimdall_common::{ether::{evm::types::{byte_size_to_type, find_cast}, signatures::{ResolvedError, ResolvedLog}}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards, base26_encode}, constants::TYPE_CAST_REGEX};
 use indicatif::ProgressBar;
 use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
 use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX, MEM_ACCESS_REGEX}};
@@ -503,7 +503,39 @@ fn inherit_infer_type(line: String) -> String {
     cleaned
 }
 
-fn cleanup(line: String) -> String {
+fn replace_resolved(
+    line: String,
+    all_resolved_errors: HashMap<String, ResolvedError>,
+    all_resolved_events: HashMap<String, ResolvedLog>,
+) -> String {
+    let mut cleaned = line.clone();    
+    
+    // line must contain CustomError_ or Event_
+    if !cleaned.contains("CustomError_") && !cleaned.contains("Event_") { return cleaned; }
+
+    // not the best way to do it, can perf later
+    for (selector, error) in all_resolved_errors.iter() {
+        let selector = selector.get(0..8).unwrap_or("00000000");
+        if cleaned.contains(selector) {
+            cleaned = cleaned.replace(&format!("CustomError_{selector}"), &error.name);
+        }
+    }
+
+    for (selector, event) in all_resolved_events.iter() {
+        let selector = selector.get(0..8).unwrap_or("00000000");
+        if cleaned.contains(selector) {
+            cleaned = cleaned.replace(&format!("Event_{selector}"), &event.name);
+        }
+    }
+
+    cleaned
+}
+
+fn cleanup(
+    line: String,
+    all_resolved_errors: HashMap<String, ResolvedError>,
+    all_resolved_events: HashMap<String, ResolvedLog>,
+) -> String {
     let mut cleaned = line;
 
     // skip comments
@@ -533,6 +565,9 @@ fn cleanup(line: String) -> String {
     // Inherit or infer types from expressions
     cleaned = inherit_infer_type(cleaned);
 
+    // Replace resolved errors and events
+    cleaned = replace_resolved(cleaned, all_resolved_errors, all_resolved_events);
+
     cleaned
 }
 
@@ -560,6 +595,8 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
 
 pub fn postprocess(
     lines: Vec<String>,
+    all_resolved_errors: HashMap<String, ResolvedError>,
+    all_resolved_events: HashMap<String, ResolvedLog>,
     bar: &ProgressBar
 ) -> Vec<String> {
     let mut indentation: usize = 0;
@@ -584,7 +621,11 @@ pub fn postprocess(
         *line = format!(
             "{}{}",
             " ".repeat(indentation*4),
-            cleanup(line.to_string())
+            cleanup(
+                line.to_string(),
+                all_resolved_errors.clone(),
+                all_resolved_events.clone()
+            )
         );
         
         // indent due to opening braces

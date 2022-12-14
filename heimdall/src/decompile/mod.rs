@@ -78,8 +78,8 @@ pub fn decompile(args: DecompilerArgs) {
     let now = Instant::now();
 
     let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
-    let mut all_resolved_events: HashMap<String, Option<ResolvedLog>> = HashMap::new();
-    let mut all_resolved_errors: HashMap<String, Option<ResolvedError>> = HashMap::new();
+    let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
+    let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
@@ -466,7 +466,7 @@ pub fn decompile(args: DecompilerArgs) {
                         
                         resolved_counter += 1;
                         analyzed_function.errors.insert(error_selector.clone(), Some(selected_match.clone()));
-                        all_resolved_errors.insert(error_selector.clone(), Some(selected_match.clone()));
+                        all_resolved_errors.insert(error_selector.clone(), selected_match.clone());
                     },
                     None => {}
                 }
@@ -515,7 +515,7 @@ pub fn decompile(args: DecompilerArgs) {
                         
                         resolved_counter += 1;
                         analyzed_function.events.insert(event_selector.clone(), (Some(selected_match.clone()), raw_event));
-                        all_resolved_events.insert(event_selector, Some(selected_match.clone()));
+                        all_resolved_events.insert(event_selector, selected_match.clone());
                     },
                     None => {}
                 }
@@ -544,6 +544,8 @@ pub fn decompile(args: DecompilerArgs) {
         &args,
         output_dir,
         analyzed_functions,
+        all_resolved_errors,
+        all_resolved_events,
         &logger,
         &mut trace,
         decompile_call,

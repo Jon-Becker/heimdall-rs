@@ -1,6 +1,6 @@
-use std::time::Duration;
+use std::{time::Duration, collections::HashMap};
 
-use heimdall_common::io::{logging::{TraceFactory, Logger}, file::{short_path, write_file, write_lines_to_file}};
+use heimdall_common::{io::{logging::{TraceFactory, Logger}, file::{short_path, write_file, write_lines_to_file}}, ether::signatures::{ResolvedError, ResolvedLog}};
 use indicatif::ProgressBar;
 
 use super::{DecompilerArgs, util::Function, constants::DECOMPILED_SOURCE_HEADER, postprocess::postprocess};
@@ -55,6 +55,8 @@ pub fn build_output(
     args: &DecompilerArgs,
     output_dir: String,
     functions: Vec<Function>,
+    all_resolved_errors: HashMap<String, ResolvedError>,
+    all_resolved_events: HashMap<String, ResolvedLog>,
     logger: &Logger,
     trace: &mut TraceFactory,
     trace_parent: u32
@@ -382,6 +384,8 @@ pub fn build_output(
             &decompiled_output_path,
             postprocess(
                 decompiled_output,
+                all_resolved_errors,
+                all_resolved_events,
                 &progress_bar
             )
         );
