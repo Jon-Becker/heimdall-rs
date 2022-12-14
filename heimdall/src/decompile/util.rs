@@ -48,7 +48,7 @@ pub struct Function {
     // holds function logic to be written to the output solidity file.
     pub logic: Vec<String>,
 
-    // holds all emitted events. used to generate solidity event definitions
+    // holds all found events used to generate solidity error definitions
     // as well as ABI specifications.
     pub events: HashMap<String, (Option<ResolvedLog>, Log)>,
 

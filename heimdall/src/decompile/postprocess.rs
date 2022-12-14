@@ -353,7 +353,9 @@ fn convert_memory_to_variable(line: String) -> String {
             // recurse to replace any other memory accesses
             cleaned = convert_memory_to_variable(cleaned);
         },
-        _ => return cleaned
+        _ => {
+            return cleaned
+        }
     }
 
     // if the memory access is an instantiation, save it
@@ -556,7 +558,10 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
     cleaned_lines
 }
 
-pub fn postprocess(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
+pub fn postprocess(
+    lines: Vec<String>,
+    bar: &ProgressBar
+) -> Vec<String> {
     let mut indentation: usize = 0;
     let mut function_count = 0;
     let mut cleaned_lines: Vec<String> = lines.clone();
@@ -579,11 +584,11 @@ pub fn postprocess(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
         *line = format!(
             "{}{}",
             " ".repeat(indentation*4),
-            cleanup(line.to_string()) 
+            cleanup(line.to_string())
         );
         
         // indent due to opening braces
-        if line.ends_with("{") {
+        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with("{") {
             indentation += 1;
         }
         

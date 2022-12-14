@@ -13,12 +13,13 @@ pub fn get_json_from_url(url: String, attempts_remaining: u8) -> Option<Value> {
         Err(_) => {
 
             // retry if we have attempts remaining
-            if attempts_remaining == 1 {
+            let attempts_remaining = attempts_remaining - 1;
+            if attempts_remaining == 0 {
                 return None
             }
 
-            std::thread::sleep(std::time::Duration::from_millis(250));
-            return get_json_from_url(url, attempts_remaining - 1)
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            return get_json_from_url(url, attempts_remaining)
         }
     };
     let mut body = String::new();

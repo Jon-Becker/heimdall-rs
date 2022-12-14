@@ -32,7 +32,7 @@ pub fn resolve_function_selectors(
                 Some(function) => {
                     let mut _resolved_functions = function_clone.lock().unwrap();
                     let mut _resolve_progress = resolve_progress.lock().unwrap();
-                    _resolve_progress.set_message(format!("resolved {} selectors.", _resolved_functions.len()));
+                    _resolve_progress.set_message(format!("resolved {} selectors...", _resolved_functions.len()));
                     _resolved_functions.insert(selector, function);
                 }
                 None => {},

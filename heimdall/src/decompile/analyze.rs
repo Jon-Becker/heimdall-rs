@@ -15,7 +15,7 @@ use heimdall_common::{
         },
     },
     io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced},
+    utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
 };
 
 use super::{util::*, precompile::decode_precompile, constants::AND_BITMASK_REGEX};
@@ -149,6 +149,7 @@ impl VMTrace {
                     revert_conditional = Some(instruction.input_operations[1].solidify());
                 }
                 else {
+                    revert_conditional = Some(instruction.input_operations[1].solidify());
 
                     // this is an if conditional for the children branches
                     let conditional = instruction.input_operations[1].solidify();
@@ -237,11 +238,21 @@ impl VMTrace {
                             )
                         }
                         None => {
-                            format!(
-                                "revert(\"{}\"); // {}",
-                                revert_string,
-                                instruction.instruction
-                            )
+                            
+                            // get the last IF statement and add the revert to it
+                            for i in (0..function.logic.len()).rev() {
+                                if function.logic[i].contains("if") {
+                                    let encap = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
+                                    let require_conditional = function.logic[i].get(encap.0..encap.1).unwrap().to_string();
+                                    function.logic[i] = format!(
+                                        "require({}, \"{}\"); //",
+                                        require_conditional,
+                                        revert_string
+                                    );
+                                    break;
+                                }
+                            }
+                            continue;
                         }
                     }
                 }
@@ -263,7 +274,6 @@ impl VMTrace {
 
                     revert_logic = match revert_conditional.clone() {
                         Some(condition) => {
-
                             if custom_error_placeholder == "()".to_string() {
                                 format!(
                                     "require({});",
@@ -279,11 +289,27 @@ impl VMTrace {
                             }
                         }
                         None => {
-                            format!(
-                                "revert{}; // {}",
-                                custom_error_placeholder,
-                                instruction.instruction
-                            )
+
+                            // get the last IF statement and add the revert to it
+                            for i in (0..function.logic.len()).rev() {
+                                if function.logic[i].starts_with("if") {
+                                    let encap = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
+                                    let require_conditional = function.logic[i].get(encap.0..encap.1).unwrap().to_string();
+
+                                    if custom_error_placeholder == "()".to_string() {
+                                        function.logic[i] = format!("require({});", require_conditional);
+                                    }
+                                    else {
+                                        function.logic[i] = format!(
+                                            "if (!{}) revert{};",
+                                            require_conditional,
+                                            custom_error_placeholder
+                                        )
+                                    }
+                                    break;
+                                }
+                            }
+                            continue;
                         }
                     }
                 }
