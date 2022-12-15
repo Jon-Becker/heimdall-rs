@@ -245,7 +245,7 @@ impl VMTrace {
                                     let encap = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
                                     let require_conditional = function.logic[i].get(encap.0..encap.1).unwrap().to_string();
                                     function.logic[i] = format!(
-                                        "require({}, \"{}\"); //",
+                                        "require({}, \"{}\");",
                                         require_conditional,
                                         revert_string
                                     );

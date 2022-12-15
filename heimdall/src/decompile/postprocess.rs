@@ -390,6 +390,9 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
                 return false;
             }
         }
+        else if x.contains(var_name) {
+            return false;
+        }
     }
 
     true
