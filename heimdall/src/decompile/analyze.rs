@@ -28,11 +28,12 @@ impl VMTrace {
         function: Function,
         trace: &mut TraceFactory,
         trace_parent: u32,
+        conditional_map: &mut Vec<String>
     ) -> Function {
 
         // make a clone of the recursed analysis function
         let mut function = function.clone();
-        let mut branch_jumped = false;
+        let mut jumped_conditional: Option<String> = None;
         let mut revert_conditional: Option<String> = None;
 
         // perform analysis on the operations of the current VMTrace branch
@@ -147,6 +148,8 @@ impl VMTrace {
                 // if the JUMPI is not taken and the branch reverts, this is a require statement
                 if self.operations.last().unwrap().last_instruction.opcode_details.clone().unwrap().name == "REVERT" {
                     revert_conditional = Some(instruction.input_operations[1].solidify());
+                    jumped_conditional = Some(revert_conditional.clone().unwrap());
+                    conditional_map.push(revert_conditional.clone().unwrap());
                 }
                 else {
                     revert_conditional = Some(instruction.input_operations[1].solidify());
@@ -191,7 +194,8 @@ impl VMTrace {
                             conditional
                         ).to_string()
                     );
-                    branch_jumped = true;
+                    jumped_conditional = Some(conditional.clone());
+                    conditional_map.push(conditional);
                 }
 
             } else if opcode_name == "REVERT" {
@@ -238,17 +242,20 @@ impl VMTrace {
                             )
                         }
                         None => {
-                            
-                            // get the last IF statement and add the revert to it
+
+                            // loop backwards through logic to find the last IF statement
                             for i in (0..function.logic.len()).rev() {
-                                if function.logic[i].contains("if") {
-                                    let encap = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
-                                    let require_conditional = function.logic[i].get(encap.0..encap.1).unwrap().to_string();
-                                    function.logic[i] = format!(
-                                        "require({}, \"{}\");",
-                                        require_conditional,
-                                        revert_string
-                                    );
+                                if function.logic[i].starts_with("if") {
+
+                                    // get matching conditional
+                                    let conditional = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
+                                    let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap();
+                                    
+                                    // we can negate the conditional to get the revert logic
+                                    // TODO: make this a require statement, if revert is rlly gross but its technically correct
+                                    //       I just ran into issues with ending bracket matching
+                                    function.logic[i] = format!("if (!({})) {{ revert(\"{}\"); }} else {{", conditional, revert_string);
+
                                     break;
                                 }
                             }
@@ -290,22 +297,19 @@ impl VMTrace {
                         }
                         None => {
 
-                            // get the last IF statement and add the revert to it
+                            // loop backwards through logic to find the last IF statement
                             for i in (0..function.logic.len()).rev() {
                                 if function.logic[i].starts_with("if") {
-                                    let encap = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
-                                    let require_conditional = function.logic[i].get(encap.0..encap.1).unwrap().to_string();
 
-                                    if custom_error_placeholder == "()".to_string() {
-                                        function.logic[i] = format!("require({});", require_conditional);
-                                    }
-                                    else {
-                                        function.logic[i] = format!(
-                                            "if (!{}) revert{};",
-                                            require_conditional,
-                                            custom_error_placeholder
-                                        )
-                                    }
+                                    // get matching conditional
+                                    let conditional = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
+                                    let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap();
+                                    
+                                    // we can negate the conditional to get the revert logic
+                                    // TODO: make this a require statement, if revert is rlly gross but its technically correct
+                                    //       I just ran into issues with ending bracket matching
+                                    function.logic[i] = format!("if (!({})) {{ revert{}; }} else {{", conditional, custom_error_placeholder);
+
                                     break;
                                 }
                             }
@@ -732,12 +736,32 @@ impl VMTrace {
         // recurse into the children of the VMTrace map
         for (_, child) in self.children.iter().enumerate() {
 
-            function = child.analyze(function, trace, trace_parent);
+            function = child.analyze(function, trace, trace_parent, conditional_map);
 
         }
 
-        if branch_jumped {
+        // if branch_jumped {
 
+        //     // if the last line is an if statement, this branch is empty and probably stack operations we don't care about
+        //     if function.logic.last().unwrap().contains("if") {
+        //         function.logic.pop();
+        //     }
+        //     else {
+        //         function.logic.push("}".to_string());
+        //     }
+        // }
+
+        // check if the ending brackets are needed
+        if jumped_conditional.is_some() && conditional_map.contains(&jumped_conditional.clone().unwrap())
+        {
+             // remove the conditional
+             for (i, conditional) in conditional_map.iter().enumerate() {
+                if conditional == &jumped_conditional.clone().unwrap() {
+                    conditional_map.remove(i);
+                    break;
+                }
+            }
+            
             // if the last line is an if statement, this branch is empty and probably stack operations we don't care about
             if function.logic.last().unwrap().contains("if") {
                 function.logic.pop();

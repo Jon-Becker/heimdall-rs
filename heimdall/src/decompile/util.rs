@@ -59,6 +59,9 @@ pub struct Function {
     // stores the matched resolved function for this Functon
     pub resolved_function: Option<ResolvedFunction>,
 
+    // stores the current indent depth, used for formatting and removing unnecessary closing brackets.
+    pub indent_depth: usize,
+
     // modifiers
     pub pure: bool,
     pub view: bool,

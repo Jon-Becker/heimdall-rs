@@ -315,12 +315,14 @@ pub fn decompile(args: DecompilerArgs) {
                 events: HashMap::new(),
                 errors: HashMap::new(),
                 resolved_function: None,
+                indent_depth: 0,
                 pure: true,
                 view: true,
                 payable: true,
             },
             &mut trace,
             func_analysis_trace,
+            &mut Vec::new()
         );
 
         let argument_count = analyzed_function.arguments.len();
@@ -519,7 +521,6 @@ pub fn decompile(args: DecompilerArgs) {
                     },
                     None => {}
                 }
-               
             }
 
             if resolved_counter > 0 {
