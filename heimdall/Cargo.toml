@@ -5,7 +5,7 @@ keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
 name = "heimdall"
 readme = "README.md"
-version = "0.1.8"
+version = "0.2.0"
 
 [dependencies]
 backtrace = "0.3"
@@ -22,7 +22,6 @@ indicatif = "0.17.0"
 strsim = "0.10.0"
 fancy-regex = "0.10.0"
 lazy_static = "1.4.0"
-ethers = "1.0.0"
 
 [[bin]]
 name = "heimdall"
