@@ -493,7 +493,7 @@ fn inherit_infer_type(line: String) -> String {
 
             // infer the type from args and vars in the expression
             for (var, var_type) in type_map.clone().iter() {
-                if cleaned.contains(var) && !type_map.contains_key(var_name) {
+                if cleaned.contains(var) && !type_map.contains_key(var_name) && var_type != "" {
                     cleaned = format!("{} {}", var_type, cleaned);
                     type_map.insert(var_name.to_string(), var_type.to_string());
                     break;
