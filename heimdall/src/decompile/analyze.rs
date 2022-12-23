@@ -756,17 +756,6 @@ impl VMTrace {
 
         }
 
-        // if branch_jumped {
-
-        //     // if the last line is an if statement, this branch is empty and probably stack operations we don't care about
-        //     if function.logic.last().unwrap().contains("if") {
-        //         function.logic.pop();
-        //     }
-        //     else {
-        //         function.logic.push("}".to_string());
-        //     }
-        // }
-
         // check if the ending brackets are needed
         if jumped_conditional.is_some() && conditional_map.contains(&jumped_conditional.clone().unwrap())
         {
