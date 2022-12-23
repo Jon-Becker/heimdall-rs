@@ -148,10 +148,10 @@ pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
     // convert the serde value into a vec of possible functions
     // AAAHAHHHHHH IM MATCHING
     let results = match signatures.get("result") {
-        Some(result) => match result.get("function") {
-            Some(function) => match function.get(format!("0x{signature}")) {
-                Some(functions) => match functions.as_array() {
-                    Some(functions) => functions.to_vec(),
+        Some(result) => match result.get("event") {
+            Some(event) => match event.get(format!("0x{signature}")) {
+                Some(events) => match events.as_array() {
+                    Some(events) => events.to_vec(),
                     None => return None
                 },
                 None => return None

@@ -1,0 +1,36 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - '*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Publish for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: heimdall
+            asset_name: heimdall-linux-amd64
+          - os: macos-latest
+            artifact_name: heimdall
+            asset_name: heimdall-macos-amd64
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build Binaries
+      working-directory: ./heimdall
+      run:  cargo build --release
+    - name: Upload Binaries
+      uses: svenstaro/upload-release-action@v2
+      with:
+        file: ./heimdall/target/release/${{ matrix.artifact_name }}
+        asset_name: ${{ matrix.asset_name }}
+        tag: ${{ github.ref }}
+        overwrite: true
