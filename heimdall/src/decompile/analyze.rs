@@ -123,6 +123,10 @@ impl VMTrace {
                     // add the event to the function
                     function.events.insert(logged_event.topics.first().unwrap().to_string(), (None, logged_event.clone()));
 
+                    // decode the data field
+                    let data_mem_ops = function.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
+                    let data_mem_ops_solidified = data_mem_ops.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ");
+    
                     // add the event emission to the function's logic
                     // will be decoded during post-processing
                     function.logic.push(format!(
@@ -134,12 +138,24 @@ impl VMTrace {
                         },
                         match logged_event.topics.get(1..) {
                             Some(topics) => match logged_event.data.len() > 0 && topics.len() > 0 {
-                                true => format!("{}, ", topics.join(", ")),
-                                false => topics.join(", "),
+                                true => {
+                                    let mut solidified_topics: Vec<String> = Vec::new();
+                                    for (i, _) in topics.iter().enumerate() {
+                                        solidified_topics.push(instruction.input_operations[i+3].solidify());
+                                    }
+                                    format!("{}, ", solidified_topics.join(", "))
+                                }
+                                false => {
+                                    let mut solidified_topics: Vec<String> = Vec::new();
+                                    for (i, _) in topics.iter().enumerate() {
+                                        solidified_topics.push(instruction.input_operations[i+3].solidify());
+                                    }
+                                    solidified_topics.join(", ")
+                                }
                             },
                             None => "".to_string(),
                         },
-                        logged_event.data
+                        data_mem_ops_solidified
                     ));
                 }
 
