@@ -1,12 +1,24 @@
-use regex::Regex;
+use fancy_regex::Regex;
 use lazy_static::lazy_static;
 
 
 lazy_static! {
 
     // The following regex is used as a detector for AND bitmasks
-    pub static ref AND_BITMASK_REGEX: Regex = Regex::new(r"0x[0-9a-fA-F]* & ").unwrap();
-    pub static ref AND_BITMASK_REGEX_2: Regex = Regex::new(r" & 0x[0-9a-fA-F]*").unwrap();
+    pub static ref AND_BITMASK_REGEX: Regex = Regex::new(r"\(0x([a-fA-F0-9]{2}){1,32}\) & ").unwrap();
+    pub static ref AND_BITMASK_REGEX_2: Regex = Regex::new(r" & \(0x([a-fA-F0-9]{2}){1,32}\)").unwrap();
+
+    // used to detect non-zero bytes within a word
+    pub static ref NON_ZERO_BYTE_REGEX: Regex = Regex::new(r"[a-fA-F0-9][a-fA-F1-9]").unwrap();
+
+    // detects a parenthesis enclosed expression
+    pub static ref ENCLOSED_EXPRESSION_REGEX: Regex = Regex::new(r"\(.*\)").unwrap();
+
+    // detects a memory access
+    pub static ref MEM_ACCESS_REGEX: Regex = Regex::new(r"memory\[.*\]").unwrap();
+    
+    // detects repeated jumps, indicating a loop
+    pub static ref LOOP_DETECTION_REGEX: Regex = Regex::new(r"((\d*->\d*;)+?)\1+").unwrap();
 
     pub static ref DECOMPILED_SOURCE_HEADER: String = 
 "// SPDX-License-Identifier: MIT
@@ -24,10 +36,6 @@ pragma solidity >=0.8.0;
 ///
 /// @custom:github    You can find the open-source decompiler here:
 ///                       https://github.com/Jon-Becker/heimdall-rs
-///
-/// @custom:donations Heimdall is open source and will always be free to use, so 
-///                     donations are always appreciated if you find it helpful.
-///                     0x6666666b0B46056247E7D6cbdb78287F4D12574d   OR   jbecker.eth
 ".to_string();
 
 }

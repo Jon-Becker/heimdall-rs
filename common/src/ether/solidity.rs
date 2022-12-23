@@ -1,6 +1,22 @@
-use crate::utils::strings::encode_hex_reduced;
+use std::str::FromStr;
+
+use ethers::types::U256;
+
+use crate::{utils::strings::encode_hex_reduced, constants::{WORD_REGEX, MEMLEN_REGEX}};
 
 use super::evm::opcodes::*;
+
+fn is_ext_call_precompile(precompile_address: U256) -> bool {
+    let address: usize = match precompile_address.try_into() {
+        Ok(x) => x,
+        Err(_) => usize::MAX,
+    };
+
+    match address {
+        1 | 2 | 3 => true,
+        _ => false,
+    }
+}
 
 impl WrappedOpcode {
 
@@ -153,7 +169,7 @@ impl WrappedOpcode {
                     true => {
                         solidified_wrapped_opcode.push_str(
                             format!(
-                                    "({}) == 0",
+                                    "!({})",
                                     self.inputs[0]._solidify()
                             ).as_str()
                         );
@@ -161,7 +177,7 @@ impl WrappedOpcode {
                     false => {
                         solidified_wrapped_opcode.push_str(
                             format!(
-                                    "{} == 0",
+                                    "!{}",
                                     self.inputs[0]._solidify()
                             ).as_str()
                         );
@@ -172,7 +188,7 @@ impl WrappedOpcode {
             "AND" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
-                            "{} & {}",
+                            "({}) & ({})",
                             self.inputs[0]._solidify(),
                             self.inputs[1]._solidify()
                     ).as_str()
@@ -235,8 +251,13 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str(self.inputs[1]._solidify().as_str());
             }
             "SHA3" => {
-                // TODO: use memory from function
-                solidified_wrapped_opcode.push_str("keccak256()");
+                
+                solidified_wrapped_opcode.push_str(
+                    &format!(
+                        "keccak256(memory[{}])",
+                        self.inputs[0]._solidify().as_str()
+                    )
+                );
             },
             "ADDRESS" => {
                 solidified_wrapped_opcode.push_str("address(this)");
@@ -259,12 +280,48 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str("msg.value");
             },
             "CALLDATALOAD" => {
-                solidified_wrapped_opcode.push_str(
-                    format!(
-                            "msg.data[{}]",
-                            self.inputs[0]._solidify()
-                    ).as_str()
-                );
+                let solidified_slot = self.inputs[0]._solidify();
+
+                // are dealing with a slot that is a constant, we can just use the slot directly
+                if WORD_REGEX.is_match(&solidified_slot).unwrap() {
+                    
+                    // convert to usize
+                    match usize::from_str_radix(
+                        &solidified_slot.replace("0x", ""),
+                        16
+                    ) {
+                        Ok(slot) => {
+                            solidified_wrapped_opcode.push_str(
+                                format!( "arg{}", (slot-4)/32 ).as_str()
+                            );
+                        },
+                        Err(_) => {
+                            if solidified_slot.contains("0x04 + ") ||
+                               solidified_slot.contains("+ 0x04")
+                            {
+                                solidified_wrapped_opcode.push_str(
+                                    solidified_slot.replace("0x04 + ", "").replace("+ 0x04", "").as_str()
+                                );
+                            }
+                            else {
+                                solidified_wrapped_opcode.push_str(
+                                    format!( "msg.data[{}]", solidified_slot).as_str()
+                                );
+                            }
+                        }
+                    };
+
+                    
+
+                }
+                else {
+                    solidified_wrapped_opcode.push_str(
+                        format!(
+                                "msg.data[{}]",
+                                solidified_slot
+                        ).as_str()
+                    );
+                }
             },
             "CALLDATASIZE" => {
                 solidified_wrapped_opcode.push_str("msg.data.length",);
@@ -335,12 +392,51 @@ impl WrappedOpcode {
                 );
             },
             "MLOAD" => {
-                solidified_wrapped_opcode.push_str(
-                    format!(
-                            "memory[{}]",
-                            self.inputs[0]._solidify()
-                    ).as_str()
-                );
+                let memloc = self.inputs[0]._solidify();
+                
+                if memloc.contains("memory") {
+                    if memloc.contains("+") {
+                        let parts = memloc.split(" + ").collect::<Vec<&str>>();
+
+                        solidified_wrapped_opcode.push_str(
+                            format!(
+                                    "memory[{}][{}]",
+                                    parts[0].replace("memory[", "").replace("]", ""),
+                                    parts[1].replace("memory[", "").replace("]", ""),
+                            ).as_str()
+                        );
+                    }
+                    else {
+                        match MEMLEN_REGEX.find(&format!("memory[{}]", memloc)).unwrap() {
+                            Some(_) => {
+                                solidified_wrapped_opcode.push_str(
+                                    format!(
+                                            "{}.length",
+                                            memloc
+                                    ).as_str()
+                                );
+                            },
+                            None => {
+                                solidified_wrapped_opcode.push_str(
+                                    format!(
+                                            "memory[{}]",
+                                            memloc
+                                    ).as_str()
+                                );
+                            }
+                        }
+                    }
+                }
+                else {
+                    solidified_wrapped_opcode.push_str(
+                        format!(
+                                "memory[{}]",
+                                memloc
+                        ).as_str()
+                    );
+                }
+                
+
             },
             "MSIZE" => {
                 solidified_wrapped_opcode.push_str(
@@ -348,16 +444,69 @@ impl WrappedOpcode {
                 );
             },
             "CALL" => {
-                solidified_wrapped_opcode.push_str("ret0");
+                match U256::from_str(&self.inputs[1]._solidify()) {
+                    Ok(addr) => {
+                        if is_ext_call_precompile(addr) {
+                            solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
+                        }
+                        else {
+                            solidified_wrapped_opcode.push_str(&"ret0");
+
+                        }
+                    },
+                    Err(_) => {
+                        solidified_wrapped_opcode.push_str(&"ret0");
+                    }
+                };
             }
             "CALLCODE" => {
-                solidified_wrapped_opcode.push_str("ret0");
-            }
+                match U256::from_str(&self.inputs[1]._solidify()) {
+                    Ok(addr) => {
+                        if is_ext_call_precompile(addr) {
+                            solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
+                        }
+                        else {
+                            solidified_wrapped_opcode.push_str(&"ret0");
+
+                        }
+                    },
+                    Err(_) => {
+                        solidified_wrapped_opcode.push_str(&"ret0");
+                    }
+                };            }
             "DELEGATECALL" => {
-                solidified_wrapped_opcode.push_str("ret0");
-            }
+                match U256::from_str(&self.inputs[1]._solidify()) {
+                    Ok(addr) => {
+                        if is_ext_call_precompile(addr) {
+                            solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
+                        }
+                        else {
+                            solidified_wrapped_opcode.push_str(&"ret0");
+
+                        }
+                    },
+                    Err(_) => {
+                        solidified_wrapped_opcode.push_str(&"ret0");
+                    }
+                };            }
             "STATICCALL" => {
-                solidified_wrapped_opcode.push_str("ret0");
+                match U256::from_str(&self.inputs[1]._solidify()) {
+                    Ok(addr) => {
+                        if is_ext_call_precompile(addr) {
+                            solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
+                        }
+                        else {
+                            solidified_wrapped_opcode.push_str(&"ret0");
+
+                        }
+                    },
+                    Err(_) => {
+                        solidified_wrapped_opcode.push_str(&"ret0");
+                    }
+                };            }
+            "RETURNDATASIZE" => {
+                // TODO
+                solidified_wrapped_opcode.push_str(&"ret0.length");
             }
             opcode => {
 

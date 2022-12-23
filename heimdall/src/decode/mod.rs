@@ -1,3 +1,5 @@
+mod tests;
+
 use std::{
     str::FromStr
 };
@@ -11,7 +13,7 @@ use ethers::{
 
 use heimdall_common::{
     io::logging::Logger,
-    consts::TRANSACTION_HASH_REGEX,
+    constants::TRANSACTION_HASH_REGEX,
     utils::{
         strings::decode_hex,
     }, ether::{evm::types::{parse_function_parameters, display}, signatures::{resolve_function_signature, ResolvedFunction}}
@@ -51,7 +53,7 @@ pub fn decode(args: DecodeArgs) {
     let calldata: String;
 
     // determine whether or not the target is a transaction hash
-    if TRANSACTION_HASH_REGEX.is_match(&args.target) {
+    if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
 
         // create new runtime block
         let rt = tokio::runtime::Builder::new_current_thread()

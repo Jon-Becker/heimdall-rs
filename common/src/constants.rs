@@ -1,4 +1,4 @@
-use regex::Regex;
+use fancy_regex::Regex;
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -16,4 +16,13 @@ lazy_static! {
 
     // The following regex is used to reduce null byte prefixes
     pub static ref REDUCE_HEX_REGEX: Regex = Regex::new(r"^0x(00)*").unwrap();
+
+    // The following regex is used as a search pattern for words
+    pub static ref WORD_REGEX: Regex = Regex::new(r"0x[0-9a-fA-F]{0,64}").unwrap();
+
+    // The following regex is used to find type castings
+    pub static ref TYPE_CAST_REGEX: Regex = Regex::new(r"(address\(|string\(|bool\(|bytes(\d*)\(|uint(\d*)\(|int(\d*)\()").unwrap();
+
+    // The following regex is used to find memory accesses
+    pub static ref MEMLEN_REGEX: Regex = Regex::new(r"memory\[memory\[[0-9x]*\]\]").unwrap();
 }

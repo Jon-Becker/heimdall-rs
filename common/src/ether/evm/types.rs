@@ -1,7 +1,7 @@
 use colored::Colorize;
 use ethers::abi::{ParamType, Token, AbiEncode};
 
-use crate::utils::strings::replace_last;
+use crate::{utils::strings::{replace_last, find_balanced_encapsulator}, constants::TYPE_CAST_REGEX};
 
 use super::vm::Instruction;
 
@@ -232,4 +232,21 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 
     // return list of potential type castings, sorted by likelihood descending
     (byte_size, potential_types)
+}
+
+pub fn find_cast(line: String) -> (usize, usize, Option<String>) {
+
+    // find the start of the cast
+    match TYPE_CAST_REGEX.find(&line).unwrap() {
+        Some(m) => {
+            let start = m.start();
+            let end = m.end() - 1;
+            let cast_type = line[start..].split("(").collect::<Vec<&str>>()[0].to_string();
+
+            // find where the cast ends
+            let (a, b, _) = find_balanced_encapsulator(line[end..].to_string(), ('(', ')'));
+            return (end+a, end+b, Some(cast_type))
+        },
+        None => return (0, 0, None),
+    }
 }

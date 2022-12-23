@@ -1,0 +1,15 @@
+echo "Compiling..."
+
+RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo build --release --package heimdall  > /dev/null 2>&1
+RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo build --release --package heimdall-config  > /dev/null 2>&1
+RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo build --release --package heimdall-common  > /dev/null 2>&1
+echo "Running benchmarks..."
+
+cargo test --release --package heimdall -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
+cargo test --release --package heimdall-config -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
+cargo test --release --package heimdall-common -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
+
+clear
+echo "Benchmark results:\n"
+cat stdout
+rm stdout

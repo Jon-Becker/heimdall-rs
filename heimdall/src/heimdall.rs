@@ -12,7 +12,6 @@ use heimdall_common::{ether::evm::disassemble::*, io::{logging::Logger}};
 use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
 
-
 #[derive(Debug, Parser)]
 #[clap(
     name = "heimdall",
@@ -58,12 +57,8 @@ fn main() {
             let (logger, _)= Logger::new("TRACE");
             logger.fatal(
                 &format!(
-                    "thread 'main' encountered a fatal error: '{}' at '/src/{}:{}'!", 
-                    panic_info.to_string().split("'").collect::<Vec<&str>>()[1]
-                        .to_lowercase().bright_white().on_bright_red().bold(),
-                    panic_info.location().unwrap().file().split("/src/")
-                        .collect::<Vec<&str>>()[1],
-                    panic_info.location().unwrap().line()
+                    "thread 'main' encountered a fatal error: '{}'!", 
+                    panic_info.to_string().bright_white().on_bright_red().bold(),
                 )
             );
             logger.fatal(&format!("Stack Trace:\n\n{:#?}", backtrace));

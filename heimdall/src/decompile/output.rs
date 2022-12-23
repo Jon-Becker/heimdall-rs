@@ -1,6 +1,6 @@
-use std::time::Duration;
+use std::{time::Duration, collections::HashMap};
 
-use heimdall_common::io::{logging::{TraceFactory, Logger}, file::{short_path, write_file}};
+use heimdall_common::{io::{logging::{TraceFactory, Logger}, file::{short_path, write_file, write_lines_to_file}}, ether::signatures::{ResolvedError, ResolvedLog}};
 use indicatif::ProgressBar;
 
 use super::{DecompilerArgs, util::Function, constants::DECOMPILED_SOURCE_HEADER, postprocess::postprocess};
@@ -55,6 +55,8 @@ pub fn build_output(
     args: &DecompilerArgs,
     output_dir: String,
     functions: Vec<Function>,
+    all_resolved_errors: HashMap<String, ResolvedError>,
+    all_resolved_events: HashMap<String, ResolvedLog>,
     logger: &Logger,
     trace: &mut TraceFactory,
     trace_parent: u32
@@ -264,7 +266,9 @@ pub fn build_output(
         )
     );
 
-    logger.info(&format!("wrote decompiled ABI to '{}' .", abi_output_path).to_string());
+    progress_bar.suspend(|| {
+        logger.success(&format!("wrote decompiled ABI to '{}' .", &abi_output_path).to_string());
+    });
 
     // write the decompiled source to file
     let mut decompiled_output: Vec<String> = Vec::new();
@@ -297,7 +301,7 @@ pub fn build_output(
             if function.pure { "pure " }
             else if function.view { "view " }
             else { "" },
-            if function.payable { "payable" }
+            if function.payable { "payable " }
             else { "" },
         );
         let function_returns = format!(
@@ -375,32 +379,20 @@ pub fn build_output(
 
     decompiled_output.push(String::from("}"));
 
-    let mut indentation: usize = 0;
-    for line in decompiled_output.iter_mut() {
-
-        // dedent due to closing braces
-        if line.starts_with("}") {
-            indentation = indentation.saturating_sub(1);
-        }
-        
-        // apply postprocessing and indentation
-        *line = format!(
-            "{}{}",
-            " ".repeat(indentation*4),
-            postprocess(line.to_string())
+    if args.include_solidity {
+        write_lines_to_file(
+            &decompiled_output_path,
+            postprocess(
+                decompiled_output,
+                all_resolved_errors,
+                all_resolved_events,
+                &progress_bar
+            )
         );
-        
-        // indent due to opening braces
-        if line.ends_with("{") {
-            indentation += 1;
-        }
-        
+        logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path).to_string());
+        progress_bar.finish_and_clear();
     }
-
-    // write_lines_to_file(
-    //     &decompiled_output_path,
-    //     decompiled_output
-    // );
-    //
-    // logger.info(&format!("wrote decompiled solidity to '{}' .", decompiled_output_path).to_string());
+    else {
+        progress_bar.finish_and_clear();
+    }
 }

@@ -7,7 +7,7 @@ use ethers::{
     providers::{Middleware, Provider, Http},
 };
 use crate::{
-    consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
+    constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::*, file::* },
     ether::evm::{ opcodes::opcode }
 };
@@ -66,7 +66,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
     }
 
     let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target) {
+    if ADDRESS_REGEX.is_match(&args.target).unwrap() {
 
         // push the address to the output directory
         if &output_dir != &args.output {
@@ -118,7 +118,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         });
         
     }
-    else if BYTECODE_REGEX.is_match(&args.target) {
+    else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone();
     }
     else {
@@ -131,7 +131,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         // We are disassembling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {                
-                if BYTECODE_REGEX.is_match(&contents) && contents.len() % 2 == 0 {
+                if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents.replacen("0x", "", 1)
                 }
                 else {
@@ -178,11 +178,11 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         program_counter += 1;
     }
 
-    logger.success(&format!("disassembled {} bytes successfully.", program_counter).to_string());
+    logger.info(&format!("disassembled {} bytes successfully.", program_counter).to_string());
 
     write_file(&String::from(format!("{}/bytecode.evm", &output_dir)), &contract_bytecode);
     let file_path = write_file(&String::from(format!("{}/disassembled.asm", &output_dir)), &output);
-    logger.info(&format!("wrote disassembled bytecode to '{}' .", file_path).to_string());
+    logger.success(&format!("wrote disassembled bytecode to '{}' .", file_path).to_string());
 
     logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()).to_string());
     

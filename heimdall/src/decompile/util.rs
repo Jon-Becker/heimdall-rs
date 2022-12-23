@@ -1,9 +1,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use ethers::{
-    abi::AbiEncode,
     prelude::{
-        rand::{self, Rng},
         U256,
     },
 };
@@ -17,6 +15,8 @@ use heimdall_common::{
     },
     io::logging::{TraceFactory},
 };
+
+use crate::decompile::constants::LOOP_DETECTION_REGEX;
 
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -48,7 +48,7 @@ pub struct Function {
     // holds function logic to be written to the output solidity file.
     pub logic: Vec<String>,
 
-    // holds all emitted events. used to generate solidity event definitions
+    // holds all found events used to generate solidity error definitions
     // as well as ABI specifications.
     pub events: HashMap<String, (Option<ResolvedLog>, Log)>,
 
@@ -58,6 +58,9 @@ pub struct Function {
 
     // stores the matched resolved function for this Functon
     pub resolved_function: Option<ResolvedFunction>,
+
+    // stores the current indent depth, used for formatting and removing unnecessary closing brackets.
+    pub indent_depth: usize,
 
     // modifiers
     pub pure: bool,
@@ -116,6 +119,7 @@ pub struct VMTrace {
     pub instruction: u128,
     pub operations: Vec<State>,
     pub children: Vec<VMTrace>,
+    pub loop_detected: bool,
     pub depth: usize,
 }
 
@@ -211,44 +215,24 @@ pub fn detect_compiler(bytecode: String) -> (String, String) {
 }
 
 // find all function selectors in the given EVM.
-pub fn find_function_selectors(evm: &VM, assembly: String) -> Vec<String> {
+pub fn find_function_selectors(assembly: String) -> Vec<String> {
     let mut function_selectors = Vec::new();
 
-    let mut vm = evm.clone();
-
-    // find a selector not present in the assembly
-    let selector;
-    loop {
-        let num = rand::thread_rng().gen_range(286331153..2147483647);
-        if !vm
-            .bytecode
-            .contains(&format!("63{}", num.encode_hex()[58..].to_string()))
-        {
-            selector = num.encode_hex()[58..].to_string();
-            break;
-        }
-    }
-
-    // execute the EVM call to find the dispatcher revert
-    let dispatcher_revert = vm.call(selector, 0).instruction - 1;
-
-    // search through assembly for PUSH4 instructions up until the dispatcher revert
+    // search through assembly for PUSH4 instructions, optimistically assuming that they are function selectors
     let assembly: Vec<String> = assembly
         .split("\n")
         .map(|line| line.trim().to_string())
         .collect();
     for line in assembly.iter() {
         let instruction_args: Vec<String> = line.split(" ").map(|arg| arg.to_string()).collect();
-        let program_counter: u128 = instruction_args[0].clone().parse().unwrap();
-        let instruction = instruction_args[1].clone();
 
-        if program_counter < dispatcher_revert {
+        if instruction_args.len() >= 2 {
+            let instruction = instruction_args[1].clone();
+
             if instruction == "PUSH4" {
                 let function_selector = instruction_args[2].clone();
                 function_selectors.push(function_selector);
             }
-        } else {
-            break;
         }
     }
     function_selectors.sort();
@@ -297,7 +281,7 @@ pub fn map_selector(
     trace_parent: u32,
     selector: String,
     entry_point: u64,
-) -> (VMTrace, Vec<u128>) {
+) -> (VMTrace, Vec<String>) {
     let mut vm = evm.clone();
     vm.calldata = selector.clone();
 
@@ -316,7 +300,13 @@ pub fn map_selector(
     // the VM is at the function entry point, begin tracing
     let mut handled_jumpdests = Vec::new();
     (
-        recursive_map(&vm.clone(), trace, trace_parent, &mut handled_jumpdests),
+        recursive_map(
+            &vm.clone(),
+            trace,
+            trace_parent,
+            &mut handled_jumpdests,
+            &mut String::new()
+        ),
         handled_jumpdests,
     )
 }
@@ -325,7 +315,8 @@ pub fn recursive_map(
     evm: &VM,
     trace: &TraceFactory,
     trace_parent: u32,
-    handled_jumpdests: &mut Vec<u128>,
+    handled_jumpdests: &mut Vec<String>,
+    path: &mut String,
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -334,6 +325,7 @@ pub fn recursive_map(
         instruction: vm.instruction,
         operations: Vec::new(),
         children: Vec::new(),
+        loop_detected: false,
         depth: 0,
     };
 
@@ -346,26 +338,29 @@ pub fn recursive_map(
         if state.last_instruction.opcode == "57" {
             vm_trace.depth += 1;
 
+            path.push_str(&format!("{}->{};", state.last_instruction.instruction, state.last_instruction.inputs[0]));
+
             // we need to create a trace for the path that wasn't taken.
             if state.last_instruction.inputs[1] == U256::from(0) {
 
-                // the jump was not taken, create a trace for the jump path
-                // only jump if we haven't already traced this destination
-                // TODO: mark as a loop?
-                if !(handled_jumpdests.contains(&(state.last_instruction.inputs[0].as_u128() + 1)))
-                {
-                    let mut trace_vm = vm.clone();
-                    trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
-                    handled_jumpdests.push(trace_vm.instruction.clone());
-                    vm_trace.children.push(recursive_map(
-                        &trace_vm,
-                        trace,
-                        trace_parent,
-                        handled_jumpdests,
-                    ));
-                } else {
+                // break out of loops
+                if LOOP_DETECTION_REGEX.is_match(&path).unwrap() {
+                    vm_trace.loop_detected = true;
                     break;
                 }
+
+                handled_jumpdests.push(format!("{}@{}", vm_trace.depth, state.last_instruction.instruction));
+
+                // push a new vm trace to the children
+                let mut trace_vm = vm.clone();
+                trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
+                vm_trace.children.push(recursive_map(
+                    &trace_vm,
+                    trace,
+                    trace_parent,
+                    handled_jumpdests,
+                    &mut path.clone()
+                ));
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
@@ -373,24 +368,29 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
+                    &mut path.clone()
                 ));
+                break;
             } else {
 
-                // the jump was taken, create a trace for the fallthrough path
-                // only jump if we haven't already traced this destination
-                if !(handled_jumpdests.contains(&(state.last_instruction.instruction + 1))) {
-                    let mut trace_vm = vm.clone();
-                    trace_vm.instruction = state.last_instruction.instruction + 1;
-                    handled_jumpdests.push(trace_vm.instruction.clone());
-                    vm_trace.children.push(recursive_map(
-                        &trace_vm,
-                        trace,
-                        trace_parent,
-                        handled_jumpdests,
-                    ));
-                } else {
+                // break out of loops
+                if LOOP_DETECTION_REGEX.is_match(&path).unwrap() {
+                    vm_trace.loop_detected = true;
                     break;
                 }
+
+                handled_jumpdests.push(format!("{}@{}", vm_trace.depth, state.last_instruction.instruction));
+
+                // push a new vm trace to the children
+                let mut trace_vm = vm.clone();
+                trace_vm.instruction = state.last_instruction.instruction + 1;
+                vm_trace.children.push(recursive_map(
+                    &trace_vm,
+                    trace,
+                    trace_parent,
+                    handled_jumpdests,
+                    &mut path.clone()
+                ));
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
@@ -398,36 +398,16 @@ pub fn recursive_map(
                     trace,
                     trace_parent,
                     handled_jumpdests,
+                    &mut path.clone()
                 ));
+                break;
             }
         }
 
-        if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
+        if vm.exitcode != 255 || vm.returndata.len() > 0 {
             break;
         }
     }
 
     vm_trace
-}
-
-pub fn find_balanced_parentheses(s: String) -> (usize, usize, bool) {
-    let mut open = 0;
-    let mut close = 0;
-    let mut start = 0;
-    let mut end = 0;
-    for (i, c) in s.chars().enumerate() {
-        if c == '(' {
-            if open == 0 {
-                start = i;
-            }
-            open += 1;
-        } else if c == ')' {
-            close += 1;
-        }
-        if open == close {
-            end = i;
-            break;
-        }
-    }
-    (start, end + 1, (open == close && end > start && open > 0))
 }

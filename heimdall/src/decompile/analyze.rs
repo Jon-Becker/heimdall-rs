@@ -15,7 +15,7 @@ use heimdall_common::{
         },
     },
     io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced},
+    utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
 };
 
 use super::{util::*, precompile::decode_precompile, constants::AND_BITMASK_REGEX};
@@ -28,10 +28,13 @@ impl VMTrace {
         function: Function,
         trace: &mut TraceFactory,
         trace_parent: u32,
+        conditional_map: &mut Vec<String>
     ) -> Function {
 
         // make a clone of the recursed analysis function
         let mut function = function.clone();
+        let mut jumped_conditional: Option<String> = None;
+        let mut revert_conditional: Option<String> = None;
 
         // perform analysis on the operations of the current VMTrace branch
         for operation in &self.operations {
@@ -120,6 +123,10 @@ impl VMTrace {
                     // add the event to the function
                     function.events.insert(logged_event.topics.first().unwrap().to_string(), (None, logged_event.clone()));
 
+                    // decode the data field
+                    let data_mem_ops = function.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
+                    let data_mem_ops_solidified = data_mem_ops.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ");
+    
                     // add the event emission to the function's logic
                     // will be decoded during post-processing
                     function.logic.push(format!(
@@ -131,26 +138,81 @@ impl VMTrace {
                         },
                         match logged_event.topics.get(1..) {
                             Some(topics) => match logged_event.data.len() > 0 && topics.len() > 0 {
-                                true => format!("{}, ", topics.join(", ")),
-                                false => topics.join(", "),
+                                true => {
+                                    let mut solidified_topics: Vec<String> = Vec::new();
+                                    for (i, _) in topics.iter().enumerate() {
+                                        solidified_topics.push(instruction.input_operations[i+3].solidify());
+                                    }
+                                    format!("{}, ", solidified_topics.join(", "))
+                                }
+                                false => {
+                                    let mut solidified_topics: Vec<String> = Vec::new();
+                                    for (i, _) in topics.iter().enumerate() {
+                                        solidified_topics.push(instruction.input_operations[i+3].solidify());
+                                    }
+                                    solidified_topics.join(", ")
+                                }
                             },
                             None => "".to_string(),
                         },
-                        logged_event.data
+                        data_mem_ops_solidified
                     ));
                 }
 
             } else if opcode_name == "JUMPI" {
-            
-                // add closing braces to the function's logic
-                // TODO: add braces
-                function.logic.push(
-                    format!(
-                        "if ({}) ",
+
+                // if the JUMPI is not taken and the branch reverts, this is a require statement
+                if self.operations.last().unwrap().last_instruction.opcode_details.clone().unwrap().name == "REVERT" {
+                    revert_conditional = Some(instruction.input_operations[1].solidify());
+                    jumped_conditional = Some(revert_conditional.clone().unwrap());
+                    conditional_map.push(revert_conditional.clone().unwrap());
+                }
+                else {
+                    revert_conditional = Some(instruction.input_operations[1].solidify());
+
+                    // this is an if conditional for the children branches
+                    let conditional = instruction.input_operations[1].solidify();
+
+                    // check if there is a conditional before this as well. combine them if so
+                    // if let Some(last) = function.logic.last_mut() {
+                    //     if last.starts_with("if") {
+                    //         let slice = find_balanced_encapsulator(last.to_string(), ('(', ')'));
+                    //         if slice.2 {
+                                
+                    //             // combine the two conditionals
+                    //             *last = format!("if ({}) {{", format!("({}) && ({})", last.get(slice.0..slice.1).unwrap(), conditional));
+
+                    //             continue;
+                    //         }
+                    //     }
+                    // }
+
+                    // check if this if statement is added by the compiler
+                    if conditional == "!msg.value" {
                         
-                        instruction.input_operations[1].solidify()
-                    ).to_string()
-                );
+                        // this is marking the start of a non-payable function
+                        trace.add_info(
+                            trace_parent,
+                            instruction.instruction.try_into().unwrap(),
+                            format!(
+                                "conditional at instruction {} indicates an non-payble function.",
+                                instruction.instruction
+                            ),
+                        );
+                        function.payable = false;
+                        continue;
+                    }
+
+                    function.logic.push(
+                        format!(
+                            "if ({}) {{",
+                            
+                            conditional
+                        ).to_string()
+                    );
+                    jumped_conditional = Some(conditional.clone());
+                    conditional_map.push(conditional);
+                }
 
             } else if opcode_name == "REVERT" {
 
@@ -167,12 +229,12 @@ impl VMTrace {
                 let revert_data = memory.read(offset, size);
 
                 // (1) if revert_data starts with 0x08c379a0, the folling is an error string abiencoded
-                // (2) if revert_data starts with any other 4byte selector, it is a custom error and should
+                // (2) if revert_data starts with 0x4e487b71, the following is a compiler panic
+                // (3) if revert_data starts with any other 4byte selector, it is a custom error and should
                 //     be resolved and added to the generated ABI
-                // (3) if revert_data is empty, it is an empty revert. Ex:
+                // (4) if revert_data is empty, it is an empty revert. Ex:
                 //       - if (true != false) { revert() };
-                //       - require(true == false)
-
+                //       - require(true != false)
                 let revert_logic;
 
                 // handle case with error string abiencoded
@@ -187,8 +249,40 @@ impl VMTrace {
                         },
                         None => "".to_string(),
                     };
+                    revert_logic = match revert_conditional.clone() {
+                        Some(condition) => {
+                            format!(
+                                "require({}, \"{}\");",
+                                condition,
+                                revert_string
+                            )
+                        }
+                        None => {
 
-                    revert_logic = format!("revert(\"{}\");", revert_string);
+                            // loop backwards through logic to find the last IF statement
+                            for i in (0..function.logic.len()).rev() {
+                                if function.logic[i].starts_with("if") {
+
+                                    // get matching conditional
+                                    let conditional = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
+                                    let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap();
+                                    
+                                    // we can negate the conditional to get the revert logic
+                                    // TODO: make this a require statement, if revert is rlly gross but its technically correct
+                                    //       I just ran into issues with ending bracket matching
+                                    function.logic[i] = format!("if (!({})) {{ revert(\"{}\"); }} else {{", conditional, revert_string);
+
+                                    break;
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                }
+
+                // handle case with panics
+                else if revert_data.starts_with("4e487b71") {
+                    continue;
                 }
 
                 // handle case with custom error OR empty revert
@@ -200,7 +294,44 @@ impl VMTrace {
                         },
                         None => "()".to_string(),
                     };
-                    revert_logic = format!("revert{};", custom_error_placeholder);
+
+                    revert_logic = match revert_conditional.clone() {
+                        Some(condition) => {
+                            if custom_error_placeholder == "()".to_string() {
+                                format!(
+                                    "require({});",
+                                    condition,
+                                )
+                            }
+                            else {
+                                format!(
+                                    "if (!{}) revert{};",
+                                    condition,
+                                    custom_error_placeholder
+                                )
+                            }
+                        }
+                        None => {
+
+                            // loop backwards through logic to find the last IF statement
+                            for i in (0..function.logic.len()).rev() {
+                                if function.logic[i].starts_with("if") {
+
+                                    // get matching conditional
+                                    let conditional = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
+                                    let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap();
+                                    
+                                    // we can negate the conditional to get the revert logic
+                                    // TODO: make this a require statement, if revert is rlly gross but its technically correct
+                                    //       I just ran into issues with ending bracket matching
+                                    function.logic[i] = format!("if (!({})) {{ revert{}; }} else {{", conditional, custom_error_placeholder);
+
+                                    break;
+                                }
+                            }
+                            continue;
+                        }
+                    }
                 }
 
                 function.logic.push(revert_logic);
@@ -231,7 +362,7 @@ impl VMTrace {
                             false => {
         
                                 // attempt to find a return type within the return memory operations
-                                let byte_size = match AND_BITMASK_REGEX.find(&return_memory_operations_solidified) {
+                                let byte_size = match AND_BITMASK_REGEX.find(&return_memory_operations_solidified).unwrap() {
                                     Some(bitmask) => {
                                         let cast = bitmask.as_str();
 
@@ -314,7 +445,8 @@ impl VMTrace {
                 // check if the external call is a precompiled contract
                 match decode_precompile(
                     instruction.inputs[1],
-                    extcalldata_memory.clone()
+                    extcalldata_memory.clone(),
+                    instruction.input_operations[2].clone()
                 ) {
                     (true, precompile_logic) => {
                         function.logic.push(precompile_logic);
@@ -346,7 +478,8 @@ impl VMTrace {
                 // check if the external call is a precompiled contract
                 match decode_precompile(
                     instruction.inputs[1],
-                    extcalldata_memory.clone()
+                    extcalldata_memory.clone(),
+                    instruction.input_operations[2].clone()
                 ) {
                     (true, precompile_logic) => {
                         function.logic.push(precompile_logic);
@@ -387,7 +520,8 @@ impl VMTrace {
                 // check if the external call is a precompiled contract
                 match decode_precompile(
                     instruction.inputs[1],
-                    extcalldata_memory.clone()
+                    extcalldata_memory.clone(),
+                    instruction.input_operations[5].clone()
                 ) {
                     (is_precompile, precompile_logic) if is_precompile=> {
                         function.logic.push(precompile_logic);
@@ -536,6 +670,9 @@ impl VMTrace {
                     None => {}
                 };
             }
+            else {
+                //function.logic.push(format!("{} not implemented", opcode_name));
+            }
 
             // handle type heuristics
             if [
@@ -613,13 +750,31 @@ impl VMTrace {
         }
 
         // recurse into the children of the VMTrace map
-        for child in &self.children {
+        for (_, child) in self.children.iter().enumerate() {
 
-            function = child.analyze(function, trace, trace_parent);
+            function = child.analyze(function, trace, trace_parent, conditional_map);
 
         }
 
-        // TODO: indentation
+        // check if the ending brackets are needed
+        if jumped_conditional.is_some() && conditional_map.contains(&jumped_conditional.clone().unwrap())
+        {
+             // remove the conditional
+             for (i, conditional) in conditional_map.iter().enumerate() {
+                if conditional == &jumped_conditional.clone().unwrap() {
+                    conditional_map.remove(i);
+                    break;
+                }
+            }
+            
+            // if the last line is an if statement, this branch is empty and probably stack operations we don't care about
+            if function.logic.last().unwrap().contains("if") {
+                function.logic.pop();
+            }
+            else {
+                function.logic.push("}".to_string());
+            }
+        }
 
         function
     }

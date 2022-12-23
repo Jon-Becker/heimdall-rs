@@ -67,6 +67,7 @@ pub struct Instruction {
 }
 
 impl VM {
+    
     // Creates a new VM instance
     pub fn new(
         bytecode: String,
@@ -122,6 +123,7 @@ impl VM {
 
     // Steps to the next PC and executes the instruction
     fn _step(&mut self) -> Instruction {
+
         // sanity check
         if self.bytecode.len() < (self.instruction * 2 + 2) as usize {
             self.exit(2, "0x");
@@ -1607,6 +1609,7 @@ impl VM {
                 };
             }
             _ => {
+                
                 // we reached an INVALID opcode, consume all remaining gas
                 self.exit(4, "0x");
                 return Instruction {

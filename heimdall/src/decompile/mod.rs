@@ -1,3 +1,5 @@
+mod tests;
+
 pub mod util;
 pub mod output;
 pub mod analyze;
@@ -30,7 +32,7 @@ use heimdall_common::{
         vm::VM
     },
     ether::signatures::*,
-    consts::{ ADDRESS_REGEX, BYTECODE_REGEX },
+    constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::* },
 };
 
@@ -65,6 +67,10 @@ pub struct DecompilerArgs {
     #[clap(long="skip-resolving")]
     pub skip_resolving: bool,
 
+    /// Whether to include solidity source code in the output (in beta).
+    #[clap(long="include-sol")]
+    pub include_solidity: bool,
+
 }
 
 pub fn decompile(args: DecompilerArgs) {
@@ -72,6 +78,8 @@ pub fn decompile(args: DecompilerArgs) {
     let now = Instant::now();
 
     let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
+    let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
@@ -103,7 +111,7 @@ pub fn decompile(args: DecompilerArgs) {
     }
 
     let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target) {
+    if ADDRESS_REGEX.is_match(&args.target).unwrap() {
 
         // push the address to the output directory
         if &output_dir != &args.output {
@@ -155,7 +163,7 @@ pub fn decompile(args: DecompilerArgs) {
         });
         
     }
-    else if BYTECODE_REGEX.is_match(&args.target) {
+    else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone();
     }
     else {
@@ -168,7 +176,7 @@ pub fn decompile(args: DecompilerArgs) {
         // We are decompiling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {                
-                if BYTECODE_REGEX.is_match(&contents) && contents.len() % 2 == 0 {
+                if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents.replacen("0x", "", 1)
                 }
                 else {
@@ -188,7 +196,7 @@ pub fn decompile(args: DecompilerArgs) {
         target: contract_bytecode.clone(),
         default: args.default.clone(),
         verbose: args.verbose.clone(),
-        output: args.output.clone(),
+        output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
     });
     trace.add_call(
@@ -235,7 +243,7 @@ pub fn decompile(args: DecompilerArgs) {
     let vm_trace = trace.add_creation(decompile_call, line!(), "contract".to_string(), shortened_target, (contract_bytecode.len()/2usize).try_into().unwrap());
 
     // find and resolve all selectors in the bytecode
-    let selectors = find_function_selectors(&evm.clone(), disassembled_bytecode);
+    let selectors = find_function_selectors(disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
@@ -243,7 +251,7 @@ pub fn decompile(args: DecompilerArgs) {
         logger.info(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
     }
     else {
-        logger.info(&format!("found {} function selectors.", selectors.len()).to_string());
+        logger.info(&format!("found {} possible function selectors.", selectors.len()).to_string());
     }
     logger.info(&format!("performing symbolic execution on '{}' .", &args.target).to_string());
 
@@ -256,6 +264,13 @@ pub fn decompile(args: DecompilerArgs) {
     for selector in selectors.clone() {
         decompilation_progress.set_message(format!("executing '0x{}'", selector));
         
+        // get the function's entry point
+        let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
+
+        if function_entry_point == 0 {
+            continue;
+        }
+
         let func_analysis_trace = trace.add_call(
             vm_trace, 
             line!(), 
@@ -265,22 +280,11 @@ pub fn decompile(args: DecompilerArgs) {
             "()".to_string()
         );
 
-        // get the function's entry point
-        let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
         trace.add_info(
             func_analysis_trace, 
             function_entry_point.try_into().unwrap(), 
             format!("discovered entry point: {}", function_entry_point).to_string()
         );
-
-        if function_entry_point == 0 {
-            trace.add_error(
-                func_analysis_trace,
-                line!(), 
-                "selector flagged as false-positive.".to_string()
-            );
-            continue;
-        }
 
         // get a map of possible jump destinations
         let (map, jumpdests) = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
@@ -311,12 +315,14 @@ pub fn decompile(args: DecompilerArgs) {
                 events: HashMap::new(),
                 errors: HashMap::new(),
                 resolved_function: None,
+                indent_depth: 0,
                 pure: true,
                 view: true,
-                payable: false,
+                payable: true,
             },
             &mut trace,
             func_analysis_trace,
+            &mut Vec::new()
         );
 
         let argument_count = analyzed_function.arguments.len();
@@ -432,7 +438,7 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom error signatures
             let mut resolved_counter = 0;
             for (error_selector, _) in analyzed_function.errors.clone() {
-                decompilation_progress.set_message(format!("resolving error 0x{}", &error_selector));
+                decompilation_progress.set_message(format!("resolving error '0x{}'", &error_selector));
                 let resolved_error_selectors = resolve_error_signature(&error_selector);
 
                 // only continue if we have matches
@@ -461,7 +467,8 @@ pub fn decompile(args: DecompilerArgs) {
                         };
                         
                         resolved_counter += 1;
-                        analyzed_function.errors.insert(error_selector, Some(selected_match.clone()));
+                        analyzed_function.errors.insert(error_selector.clone(), Some(selected_match.clone()));
+                        all_resolved_errors.insert(error_selector.clone(), selected_match.clone());
                     },
                     None => {}
                 }
@@ -480,9 +487,9 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom event signatures
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
-                decompilation_progress.set_message(format!("resolving event 0x{}", &event_selector.get(0..8).unwrap().to_string()));
-                let resolved_event_selectors = resolve_event_signature(&event_selector.get(0..64).unwrap().to_string());
-
+                decompilation_progress.set_message(format!("resolving event '0x{}'", &event_selector.get(0..8).unwrap().to_string()));
+                let resolved_event_selectors = resolve_event_signature(&event_selector.get(0..8).unwrap().to_string());
+                
                 // only continue if we have matches
                 match resolved_event_selectors {
                     Some(resolved_event_selectors) => {
@@ -509,11 +516,11 @@ pub fn decompile(args: DecompilerArgs) {
                         };
 
                         resolved_counter += 1;
-                        analyzed_function.events.insert(event_selector, (Some(selected_match.clone()), raw_event));
+                        analyzed_function.events.insert(event_selector.clone(), (Some(selected_match.clone()), raw_event));
+                        all_resolved_events.insert(event_selector, selected_match.clone());
                     },
                     None => {}
                 }
-               
             }
 
             if resolved_counter > 0 {
@@ -538,6 +545,8 @@ pub fn decompile(args: DecompilerArgs) {
         &args,
         output_dir,
         analyzed_functions,
+        all_resolved_errors,
+        all_resolved_events,
         &logger,
         &mut trace,
         decompile_call,

@@ -28,7 +28,7 @@ pub struct ResolvedLog {
 pub fn resolve_function_signature(signature: &String) -> Option<Vec<ResolvedFunction>> {
 
     // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://sig.eth.samczsun.com/api/v1/signatures?all=true&function=0x{}", &signature)) {
+    let signatures = match get_json_from_url(format!("https://sig.eth.samczsun.com/api/v1/signatures?all=true&function=0x{}", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
@@ -84,7 +84,7 @@ pub fn resolve_function_signature(signature: &String) -> Option<Vec<ResolvedFunc
 pub fn resolve_error_signature(signature: &String) -> Option<Vec<ResolvedError>> {
 
     // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://sig.eth.samczsun.com/api/v1/signatures?all=true&function=0x{}", &signature)) {
+    let signatures = match get_json_from_url(format!("https://sig.eth.samczsun.com/api/v1/signatures?all=true&function=0x{}", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
@@ -140,7 +140,7 @@ pub fn resolve_error_signature(signature: &String) -> Option<Vec<ResolvedError>>
 pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
 
     // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://sig.eth.samczsun.com/api/v1/signatures?all=true&event=0x{}", &signature)) {
+    let signatures = match get_json_from_url(format!("https://sig.eth.samczsun.com/api/v1/signatures?all=true&function=0x{}", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
