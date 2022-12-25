@@ -316,7 +316,7 @@ pub fn build_output(
         let function_header = match function.resolved_function {
             Some(resolved_function) => {
                 format!(
-                    "function {}({}) {}{}",
+                    "\n\nfunction {}({}) {}{}",
                     resolved_function.name,
 
                     resolved_function.inputs.iter().enumerate().map(|(index, solidity_type)| {
@@ -345,7 +345,7 @@ pub fn build_output(
                 sorted_arguments.sort_by(|x,y| x.0.cmp(&y.0));
 
                 format!(
-                    "function Unresolved_{}({}) {}{}",
+                    "\n\nfunction Unresolved_{}({}) {}{}",
                     function.selector,
 
                     sorted_arguments.iter().map(|(index, (_, potential_types))| {
