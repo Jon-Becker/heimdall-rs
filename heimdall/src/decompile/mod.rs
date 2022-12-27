@@ -287,7 +287,7 @@ pub fn decompile(args: DecompilerArgs) {
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdests) = map_selector(&evm.clone(), &trace, func_analysis_trace, selector.clone(), function_entry_point);
+        let (map, jumpdests) = map_selector(&evm.clone(), selector.clone(), function_entry_point);
         trace.add_debug(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
@@ -299,6 +299,14 @@ pub fn decompile(args: DecompilerArgs) {
             }
             ).to_string()
         );
+
+        if jumpdests.len() >= 1000 {
+            trace.add_error(
+                func_analysis_trace,
+                function_entry_point.try_into().unwrap(),
+                format!("Execution tree truncated to {} branches", jumpdests.len()).to_string()
+            );
+        }
         
         decompilation_progress.set_message(format!("analyzing '0x{}'", selector));
 
@@ -316,6 +324,7 @@ pub fn decompile(args: DecompilerArgs) {
                 errors: HashMap::new(),
                 resolved_function: None,
                 indent_depth: 0,
+                notices: Vec::new(),
                 pure: true,
                 view: true,
                 payable: true,
@@ -324,6 +333,11 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
             &mut Vec::new()
         );
+
+        // add notice for long execution trees
+        if jumpdests.len() >= 1000 {
+            analyzed_function.notices.push(format!("execution tree truncated to {} branches", jumpdests.len()));
+        }
 
         let argument_count = analyzed_function.arguments.len();
 
