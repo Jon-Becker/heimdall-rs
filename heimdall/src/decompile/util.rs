@@ -61,6 +61,9 @@ pub struct Function {
     // stores the current indent depth, used for formatting and removing unnecessary closing brackets.
     pub indent_depth: usize,
 
+    // stores decompiler notices
+    pub notices: Vec<String>,
+
     // modifiers
     pub pure: bool,
     pub view: bool,
@@ -323,6 +326,7 @@ pub fn recursive_map(
     };
 
     if handled_jumpdests.len() >= 1000 {
+        
         return vm_trace
     }
 

@@ -114,7 +114,7 @@ pub fn build_output(
                 let mut inputs = Vec::new();
                 let mut outputs = Vec::new();
 
-                for (index, (_, (_, potential_types))) in function.arguments.iter().enumerate() {
+                for (index, (_, (_, potential_types))) in function.arguments.clone().iter().enumerate() {
                     inputs.push(ABIToken {
                         name: format!("arg{}", index),
                         internal_type: potential_types[0].to_owned(),
@@ -316,7 +316,7 @@ pub fn build_output(
         let function_header = match function.resolved_function {
             Some(resolved_function) => {
                 format!(
-                    "\n\nfunction {}({}) {}{}",
+                    "function {}({}) {}{}",
                     resolved_function.name,
 
                     resolved_function.inputs.iter().enumerate().map(|(index, solidity_type)| {
@@ -341,11 +341,11 @@ pub fn build_output(
             None => {
                 
                 // sort arguments by their calldata index
-                let mut sorted_arguments: Vec<_> = function.arguments.into_iter().collect();
+                let mut sorted_arguments: Vec<_> = function.arguments.clone().into_iter().collect();
                 sorted_arguments.sort_by(|x,y| x.0.cmp(&y.0));
 
                 format!(
-                    "\n\nfunction Unresolved_{}({}) {}{}",
+                    "function Unresolved_{}({}) {}{}",
                     function.selector,
 
                     sorted_arguments.iter().map(|(index, (_, potential_types))| {
@@ -368,6 +368,26 @@ pub fn build_output(
                 )
             }
         };
+
+        // print natspec header for the function
+        decompiled_output.extend(vec![
+            String::new(),
+            String::from(format!("/// @custom:selector    0x{}", function.selector)),
+            String::from(format!("/// @custom:name        {}", function_header.replace("function ", "").split("(").next().unwrap())),
+        ]);
+
+        for notice in function.notices {
+            decompiled_output.push(String::from(format!("/// @notice             {}", notice)));
+        }
+
+        // sort arguments by their calldata index
+        let mut sorted_arguments: Vec<_> = function.arguments.into_iter().collect();
+        sorted_arguments.sort_by(|x,y| x.0.cmp(&y.0));
+
+        for (index, (_, solidity_type)) in sorted_arguments {
+            decompiled_output.push(String::from(format!("/// @param              arg{} {:?}", index, solidity_type)));
+        }
+        
         decompiled_output.push(function_header);
 
         // build the function's body

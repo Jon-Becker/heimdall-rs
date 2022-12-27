@@ -304,7 +304,7 @@ pub fn decompile(args: DecompilerArgs) {
             trace.add_error(
                 func_analysis_trace,
                 function_entry_point.try_into().unwrap(),
-                format!("Broke out of potentially infinite loop while mapping function.").to_string()
+                format!("Execution tree truncated to {} branches", jumpdests.len()).to_string()
             );
         }
         
@@ -324,6 +324,7 @@ pub fn decompile(args: DecompilerArgs) {
                 errors: HashMap::new(),
                 resolved_function: None,
                 indent_depth: 0,
+                notices: Vec::new(),
                 pure: true,
                 view: true,
                 payable: true,
@@ -332,6 +333,11 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
             &mut Vec::new()
         );
+
+        // add notice for long execution trees
+        if jumpdests.len() >= 1000 {
+            analyzed_function.notices.push(format!("execution tree truncated to {} branches", jumpdests.len()));
+        }
 
         let argument_count = analyzed_function.arguments.len();
 
