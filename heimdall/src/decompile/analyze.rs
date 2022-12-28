@@ -114,7 +114,13 @@ impl VMTrace {
             if opcode_number >= 0xA0 && opcode_number <= 0xA4 {
 
                 // LOG0, LOG1, LOG2, LOG3, LOG4
-                let logged_event = operation.events.last().unwrap().to_owned();
+                let logged_event = match operation.events.last() {
+                    Some(event) => event,
+                    None => {
+                        function.notices.push(format!("unable to decode event emission at instruction {}", instruction.instruction));
+                        continue;
+                    }
+                };
 
                 // check to see if the event is a duplicate
                 if !function.events.iter().any(|(selector, _)| {
