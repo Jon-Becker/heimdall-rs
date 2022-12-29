@@ -39,10 +39,10 @@ use heimdall_common::{
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Decompile EVM bytecode to Solidity",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder, 
+       global_setting = AppSettings::DeriveDisplayOrder,
        override_usage = "heimdall decompile <TARGET> [OPTIONS]")]
 pub struct DecompilerArgs {
-    
+
     /// The target to decompile, either a file, bytecode, contract address, or ENS name.
     #[clap(required=true)]
     pub target: String,
@@ -50,7 +50,7 @@ pub struct DecompilerArgs {
     /// Set the output verbosity level, 1 - 5.
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
-    
+
     /// The output directory to write the decompiled files to
     #[clap(long="output", short, default_value = "", hide_default_value = true)]
     pub output: String,
@@ -87,10 +87,10 @@ pub fn decompile(args: DecompilerArgs) {
         shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let decompile_call = trace.add_call(
-        0, line!(), 
-        "heimdall".to_string(), 
-        "decompile".to_string(), 
-        vec![shortened_target], 
+        0, line!(),
+        "heimdall".to_string(),
+        "decompile".to_string(),
+        vec![shortened_target],
         "()".to_string()
     );
 
@@ -161,7 +161,7 @@ pub fn decompile(args: DecompilerArgs) {
             };
             return bytecode_as_bytes.to_string().replacen("0x", "", 1);
         });
-        
+
     }
     else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone();
@@ -175,7 +175,7 @@ pub fn decompile(args: DecompilerArgs) {
 
         // We are decompiling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
-            Ok(contents) => {                
+            Ok(contents) => {
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents.replacen("0x", "", 1)
                 }
@@ -200,22 +200,22 @@ pub fn decompile(args: DecompilerArgs) {
         rpc_url: args.rpc_url.clone(),
     });
     trace.add_call(
-        decompile_call, 
-        line!(), 
-        "heimdall".to_string(), 
+        decompile_call,
+        line!(),
+        "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len()/2usize)], 
+        vec![format!("{} bytes", contract_bytecode.len()/2usize)],
         "()".to_string()
     );
-    
+
     // perform versioning and compiler heuristics
     let (compiler, version) = detect_compiler(contract_bytecode.clone());
     trace.add_call(
-        decompile_call, 
-        line!(), 
-        "heimdall".to_string(), 
+        decompile_call,
+        line!(),
+        "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len()/2usize)], 
+        vec![format!("{} bytes", contract_bytecode.len()/2usize)],
         format!("({}, {})", compiler, version)
     );
 
@@ -263,7 +263,7 @@ pub fn decompile(args: DecompilerArgs) {
     let mut analyzed_functions = Vec::new();
     for selector in selectors.clone() {
         decompilation_progress.set_message(format!("executing '0x{}'", selector));
-        
+
         // get the function's entry point
         let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
 
@@ -272,17 +272,17 @@ pub fn decompile(args: DecompilerArgs) {
         }
 
         let func_analysis_trace = trace.add_call(
-            vm_trace, 
-            line!(), 
-            "heimdall".to_string(), 
-            "analyze".to_string(), 
-            vec![format!("0x{}", selector)], 
+            vm_trace,
+            line!(),
+            "heimdall".to_string(),
+            "analyze".to_string(),
+            vec![format!("0x{}", selector)],
             "()".to_string()
         );
 
         trace.add_info(
-            func_analysis_trace, 
-            function_entry_point.try_into().unwrap(), 
+            func_analysis_trace,
+            function_entry_point.try_into().unwrap(),
             format!("discovered entry point: {}", function_entry_point).to_string()
         );
 
@@ -292,7 +292,7 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
             format!("execution tree {}",
-            
+
             match jumpdests.len() {
                 0 => "appears to be linear".to_string(),
                 _ => format!("has {} branches", jumpdests.len()+1)
@@ -307,7 +307,7 @@ pub fn decompile(args: DecompilerArgs) {
                 format!("Execution tree truncated to {} branches", jumpdests.len()).to_string()
             );
         }
-        
+
         decompilation_progress.set_message(format!("analyzing '0x{}'", selector));
 
         // solidify the execution tree
@@ -391,7 +391,7 @@ pub fn decompile(args: DecompilerArgs) {
             };
 
             let matched_resolved_functions = match_parameters(resolved_functions, &analyzed_function);
-            
+
             trace.br(func_analysis_trace);
             if matched_resolved_functions.len() == 0 {
                 trace.add_warn(
@@ -401,7 +401,7 @@ pub fn decompile(args: DecompilerArgs) {
                 );
             }
             else {
-                
+
                 let mut selected_function_index: u8 = 0;
                 if matched_resolved_functions.len() > 1 {
                     decompilation_progress.suspend(|| {
@@ -471,7 +471,7 @@ pub fn decompile(args: DecompilerArgs) {
                                 );
                             });
                         }
-        
+
                         let selected_match = match resolved_error_selectors.get(selected_error_index as usize) {
                             Some(selected_match) => selected_match,
                             None => {
@@ -479,14 +479,14 @@ pub fn decompile(args: DecompilerArgs) {
                                 std::process::exit(1)
                             }
                         };
-                        
+
                         resolved_counter += 1;
                         analyzed_function.errors.insert(error_selector.clone(), Some(selected_match.clone()));
                         all_resolved_errors.insert(error_selector.clone(), selected_match.clone());
                     },
                     None => {}
                 }
-               
+
             }
 
             if resolved_counter > 0 {
@@ -503,7 +503,7 @@ pub fn decompile(args: DecompilerArgs) {
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
                 decompilation_progress.set_message(format!("resolving event '0x{}'", &event_selector.get(0..8).unwrap().to_string()));
                 let resolved_event_selectors = resolve_event_signature(&event_selector.get(0..8).unwrap().to_string());
-                
+
                 // only continue if we have matches
                 match resolved_event_selectors {
                     Some(resolved_event_selectors) => {
@@ -520,7 +520,7 @@ pub fn decompile(args: DecompilerArgs) {
                                 );
                             });
                         }
-        
+
                         let selected_match = match resolved_event_selectors.get(selected_event_index as usize) {
                             Some(selected_match) => selected_match,
                             None => {
@@ -553,7 +553,7 @@ pub fn decompile(args: DecompilerArgs) {
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
     logger.info("building decompilation output.");
-    
+
     // create the decompiled source output
     build_output(
         &args,
@@ -568,4 +568,105 @@ pub fn decompile(args: DecompilerArgs) {
 
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()).to_string());
+}
+
+/// Builder pattern for using decompile method as a library.
+///
+/// Default values may be overriden individually.
+/// ## Example
+/// Use with normal settings:
+/// ```no_run
+/// # use crate::heimdall::decompile::DecompileBuilder;
+/// const SOURCE: &'static str = "7312/* snip */04ad";
+///
+/// DecompileBuilder::new(SOURCE)
+///     .decompile();
+/// ```
+/// Or change settings individually:
+/// ```no_run
+/// # use crate::heimdall::decompile::DecompileBuilder;
+///
+/// const SOURCE: &'static str = "7312/* snip */04ad";
+/// DecompileBuilder::new(SOURCE)
+///     .default(false)
+///     .include_sol(false)
+///     .output("my_contract_dir")
+///     .rpc("https://127.0.0.1:8545")
+///     .skip_resolving(true)
+///     .verbosity(5)
+///     .decompile();
+/// ```
+#[allow(dead_code)]
+pub struct DecompileBuilder {
+    args: DecompilerArgs
+}
+
+impl DecompileBuilder where {
+    /// A new builder for the decompilation of the specified target.
+    ///
+    /// The target may be a file, bytecode, contract address, or ENS name.
+    #[allow(dead_code)]
+    pub fn new(target: &str) -> Self {
+        DecompileBuilder {
+            args: DecompilerArgs {
+                target: target.to_string(),
+                verbose: clap_verbosity_flag::Verbosity::new(0, 0),
+                output: String::from(""),
+                rpc_url: String::from(""),
+                default: true,
+                skip_resolving: true,
+                include_solidity: true
+            }
+        }
+    }
+    /// Set the output verbosity level.
+    ///
+    /// - -1 None
+    /// - 0 Error
+    /// - 1 Warn
+    /// - 2 Info
+    /// - 3 Debug
+    /// - 4 Trace
+    #[allow(dead_code)]
+    pub fn verbosity(mut self, level: i8) -> DecompileBuilder {
+        // Calculated by the log library as: 1 + verbose - quiet.
+        // Set quiet as 1, and the level corresponds to the appropriate Log level.
+        self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 1);
+        self
+    }
+    /// The output directory to write the decompiled files to
+    #[allow(dead_code)]
+    pub fn output(mut self, directory: &str) -> DecompileBuilder {
+        self.args.output = directory.to_string();
+        self
+    }
+    /// The RPC provider to use for fetching target bytecode.
+    #[allow(dead_code)]
+    pub fn rpc(mut self, url: &str) -> DecompileBuilder {
+        self.args.rpc_url = url.to_string();
+        self
+    }
+    /// When prompted, always select the default value.
+    #[allow(dead_code)]
+    pub fn default(mut self, accept: bool) -> DecompileBuilder {
+        self.args.default = accept;
+        self
+    }
+    /// Whether to skip resolving function selectors.
+    #[allow(dead_code)]
+    pub fn skip_resolving(mut self, skip: bool) -> DecompileBuilder {
+        self.args.skip_resolving = skip;
+        self
+    }
+    /// Whether to include solidity source code in the output (in beta).
+    #[allow(dead_code)]
+    pub fn include_sol(mut self, include: bool) -> DecompileBuilder {
+        self.args.include_solidity = include;
+        self
+    }
+    /// Starts the decompilation.
+    #[allow(dead_code)]
+    pub fn decompile(self) {
+        decompile(self.args)
+    }
 }
