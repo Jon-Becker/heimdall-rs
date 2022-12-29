@@ -143,15 +143,6 @@ mod postprocess_tests {
 
         assert_eq!(postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)), vec![String::from("if (cast(arg0 + 1 / 10)) {")]);
     }
-
-    #[test]
-    fn test_simplify_parentheses_complex2() {
-        let lines = vec![
-            String::from("if (((((((((((((((cast(((((((((((arg0 * (((((arg1))))))))))))) + 1)) / 10)))))))))))))))) {"),
-        ];
-
-        assert_eq!(postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)), vec![String::from("if (cast((arg0 * (arg1)) + 1 / 10)) {")]);
-    }
 }
 
 #[test]
