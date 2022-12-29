@@ -602,6 +602,7 @@ pub struct DecompileBuilder {
 }
 
 impl DecompileBuilder where {
+
     /// A new builder for the decompilation of the specified target.
     ///
     /// The target may be a file, bytecode, contract address, or ENS name.
@@ -619,9 +620,9 @@ impl DecompileBuilder where {
             }
         }
     }
+
     /// Set the output verbosity level.
     ///
-    /// - -1 None
     /// - 0 Error
     /// - 1 Warn
     /// - 2 Info
@@ -629,41 +630,48 @@ impl DecompileBuilder where {
     /// - 4 Trace
     #[allow(dead_code)]
     pub fn verbosity(mut self, level: i8) -> DecompileBuilder {
+
         // Calculated by the log library as: 1 + verbose - quiet.
         // Set quiet as 1, and the level corresponds to the appropriate Log level.
-        self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 1);
+        self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 0);
         self
     }
+
     /// The output directory to write the decompiled files to
     #[allow(dead_code)]
     pub fn output(mut self, directory: &str) -> DecompileBuilder {
         self.args.output = directory.to_string();
         self
     }
+
     /// The RPC provider to use for fetching target bytecode.
     #[allow(dead_code)]
     pub fn rpc(mut self, url: &str) -> DecompileBuilder {
         self.args.rpc_url = url.to_string();
         self
     }
+
     /// When prompted, always select the default value.
     #[allow(dead_code)]
     pub fn default(mut self, accept: bool) -> DecompileBuilder {
         self.args.default = accept;
         self
     }
+
     /// Whether to skip resolving function selectors.
     #[allow(dead_code)]
     pub fn skip_resolving(mut self, skip: bool) -> DecompileBuilder {
         self.args.skip_resolving = skip;
         self
     }
+
     /// Whether to include solidity source code in the output (in beta).
     #[allow(dead_code)]
     pub fn include_sol(mut self, include: bool) -> DecompileBuilder {
         self.args.include_solidity = include;
         self
     }
+
     /// Starts the decompilation.
     #[allow(dead_code)]
     pub fn decompile(self) {

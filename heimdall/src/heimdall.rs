@@ -42,8 +42,6 @@ pub enum Subcommands {
 
     #[clap(name = "config", about = "Display and edit the current configuration")]
     Config(ConfigArgs),
-
-
 }
 
 fn main() {
