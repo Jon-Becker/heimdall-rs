@@ -7,7 +7,7 @@ use std::{
 use clap::{AppSettings, Parser};
 use ethers::{
     core::types::{H256},
-    providers::{Middleware, Provider, Http}, types::{Transaction, Address},
+    providers::{Middleware, Provider, Http}, types::{Transaction},
 };
 
 use heimdall_common::{
