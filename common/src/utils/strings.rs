@@ -20,6 +20,13 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
         .collect()
 }
 
+// encode a vector of u8 into a hex string
+pub fn encode_hex(s: Vec<u8>) -> String {
+    s.iter()
+        .map(|b| format!("{:02x}", b))
+        .collect()
+}
+
 
 // convert a U256 to hex without leading 0s
 pub fn encode_hex_reduced(s: U256) -> String {

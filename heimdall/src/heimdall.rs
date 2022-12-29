@@ -1,6 +1,7 @@
 use std::{panic};
 use backtrace::Backtrace;
 
+mod trace;
 mod decode;
 mod decompile;
 
@@ -11,6 +12,7 @@ use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_common::{ether::evm::disassemble::*, io::{logging::Logger}};
 use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
+use trace::{trace, TraceArgs};
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -39,6 +41,9 @@ pub enum Subcommands {
 
     #[clap(name = "decode", about = "Decode calldata into readable types")]
     Decode(DecodeArgs),
+
+    #[clap(name = "trace", about = "Trace a contract interaction, revealing the internals of the transaction")]
+    Trace(TraceArgs),
 
     #[clap(name = "config", about = "Display and edit the current configuration")]
     Config(ConfigArgs),
@@ -105,6 +110,19 @@ fn main() {
             };
 
             decode(cmd);
+        }
+
+        Subcommands::Trace(mut cmd) => {
+            
+            // if the user has not specified a rpc url, use the default
+            match cmd.rpc_url.as_str() {
+                "" => {
+                    cmd.rpc_url = configuration.rpc_url.clone();
+                }
+                _ => {}
+            };
+
+            trace(cmd);
         }
 
         Subcommands::Config(cmd) => {

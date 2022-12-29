@@ -66,7 +66,7 @@ pub fn decode(args: DecodeArgs) {
 
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
-                logger.error("decoging an on-chain transaction requires an RPC provider. Use `heimdall decode --help` for more information.");
+                logger.error("decoding an on-chain transaction requires an RPC provider. Use `heimdall decode --help` for more information.");
                 std::process::exit(1);
             }
 
