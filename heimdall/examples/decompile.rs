@@ -1,6 +1,7 @@
 use heimdall::decompile::DecompileBuilder;
 
 fn main() {
+
     // Decompile the bytecode and save the results.
     DecompileBuilder::new(BYTECODE).decompile();
 
