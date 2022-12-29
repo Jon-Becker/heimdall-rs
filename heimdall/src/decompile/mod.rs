@@ -614,7 +614,7 @@ impl DecompileBuilder where {
                 output: String::from(""),
                 rpc_url: String::from(""),
                 default: true,
-                skip_resolving: true,
+                skip_resolving: false,
                 include_solidity: true
             }
         }
