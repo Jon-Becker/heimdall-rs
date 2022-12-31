@@ -31,6 +31,7 @@ pub struct VM {
     pub returndata: String,
     pub exitcode: u128,
     pub timestamp: Instant,
+    pub block_timestamp: U256,
 }
 
 #[derive(Clone, Debug)]
@@ -99,6 +100,12 @@ impl VM {
             returndata: String::new(),
             exitcode: 255,
             timestamp: Instant::now(),
+            block_timestamp: U256::from(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            ),
         }
     }
 
@@ -1087,8 +1094,6 @@ impl VM {
 
                 // RETURNDATASIZE
                 if op == 0x3D {
-                    self.stack.pop().value;
-
                     self.stack.push("0x00", operation.clone());
                 }
 
@@ -1150,13 +1155,8 @@ impl VM {
 
                 // TIMESTAMP
                 if op == 0x42 {
-                    let timestamp = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs();
-
                     self.stack.push(
-                        U256::from(timestamp).encode_hex().as_str(),
+                        self.block_timestamp.encode_hex().as_str(),
                         operation.clone(),
                     );
                 }

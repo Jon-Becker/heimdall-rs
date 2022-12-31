@@ -1,13 +1,14 @@
 mod tests;
 
 use std::{
-    str::FromStr
+    str::FromStr,
+    time::Instant
 };
 
 use clap::{AppSettings, Parser};
 use ethers::{
     core::types::{H256},
-    providers::{Middleware, Provider, Http}, types::{Transaction},
+    providers::{Middleware, Provider, Http}, types::{Transaction, BlockId},
 };
 
 use heimdall_common::{
@@ -15,6 +16,7 @@ use heimdall_common::{
     constants::TRANSACTION_HASH_REGEX,
     ether::{evm::{vm::VM}}, utils::strings::encode_hex
 };
+use tokio::time::Instant as TokioInstant;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Trace a contract interaction, revealing the internals of the transaction.",
@@ -45,11 +47,12 @@ pub struct TraceArgs {
 #[allow(deprecated)]
 pub fn trace(args: TraceArgs) {
     let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
-    let raw_transaction: Transaction;
+    let raw_transaction;
+    let raw_block;
     let calldata;
-    let value;
     let interacted_with;
     let contract_bytecode;
+    let block_number;
 
     // determine whether or not the target is a transaction hash
     if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
@@ -107,7 +110,6 @@ pub fn trace(args: TraceArgs) {
             return raw_transaction;
         });
 
-        value = raw_transaction.value;
         calldata = raw_transaction.input.to_string();
         interacted_with = match raw_transaction.to {
             Some(to) => to,
@@ -141,6 +143,46 @@ pub fn trace(args: TraceArgs) {
             return bytecode_as_bytes.to_string().replacen("0x", "", 1);
         });
 
+        // get the block number of the transaction
+        block_number = match raw_transaction.block_number {
+            Some(block_number) => block_number.as_u64(),
+            None => {
+                logger.error(&format!("transaction '{}' is pending.", &args.target).to_string());
+                std::process::exit(1)
+            }
+        };
+
+        // get the timestamp of the block
+        raw_block = rt.block_on(async {
+
+            // create new provider
+            let provider = match Provider::<Http>::try_from(&args.rpc_url) {
+                Ok(provider) => provider,
+                Err(_) => {
+                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url).to_string());
+                    std::process::exit(1)
+                }
+            };
+
+            // fetch the block
+            let block = match provider.get_block(block_number).await {
+                Ok(block) => match block {
+                    Some(block) => block,
+                    None => {
+                        logger.error(&format!("block '{}' doesn't exist.", &block_number).to_string());
+                        std::process::exit(1)
+                    }
+                }
+                Err(_) => {
+                    logger.error(&format!("failed to fetch block '{}' .", &block_number).to_string());
+                    std::process::exit(1)
+                }
+            };
+
+            return block;
+        });
+
+        println!("{:#?}", raw_transaction);
     }
     else {
         logger.error(&format!("'{}' is not a valid transaction hash.", &args.target));
@@ -166,15 +208,22 @@ pub fn trace(args: TraceArgs) {
         format!("0x{}", encode_hex(interacted_with.as_bytes().to_vec())),
         format!("0x{}", encode_hex(interacted_with.as_bytes().to_vec())),
         format!("0x{}", encode_hex(raw_transaction.from.as_bytes().to_vec())),
-        value.as_u128(),
+        raw_transaction.value.as_u128(),
         raw_transaction.gas.as_u128(),
     );
 
+    // update the timestamp
+    vm.block_timestamp = raw_block.timestamp;
+
     // run the VM
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
+
+        // wait for enter
+        let mut _in = String::new();
+        std::io::stdin().read_line(&mut _in).unwrap();
         let state = vm.step();
 
-        println!("{:?}", state.last_instruction.opcode_details.unwrap().name);
+        println!("{:?}\n{:#?}\n{:#?}\n\n", state.last_instruction, state.memory, state.storage);
 
         if vm.exitcode != 255 || vm.returndata.len() > 0 {
             break;
