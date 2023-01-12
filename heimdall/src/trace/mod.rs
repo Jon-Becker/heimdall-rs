@@ -2,21 +2,19 @@ mod tests;
 
 use std::{
     str::FromStr,
-    time::Instant
 };
 
 use clap::{AppSettings, Parser};
 use ethers::{
     core::types::{H256},
-    providers::{Middleware, Provider, Http}, types::{Transaction, BlockId},
+    providers::{Middleware, Provider, Http}, types::{U256},
 };
 
 use heimdall_common::{
     io::logging::Logger,
     constants::TRANSACTION_HASH_REGEX,
-    ether::{evm::{vm::VM}}, utils::strings::encode_hex
+    ether::{evm::{vm::{Block}}, util::simulate}, utils::strings::encode_hex
 };
-use tokio::time::Instant as TokioInstant;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Trace a contract interaction, revealing the internals of the transaction.",
@@ -201,35 +199,24 @@ pub fn trace(args: TraceArgs) {
         std::process::exit(1);
     }
 
-    // make a new VM object
-    let mut vm = VM::new(
-        contract_bytecode.clone(),
+    let raw_trace = simulate(
+        format!("0x{}", encode_hex(interacted_with.as_bytes().to_vec())),
         calldata.clone(),
-        format!("0x{}", encode_hex(interacted_with.as_bytes().to_vec())),
-        format!("0x{}", encode_hex(interacted_with.as_bytes().to_vec())),
+        contract_bytecode.clone(),
         format!("0x{}", encode_hex(raw_transaction.from.as_bytes().to_vec())),
         raw_transaction.value.as_u128(),
         raw_transaction.gas.as_u128(),
+        Block {
+            number: U256::from_str(raw_block.number.unwrap().to_string().as_str()).unwrap(),
+            hash: U256::from_str(&encode_hex(raw_block.hash.unwrap().as_bytes().to_vec())).unwrap(),
+            timestamp: raw_block.timestamp,
+            coinbase: U256::from_str(&encode_hex(raw_block.author.unwrap().as_bytes().to_vec())).unwrap(),
+            difficulty: raw_block.difficulty,
+            gas_limit: raw_block.gas_limit,
+            base_fee: raw_block.base_fee_per_gas.unwrap(),
+        }
     );
 
-    // update the timestamp
-    vm.block_timestamp = raw_block.timestamp;
-
-    // run the VM
-    while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
-
-        // wait for enter
-        let mut _in = String::new();
-        std::io::stdin().read_line(&mut _in).unwrap();
-        let state = vm.step();
-
-        println!("{:?}\n{:#?}\n{:#?}\n\n", state.last_instruction, state.memory, state.storage);
-
-        if vm.exitcode != 255 || vm.returndata.len() > 0 {
-            break;
-        }
-    }
-    
     // force the trace to display
     trace.level = 4;
     trace.display();

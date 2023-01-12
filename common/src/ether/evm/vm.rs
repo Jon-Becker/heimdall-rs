@@ -1,7 +1,7 @@
 use std::{
     ops::{Div, Rem, Shl, Shr},
     str::FromStr,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{Instant},
 };
 
 use ethers::{abi::AbiEncode, prelude::U256, utils::keccak256};
@@ -29,9 +29,21 @@ pub struct VM {
     pub gas_used: u128,
     pub events: Vec<Log>,
     pub returndata: String,
+    pub extreturndata: String,
     pub exitcode: u128,
     pub timestamp: Instant,
-    pub block_timestamp: U256,
+    pub block: Block
+}
+
+#[derive(Clone, Debug)]
+pub struct Block {
+    pub number: U256,
+    pub hash: U256,
+    pub timestamp: U256,
+    pub coinbase: U256,
+    pub difficulty: U256,
+    pub gas_limit: U256,
+    pub base_fee: U256,
 }
 
 #[derive(Clone, Debug)]
@@ -98,14 +110,18 @@ impl VM {
             gas_used: 21000,
             events: Vec::new(),
             returndata: String::new(),
+            extreturndata: String::new(),
             exitcode: 255,
             timestamp: Instant::now(),
-            block_timestamp: U256::from(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            ),
+            block: Block {
+                number: U256::from(0),
+                hash: U256::from(0),
+                timestamp: U256::from(0),
+                coinbase: U256::from(0),
+                difficulty: U256::from(0),
+                gas_limit: U256::from(0),
+                base_fee: U256::from(0),
+            }
         }
     }
 
@@ -125,6 +141,12 @@ impl VM {
 
         self.gas_remaining = self.gas_remaining.saturating_sub(amount);
         self.gas_used = self.gas_used.saturating_add(amount);
+        return true;
+    }
+
+    pub fn refund_gas(&mut self, amount: u128) -> bool {
+        self.gas_remaining = self.gas_remaining.saturating_add(amount);
+        self.gas_used = self.gas_used.saturating_sub(amount);
         return true;
     }
 
@@ -1094,7 +1116,7 @@ impl VM {
 
                 // RETURNDATASIZE
                 if op == 0x3D {
-                    self.stack.push("0x00", operation.clone());
+                    self.stack.push(U256::from(self.extreturndata.len() / 2).encode_hex().as_str(), operation.clone());
                 }
 
                 // RETURNDATACOPY
@@ -1135,14 +1157,23 @@ impl VM {
                         }
                     };
 
-                    self.memory.store(dest_offset, size, "FF".repeat(size / 2))
+                    self.memory.store(dest_offset, size, self.returndata.clone())
                 }
 
                 // EXTCODEHASH and BLOCKHASH
-                if op == 0x3F || op == 0x40 {
-                    self.stack.pop().value;
+                if op == 0x3F {
+                    self.stack.pop();
 
                     self.stack.push("0x00", operation.clone());
+                }
+
+                // BLOCKHASH
+                if op == 0x40 {
+                    self.stack.pop().value;
+                    self.stack.push(
+                        self.block.hash.encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // COINBASE
@@ -1156,14 +1187,52 @@ impl VM {
                 // TIMESTAMP
                 if op == 0x42 {
                     self.stack.push(
-                        self.block_timestamp.encode_hex().as_str(),
+                        self.block.timestamp.encode_hex().as_str(),
                         operation.clone(),
                     );
                 }
 
-                // NUMBER -> BASEFEE
-                if op >= 0x43 && op <= 0x48 {
+                // NUMBER
+                if op == 0x43 {
+                    self.stack.push(
+                        self.block.number.encode_hex().as_str(),
+                        operation.clone(),
+                    );
+                }
+
+                // DIFFICULTY
+                if op == 0x44 {
+                    self.stack.push(
+                        self.block.difficulty.encode_hex().as_str(),
+                        operation.clone(),
+                    );
+                }
+
+                // GASLIMIT
+                if op == 0x45 {
+                    self.stack.push(
+                        self.block.gas_limit.encode_hex().as_str(),
+                        operation.clone(),
+                    );
+                }
+
+                // CHAINID
+                if op == 0x46 {
                     self.stack.push("0x01", operation.clone());
+
+                }
+
+                // SELFBALANCE
+                if op == 0x47 {
+                    self.stack.push("0x01", operation.clone());
+                }
+
+                // BASEFEE
+                if op == 0x48 {
+                    self.stack.push(
+                        self.block.base_fee.encode_hex().as_str(),
+                        operation.clone(),
+                    );
                 }
 
                 // POP
@@ -1638,6 +1707,40 @@ impl VM {
             storage: self.storage.clone(),
             events: self.events.clone(),
         }
+    }
+
+    // Gets the next instruction in the VM without executing it
+    pub fn peek(&mut self) -> (Opcode, Vec<WrappedOpcode>, Vec<U256>){
+
+        // sanity check
+        if self.bytecode.len() < (self.instruction * 2 + 2) as usize {
+            self.exit(2, "0x");
+            Instruction {
+                instruction: self.instruction,
+                opcode: "PANIC".to_string(),
+                opcode_details: None,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+                input_operations: Vec::new(),
+                output_operations: Vec::new(),
+            };
+        }
+
+        // get the opcode at the current instruction
+        let opcode = self.bytecode
+            [(self.instruction * 2) as usize..(self.instruction * 2 + 2) as usize]
+            .to_string();
+
+        // add the opcode to the trace
+        let opcode_details = crate::ether::evm::opcodes::opcode(opcode.replace("0x", "").as_str());
+        let input_frames = self.stack.peek_n(opcode_details.inputs as usize);
+        let input_operations = input_frames
+            .iter()
+            .map(|x| x.operation.clone())
+            .collect::<Vec<WrappedOpcode>>();
+        let inputs = input_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
+
+        return (opcode_details, input_operations, inputs);
     }
 
     // Resets the VM state for a new execution
