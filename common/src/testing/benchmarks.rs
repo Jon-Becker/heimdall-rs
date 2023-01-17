@@ -1,29 +1,26 @@
-use std::{time::Instant, thread, io, io::Write};
+use std::{thread, time::Instant, io::{self, Write}};
+use rayon::prelude::*;
 
 pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
-    let mut time = 0usize;
-    let mut max = usize::MIN;
-    let mut min = usize::MAX;
-
+    
     // warm up
     thread::sleep(std::time::Duration::from_secs(2));
 
-    for _ in 0..runs {
+    let results = (0..runs).into_par_iter().map(|_| {
         let start_time = Instant::now();
         let _ = to_bench();
         let end_time = start_time.elapsed().as_millis() as usize;
-        
-        max = std::cmp::max(max, end_time);
-        min = std::cmp::min(min, end_time);
-        time += end_time;
-    }
+        (end_time, end_time, end_time)
+    }).reduce(|| (0, usize::MIN, usize::MAX), |acc, x| {
+        (acc.0 + x.0, std::cmp::max(acc.1, x.1), std::cmp::min(acc.2, x.2))
+    });
 
     let _ = io::stdout().write_all(
         format!(
             "  {}:\n    {}ms ± {}ms per run ( with {} runs ).\n\n",
             benchmark_name,
-            time / runs,
-            std::cmp::max(max-(time / runs), (time / runs)-min),
+            results.0 / runs,
+            std::cmp::max(results.1-(results.0 / runs), (results.0 / runs)-results.2),
             runs
         ).as_bytes()
     );
