@@ -126,6 +126,7 @@ impl VMTrace {
                 if !function.events.iter().any(|(selector, _)| {
                     selector == logged_event.topics.first().unwrap()
                 }) {
+                    
                     // add the event to the function
                     function.events.insert(logged_event.topics.first().unwrap().to_string(), (None, logged_event.clone()));
 
@@ -178,20 +179,6 @@ impl VMTrace {
 
                     // this is an if conditional for the children branches
                     let conditional = instruction.input_operations[1].solidify();
-
-                    // check if there is a conditional before this as well. combine them if so
-                    // if let Some(last) = function.logic.last_mut() {
-                    //     if last.starts_with("if") {
-                    //         let slice = find_balanced_encapsulator(last.to_string(), ('(', ')'));
-                    //         if slice.2 {
-                                
-                    //             // combine the two conditionals
-                    //             *last = format!("if ({}) {{", format!("({}) && ({})", last.get(slice.0..slice.1).unwrap(), conditional));
-
-                    //             continue;
-                    //         }
-                    //     }
-                    // }
 
                     // check if this if statement is added by the compiler
                     if conditional == "!msg.value" {
@@ -325,13 +312,17 @@ impl VMTrace {
 
                                     // get matching conditional
                                     let conditional = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
-                                    let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap();
-                                    
-                                    // we can negate the conditional to get the revert logic
-                                    // TODO: make this a require statement, if revert is rlly gross but its technically correct
-                                    //       I just ran into issues with ending bracket matching
-                                    function.logic[i] = format!("if (!({})) {{ revert{}; }} else {{", conditional, custom_error_placeholder);
 
+                                    // sanity check
+                                    if conditional.2 {
+                                        let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap();
+                                    
+                                        // we can negate the conditional to get the revert logic
+                                        // TODO: make this a require statement, if revert is rlly gross but its technically correct
+                                        //       I just ran into issues with ending bracket matching
+                                        function.logic[i] = format!("if (!({})) {{ revert{}; }} else {{", conditional, custom_error_placeholder);
+    
+                                    }
                                     break;
                                 }
                             }
@@ -397,7 +388,7 @@ impl VMTrace {
                     _ => "".to_string(),
                 };
 
-                function.logic.push(format!("selfdestruct({addr});", ));
+                function.logic.push(format!("selfdestruct({addr});"));
 
             } else if opcode_name == "SSTORE" {
                 let key = instruction.inputs[0];
@@ -675,9 +666,6 @@ impl VMTrace {
                     }
                     None => {}
                 };
-            }
-            else {
-                //function.logic.push(format!("{} not implemented", opcode_name));
             }
 
             // handle type heuristics
