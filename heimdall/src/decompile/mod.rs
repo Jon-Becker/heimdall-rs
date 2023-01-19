@@ -502,7 +502,7 @@ pub fn decompile(args: DecompilerArgs) {
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
                 decompilation_progress.set_message(format!("resolving event '0x{}'", &event_selector.get(0..8).unwrap().to_string()));
-                let resolved_event_selectors = resolve_event_signature(&event_selector.get(0..8).unwrap().to_string());
+                let resolved_event_selectors = resolve_event_signature(&event_selector);
 
                 // only continue if we have matches
                 match resolved_event_selectors {
