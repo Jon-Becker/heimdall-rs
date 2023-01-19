@@ -1292,7 +1292,9 @@ impl VM {
                         }
                     };
 
-                    self.memory.store(offset, 32, value);
+                    self.memory.store(offset, 32, value.clone());
+
+                    //println!("MSTORE({}, {}) [{:?}]", offset, value.clone(), input_operations.iter().map(|x| x.solidify()).collect::<Vec<String>>().join(", "))
                 }
 
                 // MSTORE8

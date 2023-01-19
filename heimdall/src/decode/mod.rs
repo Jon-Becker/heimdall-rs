@@ -153,7 +153,7 @@ pub fn decode(args: DecodeArgs) {
                     inputs.push(input);
                 }
             },
-            None => continue
+            None => {}
         }
         match decode_abi(&inputs, &byte_args) {
             Ok(result) => {
@@ -300,4 +300,106 @@ pub fn decode(args: DecodeArgs) {
     trace.level = 4;
     trace.display();
 
+}
+
+#[allow(deprecated)]
+pub fn decode_calldata(calldata: String) -> Option<ResolvedFunction> {
+    let (logger, _) = Logger::new("ERROR");
+
+    // parse the two parts of calldata, inputs and selector
+    let function_selector = calldata.replace("0x", "").get(0..8).unwrap_or("0x00000000").to_string();
+    let byte_args = match decode_hex(&calldata[8..]) {
+        Ok(byte_args) => byte_args,
+        Err(_) => {
+            logger.error("failed to parse bytearray from calldata.");
+            std::process::exit(1)
+        }
+    };
+
+    // get the function signature possibilities
+    let potential_matches = match resolve_function_signature(&function_selector) {
+        Some(signatures) => signatures,
+        None => Vec::new()
+    };
+    let mut matches: Vec<ResolvedFunction> = Vec::new();
+    for potential_match in &potential_matches {
+
+        // convert the string inputs into a vector of decoded types
+        let mut inputs: Vec<ParamType> = Vec::new();
+        
+        match parse_function_parameters(potential_match.signature.to_owned()) {
+            Some(type_) => {
+                for input in type_ {
+                    inputs.push(input);
+                }
+            },
+            None => {}
+        }
+
+        match decode_abi(&inputs, &byte_args) {
+            Ok(result) => {
+
+                // convert tokens to params
+                let mut params: Vec<Param> = Vec::new();
+                for (i, input) in inputs.iter().enumerate() {
+                    params.push(Param {
+                        name: format!("arg{}", i),
+                        kind: input.to_owned(),
+                        internal_type: None,
+                    });
+                }
+                // build the decoded function to verify it's a match
+                let decoded_function_call = Function {
+                    name: potential_match.name.to_string(),
+                    inputs: params,
+                    outputs: Vec::new(),
+                    constant: None,
+                    state_mutability: StateMutability::NonPayable,
+                }.encode_input(&result);
+                match decoded_function_call {
+                    Ok(decoded_function_call) => {
+
+                        // decode the function call in trimmed bytes, removing 0s, because contracts can use nonstandard sized words
+                        // and padding is hard
+                        let cleaned_bytes = decoded_function_call.encode_hex().replace("0", "");
+                        let decoded_function_call = match cleaned_bytes.split_once(&function_selector.replace("0", "")) {
+                            Some(decoded_function_call) => decoded_function_call.1,
+                            None => {
+                                logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
+                                continue
+                            }
+                        };
+
+                        // if the decoded function call matches (95%) the function signature, add it to the list of matches
+                        if similarity(decoded_function_call,&calldata[8..].replace("0", "")).abs() >= 0.90 {
+                            let mut found_match = potential_match.clone();
+                            found_match.decoded_inputs = Some(result);
+                            matches.push(found_match);
+                        }
+                        else {
+                            logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
+                        }
+
+                    },
+                    Err(_) => { logger.debug(&format!("potential match '{}' ignored. type checking failed", &potential_match.signature).to_string()); }
+                }
+                
+            },
+            Err(_) => { logger.debug(&format!("potential match '{}' ignored. decoding types failed", &potential_match.signature).to_string()); }
+        }
+    }
+
+    if matches.len() == 0 {
+        return None;
+    }
+    
+    let selected_match = match matches.get(0) {
+        Some(selected_match) => selected_match,
+        None => {
+            logger.error("invalid selection.");
+            std::process::exit(1)
+        }
+    };
+
+    return Some(selected_match.to_owned())
 }

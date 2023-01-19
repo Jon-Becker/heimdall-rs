@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use ethers::{providers::{Provider, Http, Middleware}, abi::AbiEncode, types::{Address, H256}};
 
-use crate::io::logging::{Logger, TraceFactory};
+use heimdall_common::{io::logging::{Logger, TraceFactory}, ether::{evm::{vm::{State, Result, VM, Block}, types::display_inline}, signatures::resolve_event_signature}};
 
-use super::evm::vm::{State, Result, VM, Block};
+use crate::decode::decode_calldata;
 
 #[derive(Debug, Clone)]
 pub struct TxTrace {
@@ -37,6 +37,7 @@ pub fn simulate(
     calldata: String,
     contract_bytecode: String,
     from_address: String,
+    origin_address: String,
     value: u128,
     gas_remaining: u128,
     block: Block,
@@ -47,19 +48,45 @@ pub fn simulate(
     let mut state_vec = Vec::new();
     let logger = Logger::new("TRACE").0;
 
-    let parent_index = trace.add_call(parent_index, parent_instruction, from_address.clone(), calldata.clone(), vec![], "()".to_string());
+    // attempt to resolve the function from calldata
+    let parent_index = match decode_calldata(calldata.clone()) {
+        Some(function) => {
+            trace.add_call(
+                parent_index,
+                parent_instruction,
+                from_address.clone(),
+                function.name,
+                function.decoded_inputs.as_ref().unwrap().iter().map(|x| display_inline(vec![x.to_owned()])).collect(),
+                "()".to_string()
+            )
+        }
+        None => {
+            trace.add_call(
+                parent_index,
+                parent_instruction,
+                from_address.clone(),
+                calldata.replace("0x", "").get(0..8).unwrap_or("0x00000000").to_string(),
+                vec![
+                    calldata.replace("0x", "").get(8..).unwrap_or("").to_string()
+                ],
+                "()".to_string()
+            )
+        }
+    };
+
 
     // make a new VM object
     let mut vm = VM::new(
         contract_bytecode,
         calldata,
         contract_address.clone(),
+        origin_address.clone(),
         from_address.clone(),
-        from_address,
         value,
         gas_remaining,
     );
 
+    println!("NEW VM! \n\n");
 
     // create a new trace
     let mut transaction_trace = TxTrace::new(&vm);
@@ -140,6 +167,8 @@ pub fn simulate(
                 calldata = vm.memory.read(operations[3].as_usize(), operations[4].as_usize());
             }
 
+            println!("value: {}", value);
+
             // recursively call simulate
             let child_trace = simulate(
                 rpc_url.clone(),
@@ -147,6 +176,7 @@ pub fn simulate(
                 calldata,
                 contract_bytecode,
                 contract_address.clone(),
+                origin_address.clone(),
                 value,
                 gas_alotted,
                 block.clone(),
@@ -166,6 +196,9 @@ pub fn simulate(
         // override SLOAD
         if next_operation.0.name.as_str() == "SLOAD" {
 
+            // check if we modified the slot, and if so, use that value
+            // TODO save storage across vms
+
             // get the storage value from the node
             let target_address = match contract_address.clone().parse::<Address>() {
                 Ok(address) => address,
@@ -180,7 +213,7 @@ pub fn simulate(
                 .enable_all()
                 .build()
                 .unwrap();
-            
+
             // fetch the storage value at the target address
             let storage_value = rt.block_on(async {
 
@@ -236,6 +269,61 @@ pub fn simulate(
             });
 
             println!("storage value: {}", storage_value);
+        }
+
+        // override LOG
+        if next_operation.0.name.as_str().contains("LOG") {
+            let selector = next_operation.2[2].clone().encode_hex().replace("0x", "");
+
+            match next_operation.2.get(2..) {
+                Some(topics) => {
+
+                    let mut args = topics.get(1..).unwrap_or(&[]).iter().map(|x| x.encode_hex()).collect::<Vec<String>>();
+                    let data = vm.memory.read(next_operation.2[0].as_usize(), next_operation.2[1].as_usize());
+                    args.push(data);
+
+                    // resolve the event
+                    match resolve_event_signature(&selector) {
+                        Some(events) => {
+                            match events.get(0) {
+                                Some(event) => {
+                                    trace.add_emission(
+                                        parent_index,
+                                        vm.instruction.try_into().unwrap(),
+                                        event.name.clone(),
+                                        args,
+                                    );
+                                }
+                                None => {
+                                    trace.add_raw_emission(
+                                        parent_index,
+                                        vm.instruction.try_into().unwrap(),
+                                        next_operation.2[2..].iter().map(|x| x.encode_hex()).collect::<Vec<String>>(),
+                                        vm.memory.read(next_operation.2[0].as_usize(), next_operation.2[1].as_usize())
+                                    );
+                                }
+                            }
+                        },
+                        None => {
+                            trace.add_raw_emission(
+                                parent_index,
+                                vm.instruction.try_into().unwrap(),
+                                next_operation.2[2..].iter().map(|x| x.encode_hex()).collect::<Vec<String>>(),
+                                format!("0x{}", vm.memory.read(next_operation.2[0].as_usize(), next_operation.2[1].as_usize()))
+                            );
+                        }
+                    };
+                },
+                None => {
+                    trace.add_raw_emission(
+                        parent_index,
+                        vm.instruction.try_into().unwrap(),
+                        vec![],
+                        format!("0x{}", vm.memory.read(next_operation.2[0].as_usize(), next_operation.2[1].as_usize()))
+                    );
+                    continue
+                }
+            };
         }
 
         let state = vm.step();

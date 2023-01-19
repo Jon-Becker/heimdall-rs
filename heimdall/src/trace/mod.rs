@@ -1,4 +1,5 @@
 mod tests;
+mod util;
 
 use std::{
     str::FromStr,
@@ -13,8 +14,10 @@ use ethers::{
 use heimdall_common::{
     io::logging::Logger,
     constants::TRANSACTION_HASH_REGEX,
-    ether::{evm::{vm::{Block}}, util::simulate}, utils::strings::encode_hex
+    ether::{evm::{vm::{Block}}}, utils::strings::encode_hex
 };
+
+use crate::trace::util::simulate;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Trace a contract interaction, revealing the internals of the transaction.",
@@ -179,8 +182,6 @@ pub fn trace(args: TraceArgs) {
 
             return block;
         });
-
-        println!("{:#?}", raw_transaction);
     }
     else {
         logger.error(&format!("'{}' is not a valid transaction hash.", &args.target));
@@ -202,8 +203,9 @@ pub fn trace(args: TraceArgs) {
     let raw_trace = simulate(
         args.rpc_url.clone(),
         format!("0x{}", encode_hex(interacted_with.as_bytes().to_vec())),
-        calldata.clone(),
+        calldata.clone().replace("0x", ""),
         contract_bytecode.clone(),
+        format!("0x{}", encode_hex(raw_transaction.from.as_bytes().to_vec())),
         format!("0x{}", encode_hex(raw_transaction.from.as_bytes().to_vec())),
         raw_transaction.value.as_u128(),
         raw_transaction.gas.as_u128(),

@@ -185,6 +185,54 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
     output
 }
 
+// returns a vec of beautified types for a given vec of tokens
+pub fn display_inline(inputs: Vec<Token>) -> String {
+    let mut output = Vec::new();
+
+    for input in inputs {
+        match input {
+            Token::Address(_) => output.push(format!("{} 0x{input}", "address".blue())),
+            Token::Int(val) => output.push(format!("{} {}", "int".blue(), val.to_string())),
+            Token::Uint(val) => output.push(format!("{} {}", "uint".blue(), val.to_string())),
+            Token::String(val) => output.push(format!("{} {val}", "string".blue())),
+            Token::Bool(val) => {
+                if val { output.push(format!("{} true", "bool".blue())); }
+                else { output.push(format!("{} false",  "bool".blue())); }
+            },
+            Token::FixedBytes(_) | Token::Bytes(_) => {
+                let bytes = input.to_string().chars().collect::<Vec<char>>().chunks(64).map(|c| c.iter().collect::<String>()).collect::<Vec<String>>();
+
+                for (i, byte) in bytes.iter().enumerate() {
+                    if i == 0 {
+                        output.push(format!("{} 0x{}",  "bytes ".blue(), byte));
+                    }
+                    else {
+                        output.push(format!("{}   {}",  "".blue(), byte));
+                    }
+                }
+            },
+            Token::FixedArray(val) | Token::Array(val) => {
+                if val.len() == 0 {
+                    output.push(format!("[]"));
+                }
+                else {
+                    output.push(format!("[{}]", display_inline(val.to_vec())));
+                }
+            },
+            Token::Tuple(val) => {
+                if val.len() == 0 {
+                    output.push(format!("()"));
+                }
+                else {
+                    output.push(format!("({})", display_inline(val.to_vec())));
+                }
+            },
+        };
+    }
+
+    output.join(", ")
+}
+
 
 // converts a bit mask into it's potential types
 pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
