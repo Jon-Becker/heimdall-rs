@@ -1157,7 +1157,7 @@ impl VM {
                         }
                     };
 
-                    self.memory.store(dest_offset, size, self.returndata.clone())
+                    self.memory.store(dest_offset, size, self.extreturndata.clone())
                 }
 
                 // EXTCODEHASH and BLOCKHASH

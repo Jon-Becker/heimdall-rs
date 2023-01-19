@@ -43,7 +43,6 @@ pub struct DecodeArgs {
     /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
-
 }
 
 

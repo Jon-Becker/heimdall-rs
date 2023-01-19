@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 x = ['0x95aBF379c57B6732d83c25Bf9FD401854BC9D26e',
@@ -106,3 +107,9 @@ for address in x:
     
     # run the command 'echo "address"' with sys
     print(subprocess.run(["cargo", "run", "--release", "--", "decompile", address, "-vvv", "-d", "--output", "./contracts/" + address, "--include-sol"]))
+    
+    # rename the abi.json file to {address}.json
+    os.rename("./contracts/" + address + "/abi.json", "./contracts/" + address + ".json")
+    
+    # delete the folder
+    subprocess.run(["rm", "-rf", "./contracts/" + address])

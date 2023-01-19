@@ -200,6 +200,7 @@ pub fn trace(args: TraceArgs) {
     }
 
     let raw_trace = simulate(
+        args.rpc_url.clone(),
         format!("0x{}", encode_hex(interacted_with.as_bytes().to_vec())),
         calldata.clone(),
         contract_bytecode.clone(),
@@ -214,8 +215,13 @@ pub fn trace(args: TraceArgs) {
             difficulty: raw_block.difficulty,
             gas_limit: raw_block.gas_limit,
             base_fee: raw_block.base_fee_per_gas.unwrap(),
-        }
+        },
+        0,
+        &mut trace,
+        0
     );
+
+    println!("{:#?}", raw_trace);
 
     // force the trace to display
     trace.level = 4;
