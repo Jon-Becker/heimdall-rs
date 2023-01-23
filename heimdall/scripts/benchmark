@@ -13,3 +13,4 @@ clear
 echo "Benchmark results:\n"
 cat stdout
 rm stdout
+echo "\n"
