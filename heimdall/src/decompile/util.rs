@@ -121,8 +121,7 @@ pub struct VMTrace {
     pub instruction: u128,
     pub operations: Vec<State>,
     pub children: Vec<VMTrace>,
-    pub loop_detected: bool,
-    pub depth: usize,
+    pub loop_detected: bool
 }
 
 // returns the compiler version used to compile the contract.
@@ -281,7 +280,7 @@ pub fn map_selector(
     evm: &VM,
     selector: String,
     entry_point: u64,
-) -> (VMTrace, Vec<String>) {
+) -> (VMTrace, u32) {
     let mut vm = evm.clone();
     vm.calldata = selector.clone();
 
@@ -298,7 +297,7 @@ pub fn map_selector(
     }
 
     // the VM is at the function entry point, begin tracing
-    let mut handled_jumpdests = Vec::new();
+    let mut handled_jumpdests = 0;
     (
         recursive_map(
             &vm.clone(),
@@ -311,7 +310,7 @@ pub fn map_selector(
 
 pub fn recursive_map(
     evm: &VM,
-    handled_jumpdests: &mut Vec<String>,
+    handled_jumpdests: &mut u32,
     path: &mut String,
 ) -> VMTrace {
     let mut vm = evm.clone();
@@ -322,42 +321,35 @@ pub fn recursive_map(
         operations: Vec::new(),
         children: Vec::new(),
         loop_detected: false,
-        depth: 0,
     };
 
-    if handled_jumpdests.len() >= 1000 {
-        
-        return vm_trace
-    }
+    if handled_jumpdests >= &mut 1000 { return vm_trace; }
 
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
         let state = vm.step();
         vm_trace.operations.push(state.clone());
+        *handled_jumpdests += 1;
 
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {
-            vm_trace.depth += 1;
-
             path.push_str(&format!("{}->{};", state.last_instruction.instruction, state.last_instruction.inputs[0]));
 
-            // we need to create a trace for the path that wasn't taken.
-            if state.last_instruction.inputs[1] == U256::from(0) {
-
-                // break out of loops
-                match LOOP_DETECTION_REGEX.is_match(&path) {
-                    Ok(result) => {
-                        if result {
-                            vm_trace.loop_detected = true;
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        return vm_trace
+            // break out of loops
+            match LOOP_DETECTION_REGEX.is_match(&path) {
+                Ok(result) => {
+                    if result {
+                        vm_trace.loop_detected = true;
+                        break;
                     }
                 }
+                Err(_) => {
+                    return vm_trace
+                }
+            }
 
-                handled_jumpdests.push(format!("{}@{}", vm_trace.depth, state.last_instruction.instruction));
+            // we need to create a trace for the path that wasn't taken.
+            if state.last_instruction.inputs[1] == U256::from(0) {                
 
                 // push a new vm trace to the children
                 let mut trace_vm = vm.clone();
@@ -376,21 +368,6 @@ pub fn recursive_map(
                 ));
                 break;
             } else {
-
-                // break out of loops
-                match LOOP_DETECTION_REGEX.is_match(&path) {
-                    Ok(result) => {
-                        if result {
-                            vm_trace.loop_detected = true;
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        return vm_trace
-                    }
-                }
-
-                handled_jumpdests.push(format!("{}@{}", vm_trace.depth, state.last_instruction.instruction));
 
                 // push a new vm trace to the children
                 let mut trace_vm = vm.clone();

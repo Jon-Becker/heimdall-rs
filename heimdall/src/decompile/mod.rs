@@ -287,24 +287,25 @@ pub fn decompile(args: DecompilerArgs) {
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdests) = map_selector(&evm.clone(), selector.clone(), function_entry_point);
+        let (map, jumpdest_count) = map_selector(&evm.clone(), selector.clone(), function_entry_point);
+
         trace.add_debug(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
             format!("execution tree {}",
 
-            match jumpdests.len() {
+            match jumpdest_count {
                 0 => "appears to be linear".to_string(),
-                _ => format!("has {} branches", jumpdests.len()+1)
+                _ => format!("has {} branches", jumpdest_count)
             }
             ).to_string()
         );
 
-        if jumpdests.len() >= 1000 {
+        if jumpdest_count >= 1000 {
             trace.add_error(
                 func_analysis_trace,
                 function_entry_point.try_into().unwrap(),
-                format!("Execution tree truncated to {} branches", jumpdests.len()).to_string()
+                format!("Execution tree truncated to {} branches", jumpdest_count).to_string()
             );
         }
 
@@ -335,8 +336,8 @@ pub fn decompile(args: DecompilerArgs) {
         );
 
         // add notice for long execution trees
-        if jumpdests.len() >= 1000 {
-            analyzed_function.notices.push(format!("execution tree truncated to {} branches", jumpdests.len()));
+        if jumpdest_count >= 1000 {
+            analyzed_function.notices.push(format!("execution tree truncated to {} branches", jumpdest_count));
         }
 
         let argument_count = analyzed_function.arguments.len();
@@ -381,10 +382,10 @@ pub fn decompile(args: DecompilerArgs) {
             let resolved_functions = match resolved_selectors.get(&selector) {
                 Some(func) => func.clone(),
                 None => {
-                    trace.add_error(
+                    trace.add_warn(
                         func_analysis_trace,
                         line!(),
-                        "failed to resolve function.".to_string()
+                        "failed to resolve function signature".to_string()
                     );
                     continue;
                 }
