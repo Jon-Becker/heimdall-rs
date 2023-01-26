@@ -68,7 +68,7 @@ impl VMTrace {
                     let mut connecting_edges = CONNECTING_EDGES.lock().unwrap();
                     let edge = format!("{} -> {}", parent_node.index(), node_index.index());
                     if !connecting_edges.contains(&edge) {
-                        contract_cfg.add_edge(parent_node, *node_index, String::from("asdf"));
+                        contract_cfg.add_edge(parent_node, *node_index, String::from(""));
                         connecting_edges.push(edge);
                     }
                     drop(connecting_edges)
@@ -85,7 +85,7 @@ impl VMTrace {
                     let mut connecting_edges = CONNECTING_EDGES.lock().unwrap();
                     let edge = format!("{} -> {}", parent_node.index(), node_index.index());
                     if !connecting_edges.contains(&edge) {
-                        contract_cfg.add_edge(parent_node, node_index, String::from("basdf"));
+                        contract_cfg.add_edge(parent_node, node_index, String::from(""));
                         connecting_edges.push(edge);
                     }
                     drop(connecting_edges)

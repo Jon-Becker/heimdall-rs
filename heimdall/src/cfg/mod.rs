@@ -59,6 +59,11 @@ pub struct CFGArgs {
     /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
+
+    /// Specify a format (other than dot) to output the CFG in.
+    /// For example, `--format svg` will output a SVG image of the CFG.
+    #[clap(long="format", short, default_value = "", hide_default_value = true)]
+    pub format: String,
 }
 
 pub fn cfg(args: CFGArgs) {
@@ -313,8 +318,6 @@ pub fn cfg(args: CFGArgs) {
         &args,
         output_dir.clone(),
         &logger,
-        &mut trace,
-        cfg_call
     );
     
     logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()).to_string());
