@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
-use ethers::{providers::{Provider, Http, Middleware}, abi::AbiEncode, types::{Address, H256}};
+use ethers::{providers::{Provider, Http, Middleware}, abi::{AbiEncode, decode, ParamType}, types::{Address, H256}};
 
-use heimdall_common::{io::logging::{Logger, TraceFactory}, ether::{evm::{vm::{State, Result, VM, Block}, types::display_inline}, signatures::resolve_event_signature}};
+use heimdall_common::{io::logging::{Logger, TraceFactory}, ether::{evm::{vm::{State, Result, VM, Block}, types::display_inline}, signatures::resolve_event_signature}, utils::strings::decode_hex};
 
 use crate::decode::decode_calldata;
 
@@ -54,7 +54,7 @@ pub fn simulate(
             trace.add_call(
                 parent_index,
                 parent_instruction,
-                from_address.clone(),
+                contract_address.clone(),
                 function.name,
                 function.decoded_inputs.as_ref().unwrap().iter().map(|x| display_inline(vec![x.to_owned()])).collect(),
                 "()".to_string()
@@ -64,7 +64,7 @@ pub fn simulate(
             trace.add_call(
                 parent_index,
                 parent_instruction,
-                from_address.clone(),
+                contract_address.clone(),
                 calldata.replace("0x", "").get(0..8).unwrap_or("0x00000000").to_string(),
                 vec![
                     calldata.replace("0x", "").get(8..).unwrap_or("").to_string()
@@ -194,7 +194,7 @@ pub fn simulate(
         }
 
         // override SLOAD
-        if next_operation.0.name.as_str() == "SLOAD" {
+        else if next_operation.0.name.as_str() == "SLOAD" {
 
             // check if we modified the slot, and if so, use that value
             // TODO save storage across vms
@@ -244,10 +244,6 @@ pub fn simulate(
                     }
                 };
 
-                println!("target address: {:?}", target_address);
-                println!("slot: {:?}", slot);
-                println!("block hash: {:?}", block_hash);
-
                 // fetch the storage value at the target address
                 let storage_value = match provider.get_storage_at(
                     target_address.clone(), 
@@ -265,14 +261,15 @@ pub fn simulate(
                     }
                 };
 
-                return storage_value.to_string().replacen("0x", "", 1);
+                return format!("{:?}", storage_value).replacen("0x", "", 1);
             });
 
-            println!("storage value: {}", storage_value);
+            // store the storage value
+            vm.storage.store(next_operation.2[0].clone().encode_hex(), storage_value);
         }
 
         // override LOG
-        if next_operation.0.name.as_str().contains("LOG") {
+        else if next_operation.0.name.as_str().contains("LOG") {
             let selector = next_operation.2[2].clone().encode_hex().replace("0x", "");
 
             match next_operation.2.get(2..) {
@@ -326,10 +323,70 @@ pub fn simulate(
             };
         }
 
+        // override REVERT
+        else if next_operation.0.name.as_str().contains("REVERT") {
+
+            // Safely convert U256 to usize
+            let offset: usize = match next_operation.2[0].try_into() {
+                Ok(x) => x,
+                Err(_) => 0,
+            };
+            let size: usize = match next_operation.2[1].try_into() {
+                Ok(x) => x,
+                Err(_) => 0,
+            };
+
+            let revert_data = vm.memory.read(offset, size);
+
+            if revert_data.starts_with("08c379a0") {
+                let revert_string = match revert_data.get(8..) {
+                    Some(data) => match decode_hex(data) {
+                        Ok(hex_data) => match decode(&[ParamType::String], &hex_data) {
+                            Ok(revert) => revert[0].to_string(),
+                            Err(_) => "decoding error".to_string(),
+                        },
+                        Err(_) => "decoding error".to_string(),
+                    },
+                    None => "".to_string(),
+                };
+
+                trace.add_error(
+                    parent_index,
+                    vm.instruction.try_into().unwrap(),
+                    format!("execution reverted: {}", revert_string).to_string(),
+                );
+            }
+
+            // handle case with panics
+            else if revert_data.starts_with("4e487b71") {
+                trace.add_error(
+                    parent_index,
+                    vm.instruction.try_into().unwrap(),
+                    "panic".to_string(),
+                );
+            }
+
+            else {
+                let custom_error_placeholder = match revert_data.get(0..8) {
+                    Some(selector) => {
+                        format!(" CustomError_{}()", selector)
+                    },
+                    None => "".to_string(),
+                };
+
+                trace.add_error(
+                    parent_index,
+                    vm.instruction.try_into().unwrap(),
+                    format!("execution reverted: {}", custom_error_placeholder).to_string(),
+                );
+            }
+        }
+
         let state = vm.step();
         state_vec.push(state.clone());
 
         if vm.exitcode != 255 || vm.returndata.len() > 0 {
+            println!("storage: {:#?}\nmemory: {:#?}", vm.storage, vm.memory);
             break;
         }
     }
