@@ -22,6 +22,8 @@ indicatif = "0.17.0"
 strsim = "0.10.0"
 fancy-regex = "0.10.0"
 lazy_static = "1.4.0"
+petgraph = "0.6.2"
+dot = "0.1.4"
 
 [[bin]]
 name = "heimdall"
