@@ -324,3 +324,103 @@ pub fn cfg(args: CFGArgs) {
     trace.display();
 }
 
+
+/// Builder pattern for using cfg genertion as a library.
+///
+/// Default values may be overriden individually.
+/// ## Example
+/// Use with normal settings:
+/// ```no_run
+/// # use crate::heimdall::cfg::CFGBuilder;
+/// const SOURCE: &'static str = "7312/* snip */04ad";
+///
+/// CFGBuilder::new(SOURCE)
+///     .generate();
+/// ```
+/// Or change settings individually:
+/// ```no_run
+/// # use crate::heimdall::cfg::CFGBuilder;
+///
+/// const SOURCE: &'static str = "7312/* snip */04ad";
+/// CFGBuilder::new(SOURCE)
+///     .default(false)
+///     .output("my_contract_dir")
+///     .rpc("https://127.0.0.1:8545")
+///     .format("svg")
+///     .verbosity(4)
+///     .generate();
+/// ```
+#[allow(dead_code)]
+pub struct CFGBuilder {
+    args: CFGArgs
+}
+
+impl CFGBuilder where {
+
+    /// A new builder for the control flow graph generation of the specified target.
+    ///
+    /// The target may be a file, bytecode, contract address, or ENS name.
+    #[allow(dead_code)]
+    pub fn new(target: &str) -> Self {
+        CFGBuilder {
+            args: CFGArgs {
+                target: target.to_string(),
+                verbose: clap_verbosity_flag::Verbosity::new(0, 0),
+                output: String::from(""),
+                rpc_url: String::from(""),
+                format: String::from(""),
+                default: true,
+            }
+        }
+    }
+
+    /// Set the output verbosity level.
+    ///
+    /// - 0 Error
+    /// - 1 Warn
+    /// - 2 Info
+    /// - 3 Debug
+    /// - 4 Trace
+    #[allow(dead_code)]
+    pub fn verbosity(mut self, level: i8) -> CFGBuilder {
+
+        // Calculated by the log library as: 1 + verbose - quiet.
+        // Set quiet as 1, and the level corresponds to the appropriate Log level.
+        self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 0);
+        self
+    }
+
+    /// The output directory to write the decompiled files to
+    #[allow(dead_code)]
+    pub fn output(mut self, directory: &str) -> CFGBuilder {
+        self.args.output = directory.to_string();
+        self
+    }
+
+    /// The RPC provider to use for fetching target bytecode.
+    #[allow(dead_code)]
+    pub fn rpc(mut self, url: &str) -> CFGBuilder {
+        self.args.rpc_url = url.to_string();
+        self
+    }
+
+    /// When prompted, always select the default value.
+    #[allow(dead_code)]
+    pub fn default(mut self, accept: bool) -> CFGBuilder {
+        self.args.default = accept;
+        self
+    }
+
+    /// Whether to skip resolving function selectors.
+    #[allow(dead_code)]
+    pub fn format(mut self, format: String) -> CFGBuilder {
+        self.args.format = format;
+        self
+    }
+
+    /// Starts the decompilation.
+    #[allow(dead_code)]
+    pub fn generate(self) {
+        cfg(self.args)
+    }
+}

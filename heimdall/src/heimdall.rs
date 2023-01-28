@@ -50,7 +50,6 @@ pub enum Subcommands {
 }
 
 fn main() {
-
     let args = Arguments::parse();
 
     // handle catching panics with
