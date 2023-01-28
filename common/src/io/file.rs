@@ -2,7 +2,7 @@ use super::logging::Logger;
 
 use std::{
     fs::File,
-    io::{Write, Read}, env
+    io::{Write, Read}, env, process::Command
 };
 
 
@@ -64,4 +64,19 @@ pub fn read_file(_path: &String) -> String {
         }
     }
     return contents;
+}
+
+pub fn delete_path(_path: &String) -> bool {
+    let path = std::path::Path::new(_path);
+    match Command::new("rm")
+        .args(&["-rf", &path.to_str().unwrap()])
+        .output()
+    {
+        Ok(_) => {
+            return true;
+        },
+        Err(_) => {
+            return false;
+        },
+    }
 }
