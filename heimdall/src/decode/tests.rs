@@ -15,7 +15,7 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
             };
-            crate::decode::decode(args.clone())
+            crate::decode::decode(args)
         }
 
         benchmark("benchmark_decode_seaport_simple", 50, bench)
@@ -31,7 +31,7 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
             };
-            crate::decode::decode(args.clone())
+            crate::decode::decode(args)
         }
 
         benchmark("benchmark_decode_seaport_complex", 50, bench)

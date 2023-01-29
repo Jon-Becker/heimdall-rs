@@ -65,8 +65,8 @@ pub fn build_output(
     progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar.set_style(logger.info_spinner());
 
-    let abi_output_path = format!("{}/abi.json", output_dir);
-    let decompiled_output_path = format!("{}/decompiled.sol", output_dir);
+    let abi_output_path = format!("{output_dir}/abi.json");
+    let decompiled_output_path = format!("{output_dir}/decompiled.sol");
 
     // build the decompiled contract's ABI
     let mut abi: Vec<ABIStructure> = Vec::new();
@@ -89,7 +89,7 @@ pub fn build_output(
 
                 for (index, input) in resolved_function.inputs.iter().enumerate() {
                     inputs.push(ABIToken {
-                        name: format!("arg{}", index),
+                        name: format!("arg{index}"),
                         internal_type: input.to_owned(),
                         type_: input.to_owned(),
                     });
@@ -116,7 +116,7 @@ pub fn build_output(
 
                 for (index, (_, (_, potential_types))) in function.arguments.clone().iter().enumerate() {
                     inputs.push(ABIToken {
-                        name: format!("arg{}", index),
+                        name: format!("arg{index}"),
                         internal_type: potential_types[0].to_owned(),
                         type_: potential_types[0].to_owned(),
                     });
@@ -149,7 +149,7 @@ pub fn build_output(
             },
         };
 
-        let constant = state_mutability == "pure" && function_inputs.len() == 0;
+        let constant = state_mutability == "pure" && function_inputs.is_empty();
 
         // add the function to the ABI
         abi.push(
@@ -168,16 +168,16 @@ pub fn build_output(
         
         // write the function's custom errors
         for (error_selector, resolved_error) in &function.errors {
-            progress_bar.set_message(format!("writing ABI for '0x{}'", error_selector));
+            progress_bar.set_message(format!("writing ABI for '0x{error_selector}'"));
 
             match resolved_error {
                 Some(resolved_error) => {
                     let mut inputs = Vec::new();
 
                     for (index, input) in resolved_error.inputs.iter().enumerate() {
-                        if input != "" {
+                        if !input.is_empty() {
                             inputs.push(ABIToken {
-                                name: format!("arg{}", index),
+                                name: format!("arg{index}"),
                                 internal_type: input.to_owned(),
                                 type_: input.to_owned(),
                             });
@@ -199,7 +199,7 @@ pub fn build_output(
                         ABIStructure::Error(
                             ErrorABI {
                                 type_: "error".to_string(),
-                                name: format!("CustomError_{}", error_selector),
+                                name: format!("CustomError_{error_selector}"),
                                 inputs: Vec::new(),
                             }
                         )
@@ -210,16 +210,16 @@ pub fn build_output(
 
         // write the function's events
         for (event_selector, (resolved_event, _)) in &function.events {
-            progress_bar.set_message(format!("writing ABI for '0x{}'", event_selector));
+            progress_bar.set_message(format!("writing ABI for '0x{event_selector}'"));
 
             match resolved_event {
                 Some(resolved_event) => {
                     let mut inputs = Vec::new();
 
                     for (index, input) in resolved_event.inputs.iter().enumerate() {
-                        if input != "" {
+                        if !input.is_empty() {
                             inputs.push(ABIToken {
-                                name: format!("arg{}", index),
+                                name: format!("arg{index}"),
                                 internal_type: input.to_owned(),
                                 type_: input.to_owned(),
                             });
@@ -267,7 +267,7 @@ pub fn build_output(
     );
 
     progress_bar.suspend(|| {
-        logger.success(&format!("wrote decompiled ABI to '{}' .", &abi_output_path).to_string());
+        logger.success(&format!("wrote decompiled ABI to '{}' .", &abi_output_path));
     });
 
     // write the decompiled source to file
@@ -279,7 +279,7 @@ pub fn build_output(
         "heimdall".to_string(), 
         "build_output".to_string(),
         vec![args.target.to_string()], 
-        format!("{}", short_path(&decompiled_output_path))
+        short_path(&decompiled_output_path)
     );
     
     // write the header to the output file
@@ -325,7 +325,7 @@ pub fn build_output(
                             solidity_type,
 
                             if solidity_type.contains("[]") || 
-                               solidity_type.contains("(") || 
+                               solidity_type.contains('(') || 
                                ["string", "bytes"].contains(&solidity_type.as_str()) {"memory "} 
                             else { "" },
 
@@ -354,7 +354,7 @@ pub fn build_output(
                             potential_types[0],
 
                             if potential_types[0].contains("[]") || 
-                            potential_types[0].contains("(") || 
+                            potential_types[0].contains('(') || 
                                ["string", "bytes"].contains(&potential_types[0].as_str()) {"memory "} 
                             else { "" },
 
@@ -372,12 +372,12 @@ pub fn build_output(
         // print natspec header for the function
         decompiled_output.extend(vec![
             String::new(),
-            String::from(format!("/// @custom:selector    0x{}", function.selector)),
-            String::from(format!("/// @custom:name        {}", function_header.replace("function ", "").split("(").next().unwrap())),
+            format!("/// @custom:selector    0x{}", function.selector),
+            format!("/// @custom:name        {}", function_header.replace("function ", "").split('(').next().unwrap()),
         ]);
 
         for notice in function.notices {
-            decompiled_output.push(String::from(format!("/// @notice             {}", notice)));
+            decompiled_output.push(format!("/// @notice             {notice}"));
         }
 
         // sort arguments by their calldata index
@@ -385,7 +385,7 @@ pub fn build_output(
         sorted_arguments.sort_by(|x,y| x.0.cmp(&y.0));
 
         for (index, (_, solidity_type)) in sorted_arguments {
-            decompiled_output.push(String::from(format!("/// @param              arg{} {:?}", index, solidity_type)));
+            decompiled_output.push(format!("/// @param              arg{index} {solidity_type:?}"));
         }
         
         decompiled_output.push(function_header);
@@ -409,7 +409,7 @@ pub fn build_output(
                 &progress_bar
             )
         );
-        logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path).to_string());
+        logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path));
         progress_bar.finish_and_clear();
     }
     else {

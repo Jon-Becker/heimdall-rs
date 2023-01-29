@@ -1,4 +1,4 @@
-use toml;
+
 #[allow(deprecated)]
 use std::{env::home_dir};
 use clap::{AppSettings, Parser};
@@ -54,7 +54,7 @@ pub fn write_config(contents: String) {
         }
         None => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?").to_string());
+            logger.error("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?");
             std::process::exit(1)
         }
     }
@@ -82,7 +82,7 @@ pub fn read_config() -> String {
         }
         None => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?").to_string());
+            logger.error("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?");
             std::process::exit(1)
         }
     }
@@ -94,7 +94,7 @@ pub fn get_config() -> Configuration {
 
     // toml parse from contents into Configuration
     let config: Configuration = toml::from_str(&contents).unwrap();
-    return config;
+    config
 }
 
 
@@ -114,7 +114,7 @@ pub fn update_config(key: &String, value: &String) {
         }
         _ => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("unknown configuration key \'{}\' .", key).to_string());
+            logger.error(&format!("unknown configuration key \'{key}\' ."));
             std::process::exit(1)
         }
     }
@@ -127,13 +127,13 @@ pub fn update_config(key: &String, value: &String) {
 
 pub fn config(args: ConfigArgs) {
     let (logger, _) = Logger::new("");
-    if &args.key != "" {
+    if !args.key.is_empty() {
         
-        if &args.value != "" {
+        if !args.value.is_empty() {
             
             // read the config file and update the key/value pair
             update_config(&args.key, &args.value);
-            logger.success(&format!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value).to_string());
+            logger.success(&format!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value));
         }
         else {
 

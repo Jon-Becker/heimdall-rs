@@ -18,7 +18,7 @@ mod benchmark {
                 default: true,
                 format: String::from("")
             };
-            crate::cfg::cfg(args.clone())
+            crate::cfg::cfg(args)
         }
 
         benchmark("benchmark_generate_cfg_simple", 100, bench)
@@ -36,7 +36,7 @@ mod benchmark {
                 default: true,
                 format: String::from("")
             };
-            crate::cfg::cfg(args.clone())
+            crate::cfg::cfg(args)
         }
 
         benchmark("benchmark_generate_cfg_complex", 100, bench)

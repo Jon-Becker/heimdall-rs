@@ -18,7 +18,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: true
             };
-            crate::decompile::decompile(args.clone())
+            crate::decompile::decompile(args)
         }
 
         benchmark("benchmark_decompile_complex", 100, bench)
@@ -37,7 +37,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: true
             };
-            crate::decompile::decompile(args.clone())
+            crate::decompile::decompile(args)
         }
 
         benchmark("benchmark_decompile_simple", 100, bench)
@@ -56,7 +56,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: false
             };
-            crate::decompile::decompile(args.clone())
+            crate::decompile::decompile(args)
         }
 
         benchmark("benchmark_build_abi_simple", 100, bench)
@@ -75,7 +75,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: false
             };
-            crate::decompile::decompile(args.clone())
+            crate::decompile::decompile(args)
         }
 
         benchmark("benchmark_build_abi_complex", 100, bench)

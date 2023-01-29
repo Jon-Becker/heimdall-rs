@@ -63,7 +63,7 @@ fn main() {
                     panic_info.to_string().bright_white().on_bright_red().bold(),
                 )
             );
-            logger.fatal(&format!("Stack Trace:\n\n{:#?}", backtrace));
+            logger.fatal(&format!("Stack Trace:\n\n{backtrace:#?}"));
         }
     ));
 
@@ -75,7 +75,7 @@ fn main() {
             // if the user has not specified a rpc url, use the default
             match cmd.rpc_url.as_str() {
                 "" => {
-                    cmd.rpc_url = configuration.rpc_url.clone();
+                    cmd.rpc_url = configuration.rpc_url;
                 }
                 _ => {}
             };
@@ -88,7 +88,7 @@ fn main() {
             // if the user has not specified a rpc url, use the default
             match cmd.rpc_url.as_str() {
                 "" => {
-                    cmd.rpc_url = configuration.rpc_url.clone();
+                    cmd.rpc_url = configuration.rpc_url;
                 }
                 _ => {}
             };
@@ -101,7 +101,7 @@ fn main() {
             // if the user has not specified a rpc url, use the default
             match cmd.rpc_url.as_str() {
                 "" => {
-                    cmd.rpc_url = configuration.rpc_url.clone();
+                    cmd.rpc_url = configuration.rpc_url;
                 }
                 _ => {}
             };
@@ -114,7 +114,7 @@ fn main() {
             // if the user has not specified a rpc url, use the default
             match cmd.rpc_url.as_str() {
                 "" => {
-                    cmd.rpc_url = configuration.rpc_url.clone();
+                    cmd.rpc_url = configuration.rpc_url;
                 }
                 _ => {}
             };

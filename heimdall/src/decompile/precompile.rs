@@ -46,5 +46,5 @@ pub fn decode_precompile(
         _ => {}
     }
 
-    return (is_ext_call_precompile, ext_call_logic);
+    (is_ext_call_precompile, ext_call_logic)
 }

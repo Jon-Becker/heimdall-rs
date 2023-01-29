@@ -63,7 +63,7 @@ pub fn match_parameters(
     for mut resolved_function in resolved_functions {
 
         // skip checking if length of parameters is different
-        resolved_function.inputs.retain(|x| x != "");
+        resolved_function.inputs.retain(|x| !x.is_empty());
         if resolved_function.inputs.len() == function.arguments.len() {
             let mut matched = true;
 
@@ -78,7 +78,7 @@ pub fn match_parameters(
                                 continue;
                             }
                         } 
-                        else if !potential_types.contains(&input) {
+                        else if !potential_types.contains(input) {
                             matched = false;
                             break;
                         }
