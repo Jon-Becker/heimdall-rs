@@ -1,9 +1,8 @@
-*/target
-*/out
-*/debug
-*/src/debug
+/target
+/out
+/debug
+/src/debug
 
-Cargo.lock
 *.rustc_info.json
 out.json
 .idea
@@ -11,7 +10,7 @@ out.json
 
 output
 output/*
-*/output
+/output
 *.evm
 *.asm
 
