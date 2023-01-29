@@ -197,7 +197,7 @@ benchmark() {
   RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall > /dev/null 2>&1
   RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-config  > /dev/null 2>&1
   RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-common  > /dev/null 2>&1
-  echo "bifrost: running tests..."
+  echo "bifrost: running benchmarks..."
 
   RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
   RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-config -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
