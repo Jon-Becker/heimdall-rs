@@ -383,8 +383,8 @@ impl VMTrace {
                 function.storage.insert(
                     key,
                     StorageFrame {
-                        value,
-                        operations,
+                        value: value,
+                        operations: operations,
                     },
                 );
                 function.logic.push(
