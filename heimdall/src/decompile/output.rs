@@ -231,7 +231,7 @@ pub fn build_output(
                             ErrorABI {
                                 type_: "event".to_string(),
                                 name: resolved_event.name.clone(),
-                                inputs,
+                                inputs: inputs,
                             }
                         )
                     );
