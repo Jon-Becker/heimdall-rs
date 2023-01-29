@@ -111,7 +111,7 @@ pub fn detect_compiler(bytecode: String) -> (String, String) {
     }
 
 
-    (compiler, version.trim_end_matches(".").to_string())
+    (compiler, version.trim_end_matches('.').to_string())
 }
 
 // find all function selectors in the given EVM.
@@ -120,11 +120,11 @@ pub fn find_function_selectors(assembly: String) -> Vec<String> {
 
     // search through assembly for PUSH4 instructions, optimistically assuming that they are function selectors
     let assembly: Vec<String> = assembly
-        .split("\n")
+        .split('\n')
         .map(|line| line.trim().to_string())
         .collect();
     for line in assembly.iter() {
-        let instruction_args: Vec<String> = line.split(" ").map(|arg| arg.to_string()).collect();
+        let instruction_args: Vec<String> = line.split(' ').map(|arg| arg.to_string()).collect();
 
         if instruction_args.len() >= 2 {
             let instruction = instruction_args[1].clone();
@@ -166,7 +166,7 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
             break;
         }
 
-        if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
+        if vm.exitcode != 255 || !vm.returndata.is_empty() {
             break;
         }
     }
@@ -181,7 +181,7 @@ pub fn map_selector(
     entry_point: u64,
 ) -> (VMTrace, u32) {
     let mut vm = evm.clone();
-    vm.calldata = selector.clone();
+    vm.calldata = selector;
 
     // step through the bytecode until we reach the entry point
     while (vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize)
@@ -190,7 +190,7 @@ pub fn map_selector(
         vm.step();
 
         // this shouldn't be necessary, but it's safer to have it
-        if vm.exitcode != 255 || vm.returndata.len() as usize > 0 {
+        if vm.exitcode != 255 || !vm.returndata.is_empty() {
             break;
         }
     }
@@ -235,7 +235,7 @@ pub fn recursive_map(
             path.push_str(&format!("{}->{};", state.last_instruction.instruction, state.last_instruction.inputs[0]));
 
             // break out of loops
-            match LOOP_DETECTION_REGEX.is_match(&path) {
+            match LOOP_DETECTION_REGEX.is_match(path) {
                 Ok(result) => {
                     if result {
                         vm_trace.loop_detected = true;
@@ -287,7 +287,7 @@ pub fn recursive_map(
             }
         }
 
-        if vm.exitcode != 255 || vm.returndata.len() > 0 {
+        if vm.exitcode != 255 || !vm.returndata.is_empty() {
             break;
         }
     }

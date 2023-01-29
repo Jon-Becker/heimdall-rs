@@ -20,11 +20,11 @@ fn convert_bitmask_to_casting(line: String) -> String {
     match AND_BITMASK_REGEX.find(&cleaned).unwrap() {
         Some(bitmask) => {
             let cast = bitmask.as_str();
-            let cast_size = NON_ZERO_BYTE_REGEX.find_iter(&cast).count();
+            let cast_size = NON_ZERO_BYTE_REGEX.find_iter(cast).count();
             let (_, cast_types) = byte_size_to_type(cast_size);
 
             // get the cast subject
-            let mut subject = cleaned.get(bitmask.end()..).unwrap().replace(";",  "");
+            let mut subject = cleaned.get(bitmask.end()..).unwrap().replace(';',  "");
             
             // attempt to find matching parentheses
             let subject_indices = find_balanced_encapsulator(subject.to_string(), ('(', ')'));
@@ -57,8 +57,8 @@ fn convert_bitmask_to_casting(line: String) -> String {
 
             // apply the cast to the subject
             cleaned = cleaned.replace(
-                &format!("{}{}", cast, subject),
-                &format!("{}{}", solidity_type, subject),
+                &format!("{cast}{subject}"),
+                &format!("{solidity_type}{subject}"),
             );
 
             // attempt to cast again
@@ -69,13 +69,13 @@ fn convert_bitmask_to_casting(line: String) -> String {
             match AND_BITMASK_REGEX_2.find(&cleaned).unwrap() {
                 Some(bitmask) => {
                     let cast = bitmask.as_str();
-                    let cast_size = NON_ZERO_BYTE_REGEX.find_iter(&cast).count();
+                    let cast_size = NON_ZERO_BYTE_REGEX.find_iter(cast).count();
                     let (_, cast_types) = byte_size_to_type(cast_size);
         
                     // get the cast subject
-                    let mut subject = match cleaned.get(0..bitmask.start()).unwrap().replace(";",  "").split("=").collect::<Vec<&str>>().last() {
+                    let mut subject = match cleaned.get(0..bitmask.start()).unwrap().replace(';',  "").split('=').collect::<Vec<&str>>().last() {
                         Some(subject) => subject.to_string(),
-                        None => cleaned.get(0..bitmask.start()).unwrap().replace(";",  "").to_string(),
+                        None => cleaned.get(0..bitmask.start()).unwrap().replace(';',  ""),
                     };
 
                     // attempt to find matching parentheses
@@ -110,8 +110,8 @@ fn convert_bitmask_to_casting(line: String) -> String {
 
                     // apply the cast to the subject
                     cleaned = cleaned.replace(
-                        &format!("{}{}", subject, cast),
-                        &format!("{}{}", solidity_type, subject),
+                        &format!("{subject}{cast}"),
+                        &format!("{solidity_type}{subject}"),
                     );
         
                     // attempt to cast again
@@ -138,7 +138,7 @@ fn simplify_casts(line: String) -> String {
             let cleaned_cast_post = cleaned[cast_end..].to_string();
             let cleaned_cast = cleaned[cast_start..cast_end].to_string().replace(&cast, "");
 
-            cleaned = format!("{}{}{}", cleaned_cast_pre, cleaned_cast, cleaned_cast_post);
+            cleaned = format!("{cleaned_cast_pre}{cleaned_cast}{cleaned_cast_post}");
 
             // check if there are remaining casts
             let (_, _, remaining_cast_type) = find_cast(cleaned_cast_post.clone());
@@ -146,7 +146,7 @@ fn simplify_casts(line: String) -> String {
                 Some(_) => {
 
                     // a cast is remaining, simplify it
-                    let mut recursive_cleaned = format!("{}{}", cleaned_cast_pre, cleaned_cast);
+                    let mut recursive_cleaned = format!("{cleaned_cast_pre}{cleaned_cast}");
                     recursive_cleaned.push_str(
                         simplify_casts(cleaned_cast_post).as_str()
                     );
@@ -167,14 +167,8 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
     fn are_parentheses_unnecessary(expression: String) -> bool {
 
         // safely grab the first and last chars
-        let first_char = match expression.get(0..1) {
-            Some(x) => x,
-            None => "",
-        };
-        let last_char = match expression.get(expression.len() - 1..expression.len()) {
-            Some(x) => x,
-            None => "",
-        };
+        let first_char = expression.get(0..1).unwrap_or("");
+        let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
 
         // if there is a negation of an expression, remove the parentheses
         // helps with double negation
@@ -202,15 +196,15 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
             None => "".to_string(),
         };
 
-        if inside.len() > 0 {
+        if !inside.is_empty() {
             let expression_parts = inside.split(|x| ['*', '/', '=', '>', '<', '|', '&', '!']
                 .contains(&x))
-                .filter(|x| x.len() > 0).collect::<Vec<&str>>();    
+                .filter(|x| !x.is_empty()).collect::<Vec<&str>>();    
 
-            return expression_parts.len() == 1
+            expression_parts.len() == 1
         }
         else {
-            return false
+            false
         }
     }
 
@@ -220,7 +214,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
     if cleaned.contains("function") { return cleaned; }
 
     // get the nth index of the first open paren
-    let nth_paren_index = match cleaned.match_indices("(").nth(paren_index) {
+    let nth_paren_index = match cleaned.match_indices('(').nth(paren_index) {
         Some(x) => x.0,
         None => return cleaned,
     };
@@ -324,7 +318,7 @@ fn convert_memory_to_variable(line: String) -> String {
             let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
 
             // safe to unwrap since we know these indices exist
-            let memloc = format!("memory{}", memory_access.get(matched_loc.0..matched_loc.1).unwrap()).to_string();
+            let memloc = format!("memory{}", memory_access.get(matched_loc.0..matched_loc.1).unwrap());
 
             let variable_name = match mem_map.get(&memloc) {
                 Some(loc) => {
@@ -363,7 +357,7 @@ fn convert_memory_to_variable(line: String) -> String {
         let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
 
         let mut var_map = VARIABLE_MAP.lock().unwrap();
-        var_map.insert(instantiation[0].to_string(), instantiation[1].to_string().replace(";", ""));
+        var_map.insert(instantiation[0].to_string(), instantiation[1].to_string().replace(';', ""));
         drop(var_map);
     }
 
@@ -376,7 +370,7 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
     if !line.contains(" = ") { return false; }
 
     // get var name
-    let var_name = line.split(" = ").collect::<Vec<&str>>()[0].split(" ").collect::<Vec<&str>>()[line.split(" = ").collect::<Vec<&str>>()[0].split(" ").collect::<Vec<&str>>().len() - 1];
+    let var_name = line.split(" = ").collect::<Vec<&str>>()[0].split(' ').collect::<Vec<&str>>()[line.split(" = ").collect::<Vec<&str>>()[0].split(' ').collect::<Vec<&str>>().len() - 1];
 
     //remove unused vars
     for x in lines {
@@ -407,7 +401,7 @@ fn move_casts_to_declaration(line: String) -> String {
     let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
 
     // get the outermost cast
-    match TYPE_CAST_REGEX.find(&instantiation[1]).unwrap() {
+    match TYPE_CAST_REGEX.find(instantiation[1]).unwrap() {
         Some(x) => {
 
             // the match must occur at index 0
@@ -422,15 +416,15 @@ fn move_casts_to_declaration(line: String) -> String {
             // get the inside of the parens
             let cast_expression = instantiation[1].get(paren_start + 1..paren_end-1).unwrap();
 
-            return format!(
+            format!(
                 "{} {} = {};",
-                x.as_str().replace("(", ""),
+                x.as_str().replace('(', ""),
                 instantiation[0],
                 cast_expression
             )
         }
-        None => return cleaned,
-    };
+        None => cleaned,
+    }
 }
 
 fn replace_expression_with_var(line: String) -> String {
@@ -466,13 +460,13 @@ fn inherit_infer_type(line: String) -> String {
     // if the line contains a function definition, wipe the type map and get arg types
     if line.contains("function") {
         type_map.clear();
-        let args = line.split("(").collect::<Vec<&str>>()[1].split(")").collect::<Vec<&str>>()[0].split(",").collect::<Vec<&str>>();
+        let args = line.split('(').collect::<Vec<&str>>()[1].split(')').collect::<Vec<&str>>()[0].split(',').collect::<Vec<&str>>();
         for arg in args {
             let arg = arg.trim();
             
             // get type and name
-            let arg_type = arg.split(" ").collect::<Vec<&str>>()[..arg.split(" ").collect::<Vec<&str>>().len() - 1].join(" ");
-            let arg_name = arg.split(" ").collect::<Vec<&str>>()[arg.split(" ").collect::<Vec<&str>>().len() - 1];
+            let arg_type = arg.split(' ').collect::<Vec<&str>>()[..arg.split(' ').collect::<Vec<&str>>().len() - 1].join(" ");
+            let arg_name = arg.split(' ').collect::<Vec<&str>>()[arg.split(' ').collect::<Vec<&str>>().len() - 1];
 
             // add to type map
             type_map.insert(arg_name.to_string(), arg_type.to_string());
@@ -482,19 +476,19 @@ fn inherit_infer_type(line: String) -> String {
     // if the line contains an instantiation, add the type to the map
     if line.contains(" = ") {
         let instantiation = line.split(" = ").collect::<Vec<&str>>();
-        let var_type = instantiation[0].split(" ").collect::<Vec<&str>>()[..instantiation[0].split(" ").collect::<Vec<&str>>().len() - 1].join(" ");
-        let var_name = instantiation[0].split(" ").collect::<Vec<&str>>()[instantiation[0].split(" ").collect::<Vec<&str>>().len() - 1];
+        let var_type = instantiation[0].split(' ').collect::<Vec<&str>>()[..instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1].join(" ");
+        let var_name = instantiation[0].split(' ').collect::<Vec<&str>>()[instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1];
         
         // add to type map, if the variable is typed
-        if var_type.len() > 0 {
-            type_map.insert(var_name.to_string(), var_type.to_string());
+        if !var_type.is_empty() {
+            type_map.insert(var_name.to_string(), var_type);
         }
         else if !line.starts_with("storage") {
 
             // infer the type from args and vars in the expression
             for (var, var_type) in type_map.clone().iter() {
-                if cleaned.contains(var) && !type_map.contains_key(var_name) && var_type != "" {
-                    cleaned = format!("{} {}", var_type, cleaned);
+                if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty() {
+                    cleaned = format!("{var_type} {cleaned}");
                     type_map.insert(var_name.to_string(), var_type.to_string());
                     break;
                 }
@@ -511,7 +505,7 @@ fn replace_resolved(
     all_resolved_errors: HashMap<String, ResolvedError>,
     all_resolved_events: HashMap<String, ResolvedLog>,
 ) -> String {
-    let mut cleaned = line.clone();    
+    let mut cleaned = line;    
     
     // line must contain CustomError_ or Event_
     if !cleaned.contains("CustomError_") && !cleaned.contains("Event_") { return cleaned; }
@@ -542,7 +536,7 @@ fn cleanup(
     let mut cleaned = line;
 
     // skip comments
-    if cleaned.starts_with("/") { return cleaned; }
+    if cleaned.starts_with('/') { return cleaned; }
 
     // Find and convert all castings
     cleaned = convert_bitmask_to_casting(cleaned);
@@ -583,7 +577,7 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
         // update progress bar
         if line.contains("function") {
             function_count += 1;
-            bar.set_message(format!("postprocessed {} functions", function_count));
+            bar.set_message(format!("postprocessed {function_count} functions"));
         }
 
         // only pass in lines further than the current line
@@ -604,7 +598,7 @@ pub fn postprocess(
 ) -> Vec<String> {
     let mut indentation: usize = 0;
     let mut function_count = 0;
-    let mut cleaned_lines: Vec<String> = lines.clone();
+    let mut cleaned_lines: Vec<String> = lines;
 
     // clean up each line using postprocessing techniques
     for (_, line) in cleaned_lines.iter_mut().enumerate() {
@@ -612,11 +606,11 @@ pub fn postprocess(
         // update progress bar
         if line.contains("function") {
             function_count += 1;
-            bar.set_message(format!("postprocessed {} functions", function_count));
+            bar.set_message(format!("postprocessed {function_count} functions"));
         }
 
         // dedent due to closing braces
-        if line.starts_with("}") {
+        if line.starts_with('}') {
             indentation = indentation.saturating_sub(1);
         }
         
@@ -632,7 +626,7 @@ pub fn postprocess(
         );
         
         // indent due to opening braces
-        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with("{") {
+        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with('{') {
             indentation += 1;
         }
         

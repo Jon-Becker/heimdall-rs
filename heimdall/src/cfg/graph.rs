@@ -26,7 +26,7 @@ impl VMTrace {
         &self,
         contract_cfg: &mut Graph<String, String>,
         parent_node: Option<NodeIndex<u32>>,
-    ) -> () {
+    ) {
 
         let mut cfg_node: String = String::new();
         let mut parent_node = parent_node;
@@ -39,7 +39,7 @@ impl VMTrace {
             
             let assembly = format!(
                 "{} {} {}",
-                encode_hex_reduced(U256::from(instruction.instruction.clone())),
+                encode_hex_reduced(U256::from(instruction.instruction)),
                 opcode_name,
                 if opcode_name.contains("PUSH") {
                     encode_hex_reduced(*instruction.outputs.clone().first().unwrap())

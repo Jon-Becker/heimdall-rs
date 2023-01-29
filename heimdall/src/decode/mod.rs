@@ -74,7 +74,7 @@ pub fn decode(args: DecodeArgs) {
             let provider = match Provider::<Http>::try_from(&args.rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url).to_string());
+                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url));
                     std::process::exit(1)
                 }
             };
@@ -94,26 +94,26 @@ pub fn decode(args: DecodeArgs) {
                     match bytecode {
                         Some(bytecode) => bytecode,
                         None => {
-                            logger.error(&format!("transaction '{}' doesn't exist.", &args.target).to_string());
+                            logger.error(&format!("transaction '{}' doesn't exist.", &args.target));
                             std::process::exit(1)
                         }
                     }
                 },
                 Err(_) => {
-                    logger.error(&format!("failed to fetch calldata from '{}' .", &args.target).to_string());
+                    logger.error(&format!("failed to fetch calldata from '{}' .", &args.target));
                     std::process::exit(1)
                 }
             };
 
-            return raw_transaction.input.to_string().replace("0x", "")
+            raw_transaction.input.to_string().replace("0x", "")
         });
     }
     else {
-        calldata = args.target.clone().replace("0x", "");
+        calldata = args.target.replace("0x", "");
     }
 
     // check if calldata is present
-    if calldata.len() == 0 {
+    if calldata.is_empty() {
         logger.error(&format!("empty calldata found at '{}' .", &args.target));
         std::process::exit(1);
     }
@@ -163,7 +163,7 @@ pub fn decode(args: DecodeArgs) {
                 let mut params: Vec<Param> = Vec::new();
                 for (i, input) in inputs.iter().enumerate() {
                     params.push(Param {
-                        name: format!("arg{}", i),
+                        name: format!("arg{i}"),
                         kind: input.to_owned(),
                         internal_type: None,
                     });
@@ -181,8 +181,8 @@ pub fn decode(args: DecodeArgs) {
 
                         // decode the function call in trimmed bytes, removing 0s, because contracts can use nonstandard sized words
                         // and padding is hard
-                        let cleaned_bytes = decoded_function_call.encode_hex().replace("0", "");
-                        let decoded_function_call = match cleaned_bytes.split_once(&function_selector.replace("0", "")) {
+                        let cleaned_bytes = decoded_function_call.encode_hex().replace('0', "");
+                        let decoded_function_call = match cleaned_bytes.split_once(&function_selector.replace('0', "")) {
                             Some(decoded_function_call) => decoded_function_call.1,
                             None => {
                                 logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
@@ -191,7 +191,7 @@ pub fn decode(args: DecodeArgs) {
                         };
 
                         // if the decoded function call matches (95%) the function signature, add it to the list of matches
-                        if similarity(decoded_function_call,&calldata[8..].replace("0", "")).abs() >= 0.90 {
+                        if similarity(decoded_function_call,&calldata[8..].replace('0', "")).abs() >= 0.90 {
                             let mut found_match = potential_match.clone();
                             found_match.decoded_inputs = Some(result);
                             matches.push(found_match);
@@ -215,14 +215,14 @@ pub fn decode(args: DecodeArgs) {
         shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
-    if matches.len() == 0 {
+    if matches.is_empty() {
         logger.warn("couldn't find any matches for the given function signature.");
 
         // build a trace of the calldata
         let decode_call = trace.add_call(0, line!(), "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
         trace.br(decode_call);
-        trace.add_message(decode_call, line!(), vec![format!("selector: 0x{}", function_selector).to_string()]);
-        trace.add_message(decode_call, line!(), vec![format!("calldata: {} bytes", calldata.len() / 2usize).to_string()]);
+        trace.add_message(decode_call, line!(), vec![format!("selector: 0x{function_selector}")]);
+        trace.add_message(decode_call, line!(), vec![format!("calldata: {} bytes", calldata.len() / 2usize)]);
         trace.br(decode_call);
 
         // print out the decoded inputs
@@ -252,7 +252,7 @@ pub fn decode(args: DecodeArgs) {
                 "warn", "multiple possible matches found. select an option below",
                 matches.iter()
                 .map(|x| x.signature.clone()).collect(),
-                Some(*&(matches.len()-1) as u8),
+                Some((matches.len()-1) as u8),
                 args.default
             );
         }
@@ -269,10 +269,10 @@ pub fn decode(args: DecodeArgs) {
 
         let decode_call = trace.add_call(0, line!(), "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
         trace.br(decode_call);
-        trace.add_message(decode_call, line!(), vec![format!("name:      {}", selected_match.name).to_string()]);
-        trace.add_message(decode_call, line!(), vec![format!("signature: {}", selected_match.signature).to_string()]);
-        trace.add_message(decode_call, line!(), vec![format!("selector:  0x{}", function_selector).to_string()]);
-        trace.add_message(decode_call, line!(), vec![format!("calldata:  {} bytes", calldata.len() / 2usize).to_string()]);
+        trace.add_message(decode_call, line!(), vec![format!("name:      {}", selected_match.name)]);
+        trace.add_message(decode_call, line!(), vec![format!("signature: {}", selected_match.signature)]);
+        trace.add_message(decode_call, line!(), vec![format!("selector:  0x{function_selector}")]);
+        trace.add_message(decode_call, line!(), vec![format!("calldata:  {} bytes", calldata.len() / 2usize)]);
         trace.br(decode_call);
         for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
             let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");

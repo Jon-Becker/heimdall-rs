@@ -131,7 +131,7 @@ pub fn cfg(args: CFGArgs) {
             let provider = match Provider::<Http>::try_from(&args.rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url).to_string());
+                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url));
                     std::process::exit(1)
                 }
             };
@@ -140,7 +140,7 @@ pub fn cfg(args: CFGArgs) {
             let address = match args.target.parse::<Address>() {
                 Ok(address) => address,
                 Err(_) => {
-                    logger.error(&format!("failed to parse address '{}' .", &args.target).to_string());
+                    logger.error(&format!("failed to parse address '{}' .", &args.target));
                     std::process::exit(1)
                 }
             };
@@ -149,11 +149,11 @@ pub fn cfg(args: CFGArgs) {
             let bytecode_as_bytes = match provider.get_code(address, None).await {
                 Ok(bytecode) => bytecode,
                 Err(_) => {
-                    logger.error(&format!("failed to fetch bytecode from '{}' .", &args.target).to_string());
+                    logger.error(&format!("failed to fetch bytecode from '{}' .", &args.target));
                     std::process::exit(1)
                 }
             };
-            return bytecode_as_bytes.to_string().replacen("0x", "", 1);
+            bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
 
     }
@@ -174,12 +174,12 @@ pub fn cfg(args: CFGArgs) {
                     contents.replacen("0x", "", 1)
                 }
                 else {
-                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target).to_string());
+                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
                     std::process::exit(1)
                 }
             },
             Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &args.target).to_string());
+                logger.error(&format!("failed to open file '{}' .", &args.target));
                 std::process::exit(1)
             }
         };
@@ -188,7 +188,7 @@ pub fn cfg(args: CFGArgs) {
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
-        default: args.default.clone(),
+        default: args.default,
         verbose: args.verbose.clone(),
         output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
@@ -212,14 +212,14 @@ pub fn cfg(args: CFGArgs) {
         "heimdall".to_string(),
         "detect_compiler".to_string(),
         vec![format!("{} bytes", contract_bytecode.len()/2usize)],
-        format!("({}, {})", compiler, version)
+        format!("({compiler}, {version})")
     );
 
     if compiler == "solc" {
-        logger.debug(&format!("detected compiler {} {}.", compiler, version));
+        logger.debug(&format!("detected compiler {compiler} {version}."));
     }
     else {
-        logger.warn(&format!("detected compiler {} {} is not supported by heimdall.", compiler, version));
+        logger.warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
     // create a new EVM instance
@@ -242,8 +242,8 @@ pub fn cfg(args: CFGArgs) {
 
     // find all selectors in the bytecode
     let selectors = find_function_selectors(disassembled_bytecode);
-    logger.info(&format!("found {} possible function selectors.", selectors.len()).to_string());
-    logger.info(&format!("performing symbolic execution on '{}' .", &args.target).to_string());
+    logger.info(&format!("found {} possible function selectors.", selectors.len()));
+    logger.info(&format!("performing symbolic execution on '{}' .", &args.target));
 
     // create a new progress bar
     let progress = ProgressBar::new_spinner();
@@ -254,8 +254,8 @@ pub fn cfg(args: CFGArgs) {
     let mut contract_cfg = Graph::<String, String>::new();
 
     // perform EVM symbolic execution
-    for selector in selectors.clone() {
-        progress.set_message(format!("executing '0x{}'", selector));
+    for selector in selectors {
+        progress.set_message(format!("executing '0x{selector}'"));
 
         // get the function's entry point
         let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
@@ -271,7 +271,7 @@ pub fn cfg(args: CFGArgs) {
             line!(),
             "heimdall".to_string(),
             "analyze".to_string(),
-            vec![format!("0x{}", selector)],
+            vec![format!("0x{selector}")],
             "()".to_string()
         );
 
@@ -279,7 +279,7 @@ pub fn cfg(args: CFGArgs) {
         trace.add_info(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
-            format!("discovered entry point: {}", function_entry_point).to_string()
+            format!("discovered entry point: {function_entry_point}").to_string()
         );
 
         // get a map of possible jump destinations
@@ -295,7 +295,7 @@ pub fn cfg(args: CFGArgs) {
 
             match jumpdest_count {
                 0 => "appears to be linear".to_string(),
-                _ => format!("has {} branches", jumpdest_count)
+                _ => format!("has {jumpdest_count} branches")
             }
             ).to_string()
         );
@@ -304,7 +304,7 @@ pub fn cfg(args: CFGArgs) {
             trace.add_error(
                 func_analysis_trace,
                 function_entry_point.try_into().unwrap(),
-                format!("Execution tree truncated to {} branches", jumpdest_count).to_string()
+                format!("Execution tree truncated to {jumpdest_count} branches").to_string()
             );
         }
     }
@@ -320,7 +320,7 @@ pub fn cfg(args: CFGArgs) {
         &logger,
     );
     
-    logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()).to_string());
+    logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()));
     trace.display();
 }
 

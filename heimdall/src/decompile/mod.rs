@@ -137,7 +137,7 @@ pub fn decompile(args: DecompilerArgs) {
             let provider = match Provider::<Http>::try_from(&args.rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url).to_string());
+                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url));
                     std::process::exit(1)
                 }
             };
@@ -146,7 +146,7 @@ pub fn decompile(args: DecompilerArgs) {
             let address = match args.target.parse::<Address>() {
                 Ok(address) => address,
                 Err(_) => {
-                    logger.error(&format!("failed to parse address '{}' .", &args.target).to_string());
+                    logger.error(&format!("failed to parse address '{}' .", &args.target));
                     std::process::exit(1)
                 }
             };
@@ -155,11 +155,11 @@ pub fn decompile(args: DecompilerArgs) {
             let bytecode_as_bytes = match provider.get_code(address, None).await {
                 Ok(bytecode) => bytecode,
                 Err(_) => {
-                    logger.error(&format!("failed to fetch bytecode from '{}' .", &args.target).to_string());
+                    logger.error(&format!("failed to fetch bytecode from '{}' .", &args.target));
                     std::process::exit(1)
                 }
             };
-            return bytecode_as_bytes.to_string().replacen("0x", "", 1);
+            bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
 
     }
@@ -180,12 +180,12 @@ pub fn decompile(args: DecompilerArgs) {
                     contents.replacen("0x", "", 1)
                 }
                 else {
-                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target).to_string());
+                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
                     std::process::exit(1)
                 }
             },
             Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &args.target).to_string());
+                logger.error(&format!("failed to open file '{}' .", &args.target));
                 std::process::exit(1)
             }
         };
@@ -194,7 +194,7 @@ pub fn decompile(args: DecompilerArgs) {
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
-        default: args.default.clone(),
+        default: args.default,
         verbose: args.verbose.clone(),
         output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
@@ -216,14 +216,14 @@ pub fn decompile(args: DecompilerArgs) {
         "heimdall".to_string(),
         "detect_compiler".to_string(),
         vec![format!("{} bytes", contract_bytecode.len()/2usize)],
-        format!("({}, {})", compiler, version)
+        format!("({compiler}, {version})")
     );
 
     if compiler == "solc" {
-        logger.debug(&format!("detected compiler {} {}.", compiler, version));
+        logger.debug(&format!("detected compiler {compiler} {version}."));
     }
     else {
-        logger.warn(&format!("detected compiler {} {} is not supported by heimdall.", compiler, version));
+        logger.warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
     // create a new EVM instance
@@ -248,12 +248,12 @@ pub fn decompile(args: DecompilerArgs) {
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
         resolved_selectors = resolve_function_selectors(selectors.clone(), &logger);
-        logger.info(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()).to_string());
+        logger.info(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()));
     }
     else {
-        logger.info(&format!("found {} possible function selectors.", selectors.len()).to_string());
+        logger.info(&format!("found {} possible function selectors.", selectors.len()));
     }
-    logger.info(&format!("performing symbolic execution on '{}' .", &args.target).to_string());
+    logger.info(&format!("performing symbolic execution on '{}' .", &args.target));
 
     let decompilation_progress = ProgressBar::new_spinner();
     decompilation_progress.enable_steady_tick(Duration::from_millis(100));
@@ -261,8 +261,8 @@ pub fn decompile(args: DecompilerArgs) {
 
     // perform EVM analysis
     let mut analyzed_functions = Vec::new();
-    for selector in selectors.clone() {
-        decompilation_progress.set_message(format!("executing '0x{}'", selector));
+    for selector in selectors {
+        decompilation_progress.set_message(format!("executing '0x{selector}'"));
 
         // get the function's entry point
         let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
@@ -276,14 +276,14 @@ pub fn decompile(args: DecompilerArgs) {
             line!(),
             "heimdall".to_string(),
             "analyze".to_string(),
-            vec![format!("0x{}", selector)],
+            vec![format!("0x{selector}")],
             "()".to_string()
         );
 
         trace.add_info(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
-            format!("discovered entry point: {}", function_entry_point).to_string()
+            format!("discovered entry point: {function_entry_point}").to_string()
         );
 
         // get a map of possible jump destinations
@@ -296,7 +296,7 @@ pub fn decompile(args: DecompilerArgs) {
 
             match jumpdest_count {
                 0 => "appears to be linear".to_string(),
-                _ => format!("has {} branches", jumpdest_count)
+                _ => format!("has {jumpdest_count} branches")
             }
             ).to_string()
         );
@@ -305,17 +305,17 @@ pub fn decompile(args: DecompilerArgs) {
             trace.add_error(
                 func_analysis_trace,
                 function_entry_point.try_into().unwrap(),
-                format!("Execution tree truncated to {} branches", jumpdest_count).to_string()
+                format!("Execution tree truncated to {jumpdest_count} branches").to_string()
             );
         }
 
-        decompilation_progress.set_message(format!("analyzing '0x{}'", selector));
+        decompilation_progress.set_message(format!("analyzing '0x{selector}'"));
 
         // solidify the execution tree
         let mut analyzed_function = map.analyze(
             Function {
                 selector: selector.clone(),
-                entry_point: function_entry_point.clone(),
+                entry_point: function_entry_point,
                 arguments: HashMap::new(),
                 storage: HashMap::new(),
                 memory: HashMap::new(),
@@ -337,7 +337,7 @@ pub fn decompile(args: DecompilerArgs) {
 
         // add notice for long execution trees
         if jumpdest_count >= 1000 {
-            analyzed_function.notices.push(format!("execution tree truncated to {} branches", jumpdest_count));
+            analyzed_function.notices.push(format!("execution tree truncated to {jumpdest_count} branches"));
         }
 
         let argument_count = analyzed_function.arguments.len();
@@ -346,7 +346,7 @@ pub fn decompile(args: DecompilerArgs) {
             let parameter_trace_parent = trace.add_debug(
                 func_analysis_trace,
                 line!(),
-                format!("discovered and analyzed {} function parameters", argument_count).to_string()
+                format!("discovered and analyzed {argument_count} function parameters").to_string()
             );
 
             let mut parameter_vec = Vec::new();
@@ -366,7 +366,7 @@ pub fn decompile(args: DecompilerArgs) {
                             frame.slot,
                             if frame.mask_size == 32 { "has size of" } else { "is masked to" },
                             frame.mask_size,
-                            if frame.heuristics.len() > 0 {
+                            if !frame.heuristics.is_empty() {
                                 format!("heuristics suggest param used as '{}'", frame.heuristics[0])
                             } else {
                                 "".to_string()
@@ -394,7 +394,7 @@ pub fn decompile(args: DecompilerArgs) {
             let matched_resolved_functions = match_parameters(resolved_functions, &analyzed_function);
 
             trace.br(func_analysis_trace);
-            if matched_resolved_functions.len() == 0 {
+            if matched_resolved_functions.is_empty() {
                 trace.add_warn(
                     func_analysis_trace,
                     line!(),
@@ -410,7 +410,7 @@ pub fn decompile(args: DecompilerArgs) {
                             "warn", "multiple possible matches found. select an option below",
                             matched_resolved_functions.iter()
                             .map(|x| x.signature.clone()).collect(),
-                            Some(*&(matched_resolved_functions.len()-1) as u8),
+                            Some((matched_resolved_functions.len()-1) as u8),
                             args.default
                         );
                     });
@@ -467,7 +467,7 @@ pub fn decompile(args: DecompilerArgs) {
                                     "warn", "multiple possible matches found. select an option below",
                                     resolved_error_selectors.iter()
                                     .map(|x| x.signature.clone()).collect(),
-                                    Some(*&(resolved_error_selectors.len()-1) as u8),
+                                    Some((resolved_error_selectors.len()-1) as u8),
                                     args.default
                                 );
                             });
@@ -516,7 +516,7 @@ pub fn decompile(args: DecompilerArgs) {
                                     "warn", "multiple possible matches found. select an option below",
                                     resolved_event_selectors.iter()
                                     .map(|x| x.signature.clone()).collect(),
-                                    Some(*&(resolved_event_selectors.len()-1) as u8),
+                                    Some((resolved_event_selectors.len()-1) as u8),
                                     args.default
                                 );
                             });
@@ -568,7 +568,7 @@ pub fn decompile(args: DecompilerArgs) {
     );
 
     trace.display();
-    logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()).to_string());
+    logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
 }
 
 /// Builder pattern for using decompile method as a library.

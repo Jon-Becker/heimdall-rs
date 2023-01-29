@@ -32,7 +32,7 @@ impl VMTrace {
     ) -> Function {
 
         // make a clone of the recursed analysis function
-        let mut function = function.clone();
+        let mut function = function;
         let mut jumped_conditional: Option<String> = None;
         let mut revert_conditional: Option<String> = None;
 
@@ -111,7 +111,7 @@ impl VMTrace {
                 );
             }
 
-            if opcode_number >= 0xA0 && opcode_number <= 0xA4 {
+            if (0xA0..=0xA4).contains(&opcode_number) {
 
                 // LOG0, LOG1, LOG2, LOG3, LOG4
                 let logged_event = match operation.events.last() {
@@ -144,7 +144,7 @@ impl VMTrace {
                             None => "00000000",
                         },
                         match logged_event.topics.get(1..) {
-                            Some(topics) => match logged_event.data.len() > 0 && topics.len() > 0 {
+                            Some(topics) => match !logged_event.data.is_empty() && !topics.is_empty() {
                                 true => {
                                     let mut solidified_topics: Vec<String> = Vec::new();
                                     for (i, _) in topics.iter().enumerate() {
@@ -198,9 +198,7 @@ impl VMTrace {
 
                     function.logic.push(
                         format!(
-                            "if ({}) {{",
-                            
-                            conditional
+                            "if ({conditional}) {{"
                         ).to_string()
                     );
                     jumped_conditional = Some(conditional.clone());
@@ -210,14 +208,8 @@ impl VMTrace {
             } else if opcode_name == "REVERT" {
 
                 // Safely convert U256 to usize
-                let offset: usize = match instruction.inputs[0].try_into() {
-                    Ok(x) => x,
-                    Err(_) => 0,
-                };
-                let size: usize = match instruction.inputs[1].try_into() {
-                    Ok(x) => x,
-                    Err(_) => 0,
-                };
+                let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
+                let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
 
                 let revert_data = memory.read(offset, size);
 
@@ -245,9 +237,7 @@ impl VMTrace {
                     revert_logic = match revert_conditional.clone() {
                         Some(condition) => {
                             format!(
-                                "require({}, \"{}\");",
-                                condition,
-                                revert_string
+                                "require({condition}, \"{revert_string}\");"
                             )
                         }
                         None => {
@@ -263,7 +253,7 @@ impl VMTrace {
                                     // we can negate the conditional to get the revert logic
                                     // TODO: make this a require statement, if revert is rlly gross but its technically correct
                                     //       I just ran into issues with ending bracket matching
-                                    function.logic[i] = format!("if (!({})) {{ revert(\"{}\"); }} else {{", conditional, revert_string);
+                                    function.logic[i] = format!("if (!({conditional})) {{ revert(\"{revert_string}\"); }} else {{");
 
                                     break;
                                 }
@@ -283,24 +273,21 @@ impl VMTrace {
                     let custom_error_placeholder = match revert_data.get(0..8) {
                         Some(selector) => {
                             function.errors.insert(selector.to_string(), None);
-                            format!(" CustomError_{}()", selector)
+                            format!(" CustomError_{selector}()")
                         },
                         None => "()".to_string(),
                     };
 
                     revert_logic = match revert_conditional.clone() {
                         Some(condition) => {
-                            if custom_error_placeholder == "()".to_string() {
+                            if custom_error_placeholder == *"()" {
                                 format!(
-                                    "require({});",
-                                    condition,
+                                    "require({condition});",
                                 )
                             }
                             else {
                                 format!(
-                                    "if (!{}) revert{};",
-                                    condition,
-                                    custom_error_placeholder
+                                    "if (!{condition}) revert{custom_error_placeholder};"
                                 )
                             }
                         }
@@ -320,7 +307,7 @@ impl VMTrace {
                                         // we can negate the conditional to get the revert logic
                                         // TODO: make this a require statement, if revert is rlly gross but its technically correct
                                         //       I just ran into issues with ending bracket matching
-                                        function.logic[i] = format!("if (!({})) {{ revert{}; }} else {{", conditional, custom_error_placeholder);
+                                        function.logic[i] = format!("if (!({conditional})) {{ revert{custom_error_placeholder}; }} else {{");
     
                                     }
                                     break;
@@ -336,16 +323,13 @@ impl VMTrace {
             } else if opcode_name == "RETURN" {
 
                 // Safely convert U256 to usize
-                let size: usize = match instruction.inputs[1].try_into() {
-                    Ok(x) => x,
-                    Err(_) => 0,
-                };
+                let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
                 
                 let return_memory_operations = function.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
                 let return_memory_operations_solidified = return_memory_operations.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + ");
 
                 // we don't want to overwrite the return value if it's already been set
-                if function.returns == Some(String::from("uint256")) || function.returns == None {
+                if function.returns == Some(String::from("uint256")) || function.returns.is_none() {
 
                     // if the return operation == ISZERO, this is a boolean return
                     if return_memory_operations.len() == 1 && return_memory_operations[0].operations.opcode.name == "ISZERO" {
@@ -370,13 +354,13 @@ impl VMTrace {
         
                                 // convert the cast size to a string
                                 let (_, cast_types) = byte_size_to_type(byte_size);
-                                Some(format!("{}", cast_types[0]))
+                                Some(cast_types[0].to_string())
                             },
                         };
                     }
                 }
 
-                function.logic.push(format!("return({});", return_memory_operations_solidified));
+                function.logic.push(format!("return({return_memory_operations_solidified});"));
 
             } else if opcode_name == "SELDFESTRUCT" {
 
@@ -399,8 +383,8 @@ impl VMTrace {
                 function.storage.insert(
                     key,
                     StorageFrame {
-                        value: value,
-                        operations: operations,
+                        value,
+                        operations,
                     },
                 );
                 function.logic.push(
@@ -421,7 +405,7 @@ impl VMTrace {
                 function.memory.insert(
                     key,
                     StorageFrame {
-                        value: value,
+                        value,
                         operations: operation,
                     },
                 );
@@ -506,8 +490,8 @@ impl VMTrace {
                         true => format!("value: {}", instruction.input_operations[2].solidify()),
                         false => String::from(""),
                     };
-                let modifier = match gas.len() > 0 || value.len() > 0 {
-                    true => format!("{{ {}{} }}", gas, value),
+                let modifier = match !gas.is_empty() || !value.is_empty() {
+                    true => format!("{{ {gas}{value} }}"),
                     false => String::from(""),
                 };
 
@@ -694,7 +678,7 @@ impl VMTrace {
                 }) {
                    Some ((key, (frame, potential_types))) => {
                         function.arguments.insert(
-                            key.clone(),
+                            *key,
                             (
                                 CalldataFrame {
                                     slot: frame.slot,
@@ -725,7 +709,7 @@ impl VMTrace {
                 }) {
                     Some ((key, (frame, potential_types))) => {
                             function.arguments.insert(
-                                key.clone(),
+                                *key,
                                 (
                                     CalldataFrame {
                                         slot: frame.slot,
