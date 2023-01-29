@@ -1,16 +1,21 @@
-*/target
 */out
 */debug
-/src/debug
+*/src/debug
 
+Cargo.lock
 *.rustc_info.json
 out.json
 .idea
 .DS_STORE
 
+target
+*/target
+target/*
+*/target/*
+
 output
 output/*
-/output
+*/output
 *.evm
 *.asm
 
