@@ -189,7 +189,7 @@ pub fn build_output(
                             ErrorABI {
                                 type_: "error".to_string(),
                                 name: resolved_error.name.clone(),
-                                inputs,
+                                inputs: inputs,
                             }
                         )
                     );
