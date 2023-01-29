@@ -1,6 +1,6 @@
-/target
-/out
-/debug
+*/target
+*/out
+*/debug
 /src/debug
 
 *.rustc_info.json
