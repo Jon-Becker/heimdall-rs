@@ -405,7 +405,7 @@ impl VMTrace {
                 function.memory.insert(
                     key,
                     StorageFrame {
-                        value,
+                        value: value,
                         operations: operation,
                     },
                 );
