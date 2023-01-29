@@ -160,7 +160,7 @@ pub fn build_output(
                     inputs: function_inputs,
                     outputs: function_outputs,
                     state_mutability: state_mutability.to_string(),
-                    constant,
+                    constant: constant,
                 }
             )
         );
