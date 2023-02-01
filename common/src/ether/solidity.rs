@@ -24,7 +24,7 @@ impl WrappedOpcode {
     pub fn solidify(&self) -> String {
         let mut solidified_wrapped_opcode = String::new();
 
-        match self.opcode.name.as_str() {
+        match self.opcode.name {
             "ADD" => {
                 solidified_wrapped_opcode.push_str(
                     format!(
@@ -550,7 +550,7 @@ impl WrappedOpcode {
     pub fn default() -> WrappedOpcode {
         WrappedOpcode {
             opcode: Opcode {
-                name: String::from("unknown"),
+                name: "unknown",
                 mingas: 0,
                 inputs: 0,
                 outputs: 0,
