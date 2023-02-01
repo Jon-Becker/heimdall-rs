@@ -77,7 +77,7 @@ impl VMTrace {
                     "STATICCALL",
                     "CREATE2",
                 ]
-                .contains(&opcode_name.as_str())
+                .contains(&opcode_name)
             {
                 function.pure = false;
                 trace.add_info(
@@ -102,7 +102,7 @@ impl VMTrace {
                     "STATICCALL",
                     "CREATE2",
                 ]
-                .contains(&opcode_name.as_str())
+                .contains(&opcode_name)
             {
                 function.view = false;
                 trace.add_info(
@@ -617,7 +617,7 @@ impl VMTrace {
                     },
                     None => {},
                 };
-            } else if ["AND", "OR"].contains(&opcode_name.as_str()) {
+            } else if ["AND", "OR"].contains(&opcode_name) {
 
                 match instruction.input_operations.iter().find(|operation| {
                     operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
@@ -674,7 +674,7 @@ impl VMTrace {
                     "SLT",
                     "SGT",
                     "SIGNEXTEND",
-                ].contains(&opcode_name.as_str()) {
+                ].contains(&opcode_name) {
 
                 // get the calldata slot operation
                 match function.arguments.clone().iter().find(|(_, (frame, _))| {
@@ -705,7 +705,7 @@ impl VMTrace {
                 "SAR",
                 "XOR",
                 "BYTE",
-            ].contains(&opcode_name.as_str()) {
+            ].contains(&opcode_name) {
 
                 // get the calldata slot operation
                 match function.arguments.clone().iter().find(|(_, (frame, _))| {
