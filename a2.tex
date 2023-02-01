@@ -1,0 +1,103 @@
+\documentclass[12pt]{article}
+
+%
+%Margin - 1 inch on all sides
+%
+\usepackage[letterpaper]{geometry}
+\geometry{top=1.0in, bottom=1.0in, left=1.0in, right=1.0in}
+
+%
+%Doublespacing
+%
+\usepackage{setspace}
+\doublespacing
+
+% 
+%Babel package for multiple language typesetting
+%
+%\usepackage[english,german]{babel}
+%\usepackage[T1]{fontenc}
+%\usepackage[latin1]{inputenc}
+
+%
+%Setting the font
+%
+\usepackage{times}
+
+%
+%Rotating tables (e.g. sideways when too long)
+%
+\usepackage{rotating}
+
+%
+%For multiple rows in tables
+%
+\usepackage{multirow}
+
+% 
+%Line numbering in verse environment
+%
+\usepackage{lineno} 
+
+%
+%Fancy-header package to modify header/page numbering (insert last name)
+%
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\lhead{} 
+\chead{} 
+\rhead{Last name \thepage} 
+\lfoot{} 
+\cfoot{} 
+\rfoot{} 
+\renewcommand{\headrulewidth}{0pt} 
+\renewcommand{\footrulewidth}{0pt} 
+%To make sure we actually have header 0.5in away from top edge
+%12pt is one-sixth of an inch. Subtract this from 0.5in to get headsep value
+\setlength\headsep{0.333in}
+
+%
+%Works cited environment
+%(to start, use \begin{workscited...}, each entry preceded by \bibent)
+% - from Ryan Alcock's MLA style file
+%
+\newcommand{\bibent}{\noindent \hangindent 40pt}
+\newenvironment{workscited}{\newpage \begin{center} Works Cited \end{center}}{\newpage }
+
+
+%
+%Begin document
+%
+\begin{document}
+\begin{flushleft}
+
+%%%%First page name, class, etc
+Name\\
+Professor \\
+Class \\
+Date\\
+
+
+%%%%Title
+\begin{center}
+Title
+\end{center}
+
+
+%%%%Changes paragraph indentation to 0.5in
+\setlength{\parindent}{0.5in} 
+
+%%%%Begin body of paper here
+
+
+%%%%Works cited
+\begin{workscited}
+
+\bibent
+author's last name, first name.  or ``Paper Title."  \textit{Book Title}.  City: Publisher, Year of publication. Print OR Web date
+
+\end{workscited}
+
+\end{flushleft}
+\end{document}
+\}

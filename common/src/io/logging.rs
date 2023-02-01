@@ -434,6 +434,12 @@ impl Logger {
         }
     }
 
+    pub fn trace(&self, message: &str) {
+        if self.level >= 4 {
+            println!("{}: {}", "trace".bright_blue().bold(), message);
+        }
+    }
+
     pub fn info_spinner(&self) -> ProgressStyle {
         ProgressStyle::with_template(&format!(
             "{}: {}",

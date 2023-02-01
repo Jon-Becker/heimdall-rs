@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter, Result};
 use ethers::types::U256;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Opcode {
     pub name: &'static str,
     pub mingas: u16,
@@ -160,14 +160,14 @@ pub fn opcode(code: &str) -> Opcode {
 }
 
 // enum allows for Wrapped Opcodes to contain both raw U256 and Opcodes as inputs
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WrappedInput {
     Raw(U256),
     Opcode(WrappedOpcode),
 }
 
 // represents an opcode with its direct inputs as WrappedInputs
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WrappedOpcode {
     pub opcode: Opcode,
     pub inputs: Vec<WrappedInput>,

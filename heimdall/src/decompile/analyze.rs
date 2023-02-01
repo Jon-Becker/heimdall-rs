@@ -36,6 +36,10 @@ impl VMTrace {
         let mut jumped_conditional: Option<String> = None;
         let mut revert_conditional: Option<String> = None;
 
+        // if self.loop_detected {
+        //     function.logic.push("// loop detected".to_owned());
+        // }
+
         // perform analysis on the operations of the current VMTrace branch
         for operation in &self.operations {
             let instruction = operation.last_instruction.clone();
@@ -248,7 +252,10 @@ impl VMTrace {
 
                                     // get matching conditional
                                     let conditional = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
-                                    let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap();
+                                    let conditional = match function.logic[i].get(conditional.0+1..conditional.1-1) {
+                                        Some(conditional) => conditional,
+                                        None => "decoding error",
+                                    };
                                     
                                     // we can negate the conditional to get the revert logic
                                     // TODO: make this a require statement, if revert is rlly gross but its technically correct

@@ -296,18 +296,10 @@ pub fn decompile(args: DecompilerArgs) {
 
             match jumpdest_count {
                 0 => "appears to be linear".to_string(),
-                _ => format!("has {jumpdest_count} branches")
+                _ => format!("has {jumpdest_count} unique branches")
             }
             ).to_string()
         );
-
-        if jumpdest_count >= 1000 {
-            trace.add_error(
-                func_analysis_trace,
-                function_entry_point.try_into().unwrap(),
-                format!("Execution tree truncated to {jumpdest_count} branches").to_string()
-            );
-        }
 
         decompilation_progress.set_message(format!("analyzing '0x{selector}'"));
 
@@ -334,11 +326,6 @@ pub fn decompile(args: DecompilerArgs) {
             func_analysis_trace,
             &mut Vec::new()
         );
-
-        // add notice for long execution trees
-        if jumpdest_count >= 1000 {
-            analyzed_function.notices.push(format!("execution tree truncated to {jumpdest_count} branches"));
-        }
 
         let argument_count = analyzed_function.arguments.len();
 

@@ -1,4 +1,4 @@
-use std::{str::FromStr};
+use std::{str::FromStr, collections::{HashMap, VecDeque}};
 
 use ethers::{
     prelude::{
@@ -8,12 +8,10 @@ use ethers::{
 use heimdall_common::{
     ether::{
         evm::{
-            vm::{State, VM}
+            vm::{State, VM}, stack::StackFrame
         },
     },
 };
-
-use crate::decompile::constants::LOOP_DETECTION_REGEX;
 
 #[derive(Clone, Debug)]
 pub struct VMTrace {
@@ -196,21 +194,21 @@ pub fn map_selector(
     }
 
     // the VM is at the function entry point, begin tracing
-    let mut handled_jumpdests = 0;
+    let mut branch_count = 0;
     (
         recursive_map(
             &vm.clone(),
-            &mut handled_jumpdests,
-            &mut String::new()
+            &mut branch_count,
+            &mut HashMap::new()
         ),
-        handled_jumpdests,
+        branch_count
     )
 }
 
 pub fn recursive_map(
     evm: &VM,
-    handled_jumpdests: &mut u32,
-    path: &mut String,
+    branch_count: &mut u32,
+    handled_jumps: &mut HashMap<(u128, U256, usize, bool), VecDeque<StackFrame>>,
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -222,30 +220,56 @@ pub fn recursive_map(
         loop_detected: false,
     };
 
-    if handled_jumpdests >= &mut 1000 { return vm_trace; }
 
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
         let state = vm.step();
         vm_trace.operations.push(state.clone());
-        *handled_jumpdests += 1;
 
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {
-            path.push_str(&format!("{}->{};", state.last_instruction.instruction, state.last_instruction.inputs[0]));
+
+            let jump_frame: (u128, U256, usize, bool) = (
+                state.last_instruction.instruction,
+                state.last_instruction.inputs[0],
+                vm.stack.size(),
+                state.last_instruction.inputs[1] == U256::from(0)
+            );
 
             // break out of loops
-            match LOOP_DETECTION_REGEX.is_match(path) {
-                Ok(result) => {
-                    if result {
-                        vm_trace.loop_detected = true;
-                        break;
+            match handled_jumps.get(&jump_frame) {
+                Some(stack) => {
+                    
+                    // compare stacks
+                    let mut stack_diff = Vec::new();
+                    for (i, frame) in vm.stack.stack.iter().enumerate() {
+                        if frame != &stack[i] {
+                            stack_diff.push(frame);
+                        }
                     }
-                }
-                Err(_) => {
-                    return vm_trace
+
+                    if !stack_diff.is_empty() {
+                    
+                        // check if all stack diff values are in the jump condition
+                        let jump_condition = state.last_instruction.input_operations[1].solidify();
+                        if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
+
+                            vm_trace.loop_detected = true;
+                            break;
+                        }
+                    }
+
+                    // this key exists, but the stack is different, so the jump is new
+                    handled_jumps.insert(jump_frame, vm.stack.stack.clone());
+                },
+                None => {
+                    
+                    // this key doesnt exist, so the jump is new
+                    handled_jumps.insert(jump_frame, vm.stack.stack.clone());
                 }
             }
+
+            *branch_count += 1;
 
             // we need to create a trace for the path that wasn't taken.
             if state.last_instruction.inputs[1] == U256::from(0) {                
@@ -255,15 +279,15 @@ pub fn recursive_map(
                 trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
                 vm_trace.children.push(recursive_map(
                     &trace_vm,
-                    handled_jumpdests,
-                    &mut path.clone()
+                    branch_count,
+                    handled_jumps
                 ));
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
                     &vm.clone(),
-                    handled_jumpdests,
-                    &mut path.clone()
+                    branch_count,
+                    handled_jumps
                 ));
                 break;
             } else {
@@ -273,15 +297,15 @@ pub fn recursive_map(
                 trace_vm.instruction = state.last_instruction.instruction + 1;
                 vm_trace.children.push(recursive_map(
                     &trace_vm,
-                    handled_jumpdests,
-                    &mut path.clone()
+                    branch_count,
+                    handled_jumps
                 ));
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
                     &vm.clone(),
-                    handled_jumpdests,
-                    &mut path.clone()
+                    branch_count,
+                    handled_jumps
                 ));
                 break;
             }
