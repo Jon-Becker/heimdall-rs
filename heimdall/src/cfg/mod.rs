@@ -295,18 +295,10 @@ pub fn cfg(args: CFGArgs) {
 
             match jumpdest_count {
                 0 => "appears to be linear".to_string(),
-                _ => format!("has {jumpdest_count} branches")
+                _ => format!("has {jumpdest_count} unique branches")
             }
             ).to_string()
         );
-
-        if jumpdest_count >= 1000 {
-            trace.add_error(
-                func_analysis_trace,
-                function_entry_point.try_into().unwrap(),
-                format!("Execution tree truncated to {jumpdest_count} branches").to_string()
-            );
-        }
     }
 
     progress.finish_and_clear();
