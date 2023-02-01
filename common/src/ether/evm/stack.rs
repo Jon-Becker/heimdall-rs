@@ -7,12 +7,12 @@ use super::opcodes::WrappedOpcode;
 // This implemtation is a simple, (hopefully lightweight) LIFO stack.
 // Supports simple push/pop operations, with further helper operations
 // such as peek and is_empty.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Stack {
     pub stack: VecDeque<StackFrame>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct StackFrame {
     pub value: U256,
     pub operation: WrappedOpcode,
@@ -82,6 +82,7 @@ impl Stack {
         }
     }
 
+    // gets the top n values of the stack
     pub fn peek_n(&self, n: usize) -> Vec<StackFrame> {
         let mut values = Vec::new();
         for i in 0..n {
@@ -90,6 +91,7 @@ impl Stack {
         values
     }
 
+    // Get the size of the stack
     pub fn size(&self) -> usize {
         self.stack.len()
     }
