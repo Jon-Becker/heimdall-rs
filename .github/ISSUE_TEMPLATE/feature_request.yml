@@ -1,0 +1,22 @@
+name: Feature
+description: Request a feature to be developed
+title: "[Feature]: "
+labels: ["T: Feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please ensure that the question has not already been asked in the issue tracker, and that the wiki won't answer it.
+
+        Thank you!
+  - type: checkboxes
+    attributes:
+      label: Please check the following
+      options:
+        - label: This is not a duplicate request
+        - label: I have checked that this is not in development
+  - type: textarea
+    attributes:
+      label: Type a detailed explanation of your feature request here.
+    validations:
+      required: true
