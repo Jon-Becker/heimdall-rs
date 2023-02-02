@@ -25,12 +25,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build Binaries
-      working-directory: ./heimdall
       run:  cargo build --release
     - name: Upload Binaries
       uses: svenstaro/upload-release-action@v2
       with:
-        file: ./heimdall/target/release/${{ matrix.artifact_name }}
+        file: ./target/release/${{ matrix.artifact_name }}
         asset_name: ${{ matrix.asset_name }}
         tag: ${{ github.ref }}
         overwrite: true
