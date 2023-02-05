@@ -347,15 +347,20 @@ pub fn recursive_map(
                     
                         // check if all stack diff values are in the jump condition
                         let jump_condition = state.last_instruction.input_operations[1].solidify();
+                        println!("\n\ncondition: {}", jump_condition);
+                        println!("jump: ({}, {})", jump_frame.1, jump_frame.2);
+                        for (i, stack_diff_item) in stack_diff.iter().enumerate() {
+                            println!("  {} : {} : {}", i, stack_diff_item.value, stack_diff_item.operation.solidify());
+                        }
                         if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
-
+                            println!("Loop Detected");
                             vm_trace.loop_detected = true;
                             break;
                         }
                     }
-
-                    // this key exists, but the stack is different, so the jump is new
-                    handled_jumps.insert(jump_frame, vm.stack.stack.clone());
+                    
+                     // this key exists, but the stack is different, so the jump is new
+                     handled_jumps.insert(jump_frame, vm.stack.stack.clone());
                 },
                 None => {
                     
