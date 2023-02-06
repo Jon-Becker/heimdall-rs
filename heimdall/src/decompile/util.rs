@@ -207,7 +207,7 @@ pub fn detect_compiler(bytecode: String) -> (String, String) {
     (compiler, version.trim_end_matches('.').to_string())
 }
 
-// find all function selectors in the given EVM.
+// find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(assembly: String) -> Vec<String> {
     let mut function_selectors = Vec::new();
 
@@ -236,8 +236,6 @@ pub fn find_function_selectors(assembly: String) -> Vec<String> {
 // resolve a selector's function entry point from the EVM bytecode
 pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
     let mut vm = evm.clone();
-    let mut flag_next_jumpi = false;
-    let mut function_entry_point = 0;
 
     // execute the EVM call to find the entry point for the given selector
     vm.calldata = selector.clone();
@@ -245,18 +243,17 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
         let call = vm.step();
 
         // if the opcode is an EQ and it matched the selector, the next jumpi is the entry point
-        if call.last_instruction.opcode == "14"
-            && call.last_instruction.inputs[0].eq(&U256::from_str(&selector.clone()).unwrap())
-            && call.last_instruction.outputs[0].eq(&U256::from_str("1").unwrap())
-        {
-            flag_next_jumpi = true;
-        }
+        if call.last_instruction.opcode == "57" {
+            let jump_condition = call.last_instruction.input_operations[1].solidify();
+            let jump_taken = call.last_instruction.inputs[1].as_u64();
 
-        // if we are flagging the next jumpi, and the opcode is a JUMPI, we have found the entry point
-        if flag_next_jumpi && call.last_instruction.opcode == "57" {
-            // it's safe to convert here because we know max bytecode length is ~25kb, way less than 2^64
-            function_entry_point = call.last_instruction.inputs[0].as_u64();
-            break;
+            if jump_condition.contains(&selector) &&
+               jump_condition.contains("msg.data[0]") &&
+               jump_condition.contains(" == ") &&
+               jump_taken == 1
+            {
+                return call.last_instruction.inputs[0].as_u64();
+            }
         }
 
         if vm.exitcode != 255 || !vm.returndata.is_empty() {
@@ -264,7 +261,7 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
         }
     }
 
-    function_entry_point
+    0
 }
 
 // build a map of function jump possibilities from the EVM bytecode

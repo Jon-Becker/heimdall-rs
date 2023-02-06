@@ -240,7 +240,7 @@ pub fn decompile(args: DecompilerArgs) {
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
-    let vm_trace = trace.add_creation(decompile_call, line!(), "contract".to_string(), shortened_target, (contract_bytecode.len()/2usize).try_into().unwrap());
+    let vm_trace = trace.add_creation(decompile_call, line!(), "contract".to_string(), shortened_target.clone(), (contract_bytecode.len()/2usize).try_into().unwrap());
 
     // find and resolve all selectors in the bytecode
     let selectors = find_function_selectors(disassembled_bytecode);
@@ -253,7 +253,7 @@ pub fn decompile(args: DecompilerArgs) {
     else {
         logger.info(&format!("found {} possible function selectors.", selectors.len()));
     }
-    logger.info(&format!("performing symbolic execution on '{}' .", &args.target));
+    logger.info(&format!("performing symbolic execution on '{}' .", shortened_target));
 
     let decompilation_progress = ProgressBar::new_spinner();
     decompilation_progress.enable_steady_tick(Duration::from_millis(100));
