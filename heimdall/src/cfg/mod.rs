@@ -30,8 +30,7 @@ use petgraph::Graph;
 use crate::cfg::output::build_output;
 use crate::cfg::util::detect_compiler;
 use crate::cfg::util::find_function_selectors;
-use crate::cfg::util::map_selector;
-use crate::cfg::util::resolve_entry_point;
+use crate::cfg::util::map_contract;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Generate a visual control flow graph for EVM bytecode",
@@ -238,12 +237,12 @@ pub fn cfg(args: CFGArgs) {
     }
 
     // add the creation to the trace
-    let vm_trace = trace.add_creation(cfg_call, line!(), "contract".to_string(), shortened_target, (contract_bytecode.len()/2usize).try_into().unwrap());
+    let vm_trace = trace.add_creation(cfg_call, line!(), "contract".to_string(), shortened_target.clone(), (contract_bytecode.len()/2usize).try_into().unwrap());
 
     // find all selectors in the bytecode
     let selectors = find_function_selectors(disassembled_bytecode);
     logger.info(&format!("found {} possible function selectors.", selectors.len()));
-    logger.info(&format!("performing symbolic execution on '{}' .", &args.target));
+    logger.info(&format!("performing symbolic execution on '{}' .", &shortened_target));
 
     // create a new progress bar
     let progress = ProgressBar::new_spinner();
@@ -253,53 +252,28 @@ pub fn cfg(args: CFGArgs) {
     // create a new petgraph StableGraph
     let mut contract_cfg = Graph::<String, String>::new();
 
-    // perform EVM symbolic execution
-    for selector in selectors {
-        progress.set_message(format!("executing '0x{selector}'"));
 
-        // get the function's entry point
-        let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
+    // add the call to the trace
+    let map_trace = trace.add_call(
+        vm_trace,
+        line!(),
+        "heimdall".to_string(),
+        "cfg".to_string(),
+        vec![format!("{} bytes", contract_bytecode.len()/2usize)],
+        "()".to_string()
+    );
 
-        // if the entry point is 0, then the function is not reachable
-        if function_entry_point == 0 {
-            continue;
-        }
+    // get a map of possible jump destinations
+    let (map, jumpdest_count) = map_contract(&evm.clone());
 
-        // add the call to the trace
-        let func_analysis_trace = trace.add_call(
-            vm_trace,
-            line!(),
-            "heimdall".to_string(),
-            "analyze".to_string(),
-            vec![format!("0x{selector}")],
-            "()".to_string()
-        );
+    // add jumpdests to the trace
+    trace.add_info(
+        map_trace,
+        line!(),
+        format!("traced and executed {jumpdest_count} possible paths.")
+    );
 
-        // add the entry point to the trace
-        trace.add_info(
-            func_analysis_trace,
-            function_entry_point.try_into().unwrap(),
-            format!("discovered entry point: {function_entry_point}").to_string()
-        );
-
-        // get a map of possible jump destinations
-        let (map, jumpdest_count) = map_selector(&evm.clone(), selector.clone(), function_entry_point);
-
-        map.build_cfg(&mut contract_cfg, None);
-
-        // add the jumpdest count* to the trace
-        trace.add_debug(
-            func_analysis_trace,
-            function_entry_point.try_into().unwrap(),
-            format!("execution tree {}",
-
-            match jumpdest_count {
-                0 => "appears to be linear".to_string(),
-                _ => format!("has {jumpdest_count} unique branches")
-            }
-            ).to_string()
-        );
-    }
+    map.build_cfg(&mut contract_cfg, None);
 
     progress.finish_and_clear();
     logger.info("symbolic execution completed.");
