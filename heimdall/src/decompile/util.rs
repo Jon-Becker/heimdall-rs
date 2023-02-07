@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, str::FromStr};
+use std::{collections::{HashMap, VecDeque}};
 
 use ethers::{
     prelude::{
@@ -300,7 +300,7 @@ pub fn map_selector(
 pub fn recursive_map(
     evm: &VM,
     branch_count: &mut u32,
-    handled_jumps: &mut HashMap<(u128, U256, usize, bool), VecDeque<StackFrame>>,
+    handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>,
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -311,7 +311,6 @@ pub fn recursive_map(
         children: Vec::new(),
         loop_detected: false,
     };
-
 
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
@@ -330,39 +329,46 @@ pub fn recursive_map(
 
             // break out of loops
             match handled_jumps.get(&jump_frame) {
-                Some(stack) => {
-                    
-                    // compare stacks
-                    let mut stack_diff = Vec::new();
-                    for (i, frame) in vm.stack.stack.iter().enumerate() {
-                        if frame != &stack[i] {
-                            stack_diff.push(frame);
-                        }
-                    }
+                Some(historical_stacks) => {
 
-                    if !stack_diff.is_empty() {
+                    if historical_stacks.iter().any(|stack| {
+
+                        // compare stacks
+                        let mut stack_diff = Vec::new();
+                        for (i, frame) in vm.stack.stack.iter().enumerate() {
+                            if frame != &stack[i] {
+                                stack_diff.push(frame);
+                            }
+                        }
+
+                        if !stack_diff.is_empty() {
                     
-                        // check if all stack diff values are in the jump condition
-                        let jump_condition = state.last_instruction.input_operations[1].solidify();
-                        println!("\n\ncondition: {}", jump_condition);
-                        println!("jump: ({}, {})", jump_frame.1, jump_frame.2);
-                        for (i, stack_diff_item) in stack_diff.iter().enumerate() {
-                            println!("  {} : {} : {}", i, stack_diff_item.value, stack_diff_item.operation.solidify());
+                            // check if all stack diff values are in the jump condition
+                            let jump_condition = state.last_instruction.input_operations[1].solidify();
+                            if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
+                                return true
+                            }
+                            return false
                         }
-                        if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
-                            println!("Loop Detected");
-                            vm_trace.loop_detected = true;
-                            break;
+                        else {
+                            return true
                         }
+                    }) {
+                        vm_trace.loop_detected = true;
+                        return vm_trace;
                     }
-                    
-                     // this key exists, but the stack is different, so the jump is new
-                     handled_jumps.insert(jump_frame, vm.stack.stack.clone());
+                    else {
+
+                        // this key exists, but the stack is different, so the jump is new
+                        let historical_stacks: &mut Vec<VecDeque<StackFrame>> = &mut historical_stacks.clone();
+                        historical_stacks.push(vm.stack.stack.clone());
+                        handled_jumps.insert(jump_frame, historical_stacks.to_vec());
+                    }
                 },
                 None => {
                     
                     // this key doesnt exist, so the jump is new
-                    handled_jumps.insert(jump_frame, vm.stack.stack.clone());
+                    handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
                 }
             }
 
