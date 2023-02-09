@@ -66,7 +66,7 @@ pub struct CFGArgs {
 
     /// Color the edges of the graph based on the JUMPI condition.
     /// This is useful for visualizing the flow of if statements.
-    #[clap(long="color_edges", short)]
+    #[clap(long="color-edges", short)]
     pub color_edges: bool,
 }
 
