@@ -312,25 +312,10 @@ pub fn recursive_map(
         loop_detected: false,
     };
 
-    let mut last_op_push = false;
-
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
         let state = vm.step();
         vm_trace.operations.push(state.clone());
-
-
-        // if we encounter a JUMP, check if it's dynamic or static
-        if state.last_instruction.opcode == "56" {
-            println!("JUMP at {} appears to be {}", state.last_instruction.instruction, if !last_op_push { "dynamic" } else { "static" });
-        }
-
-        if state.last_instruction.opcode_details.unwrap().name.contains("PUSH") {
-            last_op_push = true;
-        }
-        else {
-            last_op_push = false;
-        }
 
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {
@@ -360,10 +345,7 @@ pub fn recursive_map(
                     
                             // check if all stack diff values are in the jump condition
                             let jump_condition = state.last_instruction.input_operations[1].solidify();
-                            if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
-                                return true
-                            }
-                            return false
+                            return stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify()))
                         }
                         else {
                             return true
