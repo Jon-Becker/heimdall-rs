@@ -21,11 +21,12 @@ lazy_static! {
 
 impl VMTrace {
     
-    // converts a VMTrace to a Function which can be written to the decompiled output
+    // converts a VMTrace to a CFG graph
     pub fn build_cfg(
         &self,
         contract_cfg: &mut Graph<String, String>,
         parent_node: Option<NodeIndex<u32>>,
+        jump_taken: bool,
     ) {
 
         let mut cfg_node: String = String::new();
@@ -68,7 +69,7 @@ impl VMTrace {
                     let mut connecting_edges = CONNECTING_EDGES.lock().unwrap();
                     let edge = format!("{} -> {}", parent_node.index(), node_index.index());
                     if !connecting_edges.contains(&edge) {
-                        contract_cfg.add_edge(parent_node, *node_index, String::from(""));
+                        contract_cfg.add_edge(parent_node, *node_index, jump_taken.to_string());
                         connecting_edges.push(edge);
                     }
                     drop(connecting_edges)
@@ -85,7 +86,7 @@ impl VMTrace {
                     let mut connecting_edges = CONNECTING_EDGES.lock().unwrap();
                     let edge = format!("{} -> {}", parent_node.index(), node_index.index());
                     if !connecting_edges.contains(&edge) {
-                        contract_cfg.add_edge(parent_node, node_index, String::from(""));
+                        contract_cfg.add_edge(parent_node, node_index, jump_taken.to_string());
                         connecting_edges.push(edge);
                     }
                     drop(connecting_edges)
@@ -99,9 +100,9 @@ impl VMTrace {
         drop(instruction_node_map);
         
         // recurse into the children of the VMTrace map
-        for (_, child) in self.children.iter().enumerate() {
+        for child in self.children.iter() {
 
-            child.build_cfg(contract_cfg, parent_node);
+            child.build_cfg(contract_cfg, parent_node, child.operations.first().unwrap().last_instruction.opcode_details.clone().unwrap().name == "JUMPDEST");
 
         }
     }

@@ -63,6 +63,11 @@ pub struct CFGArgs {
     /// For example, `--format svg` will output a SVG image of the CFG.
     #[clap(long="format", short, default_value = "", hide_default_value = true)]
     pub format: String,
+
+    /// Color the edges of the graph based on the JUMPI condition.
+    /// This is useful for visualizing the flow of if statements.
+    #[clap(long="color_edges", short)]
+    pub color_edges: bool,
 }
 
 pub fn cfg(args: CFGArgs) {
@@ -273,7 +278,7 @@ pub fn cfg(args: CFGArgs) {
         format!("traced and executed {jumpdest_count} possible paths.")
     );
 
-    map.build_cfg(&mut contract_cfg, None);
+    map.build_cfg(&mut contract_cfg, None, false);
 
     progress.finish_and_clear();
     logger.info("symbolic execution completed.");
@@ -314,6 +319,7 @@ pub fn cfg(args: CFGArgs) {
 ///     .rpc("https://127.0.0.1:8545")
 ///     .format("svg")
 ///     .verbosity(4)
+///     .color_edges(true)
 ///     .generate();
 /// ```
 #[allow(dead_code)]
@@ -335,6 +341,7 @@ impl CFGBuilder where {
                 output: String::from(""),
                 rpc_url: String::from(""),
                 format: String::from(""),
+                color_edges: false,
                 default: true,
             }
         }
@@ -381,6 +388,13 @@ impl CFGBuilder where {
     #[allow(dead_code)]
     pub fn format(mut self, format: String) -> CFGBuilder {
         self.args.format = format;
+        self
+    }
+
+    /// Whether to color the edges of the graph based on the JUMPI condition.
+    #[allow(dead_code)]
+    pub fn color_edges(mut self, color_edges: bool) -> CFGBuilder {
+        self.args.color_edges = color_edges;
         self
     }
 

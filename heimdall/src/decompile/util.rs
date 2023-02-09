@@ -242,7 +242,7 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
         let call = vm.step();
 
-        // if the opcode is an EQ and it matched the selector, the next jumpi is the entry point
+        // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
         if call.last_instruction.opcode == "57" {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
             let jump_taken = call.last_instruction.inputs[1].as_u64();
@@ -312,10 +312,25 @@ pub fn recursive_map(
         loop_detected: false,
     };
 
+    let mut last_op_push = false;
+
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
         let state = vm.step();
         vm_trace.operations.push(state.clone());
+
+
+        // if we encounter a JUMP, check if it's dynamic or static
+        if state.last_instruction.opcode == "56" {
+            println!("JUMP at {} appears to be {}", state.last_instruction.instruction, if !last_op_push { "dynamic" } else { "static" });
+        }
+
+        if state.last_instruction.opcode_details.unwrap().name.contains("PUSH") {
+            last_op_push = true;
+        }
+        else {
+            last_op_push = false;
+        }
 
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {

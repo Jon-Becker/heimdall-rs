@@ -16,6 +16,7 @@ mod benchmark {
                 output: String::from(""),
                 rpc_url: String::from(""),
                 default: true,
+                color_edges: false,
                 format: String::from("")
             };
             crate::cfg::cfg(args)
@@ -34,6 +35,7 @@ mod benchmark {
                 output: String::from(""),
                 rpc_url: String::from(""),
                 default: true,
+                color_edges: false,
                 format: String::from("")
             };
             crate::cfg::cfg(args)
