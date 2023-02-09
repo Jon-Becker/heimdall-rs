@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, str::FromStr};
+use std::{collections::{HashMap, VecDeque}};
 
 use ethers::{
     prelude::{
@@ -207,7 +207,7 @@ pub fn detect_compiler(bytecode: String) -> (String, String) {
     (compiler, version.trim_end_matches('.').to_string())
 }
 
-// find all function selectors in the given EVM.
+// find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(assembly: String) -> Vec<String> {
     let mut function_selectors = Vec::new();
 
@@ -236,27 +236,24 @@ pub fn find_function_selectors(assembly: String) -> Vec<String> {
 // resolve a selector's function entry point from the EVM bytecode
 pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
     let mut vm = evm.clone();
-    let mut flag_next_jumpi = false;
-    let mut function_entry_point = 0;
 
     // execute the EVM call to find the entry point for the given selector
     vm.calldata = selector.clone();
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
         let call = vm.step();
 
-        // if the opcode is an EQ and it matched the selector, the next jumpi is the entry point
-        if call.last_instruction.opcode == "14"
-            && call.last_instruction.inputs[0].eq(&U256::from_str(&selector.clone()).unwrap())
-            && call.last_instruction.outputs[0].eq(&U256::from_str("1").unwrap())
-        {
-            flag_next_jumpi = true;
-        }
+        // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
+        if call.last_instruction.opcode == "57" {
+            let jump_condition = call.last_instruction.input_operations[1].solidify();
+            let jump_taken = call.last_instruction.inputs[1].as_u64();
 
-        // if we are flagging the next jumpi, and the opcode is a JUMPI, we have found the entry point
-        if flag_next_jumpi && call.last_instruction.opcode == "57" {
-            // it's safe to convert here because we know max bytecode length is ~25kb, way less than 2^64
-            function_entry_point = call.last_instruction.inputs[0].as_u64();
-            break;
+            if jump_condition.contains(&selector) &&
+               jump_condition.contains("msg.data[0]") &&
+               jump_condition.contains(" == ") &&
+               jump_taken == 1
+            {
+                return call.last_instruction.inputs[0].as_u64();
+            }
         }
 
         if vm.exitcode != 255 || !vm.returndata.is_empty() {
@@ -264,7 +261,7 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
         }
     }
 
-    function_entry_point
+    0
 }
 
 // build a map of function jump possibilities from the EVM bytecode
@@ -303,7 +300,7 @@ pub fn map_selector(
 pub fn recursive_map(
     evm: &VM,
     branch_count: &mut u32,
-    handled_jumps: &mut HashMap<(u128, U256, usize, bool), VecDeque<StackFrame>>,
+    handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>,
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -315,11 +312,25 @@ pub fn recursive_map(
         loop_detected: false,
     };
 
+    let mut last_op_push = false;
 
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
         let state = vm.step();
         vm_trace.operations.push(state.clone());
+
+
+        // if we encounter a JUMP, check if it's dynamic or static
+        if state.last_instruction.opcode == "56" {
+            println!("JUMP at {} appears to be {}", state.last_instruction.instruction, if !last_op_push { "dynamic" } else { "static" });
+        }
+
+        if state.last_instruction.opcode_details.unwrap().name.contains("PUSH") {
+            last_op_push = true;
+        }
+        else {
+            last_op_push = false;
+        }
 
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == "57" {
@@ -333,34 +344,46 @@ pub fn recursive_map(
 
             // break out of loops
             match handled_jumps.get(&jump_frame) {
-                Some(stack) => {
-                    
-                    // compare stacks
-                    let mut stack_diff = Vec::new();
-                    for (i, frame) in vm.stack.stack.iter().enumerate() {
-                        if frame != &stack[i] {
-                            stack_diff.push(frame);
+                Some(historical_stacks) => {
+
+                    if historical_stacks.iter().any(|stack| {
+
+                        // compare stacks
+                        let mut stack_diff = Vec::new();
+                        for (i, frame) in vm.stack.stack.iter().enumerate() {
+                            if frame != &stack[i] {
+                                stack_diff.push(frame);
+                            }
                         }
-                    }
 
-                    if !stack_diff.is_empty() {
+                        if !stack_diff.is_empty() {
                     
-                        // check if all stack diff values are in the jump condition
-                        let jump_condition = state.last_instruction.input_operations[1].solidify();
-                        if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
-
-                            vm_trace.loop_detected = true;
-                            break;
+                            // check if all stack diff values are in the jump condition
+                            let jump_condition = state.last_instruction.input_operations[1].solidify();
+                            if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
+                                return true
+                            }
+                            return false
                         }
+                        else {
+                            return true
+                        }
+                    }) {
+                        vm_trace.loop_detected = true;
+                        return vm_trace;
                     }
+                    else {
 
-                    // this key exists, but the stack is different, so the jump is new
-                    handled_jumps.insert(jump_frame, vm.stack.stack.clone());
+                        // this key exists, but the stack is different, so the jump is new
+                        let historical_stacks: &mut Vec<VecDeque<StackFrame>> = &mut historical_stacks.clone();
+                        historical_stacks.push(vm.stack.stack.clone());
+                        handled_jumps.insert(jump_frame, historical_stacks.to_vec());
+                    }
                 },
                 None => {
                     
                     // this key doesnt exist, so the jump is new
-                    handled_jumps.insert(jump_frame, vm.stack.stack.clone());
+                    handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
                 }
             }
 
