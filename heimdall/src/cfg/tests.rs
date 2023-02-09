@@ -63,16 +63,16 @@ mod tests {
         ];
 
         CFGBuilder::new(bytecode)
-            .output("./output/tests")
+            .output("./output/tests/test1")
             .generate();
 
-        let dot = read_file(&String::from("./output/tests/cfg.dot"));
+        let dot = read_file(&String::from("./output/tests/test1/cfg.dot"));
 
         for line in lines {
             assert!(dot.contains(&line))
         }
 
-        delete_path(&String::from("./output/tests"));
+        delete_path(&String::from("./output/tests/test1"));
     }
 
     #[test]
@@ -86,15 +86,15 @@ mod tests {
         ];
 
         CFGBuilder::new(bytecode)
-            .output("./output/tests")
+            .output("./output/tests/test2")
             .generate();
 
-        let dot = read_file(&String::from("./output/tests/cfg.dot"));
+        let dot = read_file(&String::from("./output/tests/test2/cfg.dot"));
 
         for line in lines {
             assert!(dot.contains(&line))
         }
 
-        delete_path(&String::from("./output/tests"));
+        delete_path(&String::from("./output/tests/test2"));
     }
 }
