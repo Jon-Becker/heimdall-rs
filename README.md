@@ -4,6 +4,12 @@ Heimdall is an advanced EVM toolkit which aims to make dealing with smart contra
 
 ## Installation & Usage
 
+Ensure that Rust & Cargo are installed:
+
+```bash
+curl https://sh.rustup.rs -sSf | sh
+```
+
 Heimdall's update and installation manager, `bifrost`, can be installed using the following command:
 
 ```bash
