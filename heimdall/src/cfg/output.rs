@@ -41,7 +41,8 @@ pub fn build_output(
         output = output.replace("[ label = \"true\" ]", "[]");
         output = output.replace("[ label = \"false\" ]", "[]");
     }
-    
+
+    output = output.replace("[ label = \"\" ]", "[]");
 
     write_file(&dot_output_path, &output);
 
