@@ -2,7 +2,7 @@ use heimdall::cfg::CFGBuilder;
 
 fn main() {
 
-    // Decompile the bytecode and save the results.
+    // Trace the bytecode and save the results.
     CFGBuilder::new(BYTECODE).generate();
 
 }
