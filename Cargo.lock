@@ -1277,7 +1277,7 @@ checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
 
 [[package]]
 name = "heimdall"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "backtrace",
  "clap",
@@ -1299,7 +1299,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-common"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -1316,7 +1316,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-config"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
