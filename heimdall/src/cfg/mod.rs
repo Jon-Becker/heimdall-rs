@@ -384,7 +384,7 @@ impl CFGBuilder where {
         self
     }
 
-    /// Whether to skip resolving function selectors.
+    /// The format to additionally generate to. (e.g. svg, png, pdf)
     #[allow(dead_code)]
     pub fn format(mut self, format: String) -> CFGBuilder {
         self.args.format = format;
