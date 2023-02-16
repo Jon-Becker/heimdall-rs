@@ -1087,8 +1087,6 @@ impl VM {
 
                 // RETURNDATASIZE
                 if op == 0x3D {
-                    self.stack.pop().value;
-
                     self.stack.push("0x00", operation.clone());
                 }
 
