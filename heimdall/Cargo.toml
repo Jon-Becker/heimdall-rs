@@ -13,6 +13,7 @@ colored = "2"
 clap = { version = "3.1.18", features = ["derive"] }
 clap-verbosity-flag = "1.0.0"
 ethers = "1.0.0"
+heimdall-cache = { path = "./../cache" }
 heimdall-common = { path = "./../common" }
 heimdall-config = { path = "./../config" }
 tokio = { version = "1", features = ["full"] }

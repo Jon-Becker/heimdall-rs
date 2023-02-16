@@ -1286,6 +1286,7 @@ dependencies = [
  "dot",
  "ethers",
  "fancy-regex",
+ "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
  "indicatif",
@@ -1295,6 +1296,17 @@ dependencies = [
  "serde_json",
  "strsim",
  "tokio",
+]
+
+[[package]]
+name = "heimdall-cache"
+version = "0.3.2"
+dependencies = [
+ "clap",
+ "clap-verbosity-flag",
+ "heimdall-common",
+ "serde",
+ "toml",
 ]
 
 [[package]]
