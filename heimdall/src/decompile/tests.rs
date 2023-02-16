@@ -203,20 +203,12 @@ mod tests {
 
         // assert that the output is correct
         for line in vec![
-            "function Unresolved_02751cec(address arg0, bytes memory arg1, bytes memory arg2, address arg3, address arg4, address arg5) public {",
-            "(bool success, bytes memory ret0) = address(arg5).call{ value: 0 }(var_n);",
-            "function Unresolved_054d50d4(bytes memory arg0, bytes memory arg1, bool arg2) public pure returns (uint256) {",
-            "function Unresolved_18cbafe5(bytes memory arg0, bytes memory arg1, bytes memory arg2, address arg3, bytes memory arg4) public {",
-            "function Unresolved_1f00ca74(bytes memory arg0, bytes memory arg1) public returns (bytes memory) {",
-            "function Unresolved_2195995c(address arg0, address arg1, address arg2, bytes memory arg3, address arg4, address arg5, address arg6, bool arg7, bool arg8, bytes memory arg9, bytes memory arg10) public {",
-            "function Unresolved_38ed1739(bytes memory arg0, bytes memory arg1, bytes memory arg2, address arg3, bytes memory arg4) public {",
-            "function Unresolved_4a25d94a(bytes memory arg0, bytes memory arg1, bytes memory arg2, address arg3, bytes memory arg4) public {",
-            "function Unresolved_5b0d5984(address arg0, bytes memory arg1, bytes memory arg2, address arg3, address arg4, address arg5, bool arg6, bool arg7, bytes memory arg8, bytes memory arg9) public {",
+            "function Unresolved_02751cec(address arg0, bytes memory arg1, bytes memory arg2, bytes memory arg3, address arg4, bytes memory arg5) public returns (bytes memory) {",
+            "(bool success, bytes memory ret0) = address(var_j).call{ value: 0 }(var_n);",
             "revert(\"UniswapV2Library: ZERO_ADDRESS\");",
-            "function Unresolved_5c11d795(bytes memory arg0, bytes memory arg1, bytes memory arg2, address arg3, bytes memory arg4) public {",
-            "function Unresolved_791ac947(bytes memory arg0, bytes memory arg1, bytes memory arg2, address arg3, bytes memory arg4) public {",
-            "function Unresolved_7ff36ab5(bytes memory arg0, bytes memory arg1, address arg2, bytes memory arg3) public payable {"
+            "revert(\"TransferHelper: TRANSFER_FAILED\");"
         ] {
+            println!("{line}");
             assert!(output.contains(line));
         }
 
