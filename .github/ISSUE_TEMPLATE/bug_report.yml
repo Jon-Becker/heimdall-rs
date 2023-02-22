@@ -19,7 +19,14 @@ body:
         - Installing heimdall
         - Heimdall CLI
         - Heimdall Config
-        - Heimdall Modules
+        - Decompile Module
+        - Decompile Library
+        - Decode Module
+        - Decode Library
+        - Disassemble Module
+        - Disassemble Library
+        - CFG Module
+        - CFG Library
     validations:
       required: true
   - type: textarea
@@ -43,6 +50,12 @@ body:
         - macOS (Intel)
         - macOS (Apple Silicon)
         - Linux
+  - type: textarea
+    attributes:
+      label: Command used to produce the issue
+      description: For example, `heimdall decompile 0xc02...`
+    validations:
+      required: false
   - type: textarea
     attributes:
       label: Describe the issue you are facing
