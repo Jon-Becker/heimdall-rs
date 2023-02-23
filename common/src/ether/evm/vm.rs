@@ -4,7 +4,7 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-use ethers::{abi::AbiEncode, prelude::U256, utils::keccak256};
+use ethers::{abi::AbiEncode, prelude::U256, utils::keccak256, types::I256};
 
 use crate::{
     ether::evm::opcodes::{Opcode, WrappedInput, WrappedOpcode},
@@ -204,20 +204,22 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let result = a.value.overflowing_add(b.value).0;
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(a.value.overflowing_add(b.value).0), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
                     self.stack.push(
-                        a.value.overflowing_add(b.value).0.encode_hex().as_str(),
+                        result.encode_hex().as_str(),
                         simplified_operation
                     );
                 }
@@ -227,20 +229,22 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let result = a.value.overflowing_mul(b.value).0;
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(a.value.overflowing_mul(b.value).0), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
                     self.stack.push(
-                        a.value.overflowing_mul(b.value).0.encode_hex().as_str(),
+                        result.encode_hex().as_str(),
                         simplified_operation
                     );
                 }
@@ -250,20 +254,22 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let result = a.value.overflowing_sub(b.value).0;
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(a.value.overflowing_sub(b.value).0), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
                     self.stack.push(
-                        a.value.overflowing_sub(b.value).0.encode_hex().as_str(),
+                        result.encode_hex().as_str(),
                         simplified_operation
                     );
                 }
@@ -273,37 +279,27 @@ impl VM {
                     let numerator = self.stack.pop();
                     let denominator = self.stack.pop();
 
+                    let mut result = U256::zero();
+                    if !denominator.value.is_zero() {
+                        result = numerator.value.div(denominator.value);
+                    }
+
                     let simplified_operation = 
                         match numerator.operation.opcode.name.starts_with("PUSH") 
                         &&    denominator.operation.opcode.name.starts_with("PUSH") {
                             true => {
-                                if denominator.value == U256::from(0) {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(U256::from(0)), ],
-                                    )
-                                } else {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(numerator.value.div(denominator.value)), ],
-                                    )
-                                }
-                                
+                                WrappedOpcode::new(
+                                    0x7f,
+                                    vec![ WrappedInput::Raw(result), ],
+                                )
                             },
                             false => operation.clone()
                         };
 
-                    if denominator.value == U256::from(0) {
-                        self.stack.push(
-                            U256::from(0).encode_hex().as_str(),
-                            simplified_operation
-                        );
-                    } else {
-                        self.stack.push(
-                            numerator.value.div(denominator.value).encode_hex().as_str(),
-                            simplified_operation
-                        );
-                    }
+                    self.stack.push(
+                        result.encode_hex().as_str(),
+                        simplified_operation
+                    );
                 }
 
                 // SDIV
@@ -311,37 +307,27 @@ impl VM {
                     let numerator = self.stack.pop();
                     let denominator = self.stack.pop();
 
+                    let mut result = I256::zero();
+                    if !denominator.value.is_zero() {
+                        result = sign_uint(numerator.value).div(sign_uint(denominator.value));
+                    }
+
                     let simplified_operation = 
                         match numerator.operation.opcode.name.starts_with("PUSH") 
                         &&    denominator.operation.opcode.name.starts_with("PUSH") {
                             true => {
-                                if denominator.value == U256::from(0) {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(U256::from(0)), ],
-                                    )
-                                } else {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(U256::from_str(sign_uint(numerator.value).div(sign_uint(denominator.value)).encode_hex().as_str()).unwrap()), ],
-                                    )
-                                }
-                                
+                                WrappedOpcode::new(
+                                    0x7f,
+                                    vec![ WrappedInput::Raw(U256::from_str(result.encode_hex().as_str()).unwrap()), ],
+                                )
                             },
                             false => operation.clone()
                         };
 
-                    if denominator.value == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str(), simplified_operation);
-                    } else {
-                        self.stack.push(
-                            sign_uint(numerator.value)
-                                .div(sign_uint(denominator.value))
-                                .encode_hex()
-                                .as_str(),
-                            simplified_operation
-                        );
-                    }
+                    self.stack.push(
+                        result.encode_hex().as_str(),
+                        simplified_operation
+                    );
                 }
 
                 // MOD
@@ -349,31 +335,27 @@ impl VM {
                     let a = self.stack.pop();
                     let modulus = self.stack.pop();
 
+                    let mut result = U256::zero();
+                    if !modulus.value.is_zero() {
+                        result = a.value.rem(modulus.value);
+                    }
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    modulus.operation.opcode.name.starts_with("PUSH") {
                             true => {
-                                if modulus.value == U256::from(0) {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(U256::from(0)), ],
-                                    )
-                                } else {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(a.value.rem(modulus.value)), ],
-                                    )
-                                }
-                                
+                                WrappedOpcode::new(
+                                    0x7f,
+                                    vec![ WrappedInput::Raw(result), ],
+                                )
                             },
                             false => operation.clone()
                         };
 
-                    if modulus.value == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str(), simplified_operation);
-                    } else {
-                        self.stack.push(a.value.rem(modulus.value).encode_hex().as_str(), simplified_operation);
-                    }
+                        self.stack.push(
+                            result.encode_hex().as_str(),
+                            simplified_operation
+                        );
                 }
 
                 // SMOD
@@ -381,34 +363,27 @@ impl VM {
                     let a = self.stack.pop();
                     let modulus = self.stack.pop();
 
+                    let mut result = I256::zero();
+                    if !modulus.value.is_zero() {
+                        result = sign_uint(a.value).rem(sign_uint(modulus.value));
+                    }
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    modulus.operation.opcode.name.starts_with("PUSH") {
                             true => {
-                                if modulus.value == U256::from(0) {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(U256::from(0)), ],
-                                    )
-                                } else {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(U256::from_str(sign_uint(a.value).rem(sign_uint(modulus.value)).encode_hex().as_str()).unwrap()), ],
-                                    )
-                                }
-                                
+                                WrappedOpcode::new(
+                                    0x7f,
+                                    vec![ WrappedInput::Raw(U256::from_str(result.encode_hex().as_str()).unwrap()), ],
+                                )
                             },
                             false => operation.clone()
                         };
 
-                    if modulus.value == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str(), simplified_operation);
-                    } else {
-                        self.stack.push(
-                            sign_uint(a.value).rem(sign_uint(modulus.value)).encode_hex().as_str(),
-                            simplified_operation
-                        );
-                    }
+                    self.stack.push(
+                        result.encode_hex().as_str(),
+                        simplified_operation
+                    );
                 }
 
                 // ADDMOD
@@ -417,34 +392,27 @@ impl VM {
                     let b = self.stack.pop();
                     let modulus = self.stack.pop();
 
+                    let mut result = U256::zero();
+                    if !modulus.value.is_zero() {
+                        result = a.value.overflowing_add(b.value).0.rem(modulus.value);
+                    }
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    modulus.operation.opcode.name.starts_with("PUSH") {
                             true => {
-                                if modulus.value == U256::from(0) {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(U256::from(0)), ],
-                                    )
-                                } else {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(a.value.overflowing_add(b.value).0.rem(modulus.value)), ],
-                                    )
-                                }
-                                
+                                WrappedOpcode::new(
+                                    0x7f,
+                                    vec![ WrappedInput::Raw(result), ],
+                                )
                             },
                             false => operation.clone()
                         };
 
-                    if modulus.value == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str(), simplified_operation);
-                    } else {
-                        self.stack.push(
-                            a.value.overflowing_add(b.value).0.rem(modulus.value).encode_hex().as_str(),
-                            simplified_operation
-                        );
-                    }
+                    self.stack.push(
+                        result.encode_hex().as_str(),
+                        simplified_operation
+                    );
                 }
 
                 // MULMOD
@@ -453,34 +421,27 @@ impl VM {
                     let b = self.stack.pop();
                     let modulus = self.stack.pop();
 
+                    let mut result = U256::zero();
+                    if !modulus.value.is_zero() {
+                        result = a.value.overflowing_mul(b.value).0.rem(modulus.value);
+                    }
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    modulus.operation.opcode.name.starts_with("PUSH") {
                             true => {
-                                if modulus.value == U256::from(0) {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(U256::from(0)), ],
-                                    )
-                                } else {
-                                    WrappedOpcode::new(
-                                        0x7f,
-                                        vec![ WrappedInput::Raw(a.value.overflowing_mul(b.value).0.rem(modulus.value)), ],
-                                    )
-                                }
-                                
+                                WrappedOpcode::new(
+                                    0x7f,
+                                    vec![ WrappedInput::Raw(result), ],
+                                )
                             },
                             false => operation.clone()
                         };
 
-                    if modulus.value == U256::from(0) {
-                        self.stack.push(U256::from(0).encode_hex().as_str(), simplified_operation);
-                    } else {
-                        self.stack.push(
-                            a.value.overflowing_mul(b.value).0.rem(modulus.value).encode_hex().as_str(),
-                            simplified_operation
-                        );
-                    }
+                    self.stack.push(
+                        result.encode_hex().as_str(),
+                        simplified_operation
+                    );
                 }
 
                 // EXP
@@ -488,20 +449,22 @@ impl VM {
                     let a = self.stack.pop();
                     let exponent = self.stack.pop();
 
+                    let result = a.value.overflowing_pow(exponent.value).0;
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    exponent.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(a.value.overflowing_pow(exponent.value).0), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
                     self.stack.push(
-                        a.value.overflowing_pow(exponent.value).0.encode_hex().as_str(),
+                        result.encode_hex().as_str(),
                         simplified_operation
                     );
                 }
@@ -515,12 +478,10 @@ impl VM {
                     let sign_bit = U256::from(1u32) << t;
 
                     // (b & sign_bit - 1) - (b & sign_bit)
+                    let result = (b & (sign_bit.overflowing_sub(U256::from(1u32)).0)).overflowing_sub(b & sign_bit).0;
+
                     self.stack.push(
-                        ((b & (sign_bit.overflowing_sub(U256::from(1u32)).0))
-                            .overflowing_sub(b & sign_bit)
-                            .0)
-                            .encode_hex()
-                            .as_str(),
+                        result.encode_hex().as_str(),
                         operation.clone(),
                     )
                 }
@@ -595,19 +556,21 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let result = a.value & b.value;
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(a.value & b.value), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
-                    self.stack.push((a.value & b.value).encode_hex().as_str(), simplified_operation);
+                    self.stack.push(result.encode_hex().as_str(), simplified_operation);
                 }
 
                 // OR
@@ -615,19 +578,21 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let result = a.value | b.value;
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(a.value | b.value), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
-                    self.stack.push((a.value | b.value).encode_hex().as_str(), simplified_operation);
+                    self.stack.push(result.encode_hex().as_str(), simplified_operation);
                 }
 
                 // XOR
@@ -635,37 +600,41 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let result = a.value ^ b.value;
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(a.value ^ b.value), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
-                    self.stack.push((a.value ^ b.value).encode_hex().as_str(), simplified_operation);
+                    self.stack.push(result.encode_hex().as_str(), simplified_operation);
                 }
 
                 // NOT
                 if op == 0x19 {
                     let a = self.stack.pop();
 
+                    let result = !a.value;
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(!a.value), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
-                    self.stack.push((!a.value).encode_hex().as_str(), simplified_operation);
+                    self.stack.push((result).encode_hex().as_str(), simplified_operation);
                 }
 
                 // BYTE
@@ -676,11 +645,10 @@ impl VM {
                     match b >= U256::from(32u32) {
                         true => self.stack.push("0x00", operation.clone()),
                         false => {
+                            let result = a / (U256::from(256u32).pow(U256::from(31u32) - b)) % U256::from(256u32);
+
                             self.stack.push(
-                                ((a / (U256::from(256u32).pow(U256::from(31u32) - b)))
-                                    % U256::from(256u32))
-                                .encode_hex()
-                                .as_str(),
+                                result.encode_hex().as_str(),
                                 operation.clone(),
                             );
                         }
@@ -692,19 +660,24 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let result = b.value.shl(a.value);
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(b.value.shl(a.value)), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
-                    self.stack.push(b.value.shl(a.value).encode_hex().as_str(), simplified_operation);
+                    self.stack.push(
+                        result.encode_hex().as_str(),
+                        simplified_operation
+                    );
                 }
 
                 // SHR
@@ -712,19 +685,24 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let mut result = U256::zero();
+                    if !b.value.is_zero() {
+                        result = b.value.shr(a.value);
+                    }
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(b.value.shl(a.value)), ],
+                                    vec![ WrappedInput::Raw(result), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
-                    self.stack.push(b.value.shr(a.value).encode_hex().as_str(), simplified_operation);
+                    self.stack.push(result.encode_hex().as_str(), simplified_operation);
                 }
 
                 // SAR
@@ -732,20 +710,25 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    let mut result = I256::zero();
+                    if !b.value.is_zero() {
+                        result = sign_uint(b.value).shr(sign_uint(a.value));
+                    }
+
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
                         &&    b.operation.opcode.name.starts_with("PUSH") {
                             true => {
                                 WrappedOpcode::new(
                                     0x7f,
-                                    vec![ WrappedInput::Raw(U256::from_str(sign_uint(b.value).shr(sign_uint(a.value)).encode_hex().as_str()).unwrap()), ],
+                                    vec![ WrappedInput::Raw(U256::from_str(result.encode_hex().as_str()).unwrap()), ],
                                 )
                             },
                             false => operation.clone()
                         };
 
                     self.stack.push(
-                        sign_uint(b.value).shr(sign_uint(a.value)).encode_hex().as_str(),
+                        result.encode_hex().as_str(),
                         simplified_operation
                     );
                 }
@@ -788,10 +771,10 @@ impl VM {
                     };
 
                     let data = self.memory.read(offset, size);
+                    let result = keccak256(decode_hex(data.as_str()).unwrap());
+
                     self.stack.push(
-                        keccak256(decode_hex(data.as_str()).unwrap())
-                            .encode_hex()
-                            .as_str(),
+                        result.encode_hex().as_str(),
                         operation.clone(),
                     );
                 }
@@ -855,16 +838,17 @@ impl VM {
                         }
 
                         value.push_str(&"00".repeat(32 - value.len() / 2));
+                        let result = U256::from_str(&value).unwrap();
+
                         self.stack.push(
-                            U256::from_str(&value).unwrap().encode_hex().as_str(),
+                            result.encode_hex().as_str(),
                             operation.clone(),
                         );
                     } else {
+                        let result = U256::from_str(&self.calldata[i * 2..(i + 32) * 2]).unwrap();
+
                         self.stack.push(
-                            U256::from_str(&self.calldata[i * 2..(i + 32) * 2])
-                                .unwrap()
-                                .encode_hex()
-                                .as_str(),
+                            result.encode_hex().as_str(),
                             operation.clone(),
                         );
                     }
@@ -872,10 +856,10 @@ impl VM {
 
                 // CALLDATASIZE
                 if op == 0x36 {
+                    let result = U256::from(&self.calldata.len() / 2usize);
+
                     self.stack.push(
-                        U256::from(&self.calldata.len() / 2usize)
-                            .encode_hex()
-                            .as_str(),
+                        result.encode_hex().as_str(),
                         operation.clone(),
                     );
                 }
@@ -953,10 +937,10 @@ impl VM {
 
                 // CODESIZE
                 if op == 0x38 {
+                    let result = U256::from(&self.bytecode.len() / 2usize) - U256::from(1);
+
                     self.stack.push(
-                        U256::from(&self.bytecode.len() / 2usize)
-                            .encode_hex()
-                            .as_str(),
+                        result.encode_hex().as_str(),
                         operation.clone(),
                     );
                 }
@@ -1190,11 +1174,10 @@ impl VM {
                         }
                     };
 
+                    let result = U256::from_str(self.memory.read(i, 32).as_str()).unwrap();
+
                     self.stack.push(
-                        U256::from_str(self.memory.read(i, 32).as_str())
-                            .unwrap()
-                            .encode_hex()
-                            .as_str(),
+                        result.encode_hex().as_str(),
                         operation.clone(),
                     );
                 }
@@ -1253,7 +1236,10 @@ impl VM {
                 if op == 0x54 {
                     let key = self.stack.pop().value.encode_hex().replace("0x", "");
 
-                    self.stack.push(&self.storage.load(key), operation.clone())
+                    self.stack.push(
+                        &self.storage.load(key),
+                        operation.clone()
+                    )
                 }
 
                 // SSTORE
@@ -1286,10 +1272,8 @@ impl VM {
                     };
 
                     // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                    if (((pc + 1) * 2 + 2) as usize <= self.bytecode.len())
-                        && (self.bytecode[((pc + 1) * 2) as usize..((pc + 1) * 2 + 2) as usize]
-                            .to_string()
-                            != "5b")
+                    if (((pc + 1) * 2 + 2) as usize <= self.bytecode.len()) &&
+                       (self.bytecode[((pc + 1) * 2) as usize..((pc + 1) * 2 + 2) as usize].to_string() != "5b")
                     {
                         self.exit(790, "0x");
                         return Instruction {
@@ -1331,10 +1315,8 @@ impl VM {
                     if !condition.eq(&U256::from(0u8)) {
                         
                         // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                        if (((pc + 1) * 2 + 2) as usize <= self.bytecode.len())
-                            && (self.bytecode[((pc + 1) * 2) as usize..((pc + 1) * 2 + 2) as usize]
-                                .to_string()
-                                != "5b")
+                        if (((pc + 1) * 2 + 2) as usize <= self.bytecode.len()) &&
+                           (self.bytecode[((pc + 1) * 2) as usize..((pc + 1) * 2 + 2) as usize].to_string() != "5b")
                         {
                             self.exit(790, "0x");
                             return Instruction {
