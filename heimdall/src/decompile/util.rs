@@ -12,7 +12,7 @@ use heimdall_common::{
             opcodes::WrappedOpcode,
             vm::{State, VM}, stack::{StackFrame}
         }, signatures::{ResolvedFunction, ResolvedError, ResolvedLog},
-    },
+    }, constants::{MEMORY_REGEX, STORAGE_REGEX},
 };
 
 #[derive(Clone, Debug)]
@@ -330,7 +330,6 @@ pub fn recursive_map(
             // break out of loops
             match handled_jumps.get(&jump_frame) {
                 Some(historical_stacks) => {
-
                     if historical_stacks.iter().any(|stack| {
 
                         // compare stacks
@@ -345,7 +344,39 @@ pub fn recursive_map(
                     
                             // check if all stack diff values are in the jump condition
                             let jump_condition = state.last_instruction.input_operations[1].solidify();
-                            return stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify()))
+                            
+                            // if the stack diff is within the jump condition, its likely that we are in a loop
+                            if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
+                                return true;
+                            }
+                            
+                            // if a memory access in the jump condition is modified by the stack diff, its likely that we are in a loop
+                            let mut memory_accesses = MEMORY_REGEX.find_iter(&jump_condition);
+                            if stack_diff.iter().any(|frame| {
+                                return memory_accesses.any(|_match| {
+                                    if _match.is_err() { return false; }
+                                    let memory_access = _match.unwrap();
+                                    let slice = &jump_condition[memory_access.start()..memory_access.end()];
+                                    return frame.operation.solidify().contains(slice);
+                                })
+                            }) {
+                                return true;
+                            }
+
+                            // if a storage access in the jump condition is modified by the stack diff, its likely that we are in a loop
+                            let mut storage_accesses = STORAGE_REGEX.find_iter(&jump_condition);
+                            if stack_diff.iter().any(|frame| {
+                                return storage_accesses.any(|_match| {
+                                    if _match.is_err() { return false; }
+                                    let storage_access = _match.unwrap();
+                                    let slice = &jump_condition[storage_access.start()..storage_access.end()];
+                                    return frame.operation.solidify().contains(slice);
+                                })
+                            }) {
+                                return true;
+                            }
+
+                            return false
                         }
                         else {
                             return true
@@ -355,7 +386,6 @@ pub fn recursive_map(
                         return vm_trace;
                     }
                     else {
-
                         // this key exists, but the stack is different, so the jump is new
                         let historical_stacks: &mut Vec<VecDeque<StackFrame>> = &mut historical_stacks.clone();
                         historical_stacks.push(vm.stack.stack.clone());
