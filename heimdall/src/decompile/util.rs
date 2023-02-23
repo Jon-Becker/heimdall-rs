@@ -327,6 +327,17 @@ pub fn recursive_map(
                 state.last_instruction.inputs[1] == U256::from(0)
             );
 
+            // if the stack has over 16 items of the same source, it's probably a loop
+            if vm.stack.size() > 16 {
+               for frame in vm.stack.stack.iter() {
+                    let solidified_frame_source = frame.operation.solidify();
+                    if vm.stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >= 16 {
+                        vm_trace.loop_detected = true;
+                        return vm_trace;
+                    }
+               }
+            }
+
             // break out of loops
             match handled_jumps.get(&jump_frame) {
                 Some(historical_stacks) => {
@@ -339,6 +350,16 @@ pub fn recursive_map(
                                 stack_diff.push(frame);
                             }
                         }
+
+                        // println!("\nStack: ");
+                        // for (i, frame) in stack.iter().enumerate() {
+                        //     println!("  {} {} {}", i, frame.value, frame.operation.solidify());
+                        // }
+
+                        // println!("Stack Diff: ");
+                        // for (i, frame) in stack_diff.iter().enumerate() {
+                        //     println!("  {} {} {}", i, frame.value, frame.operation.solidify());
+                        // }
 
                         if !stack_diff.is_empty() {
                     
