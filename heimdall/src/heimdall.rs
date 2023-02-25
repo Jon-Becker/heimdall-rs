@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 
 use colored::Colorize;
 use heimdall_config::{config, get_config, ConfigArgs};
+use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{ether::evm::disassemble::*, io::{logging::Logger}};
 use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
@@ -47,6 +48,9 @@ pub enum Subcommands {
 
     #[clap(name = "config", about = "Display and edit the current configuration")]
     Config(ConfigArgs),
+
+    #[clap(name = "cache", about = "Manage heimdall-rs' cached files")]
+    Cache(CacheArgs),
 }
 
 fn main() {
@@ -70,6 +74,7 @@ fn main() {
     let configuration = get_config();
     match args.sub {
 
+
         Subcommands::Disassemble(mut cmd) => {
             
             // if the user has not specified a rpc url, use the default
@@ -82,6 +87,7 @@ fn main() {
 
             disassemble(cmd);
         }
+
 
         Subcommands::Decompile(mut cmd) => {
             
@@ -96,6 +102,7 @@ fn main() {
             decompile(cmd);
         }
 
+
         Subcommands::Decode(mut cmd) => {
             
             // if the user has not specified a rpc url, use the default
@@ -108,6 +115,7 @@ fn main() {
 
             decode(cmd);
         }
+
 
         Subcommands::CFG(mut cmd) => {
             
@@ -122,9 +130,16 @@ fn main() {
             cfg(cmd);
         }
 
+
         Subcommands::Config(cmd) => {
             config(cmd);
         }
+
+
+        Subcommands::Cache(cmd) => {
+            _ = cache(cmd);
+        }
         
+
     }
 }

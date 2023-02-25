@@ -1,4 +1,5 @@
 use ethers::abi::Token;
+use heimdall_cache::{store_cache, read_cache};
 
 use crate::utils::{http::get_json_from_url, strings::replace_last};
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,17 @@ pub struct ResolvedLog {
 }
 
 pub fn resolve_function_signature(signature: &String) -> Option<Vec<ResolvedFunction>> {
+
+    // get cached results
+    match read_cache::<Vec<ResolvedFunction>>(&format!("selector.{}", signature)) {
+        Some(cached_results) => {
+            match cached_results.len() {
+                0 => return None,
+                _ => return Some(cached_results)
+            }
+        },
+        None => {}
+    };
 
     // get function possibilities from 4byte
     let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?function=0x{}", &signature), 3) {
@@ -74,6 +86,9 @@ pub fn resolve_function_signature(signature: &String) -> Option<Vec<ResolvedFunc
 
     }
 
+    // cache the results
+    store_cache(&format!("selector.{}", signature), signature_list.clone(), None);
+
     return match signature_list.len() {
         0 => None,
         _ => Some(signature_list)
@@ -82,6 +97,17 @@ pub fn resolve_function_signature(signature: &String) -> Option<Vec<ResolvedFunc
 }
 
 pub fn resolve_error_signature(signature: &String) -> Option<Vec<ResolvedError>> {
+
+    // get cached results
+    match read_cache::<Vec<ResolvedError>>(&format!("selector.{}", signature)) {
+        Some(cached_results) => {
+            match cached_results.len() {
+                0 => return None,
+                _ => return Some(cached_results)
+            }
+        },
+        None => {}
+    };
 
     // get function possibilities from 4byte
     let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?function=0x{}", &signature), 3) {
@@ -129,6 +155,9 @@ pub fn resolve_error_signature(signature: &String) -> Option<Vec<ResolvedError>>
 
     }
 
+    // cache the results
+    store_cache(&format!("selector.{}", signature), signature_list.clone(), None);
+
     return match signature_list.len() {
         0 => None,
         _ => Some(signature_list)
@@ -138,6 +167,17 @@ pub fn resolve_error_signature(signature: &String) -> Option<Vec<ResolvedError>>
 
 
 pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
+
+    // get cached results
+    match read_cache::<Vec<ResolvedLog>>(&format!("selector.{}", signature)) {
+        Some(cached_results) => {
+            match cached_results.len() {
+                0 => return None,
+                _ => return Some(cached_results)
+            }
+        },
+        None => {}
+    };
 
     // get function possibilities from 4byte
     let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?event=0x{}", &signature), 3) {
@@ -184,6 +224,9 @@ pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
         });
 
     }
+    
+    // cache the results
+    store_cache(&format!("selector.{}", signature), signature_list.clone(), None);
 
     return match signature_list.len() {
         0 => None,

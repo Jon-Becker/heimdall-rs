@@ -1286,6 +1286,7 @@ dependencies = [
  "dot",
  "ethers",
  "fancy-regex",
+ "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
  "indicatif",
@@ -1298,6 +1299,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "heimdall-cache"
+version = "0.3.2"
+dependencies = [
+ "bincode",
+ "clap",
+ "clap-verbosity-flag",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "heimdall-common"
 version = "0.3.2"
 dependencies = [
@@ -1306,6 +1318,7 @@ dependencies = [
  "colored",
  "ethers",
  "fancy-regex",
+ "heimdall-cache",
  "indicatif",
  "lazy_static",
  "reqwest",
