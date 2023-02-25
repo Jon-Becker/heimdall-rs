@@ -6,6 +6,8 @@ use ethers::{
     core::types::{Address},
     providers::{Middleware, Provider, Http},
 };
+use heimdall_cache::read_cache;
+use heimdall_cache::store_cache;
 use crate::{
     constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::*, file::* },
@@ -77,10 +79,19 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .unwrap();
+            .unwrap();    
 
         // We are disassembling a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
+
+            // check the cache for a matching address
+            match read_cache(&format!("contract.{}", &args.target)) {
+                Some(bytecode) => {
+                    logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
+                    return bytecode;
+                },
+                None => {}
+            }
 
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
@@ -114,6 +125,10 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
                     std::process::exit(1)
                 }
             };
+
+            // cache the results
+            store_cache(&format!("contract.{}", &args.target), bytecode_as_bytes.to_string().replacen("0x", "", 1), None);
+
             return bytecode_as_bytes.to_string().replacen("0x", "", 1);
         });
         

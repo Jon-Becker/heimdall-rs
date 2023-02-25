@@ -7,6 +7,8 @@ pub mod util;
 use std::env;
 use std::fs;
 use std::time::Duration;
+use heimdall_cache::read_cache;
+use heimdall_cache::store_cache;
 use indicatif::ProgressBar;
 
 use clap::{AppSettings, Parser};
@@ -125,6 +127,15 @@ pub fn cfg(args: CFGArgs) {
         // We are working with a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
 
+            // check the cache for a matching address
+            match read_cache(&format!("contract.{}", &args.target)) {
+                Some(bytecode) => {
+                    logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
+                    return bytecode;
+                },
+                None => {}
+            }
+
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
                 logger.error("fetching an on-chain contract requires an RPC provider. Use `heimdall cfg --help` for more information.");
@@ -157,6 +168,10 @@ pub fn cfg(args: CFGArgs) {
                     std::process::exit(1)
                 }
             };
+
+            // cache the results
+            store_cache(&format!("contract.{}", &args.target), bytecode_as_bytes.to_string().replacen("0x", "", 1), None);
+
             bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
 

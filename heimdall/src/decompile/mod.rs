@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::time::Duration;
+use heimdall_cache::read_cache;
+use heimdall_cache::store_cache;
 use indicatif::ProgressBar;
 
 use clap::{AppSettings, Parser};
@@ -127,6 +129,15 @@ pub fn decompile(args: DecompilerArgs) {
         // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
 
+            // check the cache for a matching address
+            match read_cache(&format!("contract.{}", &args.target)) {
+                Some(bytecode) => {
+                    logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
+                    return bytecode;
+                },
+                None => {}
+            }
+
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
                 logger.error("decompiling an on-chain contract requires an RPC provider. Use `heimdall decompile --help` for more information.");
@@ -159,6 +170,10 @@ pub fn decompile(args: DecompilerArgs) {
                     std::process::exit(1)
                 }
             };
+
+            // cache the results
+            store_cache(&format!("contract.{}", &args.target), bytecode_as_bytes.to_string().replacen("0x", "", 1), None);
+
             bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
 

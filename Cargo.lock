@@ -1302,9 +1302,9 @@ dependencies = [
 name = "heimdall-cache"
 version = "0.3.2"
 dependencies = [
+ "bincode",
  "clap",
  "clap-verbosity-flag",
- "heimdall-common",
  "serde",
  "toml",
 ]
@@ -1318,6 +1318,7 @@ dependencies = [
  "colored",
  "ethers",
  "fancy-regex",
+ "heimdall-cache",
  "indicatif",
  "lazy_static",
  "reqwest",

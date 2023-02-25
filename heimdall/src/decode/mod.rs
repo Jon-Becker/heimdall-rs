@@ -11,6 +11,7 @@ use ethers::{
     abi::{ParamType, decode as decode_abi, Function, StateMutability, Param, AbiEncode},
 };
 
+use heimdall_cache::{store_cache, read_cache};
 use heimdall_common::{
     io::logging::Logger,
     constants::TRANSACTION_HASH_REGEX,
@@ -64,6 +65,15 @@ pub fn decode(args: DecodeArgs) {
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
         calldata = rt.block_on(async {
 
+            // check the cache for a matching address
+            match read_cache(&format!("transaction.{}", &args.target)) {
+                Some(calldata) => {
+                    logger.debug(&format!("found cached calldata for '{}' .", &args.target));
+                    return calldata;
+                },
+                None => {}
+            }
+
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
                 logger.error("decoging an on-chain transaction requires an RPC provider. Use `heimdall decode --help` for more information.");
@@ -104,6 +114,9 @@ pub fn decode(args: DecodeArgs) {
                     std::process::exit(1)
                 }
             };
+
+            // cache the tx
+            store_cache(&format!("transaction.{}", &args.target), raw_transaction.input.to_string().replace("0x", ""), None);
 
             raw_transaction.input.to_string().replace("0x", "")
         });
@@ -276,6 +289,10 @@ pub fn decode(args: DecodeArgs) {
         trace.br(decode_call);
         for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
             let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
+            if decoded_inputs_as_message.is_empty() {
+                break;
+            }
+            
             if i == 0 {
                 decoded_inputs_as_message[0] = format!(
                     "input {}:{}{}",

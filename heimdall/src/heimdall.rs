@@ -137,7 +137,7 @@ fn main() {
 
 
         Subcommands::Cache(cmd) => {
-            cache(cmd);
+            _ = cache(cmd);
         }
         
 
