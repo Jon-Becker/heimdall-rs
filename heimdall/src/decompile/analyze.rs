@@ -36,10 +36,6 @@ impl VMTrace {
         let mut jumped_conditional: Option<String> = None;
         let mut revert_conditional: Option<String> = None;
 
-        // if self.loop_detected {
-        //     function.logic.push("// loop detected".to_owned());
-        // }
-
         // perform analysis on the operations of the current VMTrace branch
         for operation in &self.operations {
             let instruction = operation.last_instruction.clone();

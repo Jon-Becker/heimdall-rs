@@ -13,7 +13,7 @@ curl https://sh.rustup.rs -sSf | sh
 Heimdall's update and installation manager, `bifrost`, can be installed using the following command:
 
 ```bash
-curl -L https://raw.githubusercontent.com/Jon-Becker/heimdall-rs/main/bifrost/install | bash
+curl -L http://get.heimdall.rs | bash
 ```
 
 Alternatively, you can install through GitHub directly using the following command:
