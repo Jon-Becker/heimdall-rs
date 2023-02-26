@@ -10,7 +10,7 @@ use heimdall_common::{
         evm::{
             vm::{State, VM}, stack::StackFrame
         },
-    },
+    }, constants::{STORAGE_REGEX, MEMORY_REGEX},
 };
 
 #[derive(Clone, Debug)]
@@ -159,7 +159,7 @@ pub fn map_contract(
 pub fn recursive_map(
     evm: &VM,
     branch_count: &mut u32,
-    handled_jumps: &mut HashMap<(u128, U256, usize, bool), VecDeque<StackFrame>>,
+    handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>,
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -170,7 +170,6 @@ pub fn recursive_map(
         children: Vec::new(),
         loop_detected: false,
     };
-
 
     // step through the bytecode until we find a JUMPI instruction
     while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
@@ -187,36 +186,96 @@ pub fn recursive_map(
                 state.last_instruction.inputs[1] == U256::from(0)
             );
 
+            // if the stack has over 16 items of the same source, it's probably a loop
+            if vm.stack.size() > 16 {
+               for frame in vm.stack.stack.iter() {
+                    let solidified_frame_source = frame.operation.solidify();
+                    if vm.stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >= 16 {
+                        vm_trace.loop_detected = true;
+                        return vm_trace;
+                    }
+               }
+            }
+
             // break out of loops
             match handled_jumps.get(&jump_frame) {
-                Some(stack) => {
-                    
-                    // compare stacks
-                    let mut stack_diff = Vec::new();
-                    for (i, frame) in vm.stack.stack.iter().enumerate() {
-                        if frame != &stack[i] {
-                            stack_diff.push(frame);
+                Some(historical_stacks) => {
+                    if historical_stacks.iter().any(|stack| {
+
+                        // compare stacks
+                        let mut stack_diff = Vec::new();
+                        for (i, frame) in vm.stack.stack.iter().enumerate() {
+                            if frame != &stack[i] {
+                                stack_diff.push(frame);
+                            }
                         }
-                    }
 
-                    if !stack_diff.is_empty() {
+                        // println!("\nStack: ");
+                        // for (i, frame) in stack.iter().enumerate() {
+                        //     println!("  {} {} {}", i, frame.value, frame.operation.solidify());
+                        // }
+
+                        // println!("Stack Diff: ");
+                        // for (i, frame) in stack_diff.iter().enumerate() {
+                        //     println!("  {} {} {}", i, frame.value, frame.operation.solidify());
+                        // }
+
+                        if !stack_diff.is_empty() {
                     
-                        // check if all stack diff values are in the jump condition
-                        let jump_condition = state.last_instruction.input_operations[1].solidify();
-                        if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
+                            // check if all stack diff values are in the jump condition
+                            let jump_condition = state.last_instruction.input_operations[1].solidify();
+                            
+                            // if the stack diff is within the jump condition, its likely that we are in a loop
+                            if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
+                                return true;
+                            }
+                            
+                            // if a memory access in the jump condition is modified by the stack diff, its likely that we are in a loop
+                            let mut memory_accesses = MEMORY_REGEX.find_iter(&jump_condition);
+                            if stack_diff.iter().any(|frame| {
+                                return memory_accesses.any(|_match| {
+                                    if _match.is_err() { return false; }
+                                    let memory_access = _match.unwrap();
+                                    let slice = &jump_condition[memory_access.start()..memory_access.end()];
+                                    return frame.operation.solidify().contains(slice);
+                                })
+                            }) {
+                                return true;
+                            }
 
-                            vm_trace.loop_detected = true;
-                            break;
+                            // if a storage access in the jump condition is modified by the stack diff, its likely that we are in a loop
+                            let mut storage_accesses = STORAGE_REGEX.find_iter(&jump_condition);
+                            if stack_diff.iter().any(|frame| {
+                                return storage_accesses.any(|_match| {
+                                    if _match.is_err() { return false; }
+                                    let storage_access = _match.unwrap();
+                                    let slice = &jump_condition[storage_access.start()..storage_access.end()];
+                                    return frame.operation.solidify().contains(slice);
+                                })
+                            }) {
+                                return true;
+                            }
+
+                            return false
                         }
+                        else {
+                            return true
+                        }
+                    }) {
+                        vm_trace.loop_detected = true;
+                        return vm_trace;
                     }
-
-                    // this key exists, but the stack is different, so the jump is new
-                    handled_jumps.insert(jump_frame, vm.stack.stack.clone());
+                    else {
+                        // this key exists, but the stack is different, so the jump is new
+                        let historical_stacks: &mut Vec<VecDeque<StackFrame>> = &mut historical_stacks.clone();
+                        historical_stacks.push(vm.stack.stack.clone());
+                        handled_jumps.insert(jump_frame, historical_stacks.to_vec());
+                    }
                 },
                 None => {
                     
                     // this key doesnt exist, so the jump is new
-                    handled_jumps.insert(jump_frame, vm.stack.stack.clone());
+                    handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
                 }
             }
 
