@@ -241,7 +241,7 @@ pub fn build_output(
                         ABIStructure::Error(
                             ErrorABI {
                                 type_: "event".to_string(),
-                                name: format!("Event_{}", event_selector.get(0..8).unwrap()),
+                                name: format!("Event_{}", event_selector),
                                 inputs: Vec::new(),
                             }
                         )
