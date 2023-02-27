@@ -227,8 +227,8 @@ pub fn build_output(
                     }
 
                     abi.push(
-                        ABIStructure::Error(
-                            ErrorABI {
+                        ABIStructure::Event(
+                            EventABI {
                                 type_: "event".to_string(),
                                 name: resolved_event.name.clone(),
                                 inputs: inputs,
@@ -238,8 +238,8 @@ pub fn build_output(
                 },
                 None => {
                     abi.push(
-                        ABIStructure::Error(
-                            ErrorABI {
+                        ABIStructure::Event(
+                            EventABI {
                                 type_: "event".to_string(),
                                 name: format!("Event_{}", event_selector),
                                 inputs: Vec::new(),
