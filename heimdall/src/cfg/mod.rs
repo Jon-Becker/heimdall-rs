@@ -142,7 +142,7 @@ pub fn cfg(args: CFGArgs) {
                 std::process::exit(1);
             }
 
-            // create new provider
+            // create new provider#[warn(unused_imports)]
             let provider = match Provider::<Http>::try_from(&args.rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {

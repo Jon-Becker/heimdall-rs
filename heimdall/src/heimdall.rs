@@ -2,6 +2,7 @@ use std::{panic};
 use backtrace::Backtrace;
 
 mod cfg;
+mod dump;
 mod decode;
 mod decompile;
 
@@ -13,6 +14,7 @@ use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{ether::evm::disassemble::*, io::{logging::Logger}};
 use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
+use dump::{dump, DumpArgs};
 use cfg::{cfg, CFGArgs};
 
 #[derive(Debug, Parser)]
@@ -51,6 +53,9 @@ pub enum Subcommands {
 
     #[clap(name = "cache", about = "Manage heimdall-rs' cached files")]
     Cache(CacheArgs),
+
+    #[clap(name = "dump", about = "Dump the value of all storage slots accessed by a contract")]
+    Dump(DumpArgs),
 }
 
 fn main() {
@@ -130,6 +135,20 @@ fn main() {
             cfg(cmd);
         }
 
+        
+        Subcommands::Dump(mut cmd) => {
+
+            // if the user has not specified a rpc url, use the default
+            match cmd.rpc_url.as_str() {
+                "" => {
+                    cmd.rpc_url = configuration.rpc_url;
+                }
+                _ => {}
+            };
+
+            dump(cmd);
+        }
+
 
         Subcommands::Config(cmd) => {
             config(cmd);
@@ -139,7 +158,5 @@ fn main() {
         Subcommands::Cache(cmd) => {
             _ = cache(cmd);
         }
-        
-
     }
 }

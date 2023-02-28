@@ -5,7 +5,7 @@ use clap::{AppSettings, Parser};
 use serde::{Deserialize, Serialize};
 use heimdall_common::{
     io::{
-        file::{read_file, write_file},
+        file::{read_file, write_file, delete_path},
         logging::*,
     }
 };
@@ -14,6 +14,7 @@ use heimdall_common::{
 pub static DEFAULT_CONFIG: &str = "rpc_url = \"\"
 local_rpc_url = \"http://localhost:8545\"
 etherscan_api_key = \"\"
+transpose_api_key = \"\"
 ";
 
 
@@ -39,7 +40,8 @@ pub struct ConfigArgs {
 pub struct Configuration {
     pub rpc_url: String,
     pub local_rpc_url: String,
-    pub etherscan_api_key: String
+    pub etherscan_api_key: String,
+    pub transpose_api_key: String
 }
 
 
@@ -51,6 +53,24 @@ pub fn write_config(contents: String) {
             home.push("config.toml");
             
             let _ = write_file(&home.into_os_string().to_str().unwrap().to_string(), &contents);
+        }
+        None => {
+            let (logger, _) = Logger::new("");
+            logger.error("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?");
+            std::process::exit(1)
+        }
+    }
+}
+
+
+#[allow(deprecated)]
+pub fn delete_config() {
+    match home_dir() {
+        Some(mut home) => {
+            home.push(".bifrost");
+            home.push("config.toml");
+            
+            let _ = delete_path(&home.into_os_string().to_str().unwrap().to_string());
         }
         None => {
             let (logger, _) = Logger::new("");
@@ -93,7 +113,16 @@ pub fn get_config() -> Configuration {
     let contents = read_config();
 
     // toml parse from contents into Configuration
-    let config: Configuration = toml::from_str(&contents).unwrap();
+    let config: Configuration = match toml::from_str(&contents) {
+        Ok(config) => config,
+        Err(e) => {
+            let (logger, _) = Logger::new("");
+            logger.error(&format!("failed to parse config file: {}", e));
+            logger.info("regenerating config file...");
+            delete_config();
+            return get_config()
+        }
+    };
     config
 }
 
@@ -111,6 +140,9 @@ pub fn update_config(key: &String, value: &String) {
         }
         "etherscan_api_key" => {
             contents.etherscan_api_key = value.to_string();
+        }
+        "transpose_api_key" => {
+            contents.transpose_api_key = value.to_string();
         }
         _ => {
             let (logger, _) = Logger::new("");
