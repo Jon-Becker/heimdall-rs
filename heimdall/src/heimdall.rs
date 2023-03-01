@@ -146,6 +146,14 @@ fn main() {
                 _ => {}
             };
 
+            // if the user has not specified a transpose api key, use the default
+            match cmd.transpose_api_key.as_str() {
+                "" => {
+                    cmd.transpose_api_key = configuration.transpose_api_key;
+                }
+                _ => {}
+            };
+            
             dump(cmd);
         }
 

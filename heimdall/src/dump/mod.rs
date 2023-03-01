@@ -1,22 +1,22 @@
 mod tests;
+mod tui_views;
 
-use std::env;
-use std::fs;
-use heimdall_cache::read_cache;
-use heimdall_cache::store_cache;
-
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+use std::{io};
 use clap::{AppSettings, Parser};
-use ethers::{
-    core::types::{Address},
-    providers::{Middleware, Provider, Http},
-};
+use crossterm::event::{EnableMouseCapture, DisableMouseCapture};
+use crossterm::execute;
+use crossterm::terminal::{enable_raw_mode, EnterAlternateScreen, disable_raw_mode, LeaveAlternateScreen};
+use ethers::types::U256;
+use heimdall_common::resources::transpose::get_transaction_list;
 use heimdall_common::{
-    ether::evm::{
-        vm::VM
-    },
-    constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::* },
 };
+use tui::backend::Backend;
+use tui::{Frame, backend::CrosstermBackend, Terminal};
+
+use tui_views::main::render_tui_view_main;
 
 
 #[derive(Debug, Clone, Parser)]
@@ -42,142 +42,158 @@ pub struct DumpArgs {
     #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
+    /// Your Transpose.io API Key.
+    #[clap(long="transpose-api-key", short, default_value = "", hide_default_value = true)]
+    pub transpose_api_key: String,
+
     /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct StorageSlot {
+    pub slot: U256,
+    pub alias: Option<String>,
+    pub value: Option<U256>
+}
+
+#[derive(Debug, Clone)]
+pub struct Transaction {
+    pub indexed: bool,
+    pub hash: String,
+    pub block: u128,
+}
+
+#[derive(Debug, Clone)]
+pub struct DumpState {
+    pub args: DumpArgs,
+    pub transactions: Vec<Transaction>,
+    pub storage: Vec<StorageSlot>,
+    pub view: TUIView,
+    pub start_time: Instant,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum TUIView {
+    Main,
+    CommandPalette,
+}
+
+
+fn render_ui<B: Backend>(
+    f: &mut Frame<B>,
+    state: &mut DumpState
+) {
+    match state.view {
+        TUIView::Main => { render_tui_view_main(f, state) },
+        _ => {}
+    }
+ }
+
 pub fn dump(args: DumpArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
 
-    // truncate target for prettier display
-    let mut shortened_target = args.target.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+    // check if transpose api key is set
+    if &args.transpose_api_key.len() <= &0 {
+        logger.error("you must provide a Transpose API key.");
+        logger.info("you can get a free API key at https://app.transpose.io");
+        std::process::exit(1);
     }
-
-    // add the call to the trace
-    let dump_call = trace.add_call(
-        0, line!(),
-        "heimdall".to_string(),
-        "dump".to_string(),
-        vec![shortened_target],
-        "()".to_string()
-    );
 
     // parse the output directory
-    let mut output_dir: String;
-    if &args.output.len() <= &0 {
-        output_dir = match env::current_dir() {
-            Ok(dir) => dir.into_os_string().into_string().unwrap(),
-            Err(_) => {
-                logger.error("failed to get current directory.");
-                std::process::exit(1);
-            }
-        };
-        output_dir.push_str("/output");
-    }
-    else {
-        output_dir = args.output.clone();
-    }
+    // let mut output_dir: String;
+    // if &args.output.len() <= &0 {
+    //     output_dir = match env::current_dir() {
+    //         Ok(dir) => dir.into_os_string().into_string().unwrap(),
+    //         Err(_) => {
+    //             logger.error("failed to get current directory.");
+    //             std::process::exit(1);
+    //         }
+    //     };
+    //     output_dir.push_str("/output");
+    // }
+    // else {
+    //     output_dir = args.output.clone();
+    // }
 
-    // fetch bytecode
-    let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target).unwrap() {
+    // fetch transactions
+    let transaction_list = get_transaction_list(&args.target, &args.transpose_api_key, &logger);
 
-        // push the address to the output directory
-        if &output_dir != &args.output {
-            output_dir.push_str(&format!("/{}", &args.target));
-        }
-
-        // create new runtime block
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        // We are working with a contract address, so we need to fetch the bytecode from the RPC provider.
-        contract_bytecode = rt.block_on(async {
-
-            // check the cache for a matching address
-            match read_cache(&format!("contract.{}", &args.target)) {
-                Some(bytecode) => {
-                    logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
-                    return bytecode;
-                },
-                None => {}
-            }
-
-            // make sure the RPC provider isn't empty
-            if &args.rpc_url.len() <= &0 {
-                logger.error("fetching an on-chain contract requires an RPC provider. Use `heimdall dump --help` for more information.");
-                std::process::exit(1);
-            }
-
-            // create new provider
-            let provider = match Provider::<Http>::try_from(&args.rpc_url) {
-                Ok(provider) => provider,
-                Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url));
-                    std::process::exit(1)
-                }
-            };
-
-            // safely unwrap the address
-            let address = match args.target.parse::<Address>() {
-                Ok(address) => address,
-                Err(_) => {
-                    logger.error(&format!("failed to parse address '{}' .", &args.target));
-                    std::process::exit(1)
-                }
-            };
-
-            // fetch the bytecode at the address
-            let bytecode_as_bytes = match provider.get_code(address, None).await {
-                Ok(bytecode) => bytecode,
-                Err(_) => {
-                    logger.error(&format!("failed to fetch bytecode from '{}' .", &args.target));
-                    std::process::exit(1)
-                }
-            };
-
-            // cache the results
-            store_cache(&format!("contract.{}", &args.target), bytecode_as_bytes.to_string().replacen("0x", "", 1), None);
-
-            bytecode_as_bytes.to_string().replacen("0x", "", 1)
+    // convert to vec of Transaction
+    let mut transactions: Vec<Transaction> = Vec::new();
+    for transaction in transaction_list {
+        transactions.push(Transaction {
+            indexed: false,
+            hash: transaction.1,
+            block: transaction.0
         });
-
     }
-    else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        contract_bytecode = args.target.clone();
-    }
-    else {
 
-        // push the address to the output directory
-        if &output_dir != &args.output {
-            output_dir.push_str("/local");
+    // create new state
+    let mut state = DumpState {
+        args: args.clone(),
+        transactions: transactions,
+        storage: Vec::new(),
+        view: TUIView::Main,
+        start_time: Instant::now(),
+    };
+
+    // in a new thread, start the TUI
+    let tui_thread = std::thread::spawn(move || {
+
+        // create new TUI terminal
+        enable_raw_mode().unwrap();
+        let mut stdout = io::stdout();
+        execute!(
+            stdout,
+            EnterAlternateScreen,
+            EnableMouseCapture
+        ).unwrap();
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        // while user does not click CTRL+C
+        loop {
+            terminal.draw(|f| { render_ui(f, &mut state); }).unwrap();
+
+            // check for user input
+            if let Ok(event) = crossterm::event::read() {
+                match event {
+                    crossterm::event::Event::Key(key) => {
+                        match key.code {
+                            crossterm::event::KeyCode::Char('q') => {
+                                break;
+                            },
+                            _ => {}
+                        }
+                    },
+                    _ => {}
+                }
+            }
         }
 
-        // We are analyzing a file, so we need to read the bytecode from the file.
-        contract_bytecode = match fs::read_to_string(&args.target) {
-            Ok(contents) => {
-                if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
-                    contents.replacen("0x", "", 1)
-                }
-                else {
-                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
-                    std::process::exit(1)
-                }
-            },
-            Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &args.target));
-                std::process::exit(1)
-            }
-        };
+        // cleanup
+        disable_raw_mode().unwrap();
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        ).unwrap();
+        terminal.show_cursor().unwrap();
+    });
+
+    for tx in state.transactions.iter_mut() {
+        tx.indexed = true;
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
+
+    // wait for the TUI thread to finish
+    tui_thread.join().unwrap();
 
     logger.debug(&format!("Dumped storage slots in {:?}.", now.elapsed()));
 }

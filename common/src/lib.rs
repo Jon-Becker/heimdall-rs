@@ -5,3 +5,4 @@ pub mod constants;
 pub mod io;
 pub mod utils;
 pub mod testing;
+pub mod resources;

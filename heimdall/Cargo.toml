@@ -25,6 +25,8 @@ fancy-regex = "0.10.0"
 lazy_static = "1.4.0"
 petgraph = "0.6.2"
 dot = "0.1.4"
+tui = "0.19"
+crossterm = "0.25"
 
 [[bin]]
 name = "heimdall"
