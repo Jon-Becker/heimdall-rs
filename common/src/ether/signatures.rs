@@ -40,7 +40,7 @@ pub fn resolve_function_signature(signature: &String) -> Option<Vec<ResolvedFunc
     };
 
     // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?function=0x{}", &signature), 3) {
+    let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
@@ -110,7 +110,13 @@ pub fn resolve_error_signature(signature: &String) -> Option<Vec<ResolvedError>>
     };
 
     // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?function=0x{}", &signature), 3) {
+    let signatures = match get_json_from_url(
+        format!(
+            "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
+            &signature
+        ),
+        3,
+    ) {
         Some(signatures) => signatures,
         None => return None
     };
@@ -180,7 +186,7 @@ pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
     };
 
     // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?event=0x{}", &signature), 3) {
+    let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?filter=false&event=0x{}", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
