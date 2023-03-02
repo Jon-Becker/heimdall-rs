@@ -1,4 +1,4 @@
-use std::{panic};
+use std::{panic, io};
 use backtrace::Backtrace;
 
 mod cfg;
@@ -9,6 +9,7 @@ mod decompile;
 use clap::{Parser, Subcommand};
 
 use colored::Colorize;
+use crossterm::{terminal::{disable_raw_mode, LeaveAlternateScreen}, execute, event::DisableMouseCapture};
 use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{ether::evm::disassemble::*, io::{logging::Logger}};
@@ -16,6 +17,7 @@ use decompile::{decompile, DecompilerArgs};
 use decode::{decode, DecodeArgs};
 use dump::{dump, DumpArgs};
 use cfg::{cfg, CFGArgs};
+use tui::{backend::CrosstermBackend, Terminal};
 
 #[derive(Debug, Parser)]
 #[clap(
@@ -64,6 +66,16 @@ fn main() {
     // handle catching panics with
     panic::set_hook(
         Box::new(|panic_info| {
+            
+            // cleanup the terminal
+            let stdout = io::stdout();
+            let backend = CrosstermBackend::new(stdout);
+            let mut terminal = Terminal::new(backend).unwrap();
+            disable_raw_mode().unwrap();
+            execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture).unwrap();
+            terminal.show_cursor().unwrap();
+
+            // print the panic message
             let backtrace = Backtrace::new();
             let (logger, _)= Logger::new("TRACE");
             logger.fatal(
