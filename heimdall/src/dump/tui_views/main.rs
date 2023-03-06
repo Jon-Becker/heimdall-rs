@@ -1,7 +1,7 @@
-use heimdall_common::utils::{time::{calculate_eta, format_eta}, strings::encode_hex};
+use heimdall_common::utils::{time::{calculate_eta, format_eta}};
 use tui::{backend::Backend, Frame, layout::{Layout, Constraint, Direction}, widgets::{Gauge, Block, Borders, Cell, Row, Table}, style::{Style, Color, Modifier}};
 
-use crate::dump::{DumpState};
+use crate::dump::{DumpState, util::table::build_rows};
 
 pub fn render_tui_view_main<B: Backend>(
     f: &mut Frame<B>,
@@ -66,49 +66,16 @@ pub fn render_tui_view_main<B: Backend>(
         .height(1)
         .bottom_margin(1);
 
-    // ensure scroll index is within bounds
-    if state.scroll_index >= state.storage.len() {
-        state.scroll_index = state.storage.len() - 1;
-    }
-
-    // render storage slot list
-    let mut all_rows = Vec::new();
-    let mut storage_iter = state.storage.iter().collect::<Vec<_>>();
-
-    // sort by slot
-    storage_iter.sort_by_key(|(slot, _)| *slot);
-
-    for (i, (slot, value)) in storage_iter.iter().enumerate() {
-        all_rows.push(
-            Row::new(vec![
-                Cell::from(format!("0x{}", encode_hex(slot.to_fixed_bytes().into()))),
-                Cell::from(value.modified_at.to_string()),
-                Cell::from(format!("0x{}", encode_hex(value.value.to_fixed_bytes().into()))),
-            ])
-            .style(
-                if i == state.scroll_index {
-                    Style::default().fg(Color::White).bg(Color::DarkGray)
-                }
-                else {
-                    Style::default().fg(Color::White)
-                }
-            )
-            .height(1)
-            .bottom_margin(0)
-        );
-    }
-
-    // build rows of items to display
-    let num_items = std::cmp::min(main_layout[1].height as usize - 4, all_rows.len());
-    let visible_rows = match state.scroll_index + num_items <= all_rows.len() {
-        true => all_rows[state.scroll_index..state.scroll_index + num_items].to_vec(),
-        false => all_rows[all_rows.len() - num_items..all_rows.len()].to_vec(),
-    };
-
+    let rows = build_rows(
+        state,
+        main_layout[1].height as usize - 4
+    );
+    
     // render table
-    let table = Table::new(visible_rows)
+    let table = Table::new(rows)
         .header(header)
-        .block(Block::default().borders(Borders::ALL).title("Table"))
+        .block(Block::default().borders(Borders::ALL)
+        .title(format!(" Storage for Contract {} ", &state.args.target)))
         .widths(&[
             Constraint::Length(68),
             Constraint::Length(14),

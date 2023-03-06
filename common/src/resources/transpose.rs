@@ -68,7 +68,7 @@ pub fn get_transaction_list(address: &String, api_key: &String, logger: &Logger)
     let start_time = Instant::now();
 
     // build the SQL query
-    let query = format!("{{\"sql\":\"SELECT block_number, transaction_hash FROM ethereum.transactions WHERE to_address = '{}' ORDER BY block_number ASC\",\"parameters\":{{}},\"options\":{{}}}}", address);
+    let query = format!("{{\"sql\":\"SELECT block_number, transaction_hash FROM  (SELECT transaction_hash, block_number FROM ethereum.transactions WHERE to_address = '{address}'  UNION  SELECT transaction_hash, block_number FROM ethereum.traces WHERE to_address = '{address}') x\",\"parameters\":{{}},\"options\":{{}}}}");
 
     let response = match _call_transpose(query, api_key) {
         Some(response) => response,

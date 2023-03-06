@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Mutex};
 use std::time::{Instant, Duration};
-use std::{io};
+use std::{io, env};
 use clap::{AppSettings, Parser};
 use crossterm::event::{EnableMouseCapture};
 use crossterm::execute;
@@ -23,6 +23,9 @@ use tui::{Frame, backend::CrosstermBackend, Terminal};
 use tui_views::main::render_tui_view_main;
 use lazy_static::lazy_static;
 
+use self::tui_views::command_palette::render_tui_command_palette;
+use self::tui_views::decode_slot::render_tui_decode_slot;
+use self::util::csv::write_storage_to_csv;
 use self::util::{get_storage_diff, cleanup_terminal};
 
 #[derive(Debug, Clone, Parser)]
@@ -64,8 +67,8 @@ pub struct DumpArgs {
 #[derive(Debug, Clone)]
 pub struct StorageSlot {
     pub alias: Option<String>,
-    pub modified_at: u128,
     pub value: H256,
+    pub modifiers: Vec<(u128, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -79,10 +82,12 @@ pub struct Transaction {
 pub struct DumpState {
     pub args: DumpArgs,
     pub scroll_index: usize,
+    pub selection_size: usize,
     pub transactions: Vec<Transaction>,
     pub storage: HashMap<H256, StorageSlot>,
     pub view: TUIView,
     pub start_time: Instant,
+    pub input_buffer: String,
 }
 
 impl DumpState {
@@ -98,31 +103,38 @@ impl DumpState {
                 threads: 4,
             },
             scroll_index: 0,
+            selection_size: 1,
             transactions: Vec::new(),
             storage: HashMap::new(),
             view: TUIView::Main,
             start_time: Instant::now(),
+            input_buffer: String::new(),
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum TUIView {
+    Killed,
     Main,
     CommandPalette,
+    DecodeSelected
 }
 
 lazy_static! {
     static ref DUMP_STATE: Mutex<DumpState> = Mutex::new(DumpState::new());
 }
 
+#[allow(unreachable_patterns)]
 fn render_ui<B: Backend>(
     f: &mut Frame<B>,
     state: &mut DumpState
 ) {
     match state.view {
         TUIView::Main => { render_tui_view_main(f, state) },
+        TUIView::CommandPalette => { render_tui_command_palette(f, state) },
+        TUIView::DecodeSelected => { render_tui_decode_slot(f, state) },
         _ => {}
     }
  }
@@ -140,20 +152,17 @@ pub fn dump(args: DumpArgs) {
     }
 
     // parse the output directory
-    // let mut output_dir: String;
-    // if &args.output.len() <= &0 {
-    //     output_dir = match env::current_dir() {
-    //         Ok(dir) => dir.into_os_string().into_string().unwrap(),
-    //         Err(_) => {
-    //             logger.error("failed to get current directory.");
-    //             std::process::exit(1);
-    //         }
-    //     };
-    //     output_dir.push_str("/output");
-    // }
-    // else {
-    //     output_dir = args.output.clone();
-    // }
+    let mut output_dir = args.output.clone();
+    if &args.output.len() <= &0 {
+        output_dir = match env::current_dir() {
+            Ok(dir) => dir.into_os_string().into_string().unwrap(),
+            Err(_) => {
+                logger.error("failed to get current directory.");
+                std::process::exit(1);
+            }
+        };
+        output_dir.push_str("/output");
+    }
 
     // convert the target to an H160
     let addr_hash = match H160::from_str(&args.target) {
@@ -163,6 +172,11 @@ pub fn dump(args: DumpArgs) {
             std::process::exit(1);
         }
     };
+
+    // push the address to the output directory
+    if &output_dir != &args.output {
+        output_dir.push_str(&format!("/{}", &args.target));
+    }
 
     // fetch transactions
     let transaction_list = get_transaction_list(&args.target, &args.transpose_api_key, &logger);
@@ -183,9 +197,11 @@ pub fn dump(args: DumpArgs) {
         args: args.clone(),
         transactions: transactions,
         scroll_index: 0,
+        selection_size: 1,
         storage: HashMap::new(),
         view: TUIView::Main,
         start_time: Instant::now(),
+        input_buffer: String::new(),
     };
     drop(state);
 
@@ -206,54 +222,140 @@ pub fn dump(args: DumpArgs) {
             drop(state);
 
             // check for user input
-            if crossterm::event::poll(Duration::from_millis(100)).unwrap() {
+            if crossterm::event::poll(Duration::from_millis(10)).unwrap() {
                 if let Ok(event) = crossterm::event::read() {
                     match event {
                         crossterm::event::Event::Key(key) => {
+                            let mut state = DUMP_STATE.lock().unwrap();
+
+                            // ignore key events if command palette is open
+                            if state.view == TUIView::CommandPalette {
+                                match key.code {
+
+                                    // handle keys in command palette
+                                    crossterm::event::KeyCode::Char(c) => {
+                                        state.input_buffer.push(c);
+                                    },
+
+                                    // handle backspace
+                                    crossterm::event::KeyCode::Backspace => {
+                                        state.input_buffer.pop();
+                                    },
+
+                                    // enter command
+                                    crossterm::event::KeyCode::Enter => {
+                                        let mut split = state.input_buffer.split(" ");
+                                        let command = split.next().unwrap();
+                                        let _args = split.collect::<Vec<&str>>();
+
+                                        match command {
+                                            ":q" => {
+                                                state.view = TUIView::Killed;
+                                                break;
+                                            }
+                                            ":quit" => {
+                                                state.view = TUIView::Killed;
+                                                break;
+                                            }
+                                            _ => {
+                                                state.view = TUIView::Main;
+                                            }
+                                        }
+                                    },
+
+                                    // close command palette
+                                    crossterm::event::KeyCode::Esc => {
+                                        state.view = TUIView::Main;
+                                    }
+                                    _ => {}
+                                }
+
+                                drop(state);
+                                continue;
+                            }
+
                             match key.code {
 
-                                // quit
-                                crossterm::event::KeyCode::Char('q') => { break; },
+                                // main on escape
+                                crossterm::event::KeyCode::Esc => {
+                                    state.view = TUIView::Main;
+                                },
+
+                                // select transaction
+                                crossterm::event::KeyCode::Right => {
+                                    state.view = TUIView::DecodeSelected;
+                                },
+
+                                // deselect transaction
+                                crossterm::event::KeyCode::Left => {
+                                    state.view = TUIView::Main;
+                                },
 
                                 // scroll down
                                 crossterm::event::KeyCode::Down => {
-                                    let mut state = DUMP_STATE.lock().unwrap();
+                                    state.selection_size = 1;
                                     state.scroll_index += 1;
-                                    drop(state);
                                 },
 
                                 // scroll up
                                 crossterm::event::KeyCode::Up => {
-                                    let mut state = DUMP_STATE.lock().unwrap();
+                                    state.selection_size = 1;
                                     if state.scroll_index > 0 {
                                         state.scroll_index -= 1;
                                     }
-                                    drop(state);
+                                },
+
+                                // toggle command palette on ":"
+                                crossterm::event::KeyCode::Char(':') => {
+                                    match state.view {
+                                        TUIView::CommandPalette => {
+                                            state.view = TUIView::Main;
+                                        }
+                                        _ => {
+                                            state.input_buffer = String::from(":");
+                                            state.view = TUIView::CommandPalette;
+                                        }
+                                    }
                                 },
 
                                 _ => {}
                             }
+                            drop(state)
                         },
                         crossterm::event::Event::Mouse(mouse) => {
+                            let mut state = DUMP_STATE.lock().unwrap();
                             match mouse.kind {
 
                                 // scroll down
                                 crossterm::event::MouseEventKind::ScrollDown => {
-                                    let mut state = DUMP_STATE.lock().unwrap();
-                                    state.scroll_index += 1;
-                                    drop(state);
+                                    
+                                    // if shift is held, increase selection size
+                                    if mouse.modifiers.contains(crossterm::event::KeyModifiers::SHIFT) {
+                                        state.selection_size += 1;
+                                    }
+                                    else {
+                                        state.selection_size = 1;
+                                        state.scroll_index += 1;
+                                    }
                                 },
 
                                 // scroll up
                                 crossterm::event::MouseEventKind::ScrollUp => {
-                                    let mut state = DUMP_STATE.lock().unwrap();
-                                    if state.scroll_index > 0 {
-                                        state.scroll_index -= 1;
+
+                                    // if shift is held, increase selection size
+                                    if mouse.modifiers.contains(crossterm::event::KeyModifiers::SHIFT) {
+                                        state.selection_size -= 1;
                                     }
-                                    drop(state);
+                                    else {
+                                        state.selection_size = 1;
+                                        if state.scroll_index > 0 {
+                                            state.scroll_index -= 1;
+                                        }
+                                    }
                                 },
                                 _ => {}
                             }
+                            drop(state);
                         },
                         _ => {}
                     }
@@ -279,10 +381,9 @@ pub fn dump(args: DumpArgs) {
             let mut state = DUMP_STATE.lock().unwrap();
         
             // find the transaction in the state
-            let tx = state.transactions.iter_mut().find(|t| t.hash == tx.hash).unwrap();
+            let txs = state.transactions.iter_mut().find(|t| t.hash == tx.hash).unwrap();
             let block_number = tx.block_number.clone();
-            tx.indexed = true;
-
+            txs.indexed = true;
 
             // unwrap the state diff
             match state_diff {
@@ -310,13 +411,12 @@ pub fn dump(args: DumpArgs) {
                                 match state.storage.get_mut(slot) {
                                     Some(slot) => {
 
-                                        // update slot if it's newer
-                                        if slot.modified_at > block_number {
-                                            continue;
+                                       // update value if newest modifier
+                                       if slot.modifiers.iter().all(|m| m.0 < block_number) {
+                                            slot.value = *value;
                                         }
-
-                                        slot.value = *value;
-                                        slot.modified_at = block_number;
+                                        
+                                        slot.modifiers.push((block_number, tx.hash.clone().to_owned()));
                                     },
                                     None => {
 
@@ -325,7 +425,7 @@ pub fn dump(args: DumpArgs) {
                                             *slot, 
                                             StorageSlot {
                                                 value: *value,
-                                                modified_at: block_number,
+                                                modifiers: vec![(block_number, tx.hash.clone().to_owned())],
                                                 alias: None,
                                             }
                                         );
@@ -346,7 +446,18 @@ pub fn dump(args: DumpArgs) {
     });
 
     // wait for the TUI thread to finish
-    tui_thread.join().unwrap();
+    match tui_thread.join() {
+        Ok(_) => {},
+        Err(e) => {
+            logger.error("failed to join TUI thread.");
+            logger.error(&format!("{:?}", e));
+            std::process::exit(1);
+        }
+    }
+
+    // write storage slots to csv
+    let state = DUMP_STATE.lock().unwrap();
+    write_storage_to_csv(&output_dir.clone(), &state, &logger);
 
     logger.debug(&format!("Dumped storage slots in {:?}.", now.elapsed()));
 }

@@ -1,3 +1,6 @@
+pub mod csv;
+pub mod table;
+
 use std::{str::FromStr, io};
 
 use crossterm::{terminal::{disable_raw_mode, LeaveAlternateScreen}, execute, event::DisableMouseCapture};
@@ -33,7 +36,6 @@ pub fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<StateDiff> 
         // check the cache for a matching address
         match read_cache(&format!("diff.{}", &tx.hash)) {
             Some(state_diff) => {
-                logger.debug(&format!("found cached storage diff for '{}' .", &tx.hash));
                 return state_diff;
             },
             None => {}
@@ -78,7 +80,8 @@ pub fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<StateDiff> 
         };
 
         // write the state diff to the cache
-        store_cache(&format!("diff.{}", &tx.hash), &state_diff, None);
+        let expiry = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 60 * 60 * 24 * 7;
+        store_cache(&format!("diff.{}", &tx.hash), &state_diff, Some(expiry));
 
         state_diff
     });
