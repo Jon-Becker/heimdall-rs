@@ -60,7 +60,7 @@ pub struct DumpArgs {
     pub default: bool,
 
     /// The number of threads to use
-    #[clap(long, short, default_value = "4", hide_default_value = true)]
+    #[clap(long, default_value = "4", hide_default_value = true)]
     pub threads: usize,
 }
 
@@ -370,6 +370,7 @@ pub fn dump(args: DumpArgs) {
     std::thread::spawn(move || {
         let state = DUMP_STATE.lock().unwrap();
         let transactions = state.transactions.clone();
+        let args = state.args.clone();
         drop(state);
         
         task_pool(transactions, args.threads, move |tx| {
@@ -459,5 +460,6 @@ pub fn dump(args: DumpArgs) {
     let state = DUMP_STATE.lock().unwrap();
     write_storage_to_csv(&output_dir.clone(), &state, &logger);
 
+    logger.info(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &args.target));
     logger.debug(&format!("Dumped storage slots in {:?}.", now.elapsed()));
 }
