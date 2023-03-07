@@ -165,8 +165,8 @@ pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
         None => {}
     };
 
-     // get function possibilities from etherface
-     let signatures = match get_json_from_url(format!("https://api.etherface.io/v1/signatures/hash/event/{}/1", &signature), 3) {
+    // get function possibilities from etherface
+    let signatures = match get_json_from_url(format!("https://api.etherface.io/v1/signatures/hash/event/{}/1", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
