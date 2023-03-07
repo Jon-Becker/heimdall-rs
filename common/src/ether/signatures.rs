@@ -39,23 +39,16 @@ pub fn resolve_function_signature(signature: &String) -> Option<Vec<ResolvedFunc
         None => {}
     };
 
-    // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?function=0x{}", &signature), 3) {
+    // get function possibilities from etherface
+    let signatures = match get_json_from_url(format!("https://api.etherface.io/v1/signatures/hash/function/{}/1", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
 
     // convert the serde value into a vec of possible functions
-    // AAAHAHHHHHH IM MATCHING
-    let results = match signatures.get("result") {
-        Some(result) => match result.get("function") {
-            Some(function) => match function.get(format!("0x{signature}")) {
-                Some(functions) => match functions.as_array() {
-                    Some(functions) => functions.to_vec(),
-                    None => return None
-                },
-                None => return None
-            },
+    let results = match signatures.get("items") {
+        Some(items) => match items.as_array() {
+            Some(items) => items.to_vec(),
             None => return None
         },
         None => return None
@@ -66,7 +59,7 @@ pub fn resolve_function_signature(signature: &String) -> Option<Vec<ResolvedFunc
     for signature in results {
 
         // get the function text signature and unwrap it into a string
-        let text_signature = match signature.get("name") {
+        let text_signature = match signature.get("text") {
             Some(text_signature) => text_signature.to_string().replace("\"", ""),
             None => continue
         };
@@ -109,29 +102,16 @@ pub fn resolve_error_signature(signature: &String) -> Option<Vec<ResolvedError>>
         None => {}
     };
 
-    // get function possibilities from 4byte
-    let signatures = match get_json_from_url(
-        format!(
-            "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
-            &signature
-        ),
-        3,
-    ) {
+    // get function possibilities from etherface
+    let signatures = match get_json_from_url(format!("https://api.etherface.io/v1/signatures/hash/error/{}/1", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
 
     // convert the serde value into a vec of possible functions
-    // AAAHAHHHHHH IM MATCHING
-    let results = match signatures.get("result") {
-        Some(result) => match result.get("function") {
-            Some(function) => match function.get(format!("0x{signature}")) {
-                Some(functions) => match functions.as_array() {
-                    Some(functions) => functions.to_vec(),
-                    None => return None
-                },
-                None => return None
-            },
+    let results = match signatures.get("items") {
+        Some(items) => match items.as_array() {
+            Some(items) => items.to_vec(),
             None => return None
         },
         None => return None
@@ -142,7 +122,7 @@ pub fn resolve_error_signature(signature: &String) -> Option<Vec<ResolvedError>>
     for signature in results {
 
         // get the function text signature and unwrap it into a string
-        let text_signature = match signature.get("name") {
+        let text_signature = match signature.get("text") {
             Some(text_signature) => text_signature.to_string().replace("\"", ""),
             None => continue
         };
@@ -185,23 +165,16 @@ pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
         None => {}
     };
 
-    // get function possibilities from 4byte
-    let signatures = match get_json_from_url(format!("https://api.openchain.xyz/signature-database/v1/lookup?event=0x{}", &signature), 3) {
+    // get function possibilities from etherface
+    let signatures = match get_json_from_url(format!("https://api.etherface.io/v1/signatures/hash/event/{}/1", &signature), 3) {
         Some(signatures) => signatures,
         None => return None
     };
 
     // convert the serde value into a vec of possible functions
-    // AAAHAHHHHHH IM MATCHING
-    let results = match signatures.get("result") {
-        Some(result) => match result.get("event") {
-            Some(event) => match event.get(format!("0x{signature}")) {
-                Some(events) => match events.as_array() {
-                    Some(events) => events.to_vec(),
-                    None => return None
-                },
-                None => return None
-            },
+    let results = match signatures.get("items") {
+        Some(items) => match items.as_array() {
+            Some(items) => items.to_vec(),
             None => return None
         },
         None => return None
@@ -212,7 +185,7 @@ pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
     for signature in results {
 
         // get the function text signature and unwrap it into a string
-        let text_signature = match signature.get("name") {
+        let text_signature = match signature.get("text") {
             Some(text_signature) => text_signature.to_string().replace("\"", ""),
             None => continue
         };

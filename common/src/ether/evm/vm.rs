@@ -710,9 +710,26 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
+                    // convert a to usize
+                    let usize_a: usize = match a.value.try_into() {
+                        Ok(x) => x,
+                        Err(_) => {
+                            self.exit(2, "0x");
+                            return Instruction {
+                                instruction: last_instruction,
+                                opcode: opcode,
+                                opcode_details: Some(opcode_details),
+                                inputs: inputs,
+                                outputs: Vec::new(),
+                                input_operations: input_operations,
+                                output_operations: Vec::new(),
+                            };
+                        }
+                    };
+
                     let mut result = I256::zero();
                     if !b.value.is_zero() {
-                        result = sign_uint(b.value).shr(sign_uint(a.value));
+                        result = sign_uint(b.value).shr(usize_a);
                     }
 
                     let simplified_operation = 
