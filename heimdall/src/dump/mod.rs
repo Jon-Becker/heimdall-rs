@@ -140,8 +140,6 @@ fn render_ui<B: Backend>(
  }
 
 pub fn dump(args: DumpArgs) {
-    let now = Instant::now();
-
     let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
 
     // check if transpose api key is set
@@ -461,5 +459,4 @@ pub fn dump(args: DumpArgs) {
     write_storage_to_csv(&output_dir.clone(), &state, &logger);
 
     logger.info(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &args.target));
-    logger.debug(&format!("Dumped storage slots in {:?}.", now.elapsed()));
 }
