@@ -40,6 +40,16 @@ pub fn encode_hex_reduced(s: U256) -> String {
     }
 }
 
+// convert a hex string to ascii
+pub fn hex_to_ascii(s: &str) -> String {
+    let mut result = String::new();
+    for i in 0..s.len() / 2 {
+        let byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap();
+        result.push(byte as char);
+    }
+    result
+}
+
 
 // replace the last occurrence of a string with a new string
 pub fn replace_last(s: String, old: &str, new: &str) -> String {

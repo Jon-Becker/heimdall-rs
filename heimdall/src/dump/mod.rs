@@ -1,10 +1,10 @@
 mod tests;
 mod util;
+mod constants;
 mod tui_views;
 
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::{Mutex};
 use std::time::{Instant, Duration};
 use std::{io, env};
 use clap::{AppSettings, Parser};
@@ -21,10 +21,9 @@ use tui::backend::Backend;
 use tui::{Frame, backend::CrosstermBackend, Terminal};
 
 use tui_views::main::render_tui_view_main;
-use lazy_static::lazy_static;
 
+use self::constants::{DUMP_STATE, DECODE_AS_TYPES};
 use self::tui_views::command_palette::render_tui_command_palette;
-use self::tui_views::decode_slot::render_tui_decode_slot;
 use self::util::csv::write_storage_to_csv;
 use self::util::{get_storage_diff, cleanup_terminal};
 
@@ -62,6 +61,14 @@ pub struct DumpArgs {
     /// The number of threads to use
     #[clap(long, default_value = "4", hide_default_value = true)]
     pub threads: usize,
+
+    /// The block number to start dumping from.
+    #[clap(long, short, default_value = "0", hide_default_value = true)]
+    pub from_block: u128,
+
+    /// The block number to stop dumping at.
+    #[clap(long, short, default_value = "9999999999", hide_default_value = true)]
+    pub to_block: u128,
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +76,7 @@ pub struct StorageSlot {
     pub alias: Option<String>,
     pub value: H256,
     pub modifiers: Vec<(u128, String)>,
+    pub decode_as_type_index: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -101,6 +109,8 @@ impl DumpState {
                 transpose_api_key: String::new(),
                 default: false,
                 threads: 4,
+                from_block: 0,
+                to_block: 9999999999,
             },
             scroll_index: 0,
             selection_size: 1,
@@ -119,11 +129,6 @@ pub enum TUIView {
     Killed,
     Main,
     CommandPalette,
-    DecodeSelected
-}
-
-lazy_static! {
-    static ref DUMP_STATE: Mutex<DumpState> = Mutex::new(DumpState::new());
 }
 
 #[allow(unreachable_patterns)]
@@ -134,7 +139,6 @@ fn render_ui<B: Backend>(
     match state.view {
         TUIView::Main => { render_tui_view_main(f, state) },
         TUIView::CommandPalette => { render_tui_command_palette(f, state) },
-        TUIView::DecodeSelected => { render_tui_decode_slot(f, state) },
         _ => {}
     }
  }
@@ -177,7 +181,7 @@ pub fn dump(args: DumpArgs) {
     }
 
     // fetch transactions
-    let transaction_list = get_transaction_list(&args.target, &args.transpose_api_key, &logger);
+    let transaction_list = get_transaction_list(&args.target, &args.transpose_api_key, (&args.from_block, &args.to_block), &logger);
 
     // convert to vec of Transaction
     let mut transactions: Vec<Transaction> = Vec::new();
@@ -281,12 +285,54 @@ pub fn dump(args: DumpArgs) {
 
                                 // select transaction
                                 crossterm::event::KeyCode::Right => {
-                                    state.view = TUIView::DecodeSelected;
+
+                                    // increment decode_as_type_index on all selected transactions
+                                    let scroll_index = state.scroll_index.clone();
+                                    let selection_size = state.selection_size.clone();
+                                    let mut storage_iter = state.storage.iter_mut().collect::<Vec<_>>();
+                                    storage_iter.sort_by_key(|(slot, _)| *slot);
+
+                                    for (i, (_, value)) in storage_iter.iter_mut().enumerate() {
+                                        if i >= scroll_index && i < scroll_index + selection_size {
+                                            
+                                            // saturating increment
+                                            if value.decode_as_type_index + 1 >= DECODE_AS_TYPES.len() {
+                                                value.decode_as_type_index = 0;
+                                            } else {
+                                                value.decode_as_type_index += 1;
+                                            }
+
+                                        }
+                                        else if i >= scroll_index + selection_size {
+                                            break;
+                                        }
+                                    }
                                 },
 
                                 // deselect transaction
                                 crossterm::event::KeyCode::Left => {
-                                    state.view = TUIView::Main;
+                                    
+                                    // decrement decode_as_type_index on all selected transactions
+                                    let scroll_index = state.scroll_index.clone();
+                                    let selection_size = state.selection_size.clone();
+                                    let mut storage_iter = state.storage.iter_mut().collect::<Vec<_>>();
+                                    storage_iter.sort_by_key(|(slot, _)| *slot);
+
+                                    for (i, (_, value)) in storage_iter.iter_mut().enumerate() {
+                                        if i >= scroll_index && i < scroll_index + selection_size {
+                                            
+                                            // saturating decrement
+                                            if value.decode_as_type_index == 0 {
+                                                value.decode_as_type_index = DECODE_AS_TYPES.len() - 1;
+                                            } else {
+                                                value.decode_as_type_index -= 1;
+                                            }
+
+                                        }
+                                        else if i >= scroll_index + selection_size {
+                                            break;
+                                        }
+                                    }
                                 },
 
                                 // scroll down
@@ -426,6 +472,7 @@ pub fn dump(args: DumpArgs) {
                                                 value: *value,
                                                 modifiers: vec![(block_number, tx.hash.clone().to_owned())],
                                                 alias: None,
+                                                decode_as_type_index: 0
                                             }
                                         );
                                     }

@@ -58,7 +58,12 @@ fn _call_transpose(query: String, api_key: &String) -> Option<TransposeResponse>
     }
 }
 
-pub fn get_transaction_list(address: &String, api_key: &String, logger: &Logger) -> Vec<(u128, String)> {
+pub fn get_transaction_list(
+    address: &String,
+    api_key: &String,
+    bounds: (&u128, &u128),
+    logger: &Logger
+) -> Vec<(u128, String)> {
     
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
@@ -68,7 +73,15 @@ pub fn get_transaction_list(address: &String, api_key: &String, logger: &Logger)
     let start_time = Instant::now();
 
     // build the SQL query
-    let query = format!("{{\"sql\":\"SELECT block_number, transaction_hash FROM  (SELECT transaction_hash, block_number FROM ethereum.transactions WHERE to_address = '{address}'  UNION  SELECT transaction_hash, block_number FROM ethereum.traces WHERE to_address = '{address}') x\",\"parameters\":{{}},\"options\":{{}}}}");
+    let query = format!(
+        "{{\"sql\":\"SELECT block_number, transaction_hash FROM  (SELECT transaction_hash, block_number FROM ethereum.transactions WHERE to_address = '{}' AND block_number BETWEEN {} AND {}  UNION  SELECT transaction_hash, block_number FROM ethereum.traces WHERE to_address = '{}' AND block_number BETWEEN {} AND {}) x\",\"parameters\":{{}},\"options\":{{}}}}",
+        address,
+        bounds.0,
+        bounds.1,
+        address,
+        bounds.0,
+        bounds.1
+    );
 
     let response = match _call_transpose(query, api_key) {
         Some(response) => response,

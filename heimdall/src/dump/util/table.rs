@@ -1,7 +1,8 @@
-use heimdall_common::utils::strings::encode_hex;
+use ethers::{abi::{decode, ParamType}, types::U256};
+use heimdall_common::utils::strings::{encode_hex, hex_to_ascii};
 use tui::{widgets::{Row, Cell}, style::{Style, Color}};
 
-use crate::dump::DumpState;
+use crate::dump::{DumpState, constants::DECODE_AS_TYPES};
 
 pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'static>> {
 
@@ -25,12 +26,27 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
 
     // slice storage_iter
     for (i, (slot, value)) in storage_iter[indices.clone()].iter().enumerate() {
+        let decoded_value = match value.decode_as_type_index {
+            0 => format!("0x{}", encode_hex(value.value.to_fixed_bytes().into())),
+            1 => format!("{}", !value.value.is_zero()),
+            2 => format!("0x{}", encode_hex(value.value.to_fixed_bytes().into()).get(24..).unwrap_or("")),
+            3 => match decode(&[ParamType::String], value.value.as_bytes()) {
+                Ok(decoded) => decoded[0].to_string(),
+                Err(_) => hex_to_ascii(&encode_hex(value.value.to_fixed_bytes().into()))
+            },
+            4 => {
+                let decoded = U256::from_big_endian(&value.value.to_fixed_bytes());
+                format!("{}", decoded)
+            },
+            _ => format!("decoding error")
+        };
+
         rows.push(
             Row::new(vec![
-                Cell::from(format!("0x{}", encode_hex(slot.to_fixed_bytes().into()))),
                 Cell::from(value.modifiers.iter().max_by_key(|m| m.0).unwrap().0.to_string()),
-                Cell::from(format!("0x{}", encode_hex(value.value.to_fixed_bytes().into()))),
-                Cell::from(value.modifiers.len().to_string())
+                Cell::from(format!("0x{}", encode_hex(slot.to_fixed_bytes().into()))),
+                Cell::from(DECODE_AS_TYPES[value.decode_as_type_index].clone()),
+                Cell::from(decoded_value),
             ])
             .style(
                 if storage_iter.len() - state.scroll_index < num_items {
