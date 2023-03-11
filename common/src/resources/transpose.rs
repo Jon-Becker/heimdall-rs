@@ -21,18 +21,24 @@ struct TransposeResponse {
     results: Vec<Value>
 }
 
-fn _call_transpose(query: String, api_key: &String) -> Option<TransposeResponse> {
+fn _call_transpose(endpoint: String, api_key: &String) -> Option<TransposeResponse> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", "application/json".parse().unwrap());
     headers.insert("X-API-KEY", api_key.parse().unwrap());
 
     // make the request
     let client = reqwest::blocking::Client::builder().redirect(reqwest::redirect::Policy::none()).build() .unwrap();
-    let mut response = match client.post("https://api.transpose.io/sql").headers(headers).body(query).send() {
+    let mut response = match client
+        .get(format!("https://api.transpose.io/endpoint/{endpoint}"))
+        .body("{\"options\":{\"timeout\": 999999999}}")
+        .headers(headers)
+        .send()
+    {
         Ok(res) => res,
         Err(e) => {
             let (logger, _) = Logger::new("TRACE");
-            logger.error(&format!("failed to get transaction list from Transpose: {}", e));
+            logger.error(&format!("failed to call Transpose endpoint '{endpoint}' ."));
+            logger.error(&format!("error: {}", e));
             std::process::exit(1)
         }
     };
@@ -45,14 +51,18 @@ fn _call_transpose(query: String, api_key: &String) -> Option<TransposeResponse>
                 Ok(json) => json,
                 Err(e) => {
                     let (logger, _) = Logger::new("TRACE");
-                    logger.error(&format!("failed to parse transaction list from Transpose: {}", e));
+                    logger.error(&format!("Transpose request unsucessful."));
+                    logger.error(&format!("error: {}", e));
+                    logger.debug(&format!("response body: {:?}", body));
                     std::process::exit(1)
                 }
             })
         },
         Err(e) => {
             let (logger, _) = Logger::new("TRACE");
-            logger.error(&format!("failed to get transaction list from Transpose: {}", e));
+            logger.error(&format!("failed to parse Transpose response body."));
+            logger.error(&format!("error: {}", e));
+            logger.debug(&format!("response body: {:?}", body));
             std::process::exit(1)
         }
     }
@@ -72,18 +82,10 @@ pub fn get_transaction_list(
     transaction_list_progress.set_message(format!("fetching transactions from '{}' .", address));
     let start_time = Instant::now();
 
-    // build the SQL query
-    let query = format!(
-        "{{\"sql\":\"SELECT block_number, transaction_hash FROM  (SELECT transaction_hash, block_number FROM ethereum.transactions WHERE to_address = '{}' AND block_number BETWEEN {} AND {}  UNION  SELECT transaction_hash, block_number FROM ethereum.traces WHERE to_address = '{}' AND block_number BETWEEN {} AND {}) x\",\"parameters\":{{}},\"options\":{{}}}}",
-        address,
-        bounds.0,
-        bounds.1,
-        address,
-        bounds.0,
-        bounds.1
-    );
-
-    let response = match _call_transpose(query, api_key) {
+    let response = match _call_transpose(
+        format!("get-all-transactions?address={}&from_block={}&to_block={}", address, bounds.0, bounds.1),
+        api_key
+    ) {
         Some(response) => response,
         None => {
             logger.error(&format!("failed to get transaction list from Transpose"));

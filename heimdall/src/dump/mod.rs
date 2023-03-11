@@ -31,6 +31,7 @@ use self::util::{get_storage_diff, cleanup_terminal};
 #[clap(about = "Dump the value of all storage slots accessed by a contract",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
        global_setting = AppSettings::DeriveDisplayOrder,
+         global_setting = AppSettings::ColoredHelp,
        override_usage = "heimdall dump <TARGET> [OPTIONS]")]
 pub struct DumpArgs {
 
@@ -46,28 +47,24 @@ pub struct DumpArgs {
     #[clap(long="output", short, default_value = "", hide_default_value = true)]
     pub output: String,
 
-    /// The RPC provider to use for fetching on-chain data.
+    /// The RPC URL to use for fetching data.
     #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
-    /// Your Transpose.io API Key.
+    /// Your Transpose.io API Key
     #[clap(long="transpose-api-key", short, default_value = "", hide_default_value = true)]
     pub transpose_api_key: String,
 
-    /// When prompted, always select the default value.
-    #[clap(long, short)]
-    pub default: bool,
-
-    /// The number of threads to use
+    /// The number of threads to use when fetching data.
     #[clap(long, default_value = "4", hide_default_value = true)]
     pub threads: usize,
 
     /// The block number to start dumping from.
-    #[clap(long, short, default_value = "0", hide_default_value = true)]
+    #[clap(long, default_value = "0", hide_default_value = true)]
     pub from_block: u128,
 
     /// The block number to stop dumping at.
-    #[clap(long, short, default_value = "9999999999", hide_default_value = true)]
+    #[clap(long, default_value = "9999999999", hide_default_value = true)]
     pub to_block: u128,
 }
 
@@ -107,7 +104,6 @@ impl DumpState {
                 output: String::new(),
                 rpc_url: String::new(),
                 transpose_api_key: String::new(),
-                default: false,
                 threads: 4,
                 from_block: 0,
                 to_block: 9999999999,
@@ -148,10 +144,17 @@ pub fn dump(args: DumpArgs) {
 
     // check if transpose api key is set
     if &args.transpose_api_key.len() <= &0 {
-        logger.error("you must provide a Transpose API key.");
-        logger.info("you can get a free API key at https://app.transpose.io");
+        logger.error("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
+        logger.info("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
         std::process::exit(1);
     }
+
+    // check if the RPC url is set and supports trace_replayTransaction
+    get_storage_diff(&Transaction {
+        indexed: false,
+        hash: String::from("0xb95343413e459a0f97461812111254163ae53467855c0d73e0f1e7c5b8442fa3"),
+        block_number: 471968
+    }, &args);
 
     // parse the output directory
     let mut output_dir = args.output.clone();
