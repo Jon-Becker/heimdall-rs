@@ -24,6 +24,7 @@ use tui_views::main::render_tui_view_main;
 
 use self::constants::{DUMP_STATE, DECODE_AS_TYPES};
 use self::tui_views::command_palette::render_tui_command_palette;
+use self::tui_views::help::render_tui_help;
 use self::util::csv::write_storage_to_csv;
 use self::util::{get_storage_diff, cleanup_terminal};
 
@@ -125,6 +126,7 @@ pub enum TUIView {
     Killed,
     Main,
     CommandPalette,
+    Help,
 }
 
 #[allow(unreachable_patterns)]
@@ -135,6 +137,7 @@ fn render_ui<B: Backend>(
     match state.view {
         TUIView::Main => { render_tui_view_main(f, state) },
         TUIView::CommandPalette => { render_tui_command_palette(f, state) },
+        TUIView::Help => { render_tui_help(f, state) },
         _ => {}
     }
  }
@@ -254,13 +257,12 @@ pub fn dump(args: DumpArgs) {
                                         let _args = split.collect::<Vec<&str>>();
 
                                         match command {
-                                            ":q" => {
+                                            ":q" | ":quit" => {
                                                 state.view = TUIView::Killed;
                                                 break;
                                             }
-                                            ":quit" => {
-                                                state.view = TUIView::Killed;
-                                                break;
+                                            ":h" | ":help" => {
+                                                state.view = TUIView::Help;
                                             }
                                             _ => {
                                                 state.view = TUIView::Main;
