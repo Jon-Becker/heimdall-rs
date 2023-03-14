@@ -3,7 +3,7 @@ use heimdall_common::{utils::strings::{encode_hex, hex_to_ascii}, io::{file::wri
 
 use crate::dump::{DumpState, constants::DECODE_AS_TYPES};
 
-pub fn write_storage_to_csv(output_dir: &String, file_name: &String, state: &DumpState, logger: &Logger) {
+pub fn write_storage_to_csv(output_dir: &String, file_name: &String, state: &DumpState) {
     let mut lines = {
         let mut lines = Vec::new();
 
@@ -45,5 +45,4 @@ pub fn write_storage_to_csv(output_dir: &String, file_name: &String, state: &Dum
 
     // save to file
     write_lines_to_file(&format!("{output_dir}/{file_name}"), lines);
-    logger.success(&format!("wrote storage dump to to '{output_dir}/{file_name}' ."));
 }

@@ -217,6 +217,7 @@ pub fn dump(args: DumpArgs) {
     };
     drop(state);
 
+    let _output_dir = output_dir.clone();
 
     // in a new thread, start the TUI
     let tui_thread = std::thread::spawn(move || {
@@ -274,6 +275,11 @@ pub fn dump(args: DumpArgs) {
                                                     state.filter = args[0].to_string();
                                                 }
                                                 state.view = TUIView::Main;
+                                            }
+                                            ":e" | ":export" => {
+                                                if args.len() > 0 {
+                                                    write_storage_to_csv(&output_dir.clone(), &args[0].to_string(), &state);
+                                                }
                                             }
                                             ":s" | ":seek" => {
                                                 if args.len() > 1 {
@@ -553,7 +559,7 @@ pub fn dump(args: DumpArgs) {
 
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
-    write_storage_to_csv(&output_dir.clone(), &"storage_dump.csv".to_string(), &state, &logger);
+    write_storage_to_csv(&_output_dir, &"storage_dump.csv".to_string(), &state);
 
     logger.info(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &args.target));
 }
