@@ -1,5 +1,5 @@
 use ethers::{abi::{decode, ParamType}, types::U256};
-use heimdall_common::{utils::strings::{encode_hex, hex_to_ascii}, io::{file::write_lines_to_file, logging::Logger}};
+use heimdall_common::{utils::strings::{encode_hex, hex_to_ascii}, io::{file::write_lines_to_file}};
 
 use crate::dump::{DumpState, constants::DECODE_AS_TYPES};
 
