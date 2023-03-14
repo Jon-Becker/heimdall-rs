@@ -25,7 +25,7 @@ lazy_static! {
         ":q, :quit                              exit the program".to_string(),
         ":h, :help                              display this help menu".to_string(),
         ":f, :find      <VALUE>                 search for a storage slot by slot or value".to_string(),
-        ":e, :export                            export the current storage dump to a file, preserving decoded values".to_string(),
+        ":e, :export    <FILENAME>              export the current storage dump to a file, preserving decoded values".to_string(),
         ":s, :seek      <DIRECTION> <AMOUNT>    move the cusor up or down by a specified amount".to_string(),
     ];
 
@@ -34,7 +34,7 @@ lazy_static! {
         "↓, Scroll Down                         move the cursor down one slot".to_string(),
         "←, →                                   change the decoding type of the selected slot".to_string(),
         "CTRL + ↑, CTRL + ↓                     move the cursor up or down by 10 slots".to_string(),
-        "CTRL + C, CMD + C                      copy the decoded value of the current slot to the clipboard".to_string(),
+        "CTRL + C,                              copy the decoded value of the current slot to the clipboard".to_string(),
         "ESC                                    clear the search filter".to_string(),
     ];
 }

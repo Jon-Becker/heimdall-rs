@@ -26,6 +26,7 @@ use self::constants::{DUMP_STATE, DECODE_AS_TYPES};
 use self::tui_views::command_palette::render_tui_command_palette;
 use self::tui_views::help::render_tui_help;
 use self::util::csv::write_storage_to_csv;
+use self::util::table::copy_selected;
 use self::util::{get_storage_diff, cleanup_terminal};
 
 #[derive(Debug, Clone, Parser)]
@@ -274,6 +275,30 @@ pub fn dump(args: DumpArgs) {
                                                 }
                                                 state.view = TUIView::Main;
                                             }
+                                            ":s" | ":seek" => {
+                                                if args.len() > 1 {
+                                                    let direction = args[0].to_lowercase();
+                                                    let amount = args[1].parse::<usize>().unwrap_or(0);
+                                                    match direction.as_str() {
+                                                        "up" => {
+                                                            if state.scroll_index >= amount {
+                                                                state.scroll_index -= amount;
+                                                            } else {
+                                                                state.scroll_index = 0;
+                                                            }
+                                                        }
+                                                        "down" => {
+                                                            if state.scroll_index + amount < state.storage.len() {
+                                                                state.scroll_index += amount;
+                                                            } else {
+                                                                state.scroll_index = state.storage.len() - 1;
+                                                            }
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }
+                                                state.view = TUIView::Main;
+                                            }
                                             _ => {
                                                 state.view = TUIView::Main;
                                             }
@@ -294,6 +319,13 @@ pub fn dump(args: DumpArgs) {
                             }
 
                             match key.code {
+
+                                // copy value on MODIFIER + C
+                                crossterm::event::KeyCode::Char('c') => {
+                                    if crossterm::event::KeyModifiers::NONE != key.modifiers {
+                                        copy_selected(&mut state)
+                                    }
+                                },
 
                                 // main on escape
                                 crossterm::event::KeyCode::Esc => {
@@ -521,7 +553,7 @@ pub fn dump(args: DumpArgs) {
 
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
-    write_storage_to_csv(&output_dir.clone(), &state, &logger);
+    write_storage_to_csv(&output_dir.clone(), &"storage_dump.csv".to_string(), &state, &logger);
 
     logger.info(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &args.target));
 }

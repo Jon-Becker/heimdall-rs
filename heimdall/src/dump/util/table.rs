@@ -1,5 +1,5 @@
 use ethers::{abi::{decode, ParamType}, types::{U256}};
-use heimdall_common::utils::strings::{encode_hex, hex_to_ascii};
+use heimdall_common::{utils::strings::{encode_hex, hex_to_ascii}, io::clipboard::copy_to_clipboard};
 use tui::{widgets::{Row, Cell}, style::{Style, Color}};
 
 use crate::dump::{DumpState, constants::DECODE_AS_TYPES};
@@ -14,7 +14,6 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
     // render storage slot list
     let mut rows = Vec::new();
     
-
     // filter storage_iter by state.filter
     let mut storage_iter = match state.filter.len() > 0 {
         true => {
@@ -99,4 +98,43 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
     }
 
     rows
+}
+
+pub fn copy_selected(state: &mut DumpState) {
+
+    // filter storage_iter by state.filter
+    let mut storage_iter = match state.filter.len() > 0 {
+        true => {
+            state.storage
+                .iter()
+                .filter(|(slot, value)| {
+                    let slot = format!("0x{}", encode_hex(slot.to_fixed_bytes().into()));
+                    let value = format!("0x{}", encode_hex(value.value.to_fixed_bytes().into()));
+                    slot.contains(&state.filter) ||  value.contains(&state.filter)
+                })
+                .collect::<Vec<_>>()
+        }
+        false => state.storage.iter().collect::<Vec<_>>()
+    };
+
+    // sort storage slots by slot
+    storage_iter.sort_by_key(|(slot, _)| *slot);
+
+    let (_, value) = storage_iter.get_mut(state.scroll_index).unwrap();
+    let decoded_value = match value.decode_as_type_index {
+        0 => format!("0x{}", encode_hex(value.value.to_fixed_bytes().into())),
+        1 => format!("{}", !value.value.is_zero()),
+        2 => format!("0x{}", encode_hex(value.value.to_fixed_bytes().into()).get(24..).unwrap_or("")),
+        3 => match decode(&[ParamType::String], value.value.as_bytes()) {
+            Ok(decoded) => decoded[0].to_string(),
+            Err(_) => hex_to_ascii(&encode_hex(value.value.to_fixed_bytes().into()))
+        },
+        4 => {
+            let decoded = U256::from_big_endian(&value.value.to_fixed_bytes());
+            format!("{}", decoded)
+        },
+        _ => format!("decoding error")
+    };
+
+    copy_to_clipboard(&decoded_value);
 }
