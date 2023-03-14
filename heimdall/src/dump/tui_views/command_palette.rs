@@ -29,7 +29,7 @@ pub fn render_tui_command_palette<B: Backend>(
         );
     
     // build header cells
-    let header_cells = ["Slot", "Block Number", "Value"]
+    let header_cells = ["Last Modified", "Slot", "As Type", "Value"]
         .iter()
         .map(|h| Cell::from(*h).style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
     
@@ -50,10 +50,10 @@ pub fn render_tui_command_palette<B: Backend>(
         .block(Block::default().borders(Borders::ALL)
         .title(format!(" Storage for Contract {} ", &state.args.target)))
         .widths(&[
-            Constraint::Length(68),
             Constraint::Length(14),
-            Constraint::Percentage(68),
-            Constraint::Percentage(68),
+            Constraint::Length(68),
+            Constraint::Length(9),
+            Constraint::Percentage(100),
         ]);
 
     f.render_widget(command_input, main_layout[0]);

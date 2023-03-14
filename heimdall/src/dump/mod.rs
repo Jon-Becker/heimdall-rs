@@ -94,6 +94,7 @@ pub struct DumpState {
     pub view: TUIView,
     pub start_time: Instant,
     pub input_buffer: String,
+    pub filter: String,
 }
 
 impl DumpState {
@@ -116,6 +117,7 @@ impl DumpState {
             view: TUIView::Main,
             start_time: Instant::now(),
             input_buffer: String::new(),
+            filter: String::new(),
         }
     }
 }
@@ -210,6 +212,7 @@ pub fn dump(args: DumpArgs) {
         view: TUIView::Main,
         start_time: Instant::now(),
         input_buffer: String::new(),
+        filter: String::new(),
     };
     drop(state);
 
@@ -252,9 +255,10 @@ pub fn dump(args: DumpArgs) {
 
                                     // enter command
                                     crossterm::event::KeyCode::Enter => {
+                                        state.filter = String::new();
                                         let mut split = state.input_buffer.split(" ");
                                         let command = split.next().unwrap();
-                                        let _args = split.collect::<Vec<&str>>();
+                                        let args = split.collect::<Vec<&str>>();
 
                                         match command {
                                             ":q" | ":quit" => {
@@ -264,16 +268,24 @@ pub fn dump(args: DumpArgs) {
                                             ":h" | ":help" => {
                                                 state.view = TUIView::Help;
                                             }
+                                            ":f" | ":find" => {
+                                                if args.len() > 0 {
+                                                    state.filter = args[0].to_string();
+                                                }
+                                                state.view = TUIView::Main;
+                                            }
                                             _ => {
                                                 state.view = TUIView::Main;
                                             }
                                         }
                                     },
 
-                                    // close command palette
+                                    // handle escape
                                     crossterm::event::KeyCode::Esc => {
+                                        state.filter = String::new();
                                         state.view = TUIView::Main;
                                     }
+                                    
                                     _ => {}
                                 }
 
@@ -285,6 +297,7 @@ pub fn dump(args: DumpArgs) {
 
                                 // main on escape
                                 crossterm::event::KeyCode::Esc => {
+                                    state.filter = String::new();
                                     state.view = TUIView::Main;
                                 },
 

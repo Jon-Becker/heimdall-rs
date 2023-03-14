@@ -1,4 +1,4 @@
-use ethers::{abi::{decode, ParamType}, types::U256};
+use ethers::{abi::{decode, ParamType}, types::{U256}};
 use heimdall_common::utils::strings::{encode_hex, hex_to_ascii};
 use tui::{widgets::{Row, Cell}, style::{Style, Color}};
 
@@ -13,7 +13,22 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
 
     // render storage slot list
     let mut rows = Vec::new();
-    let mut storage_iter =  state.storage.iter().collect::<Vec<_>>();
+    
+
+    // filter storage_iter by state.filter
+    let mut storage_iter = match state.filter.len() > 0 {
+        true => {
+            state.storage
+                .iter()
+                .filter(|(slot, value)| {
+                    let slot = format!("0x{}", encode_hex(slot.to_fixed_bytes().into()));
+                    let value = format!("0x{}", encode_hex(value.value.to_fixed_bytes().into()));
+                    slot.contains(&state.filter) ||  value.contains(&state.filter)
+                })
+                .collect::<Vec<_>>()
+        }
+        false => state.storage.iter().collect::<Vec<_>>()
+    };
 
     // sort storage slots by slot
     storage_iter.sort_by_key(|(slot, _)| *slot);
@@ -64,6 +79,20 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
                     Style::default().fg(Color::White)
                 }
             )
+            .height(1)
+            .bottom_margin(0)
+        );
+    }
+
+    if rows.is_empty() {
+        rows.push(
+            Row::new(vec![
+                Cell::from("No Results Found"),
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(""),
+            ])
+            .style(Style::default().fg(Color::DarkGray))
             .height(1)
             .bottom_margin(0)
         );
