@@ -21,4 +21,3 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 heimdall-cache = { path = "./../cache" }
 crossbeam-channel = "0.5.7"
-clipboard = "0.5.0"
