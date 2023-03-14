@@ -14,7 +14,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Compile
+
+    - name: Install Prerequisites
+      run: |
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          sudo apt-get install xorg-dev
+        fi
+
+    - name: Build Binaries
       working-directory: ./heimdall
       run:  |
         cargo clean

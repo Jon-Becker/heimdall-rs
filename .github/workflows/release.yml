@@ -24,10 +24,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    
+    - name: Install Prerequisites
+      run: |
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          sudo apt-get install xorg-dev
+        fi
+
     - name: Build Binaries
       run:  |
         cargo clean
         cargo build --release
+
     - name: Upload Binaries
       uses: svenstaro/upload-release-action@v2
       with:
