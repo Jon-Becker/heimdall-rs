@@ -68,6 +68,10 @@ pub struct DumpArgs {
     /// The block number to stop dumping at.
     #[clap(long, default_value = "9999999999", hide_default_value = true)]
     pub to_block: u128,
+
+    /// Whether to skip opening the TUI.
+    #[clap(long)]
+    pub no_tui: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +114,7 @@ impl DumpState {
                 threads: 4,
                 from_block: 0,
                 to_block: 9999999999,
+                no_tui: false,
             },
             scroll_index: 0,
             selection_size: 1,
@@ -221,6 +226,11 @@ pub fn dump(args: DumpArgs) {
 
     // in a new thread, start the TUI
     let tui_thread = std::thread::spawn(move || {
+
+        // if no TUI is requested, just run the dump
+        if args.no_tui {
+            return;
+        }
 
         // create new TUI terminal
         enable_raw_mode().unwrap();
@@ -467,7 +477,7 @@ pub fn dump(args: DumpArgs) {
     });
 
     // index transactions in a new thread
-    std::thread::spawn(move || {
+    let dump_thread = std::thread::spawn(move || {
         let state = DUMP_STATE.lock().unwrap();
         let transactions = state.transactions.clone();
         let args = state.args.clone();
@@ -547,6 +557,18 @@ pub fn dump(args: DumpArgs) {
         });
     });
 
+    // if no-tui flag is set, wait for the indexing thread to finish
+    if args.no_tui {
+        match dump_thread.join() {
+            Ok(_) => {},
+            Err(e) => {
+                logger.error("failed to join indexer thread.");
+                logger.error(&format!("{:?}", e));
+                std::process::exit(1);
+            }
+        }
+    }
+
     // wait for the TUI thread to finish
     match tui_thread.join() {
         Ok(_) => {},
@@ -560,6 +582,6 @@ pub fn dump(args: DumpArgs) {
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
     write_storage_to_csv(&_output_dir, &"storage_dump.csv".to_string(), &state);
-
+    logger.success(&format!("Wrote storage dump to '{}/storage_dump.csv'.", _output_dir));
     logger.info(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &args.target));
 }

@@ -34,7 +34,6 @@ lazy_static! {
         "↓, Scroll Down                         move the cursor down one slot".to_string(),
         "←, →                                   change the decoding type of the selected slot".to_string(),
         "CTRL + ↑, CTRL + ↓                     move the cursor up or down by 10 slots".to_string(),
-        "CTRL + C,                              copy the decoded value of the current slot to the clipboard".to_string(),
         "ESC                                    clear the search filter".to_string(),
     ];
 }
