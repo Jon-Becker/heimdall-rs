@@ -12,7 +12,7 @@ use crossterm::event::{EnableMouseCapture};
 use crossterm::execute;
 use crossterm::terminal::{enable_raw_mode, EnterAlternateScreen};
 use ethers::types::{H256, H160, Diff};
-use heimdall_common::resources::transpose::get_transaction_list;
+use heimdall_common::resources::transpose::{get_transaction_list, get_contract_creation};
 use heimdall_common::{
     io::{ logging::* },
     utils::{ threading::task_pool }
@@ -160,12 +160,22 @@ pub fn dump(args: DumpArgs) {
         std::process::exit(1);
     }
 
-    // check if the RPC url is set and supports trace_replayTransaction
-    get_storage_diff(&Transaction {
+    // get the contract creation tx
+    let contract_creation_tx = match get_contract_creation(&args.target, &args.transpose_api_key, &logger) {
+        Some(tx) => tx,
+        None => {
+            logger.error("failed to get contract creation transaction. Is the target a contract address?");
+            std::process::exit(1);
+        }
+    };
+
+    // add the contract creation tx to the transactions list to be indexed
+    let mut transactions: Vec<Transaction> = Vec::new();
+    transactions.push(Transaction {
         indexed: false,
-        hash: String::from("0xb95343413e459a0f97461812111254163ae53467855c0d73e0f1e7c5b8442fa3"),
-        block_number: 471968
-    }, &args);
+        hash: contract_creation_tx.1,
+        block_number: contract_creation_tx.0
+    });
 
     // parse the output directory
     let mut output_dir = args.output.clone();
@@ -198,7 +208,6 @@ pub fn dump(args: DumpArgs) {
     let transaction_list = get_transaction_list(&args.target, &args.transpose_api_key, (&args.from_block, &args.to_block), &logger);
 
     // convert to vec of Transaction
-    let mut transactions: Vec<Transaction> = Vec::new();
     for transaction in transaction_list {
         transactions.push(Transaction {
             indexed: false,
@@ -484,7 +493,10 @@ pub fn dump(args: DumpArgs) {
         let args = state.args.clone();
         drop(state);
         
-        task_pool(transactions, args.threads, move |tx| {
+        // the number of threads cannot exceed the number of transactions
+        let num_indexing_threads = std::cmp::min(transactions.len(), args.threads);
+
+        task_pool(transactions, num_indexing_threads, move |tx| {
 
             // get the storage diff for this transaction
             let state_diff = get_storage_diff(&tx, &args);
@@ -569,14 +581,15 @@ pub fn dump(args: DumpArgs) {
             }
         }
     }
-
-    // wait for the TUI thread to finish
-    match tui_thread.join() {
-        Ok(_) => {},
-        Err(e) => {
-            logger.error("failed to join TUI thread.");
-            logger.error(&format!("{:?}", e));
-            std::process::exit(1);
+    else {
+        // wait for the TUI thread to finish
+        match tui_thread.join() {
+            Ok(_) => {},
+            Err(e) => {
+                logger.error("failed to join TUI thread.");
+                logger.error(&format!("{:?}", e));
+                std::process::exit(1);
+            }
         }
     }
 

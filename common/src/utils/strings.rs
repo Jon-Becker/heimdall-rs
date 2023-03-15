@@ -55,7 +55,6 @@ pub fn hex_to_ascii(s: &str) -> String {
     result
 }
 
-
 // replace the last occurrence of a string with a new string
 pub fn replace_last(s: String, old: &str, new: &str) -> String {
     let new = new.chars().rev().collect::<String>();
