@@ -1,7 +1,7 @@
 use heimdall_common::utils::{time::{calculate_eta, format_eta}};
 use tui::{backend::Backend, Frame, layout::{Layout, Constraint, Direction}, widgets::{Gauge, Block, Borders, Cell, Row, Table}, style::{Style, Color, Modifier}};
 
-use crate::dump::{DumpState, util::table::build_rows};
+use crate::dump::{util::table::build_rows, structures::dump_state::DumpState};
 
 pub fn render_tui_view_main<B: Backend>(
     f: &mut Frame<B>,

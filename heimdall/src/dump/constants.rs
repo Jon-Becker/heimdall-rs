@@ -2,8 +2,7 @@ use std::sync::Mutex;
 
 use lazy_static::lazy_static;
 
-use crate::dump::DumpState;
-
+use crate::dump::structures::dump_state::DumpState;
 
 lazy_static! {
     pub static ref DUMP_STATE: Mutex<DumpState> = Mutex::new(DumpState::new());

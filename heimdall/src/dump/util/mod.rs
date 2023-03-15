@@ -1,5 +1,6 @@
 pub mod csv;
 pub mod table;
+pub mod threads;
 
 use std::{str::FromStr, io};
 
@@ -9,7 +10,7 @@ use heimdall_cache::{read_cache, store_cache};
 use heimdall_common::io::logging::Logger;
 use tui::{backend::CrosstermBackend, Terminal};
 
-use super::{Transaction, DumpArgs};
+use super::{DumpArgs, structures::transaction::Transaction};
 
 pub fn cleanup_terminal() {
     let stdout = io::stdout();

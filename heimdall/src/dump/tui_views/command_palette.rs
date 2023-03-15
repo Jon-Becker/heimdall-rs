@@ -1,6 +1,6 @@
 use tui::{backend::Backend, Frame, layout::{Layout, Constraint, Direction}, widgets::{Block, Borders, Cell, Row, Table, Paragraph}, style::{Style, Color, Modifier}};
 
-use crate::dump::{DumpState, util::table::build_rows};
+use crate::dump::{util::table::build_rows, structures::dump_state::DumpState};
 
 pub fn render_tui_command_palette<B: Backend>(
     f: &mut Frame<B>,

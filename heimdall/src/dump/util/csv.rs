@@ -1,7 +1,7 @@
 use ethers::{abi::{decode, ParamType}, types::U256};
 use heimdall_common::{utils::strings::{encode_hex, hex_to_ascii}, io::{file::write_lines_to_file}};
 
-use crate::dump::{DumpState, constants::DECODE_AS_TYPES};
+use crate::dump::{constants::DECODE_AS_TYPES, structures::dump_state::DumpState};
 
 pub fn write_storage_to_csv(output_dir: &String, file_name: &String, state: &DumpState) {
     let mut lines = {

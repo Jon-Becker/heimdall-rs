@@ -1,6 +1,6 @@
 use tui::{backend::Backend, Frame, layout::{Layout, Constraint, Direction, Alignment}, style::{Style, Color, Modifier}, widgets::{Paragraph, Block, Borders, Wrap}, text::Span};
 
-use crate::dump::{DumpState, constants::{HELP_MENU_COMMANDS, HELP_MENU_CONTROLS, ABOUT_TEXT}};
+use crate::dump::{constants::{HELP_MENU_COMMANDS, HELP_MENU_CONTROLS, ABOUT_TEXT}, structures::dump_state::DumpState};
 
 pub fn render_tui_help<B: Backend>(
     f: &mut Frame<B>,

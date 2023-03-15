@@ -2,7 +2,7 @@ use ethers::{abi::{decode, ParamType}, types::{U256}};
 use heimdall_common::{utils::strings::{encode_hex, hex_to_ascii}, io::clipboard::copy_to_clipboard};
 use tui::{widgets::{Row, Cell}, style::{Style, Color}};
 
-use crate::dump::{DumpState, constants::DECODE_AS_TYPES};
+use crate::dump::{constants::DECODE_AS_TYPES, structures::dump_state::DumpState};
 
 pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'static>> {
 

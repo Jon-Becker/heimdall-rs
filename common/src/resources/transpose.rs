@@ -21,22 +21,27 @@ struct TransposeResponse {
     results: Vec<Value>
 }
 
-fn _call_transpose(endpoint: String, api_key: &String, logger: &Logger) -> Option<TransposeResponse> {
+fn _call_transpose(query: String, api_key: &String, logger: &Logger) -> Option<TransposeResponse> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", "application/json".parse().unwrap());
     headers.insert("X-API-KEY", api_key.parse().unwrap());
 
     // make the request
-    let client = reqwest::blocking::Client::builder().redirect(reqwest::redirect::Policy::none()).build() .unwrap();
+    let client = reqwest::blocking::Client::builder()
+    .redirect(reqwest::redirect::Policy::none())
+    .timeout(Duration::from_secs(999999999))
+    .build()
+    .unwrap();
+
     let mut response = match client
-        .get(format!("https://api.transpose.io/endpoint/{endpoint}"))
-        .body("{\"options\":{\"timeout\": 999999999}}")
+        .post(format!("https://api.transpose.io/sql"))
+        .body(query.clone())
         .headers(headers)
         .send()
     {
         Ok(res) => res,
         Err(e) => {
-            logger.error(&format!("failed to call Transpose endpoint '{endpoint}' ."));
+            logger.error(&format!("failed to call Transpose ."));
             logger.error(&format!("error: {}", e));
             std::process::exit(1)
         }
@@ -50,7 +55,7 @@ fn _call_transpose(endpoint: String, api_key: &String, logger: &Logger) -> Optio
                 Ok(json) => json,
                 Err(e) => {
                     logger.error(&format!("Transpose request unsucessful."));
-                    logger.debug(&format!("curl: curl -X GET \"https://api.transpose.io/endpoint/{endpoint}\" -H \"accept: application/json\" -H \"Content-Type: application/json\" -H \"X-API-KEY: {api_key}\" -d \"{{\\\"options\\\":{{\\\"timeout\\\": 999999999}}}}\""));
+                    logger.debug(&format!("curl: curl -X GET \"https://api.transpose.io/sql\" -H \"accept: application/json\" -H \"Content-Type: application/json\" -H \"X-API-KEY: {api_key}\" -d {query}"));
                     logger.error(&format!("error: {}", e));
                     logger.debug(&format!("response body: {:?}", body));
                     std::process::exit(1)
@@ -80,8 +85,19 @@ pub fn get_transaction_list(
     transaction_list_progress.set_message(format!("fetching transactions from '{}' .", address));
     let start_time = Instant::now();
 
+    // build the SQL query
+    let query = format!(
+        "{{\"sql\":\"SELECT block_number, transaction_hash FROM  (SELECT transaction_hash, block_number FROM ethereum.transactions WHERE to_address = '{}' AND block_number BETWEEN {} AND {}  UNION  SELECT transaction_hash, block_number FROM ethereum.traces WHERE to_address = '{}' AND block_number BETWEEN {} AND {}) x\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
+        address,
+        bounds.0,
+        bounds.1,
+        address,
+        bounds.0,
+        bounds.1
+    );
+
     let response = match _call_transpose(
-        format!("get-all-transactions/1?address={}&from_block={}&to_block={}", address, bounds.0, bounds.1),
+        query,
         api_key,
         logger
     ) {
@@ -148,8 +164,15 @@ pub fn get_contract_creation(
     transaction_list_progress.set_message(format!("fetching '{address}''s creation tx ."));
     let start_time = Instant::now();
 
+    // build the SQL query
+    let query = format!(
+        "{{\"sql\":\"SELECT block_number, transaction_hash FROM ethereum.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM ethereum.accounts WHERE address = '{}' ) AND contract_address = '{}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
+        address,
+        address,
+    );
+
     let response = match _call_transpose(
-        format!("fast-contract-address-creation-lookup/1?contract_address={address}"),
+        query,
         api_key,
         logger
     ) {
