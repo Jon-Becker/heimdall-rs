@@ -290,6 +290,7 @@ pub fn dump(args: DumpArgs) {
                                                 if args.len() > 0 {
                                                     write_storage_to_csv(&output_dir.clone(), &args[0].to_string(), &state);
                                                 }
+                                                state.view = TUIView::Main;
                                             }
                                             ":s" | ":seek" => {
                                                 if args.len() > 1 {
