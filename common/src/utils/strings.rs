@@ -47,6 +47,11 @@ pub fn hex_to_ascii(s: &str) -> String {
         let byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap();
         result.push(byte as char);
     }
+
+    // remove newlines
+    result = result.replace("\r", "");
+    result = result.replace("\n", "");
+
     result
 }
 

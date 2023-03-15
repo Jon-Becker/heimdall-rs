@@ -28,7 +28,7 @@ pub fn write_storage_to_csv(output_dir: &String, file_name: &String, state: &Dum
             };
             lines.push(
                 format!(
-                    "{},{},{},{},{}",
+                    "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
                     value.modifiers.iter().max_by_key(|m| m.0).unwrap().0.to_string(),
                     value.alias.as_ref().unwrap_or(&String::from("None")),
                     encode_hex(slot.to_fixed_bytes().into()),
