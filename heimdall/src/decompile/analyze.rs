@@ -140,7 +140,7 @@ impl VMTrace {
                         "emit Event_{}({}{});",
                         
                         match &logged_event.topics.first() {
-                            Some(topic) => topic.get(0..8).unwrap(),
+                            Some(topic) => topic,
                             None => "00000000",
                         },
                         match logged_event.topics.get(1..) {
