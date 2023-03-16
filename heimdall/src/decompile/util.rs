@@ -22,7 +22,7 @@ pub struct Function {
 
     // the function's entry point in the code.
     // the entry point is the instruction the dispatcher JUMPs to when called.
-    pub entry_point: u64,
+    pub entry_point: u128,
 
     // argument structure:
     //   - key : slot operations of the argument.
@@ -234,7 +234,7 @@ pub fn find_function_selectors(assembly: String) -> Vec<String> {
 }
 
 // resolve a selector's function entry point from the EVM bytecode
-pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
+pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
     let mut vm = evm.clone();
 
     // execute the EVM call to find the entry point for the given selector
@@ -245,14 +245,20 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
         // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
         if call.last_instruction.opcode == "57" {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
-            let jump_taken = call.last_instruction.inputs[1].as_u64();
+            let jump_taken: u128 = match call.last_instruction.inputs[1].try_into() {
+                Ok(jump_taken) => jump_taken,
+                Err(_) => 0,
+            };
 
             if jump_condition.contains(&selector) &&
                jump_condition.contains("msg.data[0]") &&
                jump_condition.contains(" == ") &&
                jump_taken == 1
             {
-                return call.last_instruction.inputs[0].as_u64();
+                return match call.last_instruction.inputs[1].try_into() {
+                    Ok(jump_taken) => jump_taken,
+                    Err(_) => 0,
+                };
             }
         }
 
@@ -268,7 +274,7 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u64 {
 pub fn map_selector(
     evm: &VM,
     selector: String,
-    entry_point: u64,
+    entry_point: u128,
 ) -> (VMTrace, u32) {
     let mut vm = evm.clone();
     vm.calldata = selector;
