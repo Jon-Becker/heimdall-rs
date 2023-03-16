@@ -19,6 +19,21 @@ use std::{
     io::{Write, Read}, process::Command, num::ParseIntError
 };
 
+pub fn prettify_bytes(bytes: u64) -> String {
+    if bytes < 1024 {
+        return format!("{} B", bytes);
+    } else if bytes < 1024 * 1024 {
+        let kb = bytes / 1024;
+        return format!("{} KB", kb);
+    } else if bytes < 1024 * 1024 * 1024 {
+        let mb = bytes / (1024 * 1024);
+        return format!("{} MB", mb);
+    } else {
+        let gb = bytes / (1024 * 1024 * 1024);
+        return format!("{} GB", gb);
+    }
+}
+
 
 pub fn write_file(_path: &String, contents: &String) -> Option<String> {
     let path = std::path::Path::new(_path);

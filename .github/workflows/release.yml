@@ -24,8 +24,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+
     - name: Build Binaries
-      run:  cargo build --release
+      run:  |
+        cargo clean
+        cargo build --release
+
     - name: Upload Binaries
       uses: svenstaro/upload-release-action@v2
       with:

@@ -1,6 +1,6 @@
 [package]
 name = "heimdall-common"
-version = "0.3.4"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 readme = "README.md"
@@ -20,3 +20,4 @@ reqwest = { version = "0.11.11", features = ["blocking"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 heimdall-cache = { path = "./../cache" }
+crossbeam-channel = "0.5.7"

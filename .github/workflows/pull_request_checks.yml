@@ -14,9 +14,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Compile
+
+    - name: Build Binaries
       working-directory: ./heimdall
-      run: cargo build --verbose
+      run:  |
+        cargo clean
+        cargo build
 
     - name: Run Tests
       working-directory: ./heimdall

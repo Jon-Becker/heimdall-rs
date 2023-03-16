@@ -35,6 +35,9 @@ pub enum Subcommands {
 
     #[clap(name = "ls", about = "Lists all cached objects in ~/.bifrost/cache")]
     Ls(NoArguments),
+
+    #[clap(name = "size", about = "Prints the size of the cache in ~/.bifrost/cache")]
+    Size(NoArguments),
 }
 
 
@@ -188,7 +191,7 @@ pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>) where T: Seriali
     write_file(&cache_file.to_str().unwrap().to_string(), &binary_string);
 }
 
-
+#[allow(deprecated)]
 pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
     match args.sub {
         Subcommands::Clean(_) => {
@@ -202,8 +205,22 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
             for (i, key) in keys.iter().enumerate() {
                 println!("{i:>5} : {}", key);
             }
-
         },
+        Subcommands::Size(_) => {
+            let home = home_dir().unwrap();
+            let cache_dir = home.join(".bifrost").join("cache");
+            let mut size = 0;
+
+            for entry in cache_dir.read_dir().unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                let metadata = std::fs::metadata(path).unwrap();
+                size += metadata.len();
+            }
+
+            println!("Cached objects: {}", keys("*").len());
+            println!("Cache size: {}", prettify_bytes(size));
+        }
     }
    
     Ok(())

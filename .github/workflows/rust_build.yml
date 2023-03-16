@@ -7,11 +7,10 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
+
     - name: Compile
       working-directory: ./heimdall
       run: cargo build --verbose
