@@ -9,17 +9,15 @@ use std::str::FromStr;
 use std::time::{Instant};
 use std::env;
 use clap::{AppSettings, Parser};
-use ethers::types::{H160, Diff};
+use ethers::types::{H160};
 use heimdall_common::resources::transpose::{get_transaction_list, get_contract_creation};
-use heimdall_common::{io::{ logging::* }, utils::{ threading::task_pool }};
+use heimdall_common::{io::{ logging::* }};
 
 use self::constants::{DUMP_STATE};
 use self::structures::dump_state::DumpState;
-use self::structures::storage_slot::StorageSlot;
 use self::structures::transaction::Transaction;
 use self::tui_views::{TUIView};
 use self::util::csv::write_storage_to_csv;
-use self::util::{get_storage_diff};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Dump the value of all storage slots accessed by a contract",
@@ -157,86 +155,7 @@ pub fn dump(args: DumpArgs) {
 
     // index transactions in a new thread
     let dump_thread = std::thread::spawn(move || {
-        let state = DUMP_STATE.lock().unwrap();
-        let transactions = state.transactions.clone();
-        let args = state.args.clone();
-        drop(state);
-        
-        // the number of threads cannot exceed the number of transactions
-        let num_indexing_threads = std::cmp::min(transactions.len(), args.threads);
-
-        task_pool(transactions, num_indexing_threads, move |tx| {
-
-            // get the storage diff for this transaction
-            let state_diff = get_storage_diff(&tx, &args);
-
-            // unlock state
-            let mut state = DUMP_STATE.lock().unwrap();
-        
-            // find the transaction in the state
-            let txs = state.transactions.iter_mut().find(|t| t.hash == tx.hash).unwrap();
-            let block_number = tx.block_number.clone();
-            txs.indexed = true;
-
-            // unwrap the state diff
-            match state_diff {
-                Some(state_diff) => {
-
-                    // get diff for this address
-                    match state_diff.0.get(&addr_hash) {
-                        Some(diff) => {
-                            
-                            // build diff of StorageSlots and append to state
-                            for (slot, diff_type) in &diff.storage {
-
-                                // parse value from diff type
-                                let value = match diff_type {
-                                    Diff::Born(value) => value,
-                                    Diff::Changed(changed) => &changed.to,
-                                    Diff::Died(_) => {
-                                        state.storage.remove(slot);
-                                        continue;
-                                    }
-                                    _ => continue,
-                                };
-
-                                // get the slot from the state
-                                match state.storage.get_mut(slot) {
-                                    Some(slot) => {
-
-                                       // update value if newest modifier
-                                       if slot.modifiers.iter().all(|m| m.0 < block_number) {
-                                            slot.value = *value;
-                                        }
-                                        
-                                        slot.modifiers.push((block_number, tx.hash.clone().to_owned()));
-                                    },
-                                    None => {
-
-                                        // insert into state
-                                        state.storage.insert(
-                                            *slot, 
-                                            StorageSlot {
-                                                value: *value,
-                                                modifiers: vec![(block_number, tx.hash.clone().to_owned())],
-                                                alias: None,
-                                                decode_as_type_index: 0
-                                            }
-                                        );
-                                    }
-                                }
-                            }
-
-                        },
-                        None => {}
-                    }
-                },
-                None => {}
-            }
-
-            // drop state
-            drop(state);
-        });
+        util::threads::indexer::handle(addr_hash);
     });
 
     // if no-tui flag is set, wait for the indexing thread to finish
