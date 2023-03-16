@@ -22,7 +22,7 @@ use self::util::csv::write_storage_to_csv;
 #[clap(about = "Dump the value of all storage slots accessed by a contract",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
        global_setting = AppSettings::DeriveDisplayOrder,
-         global_setting = AppSettings::ColoredHelp,
+       global_setting = AppSettings::ColoredHelp,
        override_usage = "heimdall dump <TARGET> [OPTIONS]")]
 pub struct DumpArgs {
 
