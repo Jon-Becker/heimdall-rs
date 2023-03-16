@@ -1,4 +1,3 @@
-mod tests;
 mod util;
 mod constants;
 mod tui_views;
