@@ -547,7 +547,6 @@ impl VMTrace {
                     )
                 );
             } else if opcode_name == "CALLDATALOAD" {
-                println!("CALLDATALOAD: {:?}", instruction);
                 let calldata_slot = (instruction.inputs[0].as_usize().saturating_sub(4)) / 32;
                 match function.arguments.get(&calldata_slot) {
                     Some(_) => {}
