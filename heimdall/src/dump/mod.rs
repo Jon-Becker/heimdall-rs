@@ -67,12 +67,39 @@ pub struct DumpArgs {
 pub fn dump(args: DumpArgs) {
     let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
 
+    // parse the output directory
+    let mut output_dir = args.output.clone();
+    if &args.output.len() <= &0 {
+        output_dir = match env::current_dir() {
+            Ok(dir) => dir.into_os_string().into_string().unwrap(),
+            Err(_) => {
+                logger.error("failed to get current directory.");
+                std::process::exit(1);
+            }
+        };
+        output_dir.push_str("/output");
+    }
+
     // check if transpose api key is set
     if &args.transpose_api_key.len() <= &0 {
         logger.error("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
         logger.info("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
         std::process::exit(1);
     }
+
+    // // disassemble the bytecode
+    // let disassembled_bytecode = heimdall_common::ether::evm::disassemble::disassemble(DisassemblerArgs {
+    //     target: args.target.clone(),
+    //     default: true,
+    //     verbose: args.verbose.clone(),
+    //     output: String::new(),
+    //     rpc_url: args.rpc_url.clone(),
+    // });
+
+    // // find and all selectors in the bytecode
+    // let selectors = find_function_selectors(disassembled_bytecode);
+
+    // println!("{:?}", selectors);
 
     // get the contract creation tx
     let contract_creation_tx = match get_contract_creation(&args.target, &args.transpose_api_key, &logger) {
@@ -90,19 +117,6 @@ pub fn dump(args: DumpArgs) {
         hash: contract_creation_tx.1,
         block_number: contract_creation_tx.0
     });
-
-    // parse the output directory
-    let mut output_dir = args.output.clone();
-    if &args.output.len() <= &0 {
-        output_dir = match env::current_dir() {
-            Ok(dir) => dir.into_os_string().into_string().unwrap(),
-            Err(_) => {
-                logger.error("failed to get current directory.");
-                std::process::exit(1);
-            }
-        };
-        output_dir.push_str("/output");
-    }
 
     // convert the target to an H160
     let addr_hash = match H160::from_str(&args.target) {

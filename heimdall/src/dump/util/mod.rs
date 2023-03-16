@@ -12,6 +12,7 @@ use tui::{backend::CrosstermBackend, Terminal};
 
 use super::{DumpArgs, structures::transaction::Transaction};
 
+// cleanup the terminal, disable raw mode, and leave the alternate screen
 pub fn cleanup_terminal() {
     let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
@@ -21,6 +22,7 @@ pub fn cleanup_terminal() {
     terminal.show_cursor().unwrap();
 }
 
+// get the state diff for the given transaction
 pub fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<StateDiff> {
     
     // create new logger
