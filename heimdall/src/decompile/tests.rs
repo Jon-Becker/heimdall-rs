@@ -146,6 +146,7 @@ mod tests {
             "function Unresolved_d0e30db0() public payable {",
             "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"
         ] {
+            println!("{}", line);
             assert!(output.contains(line));
         }
 
@@ -178,6 +179,7 @@ mod tests {
             "function Unresolved_9b6deec4() public view payable returns (address) {",
             "function Unresolved_e834a834() public view payable returns (bool) {"
         ] {
+            println!("{}", line);
             assert!(output.contains(line));
         }
 

@@ -245,9 +245,9 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
         // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
         if call.last_instruction.opcode == "57" {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
-            let jump_taken: u128 = match call.last_instruction.inputs[1].try_into() {
+            let jump_taken = match call.last_instruction.inputs[1].try_into() {
                 Ok(jump_taken) => jump_taken,
-                Err(_) => 0,
+                Err(_) => 1
             };
 
             if jump_condition.contains(&selector) &&
@@ -255,10 +255,10 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
                jump_condition.contains(" == ") &&
                jump_taken == 1
             {
-                return match call.last_instruction.inputs[1].try_into() {
-                    Ok(jump_taken) => jump_taken,
-                    Err(_) => 0,
-                };
+                return match call.last_instruction.inputs[0].try_into() {
+                    Ok(entry_point) => entry_point,
+                    Err(_) => 0
+                }
             }
         }
 
