@@ -140,7 +140,7 @@ impl VMTrace {
                         "emit Event_{}({}{});",
                         
                         match &logged_event.topics.first() {
-                            Some(topic) => topic.get(0..8).unwrap(),
+                            Some(topic) => topic,
                             None => "00000000",
                         },
                         match logged_event.topics.get(1..) {
@@ -547,8 +547,7 @@ impl VMTrace {
                     )
                 );
             } else if opcode_name == "CALLDATALOAD" {
-
-                let calldata_slot = (instruction.inputs[0].as_usize() - 4) / 32;
+                let calldata_slot = (instruction.inputs[0].as_usize().saturating_sub(4)) / 32;
                 match function.arguments.get(&calldata_slot) {
                     Some(_) => {}
                     None => {
@@ -556,7 +555,7 @@ impl VMTrace {
                             calldata_slot,
                             (
                                 CalldataFrame {
-                                    slot: (instruction.inputs[0].as_usize() - 4) / 32,
+                                    slot: (instruction.inputs[0].as_usize().saturating_sub(4)) / 32,
                                     operation: instruction.input_operations[0].to_string(),
                                     mask_size: 32,
                                     heuristics: Vec::new(),
