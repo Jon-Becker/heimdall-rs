@@ -61,6 +61,10 @@ pub struct DumpArgs {
     /// Whether to skip opening the TUI.
     #[clap(long)]
     pub no_tui: bool,
+
+    /// The chain of the target. Valid chains are ethereum, polygon, goerli, canto, and arbitrum.
+    #[clap(long, default_value = "ethereum", hide_default_value = true)]
+    pub chain: String,
 }
 
 pub fn dump(args: DumpArgs) {
@@ -101,7 +105,7 @@ pub fn dump(args: DumpArgs) {
     // println!("{:?}", selectors);
 
     // get the contract creation tx
-    let contract_creation_tx = match get_contract_creation(&args.target, &args.transpose_api_key, &logger) {
+    let contract_creation_tx = match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key, &logger) {
         Some(tx) => tx,
         None => {
             logger.error("failed to get contract creation transaction. Is the target a contract address?");
@@ -132,7 +136,7 @@ pub fn dump(args: DumpArgs) {
     }
 
     // fetch transactions
-    let transaction_list = get_transaction_list(&args.target, &args.transpose_api_key, (&args.from_block, &args.to_block), &logger);
+    let transaction_list = get_transaction_list(&args.chain, &args.target, &args.transpose_api_key, (&args.from_block, &args.to_block), &logger);
 
     // convert to vec of Transaction
     for transaction in transaction_list {

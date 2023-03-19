@@ -519,7 +519,6 @@ fn replace_resolved(
     }
 
     for (selector, event) in all_resolved_events.iter() {
-        let selector = selector.get(0..8).unwrap_or("00000000");
         if cleaned.contains(selector) {
             cleaned = cleaned.replace(&format!("Event_{selector}"), &event.name);
         }
