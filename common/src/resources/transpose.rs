@@ -72,6 +72,7 @@ fn _call_transpose(query: String, api_key: &String, logger: &Logger) -> Option<T
 }
 
 pub fn get_transaction_list(
+    chain: &String,
     address: &String,
     api_key: &String,
     bounds: (&u128, &u128),
@@ -87,7 +88,7 @@ pub fn get_transaction_list(
 
     // build the SQL query
     let query = format!(
-        "{{\"sql\":\"SELECT block_number, transaction_hash FROM  (SELECT transaction_hash, block_number FROM ethereum.transactions WHERE to_address = '{}' AND block_number BETWEEN {} AND {}  UNION  SELECT transaction_hash, block_number FROM ethereum.traces WHERE to_address = '{}' AND block_number BETWEEN {} AND {}) x\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
+        "{{\"sql\":\"SELECT block_number, transaction_hash FROM  (SELECT transaction_hash, block_number FROM {chain}.transactions WHERE to_address = '{}' AND block_number BETWEEN {} AND {}  UNION  SELECT transaction_hash, block_number FROM {chain}.traces WHERE to_address = '{}' AND block_number BETWEEN {} AND {}) x\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
         address,
         bounds.0,
         bounds.1,
@@ -152,6 +153,7 @@ pub fn get_transaction_list(
 }
 
 pub fn get_contract_creation(
+    chain: &String,
     address: &String,
     api_key: &String,
     logger: &Logger
@@ -166,7 +168,7 @@ pub fn get_contract_creation(
 
     // build the SQL query
     let query = format!(
-        "{{\"sql\":\"SELECT block_number, transaction_hash FROM ethereum.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM ethereum.accounts WHERE address = '{}' ) AND contract_address = '{}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
+        "{{\"sql\":\"SELECT block_number, transaction_hash FROM {chain}.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM {chain}.accounts WHERE address = '{}' ) AND contract_address = '{}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
         address,
         address,
     );
