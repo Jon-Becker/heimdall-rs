@@ -6,7 +6,7 @@ use indicatif::ProgressBar;
 use super::{DecompilerArgs, util::Function, constants::DECOMPILED_SOURCE_HEADER, postprocess::postprocess};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 struct ABIToken {
     name: String,
     #[serde(rename = "internalType")]
@@ -15,7 +15,7 @@ struct ABIToken {
     type_: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 struct FunctionABI {
     #[serde(rename = "type")]
     type_: String,
@@ -27,7 +27,7 @@ struct FunctionABI {
     constant: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 struct ErrorABI {
     #[serde(rename = "type")]
     type_: String,
@@ -36,7 +36,7 @@ struct ErrorABI {
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 struct EventABI {
     #[serde(rename = "type")]
     type_: String,
@@ -44,7 +44,7 @@ struct EventABI {
     inputs: Vec<ABIToken>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 enum ABIStructure {
     Function(FunctionABI),
     Error(ErrorABI),
@@ -184,6 +184,17 @@ pub fn build_output(
                         }
                     }
 
+                    // check if the error is already in the ABI
+                    if abi.iter().any(|x| {
+                        match x {
+                            ABIStructure::Error(x) => x.name == resolved_error.name,
+                            _ => false,
+                        }
+                    }) {
+                        continue;
+                    }
+
+
                     abi.push(
                         ABIStructure::Error(
                             ErrorABI {
@@ -195,6 +206,17 @@ pub fn build_output(
                     );
                 },
                 None => {
+
+                    // check if the error is already in the ABI
+                    if abi.iter().any(|x| {
+                        match x {
+                            ABIStructure::Error(x) => x.name == format!("CustomError_{error_selector}"),
+                            _ => false,
+                        }
+                    }) {
+                        continue;
+                    }
+
                     abi.push(
                         ABIStructure::Error(
                             ErrorABI {
@@ -226,6 +248,16 @@ pub fn build_output(
                         }
                     }
 
+                    // check if the event is already in the ABI
+                    if abi.iter().any(|x| {
+                        match x {
+                            ABIStructure::Event(x) => x.name == resolved_event.name,
+                            _ => false,
+                        }
+                    }) {
+                        continue;
+                    }
+
                     abi.push(
                         ABIStructure::Event(
                             EventABI {
@@ -237,6 +269,17 @@ pub fn build_output(
                     );
                 },
                 None => {
+
+                    // check if the event is already in the ABI
+                    if abi.iter().any(|x| {
+                        match x {
+                            ABIStructure::Event(x) => x.name == format!("Event_{}", event_selector),
+                            _ => false,
+                        }
+                    }) {
+                        continue;
+                    }
+
                     abi.push(
                         ABIStructure::Event(
                             EventABI {
@@ -250,7 +293,7 @@ pub fn build_output(
             }
         }
     }
-
+    
     // write the ABI to a file
     write_file(
         &abi_output_path, 
