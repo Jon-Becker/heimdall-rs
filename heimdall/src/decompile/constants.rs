@@ -18,10 +18,10 @@ lazy_static! {
     pub static ref MEM_ACCESS_REGEX: Regex = Regex::new(r"memory\[.*\]").unwrap();
 
     // detects division by 1
-    pub static ref DIV_BY_ONE_REGEX: Regex = Regex::new(r"\/ 0x01(?!\d)").unwrap();
+    pub static ref DIV_BY_ONE_REGEX: Regex = Regex::new(r" \/ 0x01(?!\d)").unwrap();
 
     // detects multiplication by 1
-    pub static ref MUL_BY_ONE_REGEX: Regex = Regex::new(r"\b0x01\b\s*\*\s*|\*\s*\b0x01\b").unwrap();
+    pub static ref MUL_BY_ONE_REGEX: Regex = Regex::new(r"\b0x01\b\s*\*\s*| \*\s*\b0x01\b").unwrap();
     
     pub static ref DECOMPILED_SOURCE_HEADER: String = 
 "// SPDX-License-Identifier: MIT
