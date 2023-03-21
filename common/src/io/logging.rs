@@ -1,5 +1,5 @@
 use indicatif::ProgressStyle;
-use std::io::{stdin, stdout, Write};
+use std::io::{stdin, stdout};
 
 use colored::*;
 
@@ -501,7 +501,7 @@ impl Logger {
                 "".to_string()
             }
         );
-        let _ = stdout().flush();
+        let _ = std::io::Write::flush(&mut stdout());
 
         if skip {
             if default.is_some() {

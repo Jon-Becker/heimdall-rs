@@ -1,26 +1,27 @@
 mod tests;
+mod util;
 
-use std::{
-    str::FromStr
-};
+use std::{str::FromStr, time::Duration};
 
 use clap::{AppSettings, Parser};
 use ethers::{
     core::types::{H256},
     providers::{Middleware, Provider, Http},
-    abi::{ParamType, decode as decode_abi, Function, StateMutability, Param, AbiEncode},
+    abi::{ParamType, decode as decode_abi, Function, StateMutability, Param, AbiEncode}, types::Transaction,
 };
 
-use heimdall_cache::{store_cache, read_cache};
 use heimdall_common::{
     io::logging::Logger,
     constants::TRANSACTION_HASH_REGEX,
     utils::{
-        strings::decode_hex,
+        strings::{decode_hex},
     }, ether::{evm::types::{parse_function_parameters, display}, signatures::{resolve_function_signature, ResolvedFunction}}
 };
 
+use indicatif::ProgressBar;
 use strsim::normalized_damerau_levenshtein as similarity;
+
+use crate::decode::util::get_explanation;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Decode calldata into readable types",
@@ -41,6 +42,14 @@ pub struct DecodeArgs {
     #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
+    /// Your OpenAI API key, used for explaining calldata.
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub openai_api_key: String,
+
+    /// Whether to explain the decoded calldata using OpenAI.
+    #[clap(long)]
+    pub explain: bool,
+
     /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
@@ -51,7 +60,14 @@ pub struct DecodeArgs {
 #[allow(deprecated)]
 pub fn decode(args: DecodeArgs) {
     let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let mut raw_transaction: Transaction = Transaction::default();
     let calldata: String;
+
+    // check if we require an OpenAI API key
+    if args.explain && args.openai_api_key.len() <= 0 {
+        logger.error("OpenAI API key is required for explaining calldata. Use `heimdall decode --help` for more information.");
+        std::process::exit(1);
+    }
 
     // determine whether or not the target is a transaction hash
     if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
@@ -63,16 +79,7 @@ pub fn decode(args: DecodeArgs) {
             .unwrap();
         
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
-        calldata = rt.block_on(async {
-
-            // check the cache for a matching address
-            match read_cache(&format!("transaction.{}", &args.target)) {
-                Some(calldata) => {
-                    logger.debug(&format!("found cached calldata for '{}' .", &args.target));
-                    return calldata;
-                },
-                None => {}
-            }
+        raw_transaction = rt.block_on(async {
 
             // make sure the RPC provider isn't empty
             if &args.rpc_url.len() <= &0 {
@@ -100,9 +107,9 @@ pub fn decode(args: DecodeArgs) {
 
             // fetch the transaction from the node
             let raw_transaction = match provider.get_transaction(transaction_hash).await {
-                Ok(bytecode) => {
-                    match bytecode {
-                        Some(bytecode) => bytecode,
+                Ok(tx) => {
+                    match tx {
+                        Some(tx) => tx,
                         None => {
                             logger.error(&format!("transaction '{}' doesn't exist.", &args.target));
                             std::process::exit(1)
@@ -115,15 +122,11 @@ pub fn decode(args: DecodeArgs) {
                 }
             };
 
-            // cache the tx
-            store_cache(&format!("transaction.{}", &args.target), raw_transaction.input.to_string().replace("0x", ""), None);
-
-            raw_transaction.input.to_string().replace("0x", "")
+            raw_transaction
         });
     }
-    else {
-        calldata = args.target.replace("0x", "");
-    }
+
+    calldata = raw_transaction.input.to_string().replace("0x", "");
 
     // check if calldata is present
     if calldata.is_empty() {
@@ -256,7 +259,10 @@ pub fn decode(args: DecodeArgs) {
             )
         }
         trace.add_message(decode_call, line!(), inputs);
-        
+
+        // force the trace to display
+        trace.level = 4;
+        trace.display();
     }
     else {
         let mut selection: u8 = 0;
@@ -278,8 +284,6 @@ pub fn decode(args: DecodeArgs) {
             }
         };
 
-        // print out the match and it's decoded inputs
-
         let decode_call = trace.add_call(0, line!(), "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
         trace.br(decode_call);
         trace.add_message(decode_call, line!(), vec![format!("name:      {}", selected_match.name)]);
@@ -287,6 +291,16 @@ pub fn decode(args: DecodeArgs) {
         trace.add_message(decode_call, line!(), vec![format!("selector:  0x{function_selector}")]);
         trace.add_message(decode_call, line!(), vec![format!("calldata:  {} bytes", calldata.len() / 2usize)]);
         trace.br(decode_call);
+
+        // build decoded string for --explain
+        let decoded_string = &mut format!("{}\n{}\n{}\n{}", 
+            format!("name: {}", selected_match.name),
+            format!("signature: {}", selected_match.signature),
+            format!("selector: 0x{function_selector}"),
+            format!("calldata: {} bytes", calldata.len() / 2usize)
+        );
+
+        // build inputs
         for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
             let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
             if decoded_inputs_as_message.is_empty() {
@@ -310,14 +324,40 @@ pub fn decode(args: DecodeArgs) {
                 )
             }
 
-            trace.add_message(decode_call, 1, decoded_inputs_as_message);
+            // add to trace and decoded string
+            trace.add_message(decode_call, 1, decoded_inputs_as_message.clone());
+            decoded_string.push_str(&format!("\n{}", decoded_inputs_as_message.clone().join("\n")));
+        }
+
+        // force the trace to display
+        trace.level = 4;
+        trace.display();
+
+        if args.explain && !matches.is_empty() {
+
+            // get a new progress bar
+            let explain_progress = ProgressBar::new_spinner();
+            explain_progress.enable_steady_tick(Duration::from_millis(100));
+            explain_progress.set_style(logger.info_spinner());
+            explain_progress.set_message("attempting to explain calldata...");
+
+            match get_explanation(
+                decoded_string.to_string(),
+                raw_transaction,
+                &args.openai_api_key,
+                &logger
+            ) {
+                Some(explanation) => {
+                    explain_progress.finish_and_clear();
+                    logger.success(&format!("Calldata explanation: {}", explanation.trim()));
+                },
+                None => {
+                    explain_progress.finish_and_clear();
+                    logger.error("failed to get explanation from OpenAI.");
+                }
+            };
         }
     }
-
-    // force the trace to display
-    trace.level = 4;
-    trace.display();
-
 }
 
 /// Decode calldata into a Vec of potential ResolvedFunctions

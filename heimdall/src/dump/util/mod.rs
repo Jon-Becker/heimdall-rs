@@ -30,9 +30,9 @@ pub fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<StateDiff> 
 
     // create new runtime block
     let rt = tokio::runtime::Builder::new_current_thread()
-    .enable_all()
-    .build()
-    .unwrap();
+        .enable_all()
+        .build()
+        .unwrap();
 
     let state_diff = rt.block_on(async {
 

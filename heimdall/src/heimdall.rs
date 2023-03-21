@@ -130,6 +130,14 @@ fn main() {
                 _ => {}
             };
 
+            // if the user has not specified a openai api key, use the default
+            match cmd.openai_api_key.as_str() {
+                "" => {
+                    cmd.openai_api_key = configuration.openai_api_key;
+                }
+                _ => {}
+            };
+
             decode(cmd);
         }
 

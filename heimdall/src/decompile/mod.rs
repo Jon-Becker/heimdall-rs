@@ -270,6 +270,7 @@ pub fn decompile(args: DecompilerArgs) {
     }
     logger.info(&format!("performing symbolic execution on '{}' .", shortened_target));
 
+    // get a new progress bar
     let decompilation_progress = ProgressBar::new_spinner();
     decompilation_progress.enable_steady_tick(Duration::from_millis(100));
     decompilation_progress.set_style(logger.info_spinner());

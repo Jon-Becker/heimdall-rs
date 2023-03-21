@@ -90,20 +90,6 @@ pub fn dump(args: DumpArgs) {
         std::process::exit(1);
     }
 
-    // // disassemble the bytecode
-    // let disassembled_bytecode = heimdall_common::ether::evm::disassemble::disassemble(DisassemblerArgs {
-    //     target: args.target.clone(),
-    //     default: true,
-    //     verbose: args.verbose.clone(),
-    //     output: String::new(),
-    //     rpc_url: args.rpc_url.clone(),
-    // });
-
-    // // find and all selectors in the bytecode
-    // let selectors = find_function_selectors(disassembled_bytecode);
-
-    // println!("{:?}", selectors);
-
     // get the contract creation tx
     let contract_creation_tx = match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key, &logger) {
         Some(tx) => tx,
