@@ -5,7 +5,7 @@ use std::{
 use heimdall_common::{ether::{evm::types::{byte_size_to_type, find_cast}, signatures::{ResolvedError, ResolvedLog}}, utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards, base26_encode}, constants::TYPE_CAST_REGEX};
 use indicatif::ProgressBar;
 use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
-use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX, MEM_ACCESS_REGEX}};
+use super::{constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, NON_ZERO_BYTE_REGEX, MEM_ACCESS_REGEX, DIV_BY_ONE_REGEX, MUL_BY_ONE_REGEX}};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -527,6 +527,13 @@ fn replace_resolved(
     cleaned
 }
 
+fn simplify_arithmatic(line: String) -> String {
+    let cleaned = DIV_BY_ONE_REGEX.replace_all(&line, "");
+    let cleaned = MUL_BY_ONE_REGEX.replace_all(&cleaned, "");
+
+    cleaned.to_string()
+}
+
 fn cleanup(
     line: String,
     all_resolved_errors: HashMap<String, ResolvedError>,
@@ -563,6 +570,9 @@ fn cleanup(
 
     // Replace resolved errors and events
     cleaned = replace_resolved(cleaned, all_resolved_errors, all_resolved_events);
+
+    // Simplify arithmatic
+    cleaned = simplify_arithmatic(cleaned);
 
     cleaned
 }
