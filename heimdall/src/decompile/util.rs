@@ -319,10 +319,10 @@ pub fn recursive_map(
             );
 
             // if the stack has over 16 items of the same source, it's probably a loop
-            if vm.stack.size() > 16 {
+            if vm.stack.size() > 8 {
                for frame in vm.stack.stack.iter() {
                     let solidified_frame_source = frame.operation.solidify();
-                    if vm.stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >= 16 {
+                    if vm.stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >= 8 {
                         vm_trace.loop_detected = true;
                         return vm_trace;
                     }
@@ -356,7 +356,9 @@ pub fn recursive_map(
                     
                             // check if all stack diff values are in the jump condition
                             let jump_condition = state.last_instruction.input_operations[1].solidify();
-                            
+                            // println!("condition: {}", jump_condition);
+                            // println!("jump: ({}, {})\n\n", jump_frame.1, jump_frame.2);
+
                             // if the stack diff is within the jump condition, its likely that we are in a loop
                             if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
                                 return true;
