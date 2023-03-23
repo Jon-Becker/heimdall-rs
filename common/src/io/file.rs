@@ -11,7 +11,7 @@ pub fn short_path(path: &str) -> String {
         Ok(dir) => dir.into_os_string().into_string().unwrap(),
         Err(_) => std::process::exit(1)
     };
-    return format!("{}", path.replace(&current_dir, "."));
+    path.replace(&current_dir, ".")
 }
 
 
@@ -24,7 +24,7 @@ pub fn write_file(_path: &String, contents: &String) -> String {
         Ok(file) => file,
         Err(_) => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to create file \"{}\" .", _path).to_string());
+            logger.error(&format!("failed to create file \"{_path}\" ."));
             std::process::exit(1)
         }
     };
@@ -32,12 +32,12 @@ pub fn write_file(_path: &String, contents: &String) -> String {
         Ok(_) => {},
         Err(_) => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to write to file \"{}\" .", _path).to_string());
+            logger.error(&format!("failed to write to file \"{_path}\" ."));
             std::process::exit(1)
         }
     }
 
-    return _path.to_string();
+    _path.to_string()
 }
 
 pub fn write_lines_to_file(_path: &String, contents: Vec<String>) {
@@ -50,7 +50,7 @@ pub fn read_file(_path: &String) -> String {
         Ok(file) => file,
         Err(_) => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to open file \"{}\" .", _path).to_string());
+            logger.error(&format!("failed to open file \"{_path}\" ."));
             std::process::exit(1)
         }
     };
@@ -59,24 +59,17 @@ pub fn read_file(_path: &String) -> String {
         Ok(_) => {},
         Err(_) => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to read file \"{}\" .", _path).to_string());
+            logger.error(&format!("failed to read file \"{_path}\" ."));
             std::process::exit(1)
         }
     }
-    return contents;
+    contents
 }
 
 pub fn delete_path(_path: &String) -> bool {
     let path = std::path::Path::new(_path);
-    match Command::new("rm")
-        .args(&["-rf", &path.to_str().unwrap()])
+    Command::new("rm")
+        .args(["-rf", path.to_str().unwrap()])
         .output()
-    {
-        Ok(_) => {
-            return true;
-        },
-        Err(_) => {
-            return false;
-        },
-    }
+        .is_ok()
 }

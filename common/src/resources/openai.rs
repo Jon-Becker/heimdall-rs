@@ -13,7 +13,7 @@ pub fn complete(prompt: String, api_key: &String, logger: &Logger) -> Option<Str
         .build()
         .unwrap();
 
-    let response = rt.block_on(async {
+    rt.block_on(async {
         let request = match
             CreateCompletionRequestArgs::default()
             .model("text-davinci-003")
@@ -25,26 +25,24 @@ pub fn complete(prompt: String, api_key: &String, logger: &Logger) -> Option<Str
         {
             Ok(request) => request,
             Err(e) => {
-                logger.error(&format!("failed to create completion request: {}", e));
+                logger.error(&format!("failed to create completion request: {e}"));
                 return None;
             }
         };
         
         match client.completions().create(request).await {
             Ok(response) => {
-                if response.choices.len() > 0 {
-                    return Some(response.choices[0].text.clone());
+                if !response.choices.is_empty() {
+                    Some(response.choices[0].text.clone())
                 }
                 else {
-                    return None;
+                    None
                 }
             },
             Err(e) => {
-                logger.error(&format!("failed to create completion request: {}", e));
-                return None;
+                logger.error(&format!("failed to create completion request: {e}"));
+                None
             }
         }
-    });
-
-    response
+    })
 }

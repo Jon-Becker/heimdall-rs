@@ -273,7 +273,7 @@ pub fn build_output(
                     // check if the event is already in the ABI
                     if abi.iter().any(|x| {
                         match x {
-                            ABIStructure::Event(x) => x.name == format!("Event_{}", event_selector),
+                            ABIStructure::Event(x) => x.name == format!("Event_{event_selector}"),
                             _ => false,
                         }
                     }) {
@@ -284,7 +284,7 @@ pub fn build_output(
                         ABIStructure::Event(
                             EventABI {
                                 type_: "event".to_string(),
-                                name: format!("Event_{}", event_selector),
+                                name: format!("Event_{event_selector}"),
                                 inputs: Vec::new(),
                             }
                         )

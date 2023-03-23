@@ -61,20 +61,13 @@ impl TraceFactory {
             let parent = self.traces.get_mut(trace.parent as usize - 1).unwrap();
 
             // add the child index to the parent
-            parent.children.push(trace_index as u32);
+            parent.children.push(trace_index);
         }
 
         self.traces.push(trace);
 
         // return the index of the new trace
         trace_index
-    }
-
-    // updates a trace
-    pub fn update(&mut self, index: usize, message: Vec<String>) {
-        println!("{:#?}", self);
-        let trace = self.traces.get_mut(index - 1).unwrap();
-        trace.message = message;
     }
 
     // pretty print the trace
@@ -86,11 +79,8 @@ impl TraceFactory {
                 let trace = self.traces.get(index).unwrap();
 
                 // match only root traces and print them
-                match trace.parent {
-                    0 => {
-                        self.print_trace(" ", index);
-                    }
-                    _ => {}
+                if trace.parent == 0 {
+                    self.print_trace(" ", index);
                 }
             }
         }
@@ -119,7 +109,7 @@ impl TraceFactory {
                 // print the children
                 for child in &trace.children {
                     self.print_trace(
-                        &format!("{}   │", prefix).bold().bright_white(),
+                        &format!("{prefix}   │").bold().bright_white(),
                         *child as usize - 1,
                     );
                 }
@@ -127,7 +117,7 @@ impl TraceFactory {
                 // print the return value
                 println!(
                     "{} ← {}",
-                    format!("{}   └─", prefix).bold().bright_white(),
+                    format!("{prefix}   └─").bold().bright_white(),
                     match trace.message.get(1) {
                         Some(message) => format!(
                             "{}",
@@ -167,7 +157,7 @@ impl TraceFactory {
                                     .bright_white()
                             },
                             if message_index == 0 { "emit" } else { "    " },
-                            format!("topic {}", message_index).purple(),
+                            format!("topic {message_index}").purple(),
                             message
                         );
                     }
@@ -215,12 +205,12 @@ impl TraceFactory {
 
                     if i == trace.children.len() - 1 {
                         self.print_trace(
-                            &format!("{}   └─", prefix).bold().bright_white(),
+                            &format!("{prefix}   └─").bold().bright_white(),
                             *child as usize - 1,
                         );
                     } else {
                         self.print_trace(
-                            &format!("{}   │", prefix).bold().bright_white(),
+                            &format!("{prefix}   │").bold().bright_white(),
                             *child as usize - 1,
                         );
                     }
@@ -248,7 +238,7 @@ impl TraceFactory {
                 // print the children
                 for child in &trace.children {
                     self.print_trace(
-                        &format!("{}   │", prefix).bold().bright_white(),
+                        &format!("{prefix}   │").bold().bright_white(),
                         *child as usize - 1,
                     );
                 }
@@ -256,7 +246,7 @@ impl TraceFactory {
                 // print the return value
                 println!(
                     "{} ← {}",
-                    format!("{}   └─", prefix).bold().bright_white(),
+                    format!("{prefix}   └─").bold().bright_white(),
                     trace.message.get(1).unwrap().bold().green()
                 )
             }
@@ -300,7 +290,7 @@ impl TraceFactory {
             "create",
             parent_index,
             instruction,
-            vec![contract, format!("{} bytes", size.to_string())],
+            vec![contract, format!("{size} bytes")],
         )
     }
 
@@ -486,7 +476,7 @@ impl Logger {
                 } else {
                     "├─".bold().bright_white()
                 },
-                i.to_string(),
+                i,
                 option
             );
         }
@@ -495,7 +485,7 @@ impl Logger {
         let mut selection = String::new();
         print!(
             "\n  Select an option {}: ",
-            if default.is_some() {
+            if let Some(..) = default {
                 format!("(default: {})", default.unwrap())
             } else {
                 "".to_string()
@@ -504,7 +494,7 @@ impl Logger {
         let _ = std::io::Write::flush(&mut stdout());
 
         if skip {
-            if default.is_some() {
+            if let Some(..) = default {
                 println!("{}", default.unwrap());
             } else {
                 println!();
@@ -517,7 +507,7 @@ impl Logger {
             Ok(_) => {
                 // check if default was selected
                 if selection.trim() == "" {
-                    if default.is_some() {
+                    if let Some(..) = default {
                         return default.unwrap();
                     } else {
                         self.error("invalid selection.");
@@ -534,20 +524,17 @@ impl Logger {
                     }
                 };
 
-                if match options.get(selected_index as usize) {
-                    Some(_) => true,
-                    None => false,
-                } {
-                    return selected_index;
+                if options.get(selected_index as usize).is_some() {
+                    selected_index
                 } else {
                     self.error("invalid selection.");
-                    return self.option(function, message, options, default, skip);
+                    self.option(function, message, options, default, skip)
                 }
             }
             Err(_) => {
                 self.error("invalid selection.");
-                return self.option(function, message, options, default, skip);
+                self.option(function, message, options, default, skip)
             }
-        };
+        }
     }
 }

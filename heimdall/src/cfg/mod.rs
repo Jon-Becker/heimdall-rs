@@ -1,31 +1,28 @@
 mod tests;
 
-pub mod output;
 pub mod graph;
+pub mod output;
 pub mod util;
 
-use std::env;
-use std::fs;
-use std::time::Duration;
 use heimdall_cache::read_cache;
 use heimdall_cache::store_cache;
 use indicatif::ProgressBar;
+use std::env;
+use std::fs;
+use std::time::Duration;
 
 use clap::{AppSettings, Parser};
 use ethers::{
-    core::types::{Address},
-    providers::{Middleware, Provider, Http},
+    core::types::Address,
+    providers::{Http, Middleware, Provider},
 };
 use heimdall_common::{
+    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::evm::{
-        disassemble::{
-            DisassemblerArgs,
-            disassemble
-        },
-        vm::VM
+        disassemble::{disassemble, DisassemblerArgs},
+        vm::VM,
     },
-    constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
-    io::{ logging::* },
+    io::logging::*,
 };
 use petgraph::Graph;
 
@@ -40,9 +37,8 @@ use crate::cfg::util::map_contract;
        global_setting = AppSettings::DeriveDisplayOrder,
        override_usage = "heimdall cfg <TARGET> [OPTIONS]")]
 pub struct CFGArgs {
-
     /// The target to generate a CFG for, either a file, bytecode, contract address, or ENS name.
-    #[clap(required=true)]
+    #[clap(required = true)]
     pub target: String,
 
     /// Set the output verbosity level, 1 - 5.
@@ -50,11 +46,11 @@ pub struct CFGArgs {
     pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The output directory to write the output to
-    #[clap(long="output", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
     pub output: String,
 
     /// The RPC provider to use for fetching target bytecode.
-    #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// When prompted, always select the default value.
@@ -63,12 +59,12 @@ pub struct CFGArgs {
 
     /// Specify a format (other than dot) to output the CFG in.
     /// For example, `--format svg` will output a SVG image of the CFG.
-    #[clap(long="format", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "format", short, default_value = "", hide_default_value = true)]
     pub format: String,
 
     /// Color the edges of the graph based on the JUMPI condition.
     /// This is useful for visualizing the flow of if statements.
-    #[clap(long="color-edges", short)]
+    #[clap(long = "color-edges", short)]
     pub color_edges: bool,
 }
 
@@ -76,26 +72,32 @@ pub fn cfg(args: CFGArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, mut trace) = Logger::new(args.verbose.log_level().unwrap().as_str());
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target
+                .chars()
+                .skip(shortened_target.len() - 16)
+                .collect::<String>();
     }
 
     // add the call to the trace
     let cfg_call = trace.add_call(
-        0, line!(),
+        0,
+        line!(),
         "heimdall".to_string(),
         "cfg".to_string(),
         vec![shortened_target],
-        "()".to_string()
+        "()".to_string(),
     );
 
     // parse the output directory
     let mut output_dir: String;
-    if &args.output.len() <= &0 {
+    if args.output.is_empty() {
         output_dir = match env::current_dir() {
             Ok(dir) => dir.into_os_string().into_string().unwrap(),
             Err(_) => {
@@ -104,17 +106,15 @@ pub fn cfg(args: CFGArgs) {
             }
         };
         output_dir.push_str("/output");
-    }
-    else {
+    } else {
         output_dir = args.output.clone();
     }
 
     // fetch bytecode
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-
         // push the address to the output directory
-        if &output_dir != &args.output {
+        if output_dir != args.output {
             output_dir.push_str(&format!("/{}", &args.target));
         }
 
@@ -128,16 +128,13 @@ pub fn cfg(args: CFGArgs) {
         contract_bytecode = rt.block_on(async {
 
             // check the cache for a matching address
-            match read_cache(&format!("contract.{}", &args.target)) {
-                Some(bytecode) => {
-                    logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
-                    return bytecode;
-                },
-                None => {}
+            if let Some(bytecode) = read_cache(&format!("contract.{}", &args.target)) {
+                logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
+                return bytecode;
             }
 
             // make sure the RPC provider isn't empty
-            if &args.rpc_url.len() <= &0 {
+            if args.rpc_url.is_empty() {
                 logger.error("fetching an on-chain contract requires an RPC provider. Use `heimdall cfg --help` for more information.");
                 std::process::exit(1);
             }
@@ -174,15 +171,11 @@ pub fn cfg(args: CFGArgs) {
 
             bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
-
-    }
-    else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
+    } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone();
-    }
-    else {
-
+    } else {
         // push the address to the output directory
-        if &output_dir != &args.output {
+        if output_dir != args.output {
             output_dir.push_str("/local");
         }
 
@@ -191,12 +184,14 @@ pub fn cfg(args: CFGArgs) {
             Ok(contents) => {
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents.replacen("0x", "", 1)
-                }
-                else {
-                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
+                } else {
+                    logger.error(&format!(
+                        "file '{}' doesn't contain valid bytecode.",
+                        &args.target
+                    ));
                     std::process::exit(1)
                 }
-            },
+            }
             Err(_) => {
                 logger.error(&format!("failed to open file '{}' .", &args.target));
                 std::process::exit(1)
@@ -219,8 +214,8 @@ pub fn cfg(args: CFGArgs) {
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len()/2usize)],
-        "()".to_string()
+        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        "()".to_string(),
     );
 
     // perform versioning and compiler heuristics
@@ -230,15 +225,16 @@ pub fn cfg(args: CFGArgs) {
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len()/2usize)],
-        format!("({compiler}, {version})")
+        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        format!("({compiler}, {version})"),
     );
 
     if compiler == "solc" {
         logger.debug(&format!("detected compiler {compiler} {version}."));
-    }
-    else {
-        logger.warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+    } else {
+        logger.warn(&format!(
+            "detected compiler {compiler} {version} is not supported by heimdall."
+        ));
     }
 
     // create a new EVM instance
@@ -253,16 +249,33 @@ pub fn cfg(args: CFGArgs) {
     );
     let mut shortened_target = contract_bytecode.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target
+                .chars()
+                .skip(shortened_target.len() - 16)
+                .collect::<String>();
     }
 
     // add the creation to the trace
-    let vm_trace = trace.add_creation(cfg_call, line!(), "contract".to_string(), shortened_target.clone(), (contract_bytecode.len()/2usize).try_into().unwrap());
+    let vm_trace = trace.add_creation(
+        cfg_call,
+        line!(),
+        "contract".to_string(),
+        shortened_target.clone(),
+        (contract_bytecode.len() / 2usize).try_into().unwrap(),
+    );
 
     // find all selectors in the bytecode
     let selectors = find_function_selectors(disassembled_bytecode);
-    logger.info(&format!("found {} possible function selectors.", selectors.len()));
-    logger.info(&format!("performing symbolic execution on '{}' .", &shortened_target));
+    logger.info(&format!(
+        "found {} possible function selectors.",
+        selectors.len()
+    ));
+    logger.info(&format!(
+        "performing symbolic execution on '{}' .",
+        &shortened_target
+    ));
 
     // create a new progress bar
     let progress = ProgressBar::new_spinner();
@@ -272,25 +285,24 @@ pub fn cfg(args: CFGArgs) {
     // create a new petgraph StableGraph
     let mut contract_cfg = Graph::<String, String>::new();
 
-
     // add the call to the trace
     let map_trace = trace.add_call(
         vm_trace,
         line!(),
         "heimdall".to_string(),
         "cfg".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len()/2usize)],
-        "()".to_string()
+        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        "()".to_string(),
     );
 
     // get a map of possible jump destinations
-    let (map, jumpdest_count) = map_contract(&evm.clone());
+    let (map, jumpdest_count) = map_contract(&evm);
 
     // add jumpdests to the trace
     trace.add_info(
         map_trace,
         line!(),
-        format!("traced and executed {jumpdest_count} possible paths.")
+        format!("traced and executed {jumpdest_count} possible paths."),
     );
 
     map.build_cfg(&mut contract_cfg, None, false);
@@ -299,17 +311,14 @@ pub fn cfg(args: CFGArgs) {
     logger.info("symbolic execution completed.");
 
     // build the dot file
-    build_output(
-        &contract_cfg,
-        &args,
-        output_dir.clone(),
-        &logger,
-    );
-    
-    logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()));
+    build_output(&contract_cfg, &args, output_dir.clone(), &logger);
+
+    logger.debug(&format!(
+        "Control flow graph generated in {:?}.",
+        now.elapsed()
+    ));
     trace.display();
 }
-
 
 /// Builder pattern for using cfg genertion as a library.
 ///
@@ -339,11 +348,10 @@ pub fn cfg(args: CFGArgs) {
 /// ```
 #[allow(dead_code)]
 pub struct CFGBuilder {
-    args: CFGArgs
+    args: CFGArgs,
 }
 
-impl CFGBuilder where {
-
+impl CFGBuilder {
     /// A new builder for the control flow graph generation of the specified target.
     ///
     /// The target may be a file, bytecode, contract address, or ENS name.
@@ -358,7 +366,7 @@ impl CFGBuilder where {
                 format: String::from(""),
                 color_edges: false,
                 default: true,
-            }
+            },
         }
     }
 
@@ -371,7 +379,6 @@ impl CFGBuilder where {
     /// - 4 Trace
     #[allow(dead_code)]
     pub fn verbosity(mut self, level: i8) -> CFGBuilder {
-
         // Calculated by the log library as: 1 + verbose - quiet.
         // Set quiet as 1, and the level corresponds to the appropriate Log level.
         self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 0);

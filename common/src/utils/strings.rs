@@ -8,7 +8,7 @@ use crate::constants::REDUCE_HEX_REGEX;
 
 // Convert an unsigned integer into a signed one
 pub fn sign_uint(unsigned: U256) -> I256 {
-    return I256::from_raw(U256::from(unsigned))
+    I256::from_raw(unsigned)
 }
 
 
@@ -24,7 +24,7 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 // encode a hex into a string
 pub fn encode_hex(s: Vec<u8>) -> String {
     s.iter()
-        .map(|b| format!("{:02x}", b))
+        .map(|b| format!("{b:02x}"))
         .collect()
 }
 
@@ -33,7 +33,7 @@ pub fn encode_hex(s: Vec<u8>) -> String {
 pub fn encode_hex_reduced(s: U256) -> String {
 
     if s > U256::from(0) {
-        REDUCE_HEX_REGEX.replace(&s.clone().encode_hex(), "0x").to_string()
+        REDUCE_HEX_REGEX.replace(&s.encode_hex(), "0x").to_string()
     }
     else {
         String::from("0")
@@ -49,8 +49,8 @@ pub fn hex_to_ascii(s: &str) -> String {
     }
 
     // remove newlines
-    result = result.replace("\r", "");
-    result = result.replace("\n", "");
+    result = result.replace('\r', "");
+    result = result.replace('\n', "");
 
     result
 }

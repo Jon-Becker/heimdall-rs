@@ -119,7 +119,7 @@ pub fn get_config() -> Configuration {
         Ok(config) => config,
         Err(e) => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to parse config file: {}", e));
+            logger.error(&format!("failed to parse config file: {e}"));
             logger.info("regenerating config file...");
             delete_config();
             return get_config()

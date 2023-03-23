@@ -105,8 +105,6 @@ impl VM {
     pub fn exit(&mut self, code: u128, returndata: &str) {
         self.exitcode = code;
         self.returndata = returndata.to_string();
-
-        return;
     }
 
     pub fn consume_gas(&mut self, amount: u128) -> bool {
@@ -118,7 +116,7 @@ impl VM {
 
         self.gas_remaining = self.gas_remaining.saturating_sub(amount);
         self.gas_used = self.gas_used.saturating_add(amount);
-        return true;
+        true
     }
 
     // Steps to the next PC and executes the instruction
@@ -127,7 +125,7 @@ impl VM {
         // sanity check
         if self.bytecode.len() < (self.instruction * 2 + 2) as usize {
             self.exit(2, "0x");
-            Instruction {
+            return Instruction {
                 instruction: self.instruction,
                 opcode: "PANIC".to_string(),
                 opcode_details: None,
@@ -135,7 +133,7 @@ impl VM {
                 outputs: Vec::new(),
                 input_operations: Vec::new(),
                 output_operations: Vec::new(),
-            };
+            }
         }
 
         // get the opcode at the current instruction
@@ -803,7 +801,7 @@ impl VM {
 
                 // BALANCE
                 if op == 0x31 {
-                    self.stack.pop().value;
+                    self.stack.pop();
 
                     // balance is set to 1 wei because we won't run into div by 0 errors
                     self.stack.push("0x01", operation.clone());
@@ -1040,15 +1038,15 @@ impl VM {
 
                 // EXTCODESIZE
                 if op == 0x3B {
-                    self.stack.pop().value;
+                    self.stack.pop();
                     self.stack.push("0x01", operation.clone());
                 }
 
                 // EXTCODECOPY
                 if op == 0x3C {
-                    self.stack.pop().value;
+                    self.stack.pop();
                     let dest_offset = self.stack.pop().value;
-                    self.stack.pop().value;
+                    self.stack.pop();
                     let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
@@ -1094,7 +1092,7 @@ impl VM {
                 // RETURNDATACOPY
                 if op == 0x3E {
                     let dest_offset = self.stack.pop().value;
-                    self.stack.pop().value;
+                    self.stack.pop();
                     let size = self.stack.pop().value;
 
                     // Safely convert U256 to usize
@@ -1134,7 +1132,7 @@ impl VM {
 
                 // EXTCODEHASH and BLOCKHASH
                 if op == 0x3F || op == 0x40 {
-                    self.stack.pop().value;
+                    self.stack.pop();
 
                     self.stack.push("0x00", operation.clone());
                 }
@@ -1161,13 +1159,13 @@ impl VM {
                 }
 
                 // NUMBER -> BASEFEE
-                if op >= 0x43 && op <= 0x48 {
+                if (0x43..=0x48).contains(&op) {
                     self.stack.push("0x01", operation.clone());
                 }
 
                 // POP
                 if op == 0x50 {
-                    self.stack.pop().value;
+                    self.stack.pop();
                 }
 
                 // MLOAD
@@ -1376,7 +1374,7 @@ impl VM {
                 }
 
                 // PUSH1 -> PUSH32
-                if op >= 0x60 && op <= 0x7F {
+                if (0x60..=0x7F).contains(&op) {
                     // Get the number of bytes to push
                     let num_bytes = (op - 95) as u128;
 
@@ -1396,26 +1394,26 @@ impl VM {
                 }
 
                 // DUP1 -> DUP16
-                if op >= 0x80 && op <= 0x8F {
+                if (0x80..=0x8F).contains(&op) {
                     // Get the number of items to swap
-                    let index = (op - 127) as usize;
+                    let index = op - 127;
 
                     // Perform the swap
                     self.stack.dup(index);
                 }
 
                 // SWAP1 -> SWAP16
-                if op >= 0x90 && op <= 0x9F {
+                if (0x90..=0x9F).contains(&op) {
                     // Get the number of items to swap
-                    let index = (op - 143) as usize;
+                    let index = op - 143;
 
                     // Perform the swap
                     self.stack.swap(index);
                 }
 
                 // LOG0 -> LOG4
-                if op >= 0xA0 && op <= 0xA4 {
-                    let topic_count = (op - 160) as usize;
+                if (0xA0..=0xA4).contains(&op) {
+                    let topic_count = op - 160;
                     let offset = self.stack.pop().value;
                     let size = self.stack.pop().value;
                     let topics = self
@@ -1461,7 +1459,7 @@ impl VM {
 
                     // no need for a panic check because the length of events should never be larger than a u128
                     self.events.push(Log::new(
-                        (self.events.len() as usize).try_into().unwrap(),
+                        self.events.len().try_into().unwrap(),
                         topics,
                         data,
                     ))
@@ -1537,7 +1535,7 @@ impl VM {
 
                     self.stack.push(
                         "0x6865696d64616c6c000000000063726561746532",
-                        operation.clone(),
+                        operation,
                     );
                 }
 
@@ -1595,7 +1593,7 @@ impl VM {
                     .collect::<Vec<WrappedOpcode>>();
                 let outputs = output_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
 
-                return Instruction {
+                Instruction {
                     instruction: last_instruction,
                     opcode: opcode,
                     opcode_details: Some(opcode_details),
@@ -1603,13 +1601,13 @@ impl VM {
                     outputs: outputs,
                     input_operations: input_operations,
                     output_operations: output_operations,
-                };
+                }
             }
             _ => {
                 
                 // we reached an INVALID opcode, consume all remaining gas
                 self.exit(4, "0x");
-                return Instruction {
+                Instruction {
                     instruction: last_instruction,
                     opcode: "unknown".to_string(),
                     opcode_details: Some(opcode_details),
@@ -1617,7 +1615,7 @@ impl VM {
                     outputs: Vec::new(),
                     input_operations: input_operations,
                     output_operations: Vec::new(),
-                };
+                }
             }
         }
     }
@@ -1657,12 +1655,12 @@ impl VM {
         while self.bytecode.len() >= (self.instruction * 2 + 2) as usize {
             self.step();
 
-            if self.exitcode != 255 || self.returndata.len() as usize > 0 {
+            if self.exitcode != 255 || !self.returndata.is_empty() {
                 break;
             }
         }
 
-        return Result {
+        Result {
             gas_used: self.gas_used,
             gas_remaining: self.gas_remaining,
             returndata: self.returndata.to_owned(),
@@ -1670,7 +1668,7 @@ impl VM {
             events: self.events.clone(),
             runtime: self.timestamp.elapsed().as_secs_f64(),
             instruction: self.instruction,
-        };
+        }
     }
 
     // Executes provided calldata until finished
@@ -1680,6 +1678,6 @@ impl VM {
         self.calldata = calldata.replace("0x", "");
         self.value = value;
 
-        return self.execute();
+        self.execute()
     }
 }

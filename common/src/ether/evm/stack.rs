@@ -29,7 +29,7 @@ impl Stack {
     pub fn push(&mut self, value: &str, operation: WrappedOpcode) {
         self.stack.push_front(
             StackFrame {
-                value: U256::from_str(&value).unwrap(),
+                value: U256::from_str(value).unwrap(),
                 operation,
             }
         );
@@ -57,9 +57,9 @@ impl Stack {
         match self.stack.get(n) {
             Some(_) => {
                 self.stack.swap(0, n);
-                return true;
+                true
             }
-            None => return false,
+            None => false,
         }
     }
 
@@ -68,9 +68,9 @@ impl Stack {
         match self.stack.get(n - 1) {
             Some(_) => {
                 self.stack.push_front(self.stack[n - 1].clone());
-                return true;
+                true
             }
-            None => return false,
+            None => false,
         }
     }
 

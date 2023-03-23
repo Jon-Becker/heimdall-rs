@@ -26,5 +26,5 @@ pub fn get_explanation(
         transaction.value,
         decoded
     );
-    return heimdall_common::resources::openai::complete(prompt, openai_api_key, logger);
+    heimdall_common::resources::openai::complete(prompt, openai_api_key, logger)
 }

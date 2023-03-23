@@ -12,10 +12,7 @@ fn is_ext_call_precompile(precompile_address: U256) -> bool {
         Err(_) => usize::MAX,
     };
 
-    match address {
-        1 | 2 | 3 => true,
-        _ => false,
-    }
+    matches!(address, 1 | 2 | 3)
 }
 
 impl WrappedOpcode {
@@ -165,7 +162,7 @@ impl WrappedOpcode {
             "ISZERO" => {
                 let solidified_input = self.inputs[0]._solidify();
 
-                match solidified_input.contains(" ") {
+                match solidified_input.contains(' ') {
                     true => {
                         solidified_wrapped_opcode.push_str(
                             format!(
@@ -305,7 +302,7 @@ impl WrappedOpcode {
                             }
                             else {
                                 solidified_wrapped_opcode.push_str(
-                                    format!( "msg.data[{}]", solidified_slot).as_str()
+                                    format!( "msg.data[{solidified_slot}]").as_str()
                                 );
                             }
                         }
@@ -316,10 +313,7 @@ impl WrappedOpcode {
                 }
                 else {
                     solidified_wrapped_opcode.push_str(
-                        format!(
-                                "msg.data[{}]",
-                                solidified_slot
-                        ).as_str()
+                        format!("msg.data[{solidified_slot}]").as_str()
                     );
                 }
             },
@@ -395,33 +389,27 @@ impl WrappedOpcode {
                 let memloc = self.inputs[0]._solidify();
                 
                 if memloc.contains("memory") {
-                    if memloc.contains("+") {
+                    if memloc.contains('+') {
                         let parts = memloc.split(" + ").collect::<Vec<&str>>();
 
                         solidified_wrapped_opcode.push_str(
                             format!(
                                     "memory[{}][{}]",
-                                    parts[0].replace("memory[", "").replace("]", ""),
-                                    parts[1].replace("memory[", "").replace("]", ""),
+                                    parts[0].replace("memory[", "").replace(']', ""),
+                                    parts[1].replace("memory[", "").replace(']', ""),
                             ).as_str()
                         );
                     }
                     else {
-                        match MEMLEN_REGEX.find(&format!("memory[{}]", memloc)).unwrap() {
+                        match MEMLEN_REGEX.find(&format!("memory[{memloc}]")).unwrap() {
                             Some(_) => {
                                 solidified_wrapped_opcode.push_str(
-                                    format!(
-                                            "{}.length",
-                                            memloc
-                                    ).as_str()
+                                    format!("{memloc}.length").as_str()
                                 );
                             },
                             None => {
                                 solidified_wrapped_opcode.push_str(
-                                    format!(
-                                            "memory[{}]",
-                                            memloc
-                                    ).as_str()
+                                    format!("memory[{memloc}]").as_str()
                                 );
                             }
                         }
@@ -429,10 +417,7 @@ impl WrappedOpcode {
                 }
                 else {
                     solidified_wrapped_opcode.push_str(
-                        format!(
-                                "memory[{}]",
-                                memloc
-                        ).as_str()
+                        format!("memory[{memloc}]").as_str()
                     );
                 }
                 
@@ -450,12 +435,12 @@ impl WrappedOpcode {
                             solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
                         }
                         else {
-                            solidified_wrapped_opcode.push_str(&"ret0");
+                            solidified_wrapped_opcode.push_str("ret0");
 
                         }
                     },
                     Err(_) => {
-                        solidified_wrapped_opcode.push_str(&"ret0");
+                        solidified_wrapped_opcode.push_str("ret0");
                     }
                 };
             }
@@ -466,12 +451,12 @@ impl WrappedOpcode {
                             solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
                         }
                         else {
-                            solidified_wrapped_opcode.push_str(&"ret0");
+                            solidified_wrapped_opcode.push_str("ret0");
 
                         }
                     },
                     Err(_) => {
-                        solidified_wrapped_opcode.push_str(&"ret0");
+                        solidified_wrapped_opcode.push_str("ret0");
                     }
                 };            }
             "DELEGATECALL" => {
@@ -481,12 +466,12 @@ impl WrappedOpcode {
                             solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
                         }
                         else {
-                            solidified_wrapped_opcode.push_str(&"ret0");
+                            solidified_wrapped_opcode.push_str("ret0");
 
                         }
                     },
                     Err(_) => {
-                        solidified_wrapped_opcode.push_str(&"ret0");
+                        solidified_wrapped_opcode.push_str("ret0");
                     }
                 };            }
             "STATICCALL" => {
@@ -496,35 +481,24 @@ impl WrappedOpcode {
                             solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
                         }
                         else {
-                            solidified_wrapped_opcode.push_str(&"ret0");
+                            solidified_wrapped_opcode.push_str("ret0");
 
                         }
                     },
                     Err(_) => {
-                        solidified_wrapped_opcode.push_str(&"ret0");
+                        solidified_wrapped_opcode.push_str("ret0");
                     }
                 };            }
             "RETURNDATASIZE" => {
-                // TODO
-                solidified_wrapped_opcode.push_str(&"ret0.length");
+                solidified_wrapped_opcode.push_str("ret0.length");
             }
             opcode => {
 
                 if opcode.starts_with("PUSH") {
-                    solidified_wrapped_opcode.push_str(
-                        format!(
-                                "{}",
-                                self.inputs[0]._solidify()
-                        ).as_str()
-                    );
+                    solidified_wrapped_opcode.push_str(self.inputs[0]._solidify().as_str());
                 }
                 else {
-                    solidified_wrapped_opcode.push_str(
-                        format!(
-                                "{}",
-                                opcode
-                        ).as_str()
-                    );
+                    solidified_wrapped_opcode.push_str(opcode.to_string().as_str());
                 }
             }
         }
@@ -535,7 +509,7 @@ impl WrappedOpcode {
 
     // creates a new WrappedOpcode from a set of raw inputs
     pub fn new(opcode_int: usize, inputs: Vec<WrappedInput>) -> WrappedOpcode {
-        let mut opcode_str = format!("{:x}", opcode_int);
+        let mut opcode_str = format!("{opcode_int:x}");
         if opcode_str.len() == 1 {
             opcode_str.insert(0, '0');
         };
@@ -546,8 +520,10 @@ impl WrappedOpcode {
         }
     }
 
+}
 
-    pub fn default() -> WrappedOpcode {
+impl Default for WrappedOpcode {
+    fn default() -> Self {
         WrappedOpcode {
             opcode: Opcode {
                 name: "unknown",
@@ -558,7 +534,6 @@ impl WrappedOpcode {
             inputs: Vec::new(),
         }
     }
-
 }
 
 
@@ -578,12 +553,9 @@ impl WrappedInput {
 
                 let solidified_opcode = opcode.solidify();
 
-                if solidified_opcode.contains(" ") {
+                if solidified_opcode.contains(' ') {
                     solidified_wrapped_input.push_str(
-                        format!(
-                                "({})",
-                                solidified_opcode
-                        ).as_str()
+                        format!("({solidified_opcode})").as_str()
                     );
                 }
                 else {

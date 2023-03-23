@@ -95,12 +95,9 @@ fn main() {
         Subcommands::Disassemble(mut cmd) => {
             
             // if the user has not specified a rpc url, use the default
-            match cmd.rpc_url.as_str() {
-                "" => {
-                    cmd.rpc_url = configuration.rpc_url;
-                }
-                _ => {}
-            };
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
 
             disassemble(cmd);
         }
@@ -109,12 +106,9 @@ fn main() {
         Subcommands::Decompile(mut cmd) => {
             
             // if the user has not specified a rpc url, use the default
-            match cmd.rpc_url.as_str() {
-                "" => {
-                    cmd.rpc_url = configuration.rpc_url;
-                }
-                _ => {}
-            };
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
 
             decompile(cmd);
         }
@@ -123,20 +117,14 @@ fn main() {
         Subcommands::Decode(mut cmd) => {
             
             // if the user has not specified a rpc url, use the default
-            match cmd.rpc_url.as_str() {
-                "" => {
-                    cmd.rpc_url = configuration.rpc_url;
-                }
-                _ => {}
-            };
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
 
             // if the user has not specified a openai api key, use the default
-            match cmd.openai_api_key.as_str() {
-                "" => {
-                    cmd.openai_api_key = configuration.openai_api_key;
-                }
-                _ => {}
-            };
+            if cmd.openai_api_key.as_str() == "" {
+                cmd.openai_api_key = configuration.openai_api_key;
+            }
 
             decode(cmd);
         }
@@ -145,12 +133,9 @@ fn main() {
         Subcommands::CFG(mut cmd) => {
             
             // if the user has not specified a rpc url, use the default
-            match cmd.rpc_url.as_str() {
-                "" => {
-                    cmd.rpc_url = configuration.rpc_url;
-                }
-                _ => {}
-            };
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
 
             cfg(cmd);
         }
@@ -159,20 +144,14 @@ fn main() {
         Subcommands::Dump(mut cmd) => {
 
             // if the user has not specified a rpc url, use the default
-            match cmd.rpc_url.as_str() {
-                "" => {
-                    cmd.rpc_url = configuration.rpc_url;
-                }
-                _ => {}
-            };
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
 
             // if the user has not specified a transpose api key, use the default
-            match cmd.transpose_api_key.as_str() {
-                "" => {
-                    cmd.transpose_api_key = configuration.transpose_api_key;
-                }
-                _ => {}
-            };
+            if cmd.transpose_api_key.as_str() == "" {
+                cmd.transpose_api_key = configuration.transpose_api_key;
+            }
             
             dump(cmd);
         }

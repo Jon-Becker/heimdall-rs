@@ -72,7 +72,7 @@ pub fn dump(args: DumpArgs) {
 
     // parse the output directory
     let mut output_dir = args.output.clone();
-    if &args.output.len() <= &0 {
+    if args.output.is_empty() {
         output_dir = match env::current_dir() {
             Ok(dir) => dir.into_os_string().into_string().unwrap(),
             Err(_) => {
@@ -84,7 +84,7 @@ pub fn dump(args: DumpArgs) {
     }
 
     // check if transpose api key is set
-    if &args.transpose_api_key.len() <= &0 {
+    if args.transpose_api_key.is_empty() {
         logger.error("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
         logger.info("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
         std::process::exit(1);
@@ -117,7 +117,7 @@ pub fn dump(args: DumpArgs) {
     };
 
     // push the address to the output directory
-    if &output_dir != &args.output {
+    if output_dir != args.output {
         output_dir.push_str(&format!("/{}", &args.target));
     }
 
@@ -167,7 +167,7 @@ pub fn dump(args: DumpArgs) {
             Ok(_) => {},
             Err(e) => {
                 logger.error("failed to join indexer thread.");
-                logger.error(&format!("{:?}", e));
+                logger.error(&format!("{e:?}"));
                 std::process::exit(1);
             }
         }
@@ -178,7 +178,7 @@ pub fn dump(args: DumpArgs) {
             Ok(_) => {},
             Err(e) => {
                 logger.error("failed to join TUI thread.");
-                logger.error(&format!("{:?}", e));
+                logger.error(&format!("{e:?}"));
                 std::process::exit(1);
             }
         }
@@ -187,6 +187,6 @@ pub fn dump(args: DumpArgs) {
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
     write_storage_to_csv(&_output_dir, &"storage_dump.csv".to_string(), &state);
-    logger.success(&format!("Wrote storage dump to '{}/storage_dump.csv'.", _output_dir));
+    logger.success(&format!("Wrote storage dump to '{_output_dir}/storage_dump.csv'."));
     logger.info(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &_args.target));
 }
