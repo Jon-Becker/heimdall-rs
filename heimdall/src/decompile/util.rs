@@ -282,7 +282,7 @@ pub fn map_selector(
         recursive_map(
             &vm.clone(),
             &mut branch_count,
-            &mut HashMap::new()
+            &mut HashMap::new(),
         ),
         branch_count
     )
@@ -291,7 +291,7 @@ pub fn map_selector(
 pub fn recursive_map(
     evm: &VM,
     branch_count: &mut u32,
-    handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>,
+    handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -315,18 +315,16 @@ pub fn recursive_map(
                 state.last_instruction.instruction,
                 state.last_instruction.inputs[0],
                 vm.stack.size(),
-                state.last_instruction.inputs[1] == U256::from(0)
+                state.last_instruction.inputs[1].is_zero()
             );
 
             // if the stack has over 16 items of the same source, it's probably a loop
-            if vm.stack.size() > 8 {
-               for frame in vm.stack.stack.iter() {
-                    let solidified_frame_source = frame.operation.solidify();
-                    if vm.stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >= 8 {
-                        vm_trace.loop_detected = true;
-                        return vm_trace;
-                    }
-               }
+            if vm.stack.size() > 16 && vm.stack.stack.iter().any(|frame| {
+                let solidified_frame_source = frame.operation.solidify();
+                vm.stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >= 16
+            }) {
+                vm_trace.loop_detected = true;
+                return vm_trace;
             }
 
             // break out of loops
@@ -356,11 +354,11 @@ pub fn recursive_map(
                     
                             // check if all stack diff values are in the jump condition
                             let jump_condition = state.last_instruction.input_operations[1].solidify();
-                            // println!("condition: {}", jump_condition);
-                            // println!("jump: ({}, {})\n\n", jump_frame.1, jump_frame.2);
+                            println!("condition: {}", jump_condition);
+                            println!("jump: ({}, {})\n\n", jump_frame.0, jump_frame.1);
 
                             // if the stack diff is within the jump condition, its likely that we are in a loop
-                            if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
+                            if stack_diff.iter().map(|frame| frame.operation.solidify()).any(|solidified| jump_condition.contains(&solidified)) {
                                 return true;
                             }
                             
@@ -416,7 +414,7 @@ pub fn recursive_map(
             *branch_count += 1;
 
             // we need to create a trace for the path that wasn't taken.
-            if state.last_instruction.inputs[1] == U256::from(0) {                
+            if state.last_instruction.inputs[1].is_zero() {                
 
                 // push a new vm trace to the children
                 let mut trace_vm = vm.clone();
@@ -429,7 +427,7 @@ pub fn recursive_map(
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
-                    &vm.clone(),
+                    &vm,
                     branch_count,
                     handled_jumps
                 ));
@@ -447,7 +445,7 @@ pub fn recursive_map(
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
-                    &vm.clone(),
+                    &vm,
                     branch_count,
                     handled_jumps
                 ));

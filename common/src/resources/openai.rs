@@ -18,8 +18,9 @@ pub fn complete(prompt: String, api_key: &String, logger: &Logger) -> Option<Str
             CreateCompletionRequestArgs::default()
             .model("text-davinci-003")
             .prompt(prompt)
-            .max_tokens(1024_u16)
+            .max_tokens(512_u16)
             .temperature(0.75)
+            .frequency_penalty(1.1)
             .n(2)
             .build()
         {

@@ -9,15 +9,13 @@ pub fn get_explanation(
     logger: &Logger
 ) -> Option<String> {
     let prompt = format!(
-        "The following is a decoded transaction call using heimdall-rs.
-        Explain in human terms what this call may be doing.
-        Guess if necessary. Try to include values from the calldata, wherever possible.
+        "Using your knowledge of Ethereum ABIs, explain in human terms what this call may be doing.
         Be detailed, yet concise.
 
         Transaction From: 0x{}
         Transaction To (Interacted With): 0x{}
         Transaction Value (wei): {}
-        \n{}",
+        \n{}\n\nTransaction explanation:",
         encode_hex(transaction.from.to_fixed_bytes().to_vec()),
         match transaction.to {
             Some(to) => encode_hex(to.to_fixed_bytes().to_vec()),
