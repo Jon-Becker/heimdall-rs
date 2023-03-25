@@ -61,6 +61,7 @@ pub struct DecodeArgs {
 pub fn decode(args: DecodeArgs) {
     let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
     let mut raw_transaction: Transaction = Transaction::default();
+    let calldata;
     
 
     // check if we require an OpenAI API key
@@ -83,7 +84,7 @@ pub fn decode(args: DecodeArgs) {
 
             // make sure the RPC provider isn't empty
             if args.rpc_url.is_empty() {
-                logger.error("decoging an on-chain transaction requires an RPC provider. Use `heimdall decode --help` for more information.");
+                logger.error("decoding an on-chain transaction requires an RPC provider. Use `heimdall decode --help` for more information.");
                 std::process::exit(1);
             }
 
@@ -124,9 +125,12 @@ pub fn decode(args: DecodeArgs) {
 
             raw_transaction
         });
-    }
 
-    let calldata: String = raw_transaction.input.to_string().replace("0x", "");
+        calldata = raw_transaction.input.to_string().replace("0x", "");
+    }
+    else {
+        calldata = args.target.clone();
+    }
 
     // check if calldata is present
     if calldata.is_empty() {

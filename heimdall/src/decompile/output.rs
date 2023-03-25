@@ -75,7 +75,7 @@ pub fn build_output(
     for function in &functions {
         progress_bar.set_message(format!("writing ABI for '0x{}'", function.selector));
 
-        // get the function's name and parameters for both resolved and unresolved functions
+        // get the function's name parameters for both resolved and unresolved functions
         let (
             function_name,
             function_inputs,
