@@ -351,7 +351,7 @@ pub fn decode(args: DecodeArgs) {
             ) {
                 Some(explanation) => {
                     explain_progress.finish_and_clear();
-                    logger.success(&format!("Calldata explanation: {}", explanation.trim()));
+                    logger.success(&format!("Transaction explanation: {}", explanation.trim()));
                 },
                 None => {
                     explain_progress.finish_and_clear();
