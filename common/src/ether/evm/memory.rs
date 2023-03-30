@@ -55,7 +55,7 @@ impl Memory {
                     value = value.get(0..(size * 2)).unwrap().to_string();
                 }
             }
-
+            
             // extend the value to size bytes
             if value.len() / 2 < size {
                 value.insert_str(0, &"00".repeat(size - value.len() / 2));

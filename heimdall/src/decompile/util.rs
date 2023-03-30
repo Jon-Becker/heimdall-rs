@@ -1,4 +1,5 @@
 use std::{collections::{HashMap, VecDeque}};
+use strsim::normalized_damerau_levenshtein as similarity;
 
 use ethers::{
     prelude::{
@@ -337,8 +338,19 @@ pub fn recursive_map(
                         for (i, frame) in vm.stack.stack.iter().enumerate() {
                             if frame != &stack[i] {
                                 stack_diff.push(frame);
+
+                                // check similarity of stack diff values against the stack, using normalized Levenshtein distance
+                                for stack_frame in stack.iter() {
+                                    let solidified_frame = frame.operation.solidify();
+                                    let solidified_stack_frame = stack_frame.operation.solidify();
+                                    
+                                    if similarity(&solidified_frame, &solidified_stack_frame) > 0.9 {
+                                        return true;
+                                    }
+                                }
                             }
                         }
+
 
                         // println!("\nStack: ");
                         // for (i, frame) in stack.iter().enumerate() {
@@ -354,11 +366,17 @@ pub fn recursive_map(
                     
                             // check if all stack diff values are in the jump condition
                             let jump_condition = state.last_instruction.input_operations[1].solidify();
-                            println!("condition: {}", jump_condition);
-                            println!("jump: ({}, {})\n\n", jump_frame.0, jump_frame.1);
 
                             // if the stack diff is within the jump condition, its likely that we are in a loop
                             if stack_diff.iter().map(|frame| frame.operation.solidify()).any(|solidified| jump_condition.contains(&solidified)) {
+                                return true;
+                            }
+
+                            // if we repeat conditionals, its likely that we are in a loop
+                            if stack_diff.iter().any(|frame| {
+                                let solidified = frame.operation.solidify();
+                                jump_condition.contains(&solidified) && jump_condition.matches(&solidified).count() > 1
+                            }) {
                                 return true;
                             }
                             
@@ -405,7 +423,7 @@ pub fn recursive_map(
                     }
                 },
                 None => {
-                    
+
                     // this key doesnt exist, so the jump is new
                     handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
                 }
