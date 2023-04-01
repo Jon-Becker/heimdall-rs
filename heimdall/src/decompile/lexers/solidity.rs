@@ -18,12 +18,12 @@ use heimdall_common::{
     utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
 };
 
-use super::{util::*, precompile::decode_precompile, constants::AND_BITMASK_REGEX};
+use super::{super::util::*, super::precompile::decode_precompile, super::constants::AND_BITMASK_REGEX};
 
 impl VMTrace {
     
-    // converts a VMTrace to a Function which can be written to the decompiled output
-    pub fn analyze(
+    // converts a VMTrace to a Funciton through lexical and syntactic analysis
+    pub fn analyze_sol(
         &self,
         function: Function,
         trace: &mut TraceFactory,
@@ -396,7 +396,7 @@ impl VMTrace {
                     )
                 );
 
-            } else if opcode_name.contains("MSTORE") {
+            } else if opcode_name.contains("MSTORE") || opcode_name.contains("MSTORE8") {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
                 let operation = instruction.input_operations[1].clone();
@@ -706,7 +706,7 @@ impl VMTrace {
         // recurse into the children of the VMTrace map
         for (_, child) in self.children.iter().enumerate() {
 
-            function = child.analyze(function, trace, trace_parent, conditional_map);
+            function = child.analyze_sol(function, trace, trace_parent, conditional_map);
 
         }
 

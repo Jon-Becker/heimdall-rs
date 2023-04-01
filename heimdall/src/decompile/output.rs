@@ -3,7 +3,7 @@ use std::{time::Duration, collections::HashMap};
 use heimdall_common::{io::{logging::{TraceFactory, Logger}, file::{short_path, write_file, write_lines_to_file}}, ether::signatures::{ResolvedError, ResolvedLog}};
 use indicatif::ProgressBar;
 
-use super::{DecompilerArgs, util::Function, constants::DECOMPILED_SOURCE_HEADER, postprocess::postprocess};
+use super::{DecompilerArgs, util::Function, constants::DECOMPILED_SOURCE_HEADER, postprocess::{postprocess, indent}};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq)]
@@ -66,7 +66,10 @@ pub fn build_output(
     progress_bar.set_style(logger.info_spinner());
 
     let abi_output_path = format!("{output_dir}/abi.json");
-    let decompiled_output_path = format!("{output_dir}/decompiled.sol");
+    let decompiled_output_path = match (args.include_solidity, args.include_yul) {
+        (_ , true) => format!("{output_dir}/decompiled.yul"),
+        (_, _) => format!("{output_dir}/decompiled.sol"),
+    };
 
     // build the decompiled contract's ABI
     let mut abi: Vec<ABIStructure> = Vec::new();
@@ -451,6 +454,14 @@ pub fn build_output(
                 all_resolved_events,
                 &progress_bar
             )
+        );
+        logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path));
+        progress_bar.finish_and_clear();
+    }
+    else if args.include_yul {
+        write_lines_to_file(
+            &decompiled_output_path,
+            indent(decompiled_output)
         );
         logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path));
         progress_bar.finish_and_clear();

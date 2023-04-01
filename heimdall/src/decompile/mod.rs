@@ -1,6 +1,6 @@
 mod tests;
 
-pub mod analyze;
+pub mod lexers;
 pub mod constants;
 pub mod output;
 pub mod postprocess;
@@ -68,6 +68,10 @@ pub struct DecompilerArgs {
     /// Whether to include solidity source code in the output (in beta).
     #[clap(long = "include-sol")]
     pub include_solidity: bool,
+
+    /// Whether to include yul source code in the output (in beta).
+    #[clap(long = "include-yul")]
+    pub include_yul: bool,
 }
 
 pub fn decompile(args: DecompilerArgs) {
@@ -77,6 +81,12 @@ pub fn decompile(args: DecompilerArgs) {
     let (logger, mut trace) = Logger::new(args.verbose.log_level().unwrap().as_str());
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
+
+    // ensure both --include-sol and --include-yul aren't set
+    if args.include_solidity && args.include_yul {
+        logger.error("arguments '--include-sol' and '--include-yul' are mutually exclusive.");
+        std::process::exit(1);
+    }
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
@@ -335,29 +345,56 @@ pub fn decompile(args: DecompilerArgs) {
 
         decompilation_progress.set_message(format!("analyzing '0x{selector}'"));
 
-        // solidify the execution tree
-        let mut analyzed_function = map.analyze(
-            Function {
-                selector: selector.clone(),
-                entry_point: function_entry_point,
-                arguments: HashMap::new(),
-                storage: HashMap::new(),
-                memory: HashMap::new(),
-                returns: None,
-                logic: Vec::new(),
-                events: HashMap::new(),
-                errors: HashMap::new(),
-                resolved_function: None,
-                indent_depth: 0,
-                notices: Vec::new(),
-                pure: true,
-                view: true,
-                payable: true,
-            },
-            &mut trace,
-            func_analysis_trace,
-            &mut Vec::new(),
-        );
+        // analyze execution tree
+        let mut analyzed_function;
+        if args.include_yul {
+            analyzed_function = map.analyze_yul(
+                Function {
+                    selector: selector.clone(),
+                    entry_point: function_entry_point,
+                    arguments: HashMap::new(),
+                    storage: HashMap::new(),
+                    memory: HashMap::new(),
+                    returns: None,
+                    logic: Vec::new(),
+                    events: HashMap::new(),
+                    errors: HashMap::new(),
+                    resolved_function: None,
+                    indent_depth: 0,
+                    notices: Vec::new(),
+                    pure: true,
+                    view: true,
+                    payable: true,
+                },
+                &mut trace,
+                func_analysis_trace,
+                &mut Vec::new(),
+            );
+        }
+        else {
+            analyzed_function = map.analyze_sol(
+                Function {
+                    selector: selector.clone(),
+                    entry_point: function_entry_point,
+                    arguments: HashMap::new(),
+                    storage: HashMap::new(),
+                    memory: HashMap::new(),
+                    returns: None,
+                    logic: Vec::new(),
+                    events: HashMap::new(),
+                    errors: HashMap::new(),
+                    resolved_function: None,
+                    indent_depth: 0,
+                    notices: Vec::new(),
+                    pure: true,
+                    view: true,
+                    payable: true,
+                },
+                &mut trace,
+                func_analysis_trace,
+                &mut Vec::new(),
+            );
+        }
 
         let argument_count = analyzed_function.arguments.len();
 
@@ -398,8 +435,10 @@ pub fn decompile(args: DecompilerArgs) {
             }
         }
 
+        // resolve signatures
         if !args.skip_resolving {
-            let resolved_functions = match resolved_selectors.get(&selector) {
+
+            let resolved_functions = match resolved_selectors.get(&selector){
                 Some(func) => func.clone(),
                 None => {
                     trace.add_warn(
@@ -468,9 +507,7 @@ pub fn decompile(args: DecompilerArgs) {
                     trace.add_message(match_trace, line!(), vec![resolved_function.signature]);
                 }
             }
-        }
-
-        if !args.skip_resolving {
+            
             // resolve custom error signatures
             let mut resolved_counter = 0;
             for (error_selector, _) in analyzed_function.errors.clone() {
@@ -654,6 +691,7 @@ impl DecompileBuilder {
                 default: true,
                 skip_resolving: false,
                 include_solidity: true,
+                include_yul: false,
             },
         }
     }
@@ -705,6 +743,13 @@ impl DecompileBuilder {
     #[allow(dead_code)]
     pub fn include_sol(mut self, include: bool) -> DecompileBuilder {
         self.args.include_solidity = include;
+        self
+    }
+
+    /// Whether to include yul source code in the output (in beta).
+    #[allow(dead_code)]
+    pub fn include_yul(mut self, include: bool) -> DecompileBuilder {
+        self.args.include_yul = include;
         self
     }
 

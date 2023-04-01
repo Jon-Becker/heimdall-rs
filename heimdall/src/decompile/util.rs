@@ -351,17 +351,6 @@ pub fn recursive_map(
                             }
                         }
 
-
-                        // println!("\nStack: ");
-                        // for (i, frame) in stack.iter().enumerate() {
-                        //     println!("  {} {} {}", i, frame.value, frame.operation.solidify());
-                        // }
-
-                        // println!("Stack Diff: ");
-                        // for (i, frame) in stack_diff.iter().enumerate() {
-                        //     println!("  {} {} {}", i, frame.value, frame.operation.solidify());
-                        // }
-
                         if !stack_diff.is_empty() {
                     
                             // check if all stack diff values are in the jump condition

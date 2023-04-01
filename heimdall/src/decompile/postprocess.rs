@@ -628,6 +628,41 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
     cleaned_lines
 }
 
+pub fn indent(
+    lines: Vec<String>,
+) -> Vec<String> {
+    let mut indentation: usize = 0;
+    let mut cleaned_lines: Vec<String> = lines;
+
+    for (_, line) in cleaned_lines.iter_mut().enumerate() {
+
+        if line.starts_with('}') {
+            indentation = indentation.saturating_sub(1);
+        }
+
+        // apply indentation
+        *line = format!(
+            "{}{}",
+            " ".repeat(indentation * 4),
+            line.trim_start()
+        );
+
+        // indent due to opening braces
+        if line
+            .split("//")
+            .collect::<Vec<&str>>()
+            .first()
+            .unwrap()
+            .trim()
+            .ends_with('{')
+        {
+            indentation += 1;
+        }
+    }
+
+    cleaned_lines
+}
+
 pub fn postprocess(
     lines: Vec<String>,
     all_resolved_errors: HashMap<String, ResolvedError>,

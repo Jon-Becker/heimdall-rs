@@ -16,7 +16,8 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
-                include_solidity: true
+                include_solidity: true,
+                include_yul: false
             };
             crate::decompile::decompile(args)
         }
@@ -35,7 +36,8 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
-                include_solidity: true
+                include_solidity: true,
+                include_yul: false
             };
             crate::decompile::decompile(args)
         }
@@ -54,7 +56,8 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
-                include_solidity: false
+                include_solidity: false,
+                include_yul: false
             };
             crate::decompile::decompile(args)
         }
@@ -73,7 +76,8 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
-                include_solidity: false
+                include_solidity: false,
+                include_yul: false
             };
             crate::decompile::decompile(args)
         }
