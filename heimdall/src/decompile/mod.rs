@@ -1,14 +1,12 @@
 mod tests;
 
-pub mod lexers;
 pub mod constants;
-pub mod output;
-pub mod postprocess;
+pub mod lexers;
+pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
 
-use crate::decompile::output::*;
 use crate::decompile::resolve::*;
 use crate::decompile::util::*;
 
@@ -370,8 +368,7 @@ pub fn decompile(args: DecompilerArgs) {
                 func_analysis_trace,
                 &mut Vec::new(),
             );
-        }
-        else {
+        } else {
             analyzed_function = map.analyze_sol(
                 Function {
                     selector: selector.clone(),
@@ -437,8 +434,7 @@ pub fn decompile(args: DecompilerArgs) {
 
         // resolve signatures
         if !args.skip_resolving {
-
-            let resolved_functions = match resolved_selectors.get(&selector){
+            let resolved_functions = match resolved_selectors.get(&selector) {
                 Some(func) => func.clone(),
                 None => {
                     trace.add_warn(
@@ -446,12 +442,11 @@ pub fn decompile(args: DecompilerArgs) {
                         line!(),
                         "failed to resolve function signature".to_string(),
                     );
-                    continue;
+                    Vec::new()
                 }
             };
 
-            let matched_resolved_functions =
-                match_parameters(resolved_functions, &analyzed_function);
+            let matched_resolved_functions = match_parameters(resolved_functions, &analyzed_function);
 
             trace.br(func_analysis_trace);
             if matched_resolved_functions.is_empty() {
@@ -507,7 +502,7 @@ pub fn decompile(args: DecompilerArgs) {
                     trace.add_message(match_trace, line!(), vec![resolved_function.signature]);
                 }
             }
-            
+
             // resolve custom error signatures
             let mut resolved_counter = 0;
             for (error_selector, _) in analyzed_function.errors.clone() {
@@ -630,16 +625,30 @@ pub fn decompile(args: DecompilerArgs) {
     logger.info("building decompilation output.");
 
     // create the decompiled source output
-    build_output(
-        &args,
-        output_dir,
-        analyzed_functions,
-        all_resolved_errors,
-        all_resolved_events,
-        &logger,
-        &mut trace,
-        decompile_call,
-    );
+    if args.include_yul {
+        out::yul::output(
+            &args,
+            output_dir,
+            analyzed_functions,
+            all_resolved_errors,
+            all_resolved_events,
+            &logger,
+            &mut trace,
+            decompile_call,
+        );
+    }
+    else {
+        out::solidity::output(
+            &args,
+            output_dir,
+            analyzed_functions,
+            all_resolved_errors,
+            all_resolved_events,
+            &logger,
+            &mut trace,
+            decompile_call,
+        );
+    }
 
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));

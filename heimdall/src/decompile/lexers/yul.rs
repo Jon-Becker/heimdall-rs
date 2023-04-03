@@ -10,15 +10,14 @@ use ethers::{
 use heimdall_common::{
     ether::{
         evm::{
-            opcodes::WrappedOpcode,
-            types::{convert_bitmask, byte_size_to_type},
+            types::{convert_bitmask},
         },
     },
     io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
+    utils::strings::{decode_hex, encode_hex_reduced},
 };
 
-use super::{super::util::*, super::precompile::decode_precompile, super::constants::AND_BITMASK_REGEX};
+use super::{super::util::*};
 
 impl VMTrace {
     
@@ -177,15 +176,12 @@ impl VMTrace {
                         if function.logic[i].starts_with("if") {
 
                             // get matching conditional
-                            let conditional = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
-                            let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap_or("decoding error");
+                            let conditional = function.logic[i].split("if ").collect::<Vec<&str>>()[1].split(" {").collect::<Vec<&str>>()[0].to_string();
                             
                             // we can negate the conditional to get the revert logic
                             // TODO: make this a require statement, if revert is rlly gross but its technically correct
                             //       I just ran into issues with ending bracket matching
-                            function.logic[i] = format!("if {conditional} {{ revert({}, {}); }}", instruction.input_operations[0].yulify(), instruction.input_operations[1].yulify());
-
-                            conditional_map.remove(conditional_map.len() - 1);
+                            function.logic[i] = format!("if {conditional} {{ revert({}, {}); }} else {{", instruction.input_operations[0].yulify(), instruction.input_operations[1].yulify());
 
                             break;
                         }
@@ -429,15 +425,16 @@ impl VMTrace {
         // check if the ending brackets are needed
         if jumped_conditional.is_some() && conditional_map.contains(&jumped_conditional.clone().unwrap())
         {
-             // remove the conditional
-             for (i, conditional) in conditional_map.iter().enumerate() {
-                if conditional == &jumped_conditional.clone().unwrap() {
-                    conditional_map.remove(i);
+
+            // remove the last matching conditional from the conditional map
+            for j in (0..conditional_map.len()).rev() {
+                if conditional_map[j] == jumped_conditional.clone().unwrap() {
+                    conditional_map.remove(j);
                     break;
                 }
             }
-            
-            // if the last line is an if statement, this branch is empty and probably stack operations we don't care about
+
+            // if the last logic is an if statement, remove it because it's empty
             if function.logic.last().unwrap().contains("if") {
                 function.logic.pop();
             }

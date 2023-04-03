@@ -223,7 +223,7 @@ mod postprocess_tests {
 
     use indicatif::ProgressBar;
 
-    use crate::decompile::postprocess::postprocess;
+    use crate::decompile::out::postprocessers::solidity::postprocess;
 
     #[test]
     fn test_bitmask_conversion() {
