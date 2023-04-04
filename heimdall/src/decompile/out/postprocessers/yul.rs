@@ -253,10 +253,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
     cleaned
 }
 
-fn add_resolved_events(
-    line: String,
-    all_resolved_events: HashMap<String, ResolvedLog>,
-) -> String {
+fn add_resolved_events(line: String, all_resolved_events: HashMap<String, ResolvedLog>) -> String {
     let mut cleaned = line;
 
     // skip lines that not logs
@@ -292,7 +289,6 @@ fn add_resolved_events(
     cleaned
 }
 
-
 fn cleanup(
     line: String,
     all_resolved_events: HashMap<String, ResolvedLog>,
@@ -325,30 +321,6 @@ fn cleanup(
     cleaned
 }
 
-fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
-    let mut cleaned_lines: Vec<String> = Vec::new();
-    let mut function_count = 0;
-
-    // remove unused assignments
-    for (i, line) in lines.iter().enumerate() {
-        // update progress bar
-        if line.contains("function") {
-            function_count += 1;
-            bar.set_message(format!("postprocessed {function_count} functions"));
-        }
-
-        // // only pass in lines further than the current line
-        // if !contains_unnecessary_assignment(
-        //     line.trim().to_string(),
-        //     &lines[i..].iter().collect::<Vec<_>>(),
-        // ) {
-        cleaned_lines.push(line.to_string());
-        // }
-    }
-
-    cleaned_lines
-}
-
 pub fn postprocess(
     lines: Vec<String>,
     all_resolved_events: HashMap<String, ResolvedLog>,
@@ -359,7 +331,7 @@ pub fn postprocess(
     let mut cleaned_lines: Vec<String> = lines;
 
     // clean up each line using postprocessing techniques
-    for (i, line) in cleaned_lines.iter_mut().enumerate() {
+    for line in cleaned_lines.iter_mut() {
         // update progress bar
         if line.contains("function") {
             function_count += 1;
@@ -397,6 +369,5 @@ pub fn postprocess(
         }
     }
 
-    // run finalizing postprocessing, which need to operate on cleaned lines
-    finalize(cleaned_lines, bar)
+    cleaned_lines
 }

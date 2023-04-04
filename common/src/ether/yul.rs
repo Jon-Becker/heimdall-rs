@@ -23,16 +23,10 @@ impl WrappedInput {
 
         match self {
             WrappedInput::Raw(u256) => {
-                solidified_wrapped_input.push_str(
-                    &encode_hex_reduced(*u256)
-                );
+                solidified_wrapped_input.push_str(&encode_hex_reduced(*u256));
             }
             WrappedInput::Opcode(opcode) => {
-                let solidified_opcode = opcode.yulify();
-
-                solidified_wrapped_input.push_str(
-                    solidified_opcode.as_str()
-                );
+                solidified_wrapped_input.push_str(&opcode.yulify());
             },
         }
 

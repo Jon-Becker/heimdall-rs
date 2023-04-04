@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use heimdall_common::{
-    ether::signatures::{ResolvedLog},
+    ether::signatures::ResolvedLog,
     io::{
         file::{short_path, write_file, write_lines_to_file},
         logging::{Logger, TraceFactory},
@@ -9,11 +9,10 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 
-use super::{super::{
-    constants::DECOMPILED_SOURCE_HEADER_YUL,
-    util::Function,
-    DecompilerArgs,
-}, postprocessers::yul::postprocess};
+use super::{
+    super::{constants::DECOMPILED_SOURCE_HEADER_YUL, util::Function, DecompilerArgs},
+    postprocessers::yul::postprocess,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq)]
@@ -307,7 +306,7 @@ pub fn output(
         DECOMPILED_SOURCE_HEADER_YUL
             .replace("{}", env!("CARGO_PKG_VERSION"))
             .split("\n")
-            .map(|x| x.to_string())
+            .map(|x| x.to_string()),
     );
 
     // write contract logic
@@ -351,7 +350,7 @@ pub fn output(
                     function.selector,
                     sorted_arguments
                         .iter()
-                        .map(|(index, (_, potential_types))| {
+                        .map(|(_, (_, potential_types))| {
                             format!(
                                 "{}{}",
                                 potential_types[0],
@@ -375,7 +374,11 @@ pub fn output(
         let mut sorted_arguments: Vec<_> = function.arguments.into_iter().collect();
         sorted_arguments.sort_by(|x, y| x.0.cmp(&y.0));
 
-        decompiled_output.push(format!("case 0x{} /* \"{}\" */ {{", function.selector, function_header));
+        decompiled_output.push(format!(
+            "case 0x{} /* \"{}\" */ {{",
+            function.selector,
+            function_header
+        ));
         decompiled_output.extend(function.logic);
         decompiled_output.push(String::from("}"));
     }
@@ -391,11 +394,7 @@ pub fn output(
     if args.include_yul {
         write_lines_to_file(
             &decompiled_output_path,
-            postprocess(
-                decompiled_output,
-                all_resolved_events,
-                &progress_bar,
-            ),
+            postprocess(decompiled_output, all_resolved_events, &progress_bar),
         );
         logger.success(&format!(
             "wrote decompiled contract to '{}' .",
