@@ -2,6 +2,7 @@
 use std::{num::ParseIntError};
 
 use ethers::{prelude::{I256, U256}, abi::AbiEncode};
+use fancy_regex::Regex;
 
 use crate::constants::REDUCE_HEX_REGEX;
 
@@ -118,4 +119,30 @@ pub fn base26_encode(n: usize) -> String {
         n /= 26;
     }
     s.to_lowercase().chars().rev().collect()
+}
+
+// splits a string by a given regex
+pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
+
+    // Find all matches of the pattern in the input string
+    let matches = pattern.find_iter(input);
+
+    // Use the matches to split the input string into substrings
+    let mut substrings = vec![];
+    let mut last_end = 0;
+    for m in matches {
+        let m = m.unwrap();
+        let start = m.start();
+        let end = m.end();
+        if start > last_end {
+            substrings.push(input[last_end..start].to_string());
+        }
+        last_end = end;
+    }
+    if last_end < input.len() {
+        substrings.push(input[last_end..].to_string());
+    }
+
+    // Return the resulting vector of substrings
+    substrings
 }

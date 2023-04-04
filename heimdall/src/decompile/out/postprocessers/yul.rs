@@ -1,13 +1,13 @@
 use heimdall_common::{
     ether::{
-        signatures::{ResolvedError, ResolvedLog}, evm::types::find_cast,
-    }, utils::strings::find_balanced_encapsulator,
+        signatures::{ResolvedLog}, evm::types::find_cast,
+    }, utils::strings::{find_balanced_encapsulator, split_string_by_regex},
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
 use std::{collections::HashMap, sync::Mutex};
 
-use crate::decompile::constants::ENCLOSED_EXPRESSION_REGEX;
+use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, ARGS_SPLIT_REGEX};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -253,10 +253,48 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
     cleaned
 }
 
+fn add_resolved_events(
+    line: String,
+    all_resolved_events: HashMap<String, ResolvedLog>,
+) -> String {
+    let mut cleaned = line;
+
+    // skip lines that not logs
+    if !cleaned.contains("log") {
+        return cleaned
+    }
+
+    // get the inside of the log statement
+    let log_statement = find_balanced_encapsulator(cleaned.clone(), ('(', ')'));
+
+    // no balance found, break
+    if !log_statement.2 { return cleaned }
+
+    // use ARGS_SPLIT_REGEX to split the log into its arguments
+    let log_args = split_string_by_regex(&cleaned[log_statement.0+1..log_statement.1-1], ARGS_SPLIT_REGEX.clone());
+
+    // get the event matching the log's selector 
+    for (selector, resolved_event) in all_resolved_events.iter() {
+        if log_args.contains(&format!("0x{}", selector)) {       
+            cleaned = format!(
+                "\n/* \"{}({})\" */\n{}",
+                resolved_event.name,
+                resolved_event.inputs
+                    .iter()
+                    .map(|x| x.clone())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+                cleaned
+            )
+        }
+    }
+
+    cleaned
+}
+
 
 fn cleanup(
     line: String,
-    all_resolved_errors: HashMap<String, ResolvedError>,
     all_resolved_events: HashMap<String, ResolvedLog>,
 ) -> String {
     let mut cleaned = line;
@@ -280,6 +318,9 @@ fn cleanup(
 
     // remove unnecessary parentheses
     cleaned = simplify_parentheses(cleaned, 0);
+
+    // add resolved events as comments
+    cleaned = add_resolved_events(cleaned, all_resolved_events);
 
     cleaned
 }
@@ -310,7 +351,6 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
 
 pub fn postprocess(
     lines: Vec<String>,
-    all_resolved_errors: HashMap<String, ResolvedError>,
     all_resolved_events: HashMap<String, ResolvedLog>,
     bar: &ProgressBar,
 ) -> Vec<String> {
@@ -319,7 +359,7 @@ pub fn postprocess(
     let mut cleaned_lines: Vec<String> = lines;
 
     // clean up each line using postprocessing techniques
-    for (_, line) in cleaned_lines.iter_mut().enumerate() {
+    for (i, line) in cleaned_lines.iter_mut().enumerate() {
         // update progress bar
         if line.contains("function") {
             function_count += 1;
@@ -331,15 +371,17 @@ pub fn postprocess(
             indentation = indentation.saturating_sub(1);
         }
 
+        // cleanup the line
+        let cleaned = cleanup(
+            line.to_string(),
+            all_resolved_events.clone(),
+        );
+
         // apply postprocessing and indentation
         *line = format!(
             "{}{}",
             " ".repeat(indentation * 4),
-            cleanup(
-                line.to_string(),
-                all_resolved_errors.clone(),
-                all_resolved_events.clone()
-            )
+            cleaned.replace("\n", &format!("\n{}", " ".repeat(indentation * 4)))
         );
 
         // indent due to opening braces

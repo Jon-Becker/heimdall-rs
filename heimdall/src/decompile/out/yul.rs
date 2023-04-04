@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use heimdall_common::{
-    ether::signatures::{ResolvedError, ResolvedLog},
+    ether::signatures::{ResolvedLog},
     io::{
         file::{short_path, write_file, write_lines_to_file},
         logging::{Logger, TraceFactory},
@@ -64,7 +64,6 @@ pub fn output(
     args: &DecompilerArgs,
     output_dir: String,
     functions: Vec<Function>,
-    all_resolved_errors: HashMap<String, ResolvedError>,
     all_resolved_events: HashMap<String, ResolvedLog>,
     logger: &Logger,
     trace: &mut TraceFactory,
@@ -79,8 +78,6 @@ pub fn output(
 
     // build the decompiled contract's ABI
     let mut abi: Vec<ABIStructure> = Vec::new();
-
-    println!("functions out/yul.rs: {}", functions.len());
 
     // build the ABI for each function
     for function in &functions {
@@ -396,7 +393,6 @@ pub fn output(
             &decompiled_output_path,
             postprocess(
                 decompiled_output,
-                all_resolved_errors,
                 all_resolved_events,
                 &progress_bar,
             ),

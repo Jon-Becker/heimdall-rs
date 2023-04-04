@@ -1624,8 +1624,6 @@ impl VM {
     pub fn step(&mut self) -> State {
         let instruction = self._step();
 
-        //println!("{}({:?})", instruction.clone().opcode_details.unwrap().name, instruction.inputs);
-
         State {
             last_instruction: instruction,
             gas_used: self.gas_used,

@@ -23,6 +23,9 @@ lazy_static! {
     // detects multiplication by 1
     pub static ref MUL_BY_ONE_REGEX: Regex = Regex::new(r"\b0x01\b\s*\*\s*| \*\s*\b0x01\b").unwrap();
     
+    // extracts commas within a certain expression, not including commas within parentheses
+    pub static ref ARGS_SPLIT_REGEX: Regex = Regex::new(r",\s*(?![^()]*\))").unwrap();
+
     pub static ref DECOMPILED_SOURCE_HEADER_SOL: String = 
 "// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;

@@ -630,7 +630,6 @@ pub fn decompile(args: DecompilerArgs) {
             &args,
             output_dir,
             analyzed_functions,
-            all_resolved_errors,
             all_resolved_events,
             &logger,
             &mut trace,
