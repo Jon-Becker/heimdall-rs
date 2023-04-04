@@ -45,6 +45,9 @@ impl VMTrace {
             let opcode_name = instruction.opcode_details.clone().unwrap().name;
             let opcode_number = U256::from_str(&instruction.opcode).unwrap().as_usize();
 
+            println!("opcode_name: {}", opcode_name);
+            println!("inputs: {:?}\n", instruction.inputs);
+
             // if the instruction is a state-accessing instruction, the function is no longer pure
             if function.pure
                 && vec![
@@ -544,7 +547,8 @@ impl VMTrace {
                     )
                 );
             } else if opcode_name == "CALLDATALOAD" {
-                let calldata_slot = (instruction.inputs[0].as_usize().saturating_sub(4)) / 32;
+                let slot_as_usize: usize = instruction.inputs[0].try_into().unwrap_or(usize::MAX);
+                let calldata_slot = (slot_as_usize.saturating_sub(4)) / 32;
                 match function.arguments.get(&calldata_slot) {
                     Some(_) => {}
                     None => {
@@ -552,7 +556,7 @@ impl VMTrace {
                             calldata_slot,
                             (
                                 CalldataFrame {
-                                    slot: (instruction.inputs[0].as_usize().saturating_sub(4)) / 32,
+                                    slot: calldata_slot,
                                     operation: instruction.input_operations[0].to_string(),
                                     mask_size: 32,
                                     heuristics: Vec::new(),

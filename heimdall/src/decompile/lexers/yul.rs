@@ -256,7 +256,8 @@ impl VMTrace {
                     instruction.input_operations.iter().map(|x| x.yulify()).collect::<Vec<String>>().join(", ")
                 ));
             } else if opcode_name == "CALLDATALOAD" {
-                let calldata_slot = (instruction.inputs[0].as_usize().saturating_sub(4)) / 32;
+                let slot_as_usize: usize = instruction.inputs[0].try_into().unwrap_or(usize::MAX);
+                let calldata_slot = (slot_as_usize.saturating_sub(4)) / 32;
                 match function.arguments.get(&calldata_slot) {
                     Some(_) => {}
                     None => {
@@ -264,7 +265,7 @@ impl VMTrace {
                             calldata_slot,
                             (
                                 CalldataFrame {
-                                    slot: (instruction.inputs[0].as_usize().saturating_sub(4)) / 32,
+                                    slot: calldata_slot,
                                     operation: instruction.input_operations[0].to_string(),
                                     mask_size: 32,
                                     heuristics: Vec::new(),
