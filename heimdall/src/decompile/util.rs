@@ -1,4 +1,5 @@
 use std::{collections::{HashMap, VecDeque}};
+use strsim::normalized_damerau_levenshtein as similarity;
 
 use ethers::{
     prelude::{
@@ -94,11 +95,8 @@ impl Function {
 
         // get the memory range
         while size > 0 {
-            match self.memory.get(&U256::from(offset)) {
-                Some(memory) => {
-                    memory_slice.push(memory.clone());
-                }
-                None => {}
+            if let Some(memory) = self.memory.get(&U256::from(offset)) {
+                memory_slice.push(memory.clone());
             }
             offset += 32;
             size = size.saturating_sub(32);
@@ -164,20 +162,17 @@ pub fn detect_compiler(bytecode: String) -> (String, String) {
         let compiler_version = bytecode.split("736f6c6343").collect::<Vec<&str>>();
         
         if compiler_version.len() > 1 {
-            match compiler_version[1].get(0..6) {
-                Some(encoded_version) => {
-                    let version_array = encoded_version.chars()
-                        .collect::<Vec<char>>()
-                        .chunks(2)
-                        .map(|c| c.iter().collect::<String>())
-                        .collect::<Vec<String>>();
-
-                    version = String::new();
-                    for version_part in version_array {
-                        version.push_str(&format!("{}.", u8::from_str_radix(&version_part, 16).unwrap()));
-                    }
-                },
-                None => {},
+            if let Some(encoded_version) = compiler_version[1].get(0..6) {
+                let version_array = encoded_version.chars()
+                    .collect::<Vec<char>>()
+                    .chunks(2)
+                    .map(|c| c.iter().collect::<String>())
+                    .collect::<Vec<String>>();
+                
+                version = String::new();
+                for version_part in version_array {
+                    version.push_str(&format!("{}.", u8::from_str_radix(&version_part, 16).unwrap()));
+                }
             }
         }
     }
@@ -185,20 +180,17 @@ pub fn detect_compiler(bytecode: String) -> (String, String) {
         let compiler_version = bytecode.split("767970657283").collect::<Vec<&str>>();
         
         if compiler_version.len() > 1 {
-            match compiler_version[1].get(0..6) {
-                Some(encoded_version) => {
-                    let version_array = encoded_version.chars()
-                        .collect::<Vec<char>>()
-                        .chunks(2)
-                        .map(|c| c.iter().collect::<String>())
-                        .collect::<Vec<String>>();
-
-                    version = String::new();
-                    for version_part in version_array {
-                        version.push_str(&format!("{}.", u8::from_str_radix(&version_part, 16).unwrap()));
-                    }
-                },
-                None => {},
+            if let Some(encoded_version) = compiler_version[1].get(0..6) {
+                let version_array = encoded_version.chars()
+                    .collect::<Vec<char>>()
+                    .chunks(2)
+                    .map(|c| c.iter().collect::<String>())
+                    .collect::<Vec<String>>();
+                
+                version = String::new();
+                for version_part in version_array {
+                    version.push_str(&format!("{}.", u8::from_str_radix(&version_part, 16).unwrap()));
+                }
             }
         }
     }
@@ -245,20 +237,14 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
         // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
         if call.last_instruction.opcode == "57" {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
-            let jump_taken = match call.last_instruction.inputs[1].try_into() {
-                Ok(jump_taken) => jump_taken,
-                Err(_) => 1
-            };
+            let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
 
             if jump_condition.contains(&selector) &&
                jump_condition.contains("msg.data[0]") &&
                jump_condition.contains(" == ") &&
                jump_taken == 1
             {
-                return match call.last_instruction.inputs[0].try_into() {
-                    Ok(entry_point) => entry_point,
-                    Err(_) => 0
-                }
+                return call.last_instruction.inputs[0].try_into().unwrap_or(0)
             }
         }
 
@@ -281,7 +267,7 @@ pub fn map_selector(
 
     // step through the bytecode until we reach the entry point
     while (vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize)
-        && (vm.instruction <= entry_point.into())
+        && (vm.instruction <= entry_point)
     {
         vm.step();
 
@@ -297,7 +283,7 @@ pub fn map_selector(
         recursive_map(
             &vm.clone(),
             &mut branch_count,
-            &mut HashMap::new()
+            &mut HashMap::new(),
         ),
         branch_count
     )
@@ -306,7 +292,7 @@ pub fn map_selector(
 pub fn recursive_map(
     evm: &VM,
     branch_count: &mut u32,
-    handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>,
+    handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>
 ) -> VMTrace {
     let mut vm = evm.clone();
 
@@ -330,18 +316,16 @@ pub fn recursive_map(
                 state.last_instruction.instruction,
                 state.last_instruction.inputs[0],
                 vm.stack.size(),
-                state.last_instruction.inputs[1] == U256::from(0)
+                state.last_instruction.inputs[1].is_zero()
             );
 
             // if the stack has over 16 items of the same source, it's probably a loop
-            if vm.stack.size() > 16 {
-               for frame in vm.stack.stack.iter() {
-                    let solidified_frame_source = frame.operation.solidify();
-                    if vm.stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >= 16 {
-                        vm_trace.loop_detected = true;
-                        return vm_trace;
-                    }
-               }
+            if vm.stack.size() > 16 && vm.stack.stack.iter().any(|frame| {
+                let solidified_frame_source = frame.operation.solidify();
+                vm.stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >= 16
+            }) {
+                vm_trace.loop_detected = true;
+                return vm_trace;
             }
 
             // break out of loops
@@ -354,37 +338,45 @@ pub fn recursive_map(
                         for (i, frame) in vm.stack.stack.iter().enumerate() {
                             if frame != &stack[i] {
                                 stack_diff.push(frame);
+
+                                // check similarity of stack diff values against the stack, using normalized Levenshtein distance
+                                for stack_frame in stack.iter() {
+                                    let solidified_frame = frame.operation.solidify();
+                                    let solidified_stack_frame = stack_frame.operation.solidify();
+                                    
+                                    if similarity(&solidified_frame, &solidified_stack_frame) > 0.9 {
+                                        return true;
+                                    }
+                                }
                             }
                         }
-
-                        // println!("\nStack: ");
-                        // for (i, frame) in stack.iter().enumerate() {
-                        //     println!("  {} {} {}", i, frame.value, frame.operation.solidify());
-                        // }
-
-                        // println!("Stack Diff: ");
-                        // for (i, frame) in stack_diff.iter().enumerate() {
-                        //     println!("  {} {} {}", i, frame.value, frame.operation.solidify());
-                        // }
 
                         if !stack_diff.is_empty() {
                     
                             // check if all stack diff values are in the jump condition
                             let jump_condition = state.last_instruction.input_operations[1].solidify();
-                            
+
                             // if the stack diff is within the jump condition, its likely that we are in a loop
-                            if stack_diff.iter().any(|frame| jump_condition.contains(&frame.operation.solidify())) {
+                            if stack_diff.iter().map(|frame| frame.operation.solidify()).any(|solidified| jump_condition.contains(&solidified)) {
+                                return true;
+                            }
+
+                            // if we repeat conditionals, its likely that we are in a loop
+                            if stack_diff.iter().any(|frame| {
+                                let solidified = frame.operation.solidify();
+                                jump_condition.contains(&solidified) && jump_condition.matches(&solidified).count() > 1
+                            }) {
                                 return true;
                             }
                             
                             // if a memory access in the jump condition is modified by the stack diff, its likely that we are in a loop
                             let mut memory_accesses = MEMORY_REGEX.find_iter(&jump_condition);
                             if stack_diff.iter().any(|frame| {
-                                return memory_accesses.any(|_match| {
+                                memory_accesses.any(|_match| {
                                     if _match.is_err() { return false; }
                                     let memory_access = _match.unwrap();
                                     let slice = &jump_condition[memory_access.start()..memory_access.end()];
-                                    return frame.operation.solidify().contains(slice);
+                                    frame.operation.solidify().contains(slice)
                                 })
                             }) {
                                 return true;
@@ -393,20 +385,20 @@ pub fn recursive_map(
                             // if a storage access in the jump condition is modified by the stack diff, its likely that we are in a loop
                             let mut storage_accesses = STORAGE_REGEX.find_iter(&jump_condition);
                             if stack_diff.iter().any(|frame| {
-                                return storage_accesses.any(|_match| {
+                                storage_accesses.any(|_match| {
                                     if _match.is_err() { return false; }
                                     let storage_access = _match.unwrap();
                                     let slice = &jump_condition[storage_access.start()..storage_access.end()];
-                                    return frame.operation.solidify().contains(slice);
+                                    frame.operation.solidify().contains(slice)
                                 })
                             }) {
                                 return true;
                             }
 
-                            return false
+                            false
                         }
                         else {
-                            return true
+                            true
                         }
                     }) {
                         vm_trace.loop_detected = true;
@@ -420,7 +412,7 @@ pub fn recursive_map(
                     }
                 },
                 None => {
-                    
+
                     // this key doesnt exist, so the jump is new
                     handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
                 }
@@ -429,7 +421,7 @@ pub fn recursive_map(
             *branch_count += 1;
 
             // we need to create a trace for the path that wasn't taken.
-            if state.last_instruction.inputs[1] == U256::from(0) {                
+            if state.last_instruction.inputs[1].is_zero() {                
 
                 // push a new vm trace to the children
                 let mut trace_vm = vm.clone();
@@ -442,7 +434,7 @@ pub fn recursive_map(
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
-                    &vm.clone(),
+                    &vm,
                     branch_count,
                     handled_jumps
                 ));
@@ -460,7 +452,7 @@ pub fn recursive_map(
 
                 // push the current path onto the stack
                 vm_trace.children.push(recursive_map(
-                    &vm.clone(),
+                    &vm,
                     branch_count,
                     handled_jumps
                 ));

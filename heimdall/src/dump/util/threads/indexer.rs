@@ -40,7 +40,7 @@ pub fn handle(
         // find the transaction in the state
         let all_txs = state.transactions.clone();
         let txs = state.transactions.iter_mut().find(|t| t.hash == tx.hash).unwrap();
-        let block_number = tx.block_number.clone();
+        let block_number = tx.block_number;
 
         if args.no_tui {
             let num_done = all_txs.iter().filter(|t| t.indexed).count();
@@ -54,59 +54,52 @@ pub fn handle(
         txs.indexed = true;
 
         // unwrap the state diff
-        match state_diff {
-            Some(state_diff) => {
+        if let Some(state_diff) = state_diff {
 
-                // get diff for this address
-                match state_diff.0.get(&addr_hash) {
-                    Some(diff) => {
-                        
-                        // build diff of StorageSlots and append to state
-                        for (slot, diff_type) in &diff.storage {
+            // get diff for this address
+            if let Some(diff) = state_diff.0.get(&addr_hash) {
 
-                            // parse value from diff type
-                            let value = match diff_type {
-                                Diff::Born(value) => value,
-                                Diff::Changed(changed) => &changed.to,
-                                Diff::Died(_) => {
-                                    state.storage.remove(slot);
-                                    continue;
-                                }
-                                _ => continue,
-                            };
+                // build diff of StorageSlots and append to state
+                for (slot, diff_type) in &diff.storage {
 
-                            // get the slot from the state
-                            match state.storage.get_mut(slot) {
-                                Some(slot) => {
-
-                                    // update value if newest modifier
-                                    if slot.modifiers.iter().all(|m| m.0 < block_number) {
-                                        slot.value = *value;
-                                    }
-                                    
-                                    slot.modifiers.push((block_number, tx.hash.clone().to_owned()));
-                                },
-                                None => {
-
-                                    // insert into state
-                                    state.storage.insert(
-                                        *slot, 
-                                        StorageSlot {
-                                            value: *value,
-                                            modifiers: vec![(block_number, tx.hash.clone().to_owned())],
-                                            alias: None,
-                                            decode_as_type_index: 0
-                                        }
-                                    );
-                                }
-                            }
+                    // parse value from diff type
+                    let value = match diff_type {
+                        Diff::Born(value) => value,
+                        Diff::Changed(changed) => &changed.to,
+                        Diff::Died(_) => {
+                            state.storage.remove(slot);
+                            continue;
                         }
+                        _ => continue,
+                    };
 
-                    },
-                    None => {}
+                    // get the slot from the state
+                    match state.storage.get_mut(slot) {
+                        Some(slot) => {
+
+                            // update value if newest modifier
+                            if slot.modifiers.iter().all(|m| m.0 < block_number) {
+                                slot.value = *value;
+                            }
+                            
+                            slot.modifiers.push((block_number, tx.hash.clone().to_owned()));
+                        },
+                        None => {
+
+                            // insert into state
+                            state.storage.insert(
+                                *slot, 
+                                StorageSlot {
+                                    value: *value,
+                                    modifiers: vec![(block_number, tx.hash.clone().to_owned())],
+                                    alias: None,
+                                    decode_as_type_index: 0
+                                }
+                            );
+                        }
+                    }
                 }
-            },
-            None => {}
+            }
         }
 
         // drop state

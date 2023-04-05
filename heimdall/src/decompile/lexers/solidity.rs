@@ -18,12 +18,12 @@ use heimdall_common::{
     utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
 };
 
-use super::{util::*, precompile::decode_precompile, constants::AND_BITMASK_REGEX};
+use super::{super::util::*, super::precompile::decode_precompile, super::constants::AND_BITMASK_REGEX};
 
 impl VMTrace {
     
-    // converts a VMTrace to a Function which can be written to the decompiled output
-    pub fn analyze(
+    // converts a VMTrace to a Funciton through lexical and syntactic analysis
+    pub fn analyze_sol(
         &self,
         function: Function,
         trace: &mut TraceFactory,
@@ -44,6 +44,9 @@ impl VMTrace {
 
             let opcode_name = instruction.opcode_details.clone().unwrap().name;
             let opcode_number = U256::from_str(&instruction.opcode).unwrap().as_usize();
+
+            println!("opcode_name: {}", opcode_name);
+            println!("inputs: {:?}\n", instruction.inputs);
 
             // if the instruction is a state-accessing instruction, the function is no longer pure
             if function.pure
@@ -248,10 +251,7 @@ impl VMTrace {
 
                                     // get matching conditional
                                     let conditional = find_balanced_encapsulator(function.logic[i].to_string(), ('(', ')'));
-                                    let conditional = match function.logic[i].get(conditional.0+1..conditional.1-1) {
-                                        Some(conditional) => conditional,
-                                        None => "decoding error",
-                                    };
+                                    let conditional = function.logic[i].get(conditional.0+1..conditional.1-1).unwrap_or("decoding error");
                                     
                                     // we can negate the conditional to get the revert logic
                                     // TODO: make this a require statement, if revert is rlly gross but its technically correct
@@ -329,7 +329,7 @@ impl VMTrace {
                 let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
                 
                 let return_memory_operations = function.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
-                let return_memory_operations_solidified = return_memory_operations.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + ");
+                let return_memory_operations_solidified = return_memory_operations.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join("");
 
                 // we don't want to overwrite the return value if it's already been set
                 if function.returns == Some(String::from("uint256")) || function.returns.is_none() {
@@ -399,7 +399,7 @@ impl VMTrace {
                     )
                 );
 
-            } else if opcode_name.contains("MSTORE") {
+            } else if opcode_name.contains("MSTORE") || opcode_name.contains("MSTORE8") {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
                 let operation = instruction.input_operations[1].clone();
@@ -441,7 +441,7 @@ impl VMTrace {
                             
                             address.solidify(),
                             modifier,
-                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + "),
+                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(""),
 
                         ));
                     }
@@ -474,7 +474,7 @@ impl VMTrace {
                             
                             address.solidify(),
                             modifier,
-                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + "),
+                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(""),
 
                         ));
                     }
@@ -516,7 +516,7 @@ impl VMTrace {
                             
                             address.solidify(),
                             modifier,
-                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(" + ")),
+                            extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join("")),
         
                         );
                     }
@@ -547,7 +547,8 @@ impl VMTrace {
                     )
                 );
             } else if opcode_name == "CALLDATALOAD" {
-                let calldata_slot = (instruction.inputs[0].as_usize().saturating_sub(4)) / 32;
+                let slot_as_usize: usize = instruction.inputs[0].try_into().unwrap_or(usize::MAX);
+                let calldata_slot = (slot_as_usize.saturating_sub(4)) / 32;
                 match function.arguments.get(&calldata_slot) {
                     Some(_) => {}
                     None => {
@@ -555,7 +556,7 @@ impl VMTrace {
                             calldata_slot,
                             (
                                 CalldataFrame {
-                                    slot: (instruction.inputs[0].as_usize().saturating_sub(4)) / 32,
+                                    slot: calldata_slot,
                                     operation: instruction.input_operations[0].to_string(),
                                     mask_size: 32,
                                     heuristics: Vec::new(),
@@ -574,83 +575,66 @@ impl VMTrace {
                 }
                   
             } else if opcode_name == "ISZERO" {
-
-                match instruction.input_operations.iter().find(|operation| {
+                if let Some(calldata_slot_operation) = instruction.input_operations.iter().find(|operation| {
                     operation.opcode.name == "CALLDATALOAD"
                 }) {
-                    Some(calldata_slot_operation) => {
-
-                        match function.arguments.clone().iter().find(|(_, (frame, _))| {
-                            frame.operation == calldata_slot_operation.inputs[0].to_string()
-                        }) {
-                            Some((calldata_slot, arg)) => {
-    
-                                // copy the current potential types to a new vector and remove duplicates
-                                let mut potential_types = 
-                                    vec![
-                                        "bool".to_string(),
-                                        "bytes1".to_string(),
-                                        "uint8".to_string(),
-                                        "int8".to_string(),
-                                    ];
-                                potential_types.append(&mut arg.1.clone());
-                                potential_types.sort();
-                                potential_types.dedup();
-                                
-                                // replace mask size and potential types
-                                function.arguments.insert(
-                                    *calldata_slot,
-                                    (
-                                        arg.0.clone(),
-                                        potential_types
-                                    ),
-                                );
-    
-                            },
-                            None => {}
-                        }
-                    },
-                    None => {},
+                
+                    if let Some((calldata_slot, arg)) = function.arguments.clone().iter().find(|(_, (frame, _))| {
+                        frame.operation == calldata_slot_operation.inputs[0].to_string()
+                    }) {
+                        
+                        // copy the current potential types to a new vector and remove duplicates
+                        let mut potential_types = vec![
+                            "bool".to_string(),
+                            "bytes1".to_string(),
+                            "uint8".to_string(),
+                            "int8".to_string(),
+                        ];
+                        potential_types.append(&mut arg.1.clone());
+                        potential_types.sort();
+                        potential_types.dedup();
+                        
+                        // replace mask size and potential types
+                        function.arguments.insert(
+                            *calldata_slot,
+                            (
+                                arg.0.clone(),
+                                potential_types
+                            ),
+                        );
+                    }
                 };
             } else if ["AND", "OR"].contains(&opcode_name) {
-
-                match instruction.input_operations.iter().find(|operation| {
+                if let Some(calldata_slot_operation) = instruction.input_operations.iter().find(|operation| {
                     operation.opcode.name == "CALLDATALOAD" || operation.opcode.name == "CALLDATACOPY"
                 }) {
-                    Some(calldata_slot_operation) => {
+                    
+                    // convert the bitmask to it's potential solidity types
+                    let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
+                    
+                    if let Some((calldata_slot, arg)) = function.arguments.clone().iter().find(|(_, (frame, _))| {
+                        frame.operation == calldata_slot_operation.inputs[0].to_string()
+                    }) {
                         
-                        // convert the bitmask to it's potential solidity types
-                        let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
+                        // append the current potential types to the new vector and remove duplicates
+                        potential_types.append(&mut arg.1.clone());
+                        potential_types.sort();
+                        potential_types.dedup();
                         
-                        match function.arguments.clone().iter().find(|(_, (frame, _))| {
-                            frame.operation == calldata_slot_operation.inputs[0].to_string()
-                        }) {
-                            Some((calldata_slot, arg)) => {
-    
-                                // append the current potential types to the new vector and remove duplicates
-                                potential_types.append(&mut arg.1.clone());
-                                potential_types.sort();
-                                potential_types.dedup();
-                                
-                                // replace mask size and potential types
-                                function.arguments.insert(
-                                    *calldata_slot,
-                                    (
-                                        CalldataFrame {
-                                            slot: arg.0.slot,
-                                            operation: arg.0.operation.clone(),
-                                            mask_size: mask_size_bytes,
-                                            heuristics: Vec::new(),
-                                        },
-                                        potential_types,
-                                    ),
-                                );
-    
-                            },
-                            None => {}
-                        }
+                        // replace mask size and potential types
+                        function.arguments.insert(
+                            *calldata_slot,
+                            (
+                                CalldataFrame {
+                                    slot: arg.0.slot,
+                                    operation: arg.0.operation.clone(),
+                                    mask_size: mask_size_bytes,
+                                    heuristics: Vec::new(),
+                                },
+                                potential_types,
+                            ),
+                        );
                     }
-                    None => {}
                 };
             }
 
@@ -672,27 +656,24 @@ impl VMTrace {
                 ].contains(&opcode_name) {
 
                 // get the calldata slot operation
-                match function.arguments.clone().iter().find(|(_, (frame, _))| {
+                if let Some ((key, (frame, potential_types))) = function.arguments.clone().iter().find(|(_, (frame, _))| {
                     instruction.output_operations.iter().any(|operation| {
                         operation.to_string().contains(frame.operation.as_str()) &&
                         !frame.heuristics.contains(&"integer".to_string())
                     })
                 }) {
-                   Some ((key, (frame, potential_types))) => {
-                        function.arguments.insert(
-                            *key,
-                            (
-                                CalldataFrame {
-                                    slot: frame.slot,
-                                    operation: frame.operation.clone(),
-                                    mask_size: frame.mask_size,
-                                    heuristics: vec!["integer".to_string()],
-                                },
-                                potential_types.to_owned()
-                            ),
-                        );
-                   },
-                   None => {}
+                    function.arguments.insert(
+                        *key,
+                        (
+                            CalldataFrame {
+                                slot: frame.slot,
+                                operation: frame.operation.clone(),
+                                mask_size: frame.mask_size,
+                                heuristics: vec!["integer".to_string()],
+                            },
+                            potential_types.to_owned()
+                        ),
+                    );
                 }
             } else if [
                 "SHR",
@@ -703,27 +684,24 @@ impl VMTrace {
             ].contains(&opcode_name) {
 
                 // get the calldata slot operation
-                match function.arguments.clone().iter().find(|(_, (frame, _))| {
+                if let Some ((key, (frame, potential_types))) = function.arguments.clone().iter().find(|(_, (frame, _))| {
                     instruction.output_operations.iter().any(|operation| {
                         operation.to_string().contains(frame.operation.as_str()) &&
                         !frame.heuristics.contains(&"bytes".to_string())
                     })
                 }) {
-                    Some ((key, (frame, potential_types))) => {
-                            function.arguments.insert(
-                                *key,
-                                (
-                                    CalldataFrame {
-                                        slot: frame.slot,
-                                        operation: frame.operation.clone(),
-                                        mask_size: frame.mask_size,
-                                        heuristics: vec!["bytes".to_string()],
-                                    },
-                                    potential_types.to_owned()
-                                ),
-                            );
-                    },
-                    None => {}
+                    function.arguments.insert(
+                        *key,
+                        (
+                            CalldataFrame {
+                                slot: frame.slot,
+                                operation: frame.operation.clone(),
+                                mask_size: frame.mask_size,
+                                heuristics: vec!["bytes".to_string()],
+                            },
+                            potential_types.to_owned()
+                        ),
+                    );
                 }
             }
 
@@ -732,7 +710,7 @@ impl VMTrace {
         // recurse into the children of the VMTrace map
         for (_, child) in self.children.iter().enumerate() {
 
-            function = child.analyze(function, trace, trace_parent, conditional_map);
+            function = child.analyze_sol(function, trace, trace_parent, conditional_map);
 
         }
 

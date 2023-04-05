@@ -14,19 +14,18 @@ impl Memory {
 
     // get the size of the memory in bytes
     pub fn size(&self) -> u128 {
-        return (self.memory.len() / 2) as u128;
+        (self.memory.len() / 2) as u128
     }
 
     pub fn extend(&mut self, offset: u128, size: u128) {
         
         // calculate the new size of the memory
         let r = (offset + size) % 32;
-        let new_mem_size: u128;
-        if r == 0 {
-            new_mem_size = offset + size;
+        let new_mem_size = if r == 0 {
+            offset + size
         } else {
-            new_mem_size = offset + size + 32 - r;
-        }
+            offset + size + 32 - r
+        };
 
         let mut byte_difference = 0;
         if self.size() <= new_mem_size {
@@ -56,7 +55,7 @@ impl Memory {
                     value = value.get(0..(size * 2)).unwrap().to_string();
                 }
             }
-
+            
             // extend the value to size bytes
             if value.len() / 2 < size {
                 value.insert_str(0, &"00".repeat(size - value.len() / 2));
@@ -80,7 +79,7 @@ impl Memory {
 
         // cap size to 2**16 for optimization
         if size > 65536 || offset > 65536 {
-            return "00".repeat(size).to_string();
+            return "00".repeat(size);
         }
 
         // if the offset + size will be out of bounds, append null bytes until the size is met

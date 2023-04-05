@@ -34,7 +34,7 @@ pub fn get_json_from_url(url: String, attempts_remaining: u8) -> Option<Value> {
             })
         },
         Err(_) => {
-            return None
+            None
         }
     }
 }

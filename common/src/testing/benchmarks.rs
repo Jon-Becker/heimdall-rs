@@ -10,7 +10,7 @@ pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
 
     for _ in 0..runs {
         let start_time = Instant::now();
-        let _ = to_bench();
+        to_bench();
         let end_time = start_time.elapsed().as_millis() as usize;
         
         max = std::cmp::max(max, end_time);

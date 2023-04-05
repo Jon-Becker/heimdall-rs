@@ -15,7 +15,7 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
     let mut rows = Vec::new();
     
     // filter storage_iter by state.filter
-    let mut storage_iter = match state.filter.len() > 0 {
+    let mut storage_iter = match !state.filter.is_empty() {
         true => {
             state.storage
                 .iter()
@@ -39,7 +39,7 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
     };
 
     // slice storage_iter
-    for (i, (slot, value)) in storage_iter[indices.clone()].iter().enumerate() {
+    for (i, (slot, value)) in storage_iter[indices].iter().enumerate() {
         let decoded_value = match value.decode_as_type_index {
             0 => format!("0x{}", encode_hex(value.value.to_fixed_bytes().into())),
             1 => format!("{}", !value.value.is_zero()),
@@ -50,9 +50,9 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
             },
             4 => {
                 let decoded = U256::from_big_endian(&value.value.to_fixed_bytes());
-                format!("{}", decoded)
+                format!("{decoded}")
             },
-            _ => format!("decoding error")
+            _ => "decoding error".to_string()
         };
 
         rows.push(
@@ -103,7 +103,7 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
 pub fn copy_selected(state: &mut DumpState) {
 
     // filter storage_iter by state.filter
-    let mut storage_iter = match state.filter.len() > 0 {
+    let mut storage_iter = match !state.filter.is_empty() {
         true => {
             state.storage
                 .iter()
@@ -131,9 +131,9 @@ pub fn copy_selected(state: &mut DumpState) {
         },
         4 => {
             let decoded = U256::from_big_endian(&value.value.to_fixed_bytes());
-            format!("{}", decoded)
+            format!("{decoded}")
         },
-        _ => format!("decoding error")
+        _ => "decoding error".to_string()
     };
 
     copy_to_clipboard(&decoded_value);

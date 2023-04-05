@@ -51,7 +51,7 @@ pub fn handle(
                                 // enter command
                                 crossterm::event::KeyCode::Enter => {
                                     state.filter = String::new();
-                                    let mut split = state.input_buffer.split(" ");
+                                    let mut split = state.input_buffer.split(' ');
                                     let command = split.next().unwrap();
                                     let args = split.collect::<Vec<&str>>();
 
@@ -64,13 +64,13 @@ pub fn handle(
                                             state.view = TUIView::Help;
                                         }
                                         ":f" | ":find" => {
-                                            if args.len() > 0 {
+                                            if !args.is_empty() {
                                                 state.filter = args[0].to_string();
                                             }
                                             state.view = TUIView::Main;
                                         }
                                         ":e" | ":export" => {
-                                            if args.len() > 0 {
+                                            if !args.is_empty() {
                                                 write_storage_to_csv(&output_dir.clone(), &args[0].to_string(), &state);
                                             }
                                             state.view = TUIView::Main;
@@ -137,8 +137,8 @@ pub fn handle(
                             crossterm::event::KeyCode::Right => {
 
                                 // increment decode_as_type_index on all selected transactions
-                                let scroll_index = state.scroll_index.clone();
-                                let selection_size = state.selection_size.clone();
+                                let scroll_index = state.scroll_index;
+                                let selection_size = state.selection_size;
                                 let mut storage_iter = state.storage.iter_mut().collect::<Vec<_>>();
                                 storage_iter.sort_by_key(|(slot, _)| *slot);
 
@@ -163,8 +163,8 @@ pub fn handle(
                             crossterm::event::KeyCode::Left => {
                                 
                                 // decrement decode_as_type_index on all selected transactions
-                                let scroll_index = state.scroll_index.clone();
-                                let selection_size = state.selection_size.clone();
+                                let scroll_index = state.scroll_index;
+                                let selection_size = state.selection_size;
                                 let mut storage_iter = state.storage.iter_mut().collect::<Vec<_>>();
                                 storage_iter.sort_by_key(|(slot, _)| *slot);
 

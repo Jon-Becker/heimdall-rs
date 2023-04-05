@@ -15,6 +15,7 @@ pub static DEFAULT_CONFIG: &str = "rpc_url = \"\"
 local_rpc_url = \"http://localhost:8545\"
 etherscan_api_key = \"\"
 transpose_api_key = \"\"
+openai_api_key = \"\"
 ";
 
 
@@ -41,7 +42,8 @@ pub struct Configuration {
     pub rpc_url: String,
     pub local_rpc_url: String,
     pub etherscan_api_key: String,
-    pub transpose_api_key: String
+    pub transpose_api_key: String,
+    pub openai_api_key: String,
 }
 
 
@@ -117,7 +119,7 @@ pub fn get_config() -> Configuration {
         Ok(config) => config,
         Err(e) => {
             let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to parse config file: {}", e));
+            logger.error(&format!("failed to parse config file: {e}"));
             logger.info("regenerating config file...");
             delete_config();
             return get_config()
@@ -143,6 +145,9 @@ pub fn update_config(key: &String, value: &String) {
         }
         "transpose_api_key" => {
             contents.transpose_api_key = value.to_string();
+        }
+        "openai_api_key" => {
+            contents.openai_api_key = value.to_string();
         }
         _ => {
             let (logger, _) = Logger::new("");

@@ -28,14 +28,11 @@ pub fn resolve_function_selectors(
 
         // create a new thread for each selector
         threads.push(thread::spawn(move || {
-            match resolve_function_signature(&selector) {
-                Some(function) => {
-                    let mut _resolved_functions = function_clone.lock().unwrap();
-                    let mut _resolve_progress = resolve_progress.lock().unwrap();
-                    _resolve_progress.set_message(format!("resolved {} selectors...", _resolved_functions.len()));
-                    _resolved_functions.insert(selector, function);
-                }
-                None => {},
+            if let Some(function) = resolve_function_signature(&selector) {
+                let mut _resolved_functions = function_clone.lock().unwrap();
+                let mut _resolve_progress = resolve_progress.lock().unwrap();
+                _resolve_progress.set_message(format!("resolved {} selectors...", _resolved_functions.len()));
+                _resolved_functions.insert(selector, function);
             }
         }));
         

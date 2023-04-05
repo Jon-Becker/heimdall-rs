@@ -1,4 +1,4 @@
-use super::constants::{
+use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
     NON_ZERO_BYTE_REGEX,
 };
@@ -622,41 +622,6 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
             &lines[i..].iter().collect::<Vec<_>>(),
         ) {
             cleaned_lines.push(line.to_string());
-        }
-    }
-
-    cleaned_lines
-}
-
-pub fn indent(
-    lines: Vec<String>,
-) -> Vec<String> {
-    let mut indentation: usize = 0;
-    let mut cleaned_lines: Vec<String> = lines;
-
-    for (_, line) in cleaned_lines.iter_mut().enumerate() {
-
-        if line.starts_with('}') {
-            indentation = indentation.saturating_sub(1);
-        }
-
-        // apply indentation
-        *line = format!(
-            "{}{}",
-            " ".repeat(indentation * 4),
-            line.trim_start()
-        );
-
-        // indent due to opening braces
-        if line
-            .split("//")
-            .collect::<Vec<&str>>()
-            .first()
-            .unwrap()
-            .trim()
-            .ends_with('{')
-        {
-            indentation += 1;
         }
     }
 

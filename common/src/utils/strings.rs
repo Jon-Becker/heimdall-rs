@@ -2,13 +2,14 @@
 use std::{num::ParseIntError};
 
 use ethers::{prelude::{I256, U256}, abi::AbiEncode};
+use fancy_regex::Regex;
 
 use crate::constants::REDUCE_HEX_REGEX;
 
 
 // Convert an unsigned integer into a signed one
 pub fn sign_uint(unsigned: U256) -> I256 {
-    return I256::from_raw(U256::from(unsigned))
+    I256::from_raw(unsigned)
 }
 
 
@@ -24,7 +25,7 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 // encode a hex into a string
 pub fn encode_hex(s: Vec<u8>) -> String {
     s.iter()
-        .map(|b| format!("{:02x}", b))
+        .map(|b| format!("{b:02x}"))
         .collect()
 }
 
@@ -33,7 +34,7 @@ pub fn encode_hex(s: Vec<u8>) -> String {
 pub fn encode_hex_reduced(s: U256) -> String {
 
     if s > U256::from(0) {
-        REDUCE_HEX_REGEX.replace(&s.clone().encode_hex(), "0x").to_string()
+        REDUCE_HEX_REGEX.replace(&s.encode_hex(), "0x").to_string()
     }
     else {
         String::from("0")
@@ -49,8 +50,8 @@ pub fn hex_to_ascii(s: &str) -> String {
     }
 
     // remove newlines
-    result = result.replace("\r", "");
-    result = result.replace("\n", "");
+    result = result.replace('\r', "");
+    result = result.replace('\n', "");
 
     result
 }
@@ -118,4 +119,30 @@ pub fn base26_encode(n: usize) -> String {
         n /= 26;
     }
     s.to_lowercase().chars().rev().collect()
+}
+
+// splits a string by a given regex
+pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
+
+    // Find all matches of the pattern in the input string
+    let matches = pattern.find_iter(input);
+
+    // Use the matches to split the input string into substrings
+    let mut substrings = vec![];
+    let mut last_end = 0;
+    for m in matches {
+        let m = m.unwrap();
+        let start = m.start();
+        let end = m.end();
+        if start > last_end {
+            substrings.push(input[last_end..start].to_string());
+        }
+        last_end = end;
+    }
+    if last_end < input.len() {
+        substrings.push(input[last_end..].to_string());
+    }
+
+    // Return the resulting vector of substrings
+    substrings
 }

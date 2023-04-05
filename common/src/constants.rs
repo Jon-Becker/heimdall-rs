@@ -21,7 +21,7 @@ lazy_static! {
     pub static ref WORD_REGEX: Regex = Regex::new(r"0x[0-9a-fA-F]{0,64}").unwrap();
 
     // The following regex is used to find type castings
-    pub static ref TYPE_CAST_REGEX: Regex = Regex::new(r"(address\(|string\(|bool\(|bytes(\d*)\(|uint(\d*)\(|int(\d*)\()").unwrap();
+    pub static ref TYPE_CAST_REGEX: Regex = Regex::new(r"(address\(|string\(|bool\(|bytes(\d*)\(|uint(\d*)\(|int(\d*)\()(?!\))").unwrap();
 
     // The following regex is used to find memory length accesses
     pub static ref MEMLEN_REGEX: Regex = Regex::new(r"memory\[memory\[[0-9x]*\]\]").unwrap();

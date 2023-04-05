@@ -16,7 +16,8 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
-                include_solidity: true
+                include_solidity: true,
+                include_yul: false
             };
             crate::decompile::decompile(args)
         }
@@ -35,7 +36,8 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
-                include_solidity: true
+                include_solidity: true,
+                include_yul: false
             };
             crate::decompile::decompile(args)
         }
@@ -54,7 +56,8 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
-                include_solidity: false
+                include_solidity: false,
+                include_yul: false
             };
             crate::decompile::decompile(args)
         }
@@ -73,7 +76,8 @@ mod benchmark {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: true,
-                include_solidity: false
+                include_solidity: false,
+                include_yul: false
             };
             crate::decompile::decompile(args)
         }
@@ -105,10 +109,8 @@ mod tests {
         let output = read_file(&String::from("./output/tests/decompile/test1/decompiled.sol"));
 
         // assert that the output is correct
-        for line in vec![
-            "function Unresolved_19045a25(bytes memory arg0, bytes memory arg1) public payable returns (address) {",
-            "address var_h = ecrecover(var_d, var_e, var_f, var_g);"
-        ] {
+        for line in &["function Unresolved_19045a25(bytes memory arg0, bytes memory arg1) public payable returns (address) {",
+            "address var_h = ecrecover(var_d, var_e, var_f, var_g);"] {
             assert!(output.contains(line));
         }
 
@@ -133,8 +135,7 @@ mod tests {
         let output = read_file(&String::from("./output/tests/decompile/test2/decompiled.sol"));
 
         // assert that the output is correct
-        for line in vec![
-            "function Unresolved_06fdde03() public view returns (bytes memory) {",
+        for line in &["function Unresolved_06fdde03() public view returns (bytes memory) {",
             "function Unresolved_095ea7b3(address arg0, bytes memory arg1) public returns (bool) {",
             "function Unresolved_18160ddd() public view returns (address) {",
             "function Unresolved_23b872dd(address arg0, address arg1, bytes memory arg2) public returns (bool) {",
@@ -144,9 +145,8 @@ mod tests {
             "function Unresolved_95d89b41() public view returns (bytes memory) {",
             "function Unresolved_a9059cbb(address arg0, bytes memory arg1) public returns (bool) {",
             "function Unresolved_d0e30db0() public payable {",
-            "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"
-        ] {
-            println!("{}", line);
+            "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"] {
+            println!("{line}");
             assert!(output.contains(line));
         }
 
@@ -171,15 +171,13 @@ mod tests {
         let output = read_file(&String::from("./output/tests/decompile/test3/decompiled.sol"));
 
         // assert that the output is correct
-        for line in vec![
-            "function Unresolved_55c241c3(bytes memory arg0, bytes memory arg1, bytes memory arg2) public view payable returns (uint256) {",
+        for line in &["function Unresolved_55c241c3(bytes memory arg0, bytes memory arg1, bytes memory arg2) public view payable returns (uint256) {",
             "if (storage[0]) { revert(\"Already solved\"); } else {",
             "function Unresolved_692a34f4(bytes memory arg0) public view payable returns (uint256) {",
             "function Unresolved_799320bb() public payable {",
             "function Unresolved_9b6deec4() public view payable returns (address) {",
-            "function Unresolved_e834a834() public view payable returns (bool) {"
-        ] {
-            println!("{}", line);
+            "function Unresolved_e834a834() public view payable returns (bool) {"] {
+            println!("{line}");
             assert!(output.contains(line));
         }
 
@@ -204,12 +202,10 @@ mod tests {
         let output = read_file(&String::from("./output/tests/decompile/test4/decompiled.sol"));
 
         // assert that the output is correct
-        for line in vec![
-            "function Unresolved_02751cec(address arg0, bytes memory arg1, bytes memory arg2, bytes memory arg3, address arg4, bytes memory arg5) public returns (bytes memory) {",
+        for line in &["function Unresolved_02751cec(address arg0, bytes memory arg1, bytes memory arg2, bytes memory arg3, address arg4, bytes memory arg5) public returns (bytes memory) {",
             "(bool success, bytes memory ret0) = address(var_j).call{ value: 0 }(var_n);",
             "revert(\"UniswapV2Library: ZERO_ADDRESS\");",
-            "revert(\"TransferHelper: TRANSFER_FAILED\");"
-        ] {
+            "revert(\"TransferHelper: TRANSFER_FAILED\");"] {
             println!("{line}");
             assert!(output.contains(line));
         }
@@ -227,7 +223,7 @@ mod postprocess_tests {
 
     use indicatif::ProgressBar;
 
-    use crate::decompile::postprocess::postprocess;
+    use crate::decompile::out::postprocessers::solidity::postprocess;
 
     #[test]
     fn test_bitmask_conversion() {

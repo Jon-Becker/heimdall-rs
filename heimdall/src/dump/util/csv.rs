@@ -22,14 +22,14 @@ pub fn write_storage_to_csv(output_dir: &String, file_name: &String, state: &Dum
                 },
                 4 => {
                     let decoded = U256::from_big_endian(&value.value.to_fixed_bytes());
-                    format!("{}", decoded)
+                    format!("{decoded}")
                 },
-                _ => format!("decoding error")
+                _ => "decoding error".to_string()
             };
             lines.push(
                 format!(
                     "\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
-                    value.modifiers.iter().max_by_key(|m| m.0).unwrap().0.to_string(),
+                    value.modifiers.iter().max_by_key(|m| m.0).unwrap().0,
                     value.alias.as_ref().unwrap_or(&String::from("None")),
                     encode_hex(slot.to_fixed_bytes().into()),
                     DECODE_AS_TYPES[value.decode_as_type_index],

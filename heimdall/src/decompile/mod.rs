@@ -1,41 +1,36 @@
 mod tests;
 
-pub mod util;
-pub mod output;
-pub mod analyze;
-pub mod resolve;
 pub mod constants;
+pub mod lexers;
+pub mod out;
 pub mod precompile;
-pub mod postprocess;
+pub mod resolve;
+pub mod util;
 
-use crate::decompile::util::*;
-use crate::decompile::output::*;
 use crate::decompile::resolve::*;
+use crate::decompile::util::*;
 
+use heimdall_cache::read_cache;
+use heimdall_cache::store_cache;
+use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::time::Duration;
-use heimdall_cache::read_cache;
-use heimdall_cache::store_cache;
-use indicatif::ProgressBar;
 
 use clap::{AppSettings, Parser};
 use ethers::{
-    core::types::{Address},
-    providers::{Middleware, Provider, Http},
+    core::types::Address,
+    providers::{Http, Middleware, Provider},
 };
 use heimdall_common::{
+    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::evm::{
-        disassemble::{
-            DisassemblerArgs,
-            disassemble
-        },
-        vm::VM
+        disassemble::{disassemble, DisassemblerArgs},
+        vm::VM,
     },
     ether::signatures::*,
-    constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
-    io::{ logging::* },
+    io::logging::*,
 };
 
 #[derive(Debug, Clone, Parser)]
@@ -44,9 +39,8 @@ use heimdall_common::{
        global_setting = AppSettings::DeriveDisplayOrder,
        override_usage = "heimdall decompile <TARGET> [OPTIONS]")]
 pub struct DecompilerArgs {
-
     /// The target to decompile, either a file, bytecode, contract address, or ENS name.
-    #[clap(required=true)]
+    #[clap(required = true)]
     pub target: String,
 
     /// Set the output verbosity level, 1 - 5.
@@ -54,11 +48,11 @@ pub struct DecompilerArgs {
     pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The output directory to write the decompiled files to
-    #[clap(long="output", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
     pub output: String,
 
     /// The RPC provider to use for fetching target bytecode.
-    #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// When prompted, always select the default value.
@@ -66,39 +60,54 @@ pub struct DecompilerArgs {
     pub default: bool,
 
     /// Whether to skip resolving function selectors.
-    #[clap(long="skip-resolving")]
+    #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
 
     /// Whether to include solidity source code in the output (in beta).
-    #[clap(long="include-sol")]
+    #[clap(long = "include-sol")]
     pub include_solidity: bool,
 
+    /// Whether to include yul source code in the output (in beta).
+    #[clap(long = "include-yul")]
+    pub include_yul: bool,
 }
 
 pub fn decompile(args: DecompilerArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, mut trace)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, mut trace) = Logger::new(args.verbose.log_level().unwrap().as_str());
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
+
+    // ensure both --include-sol and --include-yul aren't set
+    if args.include_solidity && args.include_yul {
+        logger.error("arguments '--include-sol' and '--include-yul' are mutually exclusive.");
+        std::process::exit(1);
+    }
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target
+                .chars()
+                .skip(shortened_target.len() - 16)
+                .collect::<String>();
     }
     let decompile_call = trace.add_call(
-        0, line!(),
+        0,
+        line!(),
         "heimdall".to_string(),
         "decompile".to_string(),
         vec![shortened_target],
-        "()".to_string()
+        "()".to_string(),
     );
 
     // parse the output directory
     let mut output_dir: String;
-    if &args.output.len() <= &0 {
+    if args.output.is_empty() {
         output_dir = match env::current_dir() {
             Ok(dir) => dir.into_os_string().into_string().unwrap(),
             Err(_) => {
@@ -107,16 +116,14 @@ pub fn decompile(args: DecompilerArgs) {
             }
         };
         output_dir.push_str("/output");
-    }
-    else {
+    } else {
         output_dir = args.output.clone();
     }
 
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-
         // push the address to the output directory
-        if &output_dir != &args.output {
+        if output_dir != args.output {
             output_dir.push_str(&format!("/{}", &args.target));
         }
 
@@ -130,16 +137,13 @@ pub fn decompile(args: DecompilerArgs) {
         contract_bytecode = rt.block_on(async {
 
             // check the cache for a matching address
-            match read_cache(&format!("contract.{}", &args.target)) {
-                Some(bytecode) => {
-                    logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
-                    return bytecode;
-                },
-                None => {}
+            if let Some(bytecode) = read_cache(&format!("contract.{}", &args.target)) {
+                logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
+                return bytecode;
             }
 
             // make sure the RPC provider isn't empty
-            if &args.rpc_url.len() <= &0 {
+            if args.rpc_url.is_empty() {
                 logger.error("decompiling an on-chain contract requires an RPC provider. Use `heimdall decompile --help` for more information.");
                 std::process::exit(1);
             }
@@ -176,15 +180,11 @@ pub fn decompile(args: DecompilerArgs) {
 
             bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
-
-    }
-    else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
+    } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone();
-    }
-    else {
-
+    } else {
         // push the address to the output directory
-        if &output_dir != &args.output {
+        if output_dir != args.output {
             output_dir.push_str("/local");
         }
 
@@ -193,12 +193,14 @@ pub fn decompile(args: DecompilerArgs) {
             Ok(contents) => {
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents.replacen("0x", "", 1)
-                }
-                else {
-                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
+                } else {
+                    logger.error(&format!(
+                        "file '{}' doesn't contain valid bytecode.",
+                        &args.target
+                    ));
                     std::process::exit(1)
                 }
-            },
+            }
             Err(_) => {
                 logger.error(&format!("failed to open file '{}' .", &args.target));
                 std::process::exit(1)
@@ -219,8 +221,8 @@ pub fn decompile(args: DecompilerArgs) {
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len()/2usize)],
-        "()".to_string()
+        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        "()".to_string(),
     );
 
     // perform versioning and compiler heuristics
@@ -230,15 +232,16 @@ pub fn decompile(args: DecompilerArgs) {
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len()/2usize)],
-        format!("({compiler}, {version})")
+        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        format!("({compiler}, {version})"),
     );
 
     if compiler == "solc" {
         logger.debug(&format!("detected compiler {compiler} {version}."));
-    }
-    else {
-        logger.warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+    } else {
+        logger.warn(&format!(
+            "detected compiler {compiler} {version} is not supported by heimdall."
+        ));
     }
 
     // create a new EVM instance
@@ -253,9 +256,20 @@ pub fn decompile(args: DecompilerArgs) {
     );
     let mut shortened_target = contract_bytecode.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() + "..." + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target
+                .chars()
+                .skip(shortened_target.len() - 16)
+                .collect::<String>();
     }
-    let vm_trace = trace.add_creation(decompile_call, line!(), "contract".to_string(), shortened_target.clone(), (contract_bytecode.len()/2usize).try_into().unwrap());
+    let vm_trace = trace.add_creation(
+        decompile_call,
+        line!(),
+        "contract".to_string(),
+        shortened_target.clone(),
+        (contract_bytecode.len() / 2usize).try_into().unwrap(),
+    );
 
     // find and resolve all selectors in the bytecode
     let selectors = find_function_selectors(disassembled_bytecode);
@@ -263,13 +277,22 @@ pub fn decompile(args: DecompilerArgs) {
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
         resolved_selectors = resolve_function_selectors(selectors.clone(), &logger);
-        logger.info(&format!("resolved {} possible functions from {} detected selectors.", resolved_selectors.len(), selectors.len()));
+        logger.info(&format!(
+            "resolved {} possible functions from {} detected selectors.",
+            resolved_selectors.len(),
+            selectors.len()
+        ));
+    } else {
+        logger.info(&format!(
+            "found {} possible function selectors.",
+            selectors.len()
+        ));
     }
-    else {
-        logger.info(&format!("found {} possible function selectors.", selectors.len()));
-    }
-    logger.info(&format!("performing symbolic execution on '{}' .", shortened_target));
+    logger.info(&format!(
+        "performing symbolic execution on '{shortened_target}' ."
+    ));
 
+    // get a new progress bar
     let decompilation_progress = ProgressBar::new_spinner();
     decompilation_progress.enable_steady_tick(Duration::from_millis(100));
     decompilation_progress.set_style(logger.info_spinner());
@@ -292,55 +315,83 @@ pub fn decompile(args: DecompilerArgs) {
             "heimdall".to_string(),
             "analyze".to_string(),
             vec![format!("0x{selector}")],
-            "()".to_string()
+            "()".to_string(),
         );
 
         trace.add_info(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
-            format!("discovered entry point: {function_entry_point}").to_string()
+            format!("discovered entry point: {function_entry_point}").to_string(),
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdest_count) = map_selector(&evm.clone(), selector.clone(), function_entry_point);
+        let (map, jumpdest_count) =
+            map_selector(&evm.clone(), selector.clone(), function_entry_point);
 
         trace.add_debug(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
-            format!("execution tree {}",
-
-            match jumpdest_count {
-                0 => "appears to be linear".to_string(),
-                _ => format!("has {jumpdest_count} unique branches")
-            }
-            ).to_string()
+            format!(
+                "execution tree {}",
+                match jumpdest_count {
+                    0 => "appears to be linear".to_string(),
+                    _ => format!("has {jumpdest_count} unique branches"),
+                }
+            )
+            .to_string(),
         );
 
         decompilation_progress.set_message(format!("analyzing '0x{selector}'"));
 
-        // solidify the execution tree
-        let mut analyzed_function = map.analyze(
-            Function {
-                selector: selector.clone(),
-                entry_point: function_entry_point,
-                arguments: HashMap::new(),
-                storage: HashMap::new(),
-                memory: HashMap::new(),
-                returns: None,
-                logic: Vec::new(),
-                events: HashMap::new(),
-                errors: HashMap::new(),
-                resolved_function: None,
-                indent_depth: 0,
-                notices: Vec::new(),
-                pure: true,
-                view: true,
-                payable: true,
-            },
-            &mut trace,
-            func_analysis_trace,
-            &mut Vec::new()
-        );
+        // analyze execution tree
+        let mut analyzed_function;
+        if args.include_yul {
+            analyzed_function = map.analyze_yul(
+                Function {
+                    selector: selector.clone(),
+                    entry_point: function_entry_point,
+                    arguments: HashMap::new(),
+                    storage: HashMap::new(),
+                    memory: HashMap::new(),
+                    returns: None,
+                    logic: Vec::new(),
+                    events: HashMap::new(),
+                    errors: HashMap::new(),
+                    resolved_function: None,
+                    indent_depth: 0,
+                    notices: Vec::new(),
+                    pure: true,
+                    view: true,
+                    payable: true,
+                },
+                &mut trace,
+                func_analysis_trace,
+                &mut Vec::new(),
+            );
+        } else {
+            analyzed_function = map.analyze_sol(
+                Function {
+                    selector: selector.clone(),
+                    entry_point: function_entry_point,
+                    arguments: HashMap::new(),
+                    storage: HashMap::new(),
+                    memory: HashMap::new(),
+                    returns: None,
+                    logic: Vec::new(),
+                    events: HashMap::new(),
+                    errors: HashMap::new(),
+                    resolved_function: None,
+                    indent_depth: 0,
+                    notices: Vec::new(),
+                    pure: true,
+                    view: true,
+                    payable: true,
+                },
+                &mut trace,
+                func_analysis_trace,
+                &mut Vec::new(),
+            );
+        }
 
         let argument_count = analyzed_function.arguments.len();
 
@@ -348,7 +399,7 @@ pub fn decompile(args: DecompilerArgs) {
             let parameter_trace_parent = trace.add_debug(
                 func_analysis_trace,
                 line!(),
-                format!("discovered and analyzed {argument_count} function parameters").to_string()
+                format!("discovered and analyzed {argument_count} function parameters").to_string(),
             );
 
             let mut parameter_vec = Vec::new();
@@ -357,39 +408,41 @@ pub fn decompile(args: DecompilerArgs) {
             }
             parameter_vec.sort_by(|a, b| a.0.slot.cmp(&b.0.slot));
 
-
             for (frame, _) in parameter_vec {
                 trace.add_message(
                     parameter_trace_parent,
                     line!(),
-                    vec![
-                        format!(
-                            "parameter {} {} {} bytes. {}",
-                            frame.slot,
-                            if frame.mask_size == 32 { "has size of" } else { "is masked to" },
-                            frame.mask_size,
-                            if !frame.heuristics.is_empty() {
-                                format!("heuristics suggest param used as '{}'", frame.heuristics[0])
-                            } else {
-                                "".to_string()
-                            }
-                        ).to_string()
-                    ]
+                    vec![format!(
+                        "parameter {} {} {} bytes. {}",
+                        frame.slot,
+                        if frame.mask_size == 32 {
+                            "has size of"
+                        } else {
+                            "is masked to"
+                        },
+                        frame.mask_size,
+                        if !frame.heuristics.is_empty() {
+                            format!("heuristics suggest param used as '{}'", frame.heuristics[0])
+                        } else {
+                            "".to_string()
+                        }
+                    )
+                    .to_string()],
                 );
             }
         }
 
+        // resolve signatures
         if !args.skip_resolving {
-
             let resolved_functions = match resolved_selectors.get(&selector) {
                 Some(func) => func.clone(),
                 None => {
                     trace.add_warn(
                         func_analysis_trace,
                         line!(),
-                        "failed to resolve function signature".to_string()
+                        "failed to resolve function signature".to_string(),
                     );
-                    continue;
+                    Vec::new()
                 }
             };
 
@@ -400,31 +453,33 @@ pub fn decompile(args: DecompilerArgs) {
                 trace.add_warn(
                     func_analysis_trace,
                     line!(),
-                    "no resolved signatures matched this function's parameters".to_string()
+                    "no resolved signatures matched this function's parameters".to_string(),
                 );
-            }
-            else {
-
+            } else {
                 let mut selected_function_index: u8 = 0;
                 if matched_resolved_functions.len() > 1 {
                     decompilation_progress.suspend(|| {
                         selected_function_index = logger.option(
-                            "warn", "multiple possible matches found. select an option below",
-                            matched_resolved_functions.iter()
-                            .map(|x| x.signature.clone()).collect(),
-                            Some((matched_resolved_functions.len()-1) as u8),
-                            args.default
+                            "warn",
+                            "multiple possible matches found. select an option below",
+                            matched_resolved_functions
+                                .iter()
+                                .map(|x| x.signature.clone())
+                                .collect(),
+                            Some((matched_resolved_functions.len() - 1) as u8),
+                            args.default,
                         );
                     });
                 }
 
-                let selected_match = match matched_resolved_functions.get(selected_function_index as usize) {
-                    Some(selected_match) => selected_match,
-                    None => {
-                        logger.error("invalid selection.");
-                        std::process::exit(1)
-                    }
-                };
+                let selected_match =
+                    match matched_resolved_functions.get(selected_function_index as usize) {
+                        Some(selected_match) => selected_match,
+                        None => {
+                            logger.error("invalid selection.");
+                            std::process::exit(1)
+                        }
+                    };
 
                 analyzed_function.resolved_function = Some(selected_match.clone());
 
@@ -434,48 +489,47 @@ pub fn decompile(args: DecompilerArgs) {
                     format!(
                         "{} resolved signature{} matched this function's parameters",
                         matched_resolved_functions.len(),
-                        if matched_resolved_functions.len() > 1 { "s" } else { "" }
-                    ).to_string()
+                        if matched_resolved_functions.len() > 1 {
+                            "s"
+                        } else {
+                            ""
+                        }
+                    )
+                    .to_string(),
                 );
 
                 for resolved_function in matched_resolved_functions {
-                    trace.add_message(
-                        match_trace,
-                        line!(),
-                        vec![resolved_function.signature]
-                    );
+                    trace.add_message(match_trace, line!(), vec![resolved_function.signature]);
                 }
-
             }
-        }
-
-
-        if !args.skip_resolving {
 
             // resolve custom error signatures
             let mut resolved_counter = 0;
             for (error_selector, _) in analyzed_function.errors.clone() {
-                decompilation_progress.set_message(format!("resolving error '0x{}'", &error_selector));
+                decompilation_progress
+                    .set_message(format!("resolving error '0x{}'", &error_selector));
                 let resolved_error_selectors = resolve_error_signature(&error_selector);
 
                 // only continue if we have matches
-                match resolved_error_selectors {
-                    Some(resolved_error_selectors) => {
+                if let Some(resolved_error_selectors) = resolved_error_selectors {
+                    let mut selected_error_index: u8 = 0;
+                    if resolved_error_selectors.len() > 1 {
+                        decompilation_progress.suspend(|| {
+                            selected_error_index = logger.option(
+                                "warn",
+                                "multiple possible matches found. select an option below",
+                                resolved_error_selectors
+                                    .iter()
+                                    .map(|x| x.signature.clone())
+                                    .collect(),
+                                Some((resolved_error_selectors.len() - 1) as u8),
+                                args.default,
+                            );
+                        });
+                    }
 
-                        let mut selected_error_index: u8 = 0;
-                        if resolved_error_selectors.len() > 1 {
-                            decompilation_progress.suspend(|| {
-                                selected_error_index = logger.option(
-                                    "warn", "multiple possible matches found. select an option below",
-                                    resolved_error_selectors.iter()
-                                    .map(|x| x.signature.clone()).collect(),
-                                    Some((resolved_error_selectors.len()-1) as u8),
-                                    args.default
-                                );
-                            });
-                        }
-
-                        let selected_match = match resolved_error_selectors.get(selected_error_index as usize) {
+                    let selected_match =
+                        match resolved_error_selectors.get(selected_error_index as usize) {
                             Some(selected_match) => selected_match,
                             None => {
                                 logger.error("invalid selection.");
@@ -483,13 +537,12 @@ pub fn decompile(args: DecompilerArgs) {
                             }
                         };
 
-                        resolved_counter += 1;
-                        analyzed_function.errors.insert(error_selector.clone(), Some(selected_match.clone()));
-                        all_resolved_errors.insert(error_selector.clone(), selected_match.clone());
-                    },
-                    None => {}
+                    resolved_counter += 1;
+                    analyzed_function
+                        .errors
+                        .insert(error_selector.clone(), Some(selected_match.clone()));
+                    all_resolved_errors.insert(error_selector.clone(), selected_match.clone());
                 }
-
             }
 
             if resolved_counter > 0 {
@@ -497,34 +550,44 @@ pub fn decompile(args: DecompilerArgs) {
                 trace.add_info(
                     func_analysis_trace,
                     line!(),
-                    format!("resolved {} error signatures from {} selectors.", resolved_counter, analyzed_function.errors.len()).to_string()
+                    format!(
+                        "resolved {} error signatures from {} selectors.",
+                        resolved_counter,
+                        analyzed_function.errors.len()
+                    )
+                    .to_string(),
                 );
             }
 
             // resolve custom event signatures
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
-                decompilation_progress.set_message(format!("resolving event '0x{}'", &event_selector.get(0..8).unwrap().to_string()));
+                decompilation_progress.set_message(format!(
+                    "resolving event '0x{}'",
+                    &event_selector.get(0..8).unwrap().to_string()
+                ));
                 let resolved_event_selectors = resolve_event_signature(&event_selector);
 
                 // only continue if we have matches
-                match resolved_event_selectors {
-                    Some(resolved_event_selectors) => {
+                if let Some(resolved_event_selectors) = resolved_event_selectors {
+                    let mut selected_event_index: u8 = 0;
+                    if resolved_event_selectors.len() > 1 {
+                        decompilation_progress.suspend(|| {
+                            selected_event_index = logger.option(
+                                "warn",
+                                "multiple possible matches found. select an option below",
+                                resolved_event_selectors
+                                    .iter()
+                                    .map(|x| x.signature.clone())
+                                    .collect(),
+                                Some((resolved_event_selectors.len() - 1) as u8),
+                                args.default,
+                            );
+                        });
+                    }
 
-                        let mut selected_event_index: u8 = 0;
-                        if resolved_event_selectors.len() > 1 {
-                            decompilation_progress.suspend(|| {
-                                selected_event_index = logger.option(
-                                    "warn", "multiple possible matches found. select an option below",
-                                    resolved_event_selectors.iter()
-                                    .map(|x| x.signature.clone()).collect(),
-                                    Some((resolved_event_selectors.len()-1) as u8),
-                                    args.default
-                                );
-                            });
-                        }
-
-                        let selected_match = match resolved_event_selectors.get(selected_event_index as usize) {
+                    let selected_match =
+                        match resolved_event_selectors.get(selected_event_index as usize) {
                             Some(selected_match) => selected_match,
                             None => {
                                 logger.error("invalid selection.");
@@ -532,11 +595,12 @@ pub fn decompile(args: DecompilerArgs) {
                             }
                         };
 
-                        resolved_counter += 1;
-                        analyzed_function.events.insert(event_selector.clone(), (Some(selected_match.clone()), raw_event));
-                        all_resolved_events.insert(event_selector, selected_match.clone());
-                    },
-                    None => {}
+                    resolved_counter += 1;
+                    analyzed_function.events.insert(
+                        event_selector.clone(),
+                        (Some(selected_match.clone()), raw_event),
+                    );
+                    all_resolved_events.insert(event_selector, selected_match.clone());
                 }
             }
 
@@ -544,30 +608,46 @@ pub fn decompile(args: DecompilerArgs) {
                 trace.add_info(
                     func_analysis_trace,
                     line!(),
-                    format!("resolved {} event signatures from {} selectors.", resolved_counter, analyzed_function.events.len()).to_string()
+                    format!(
+                        "resolved {} event signatures from {} selectors.",
+                        resolved_counter,
+                        analyzed_function.events.len()
+                    )
+                    .to_string(),
                 );
             }
         }
 
         analyzed_functions.push(analyzed_function.clone());
-
-
     }
     decompilation_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
     logger.info("building decompilation output.");
 
     // create the decompiled source output
-    build_output(
-        &args,
-        output_dir,
-        analyzed_functions,
-        all_resolved_errors,
-        all_resolved_events,
-        &logger,
-        &mut trace,
-        decompile_call,
-    );
+    if args.include_yul {
+        out::yul::output(
+            &args,
+            output_dir,
+            analyzed_functions,
+            all_resolved_events,
+            &logger,
+            &mut trace,
+            decompile_call,
+        );
+    }
+    else {
+        out::solidity::output(
+            &args,
+            output_dir,
+            analyzed_functions,
+            all_resolved_errors,
+            all_resolved_events,
+            &logger,
+            &mut trace,
+            decompile_call,
+        );
+    }
 
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
@@ -601,11 +681,10 @@ pub fn decompile(args: DecompilerArgs) {
 /// ```
 #[allow(dead_code)]
 pub struct DecompileBuilder {
-    args: DecompilerArgs
+    args: DecompilerArgs,
 }
 
-impl DecompileBuilder where {
-
+impl DecompileBuilder {
     /// A new builder for the decompilation of the specified target.
     ///
     /// The target may be a file, bytecode, contract address, or ENS name.
@@ -619,8 +698,9 @@ impl DecompileBuilder where {
                 rpc_url: String::from(""),
                 default: true,
                 skip_resolving: false,
-                include_solidity: true
-            }
+                include_solidity: true,
+                include_yul: false,
+            },
         }
     }
 
@@ -633,7 +713,6 @@ impl DecompileBuilder where {
     /// - 4 Trace
     #[allow(dead_code)]
     pub fn verbosity(mut self, level: i8) -> DecompileBuilder {
-
         // Calculated by the log library as: 1 + verbose - quiet.
         // Set quiet as 1, and the level corresponds to the appropriate Log level.
         self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 0);
@@ -672,6 +751,13 @@ impl DecompileBuilder where {
     #[allow(dead_code)]
     pub fn include_sol(mut self, include: bool) -> DecompileBuilder {
         self.args.include_solidity = include;
+        self
+    }
+
+    /// Whether to include yul source code in the output (in beta).
+    #[allow(dead_code)]
+    pub fn include_yul(mut self, include: bool) -> DecompileBuilder {
+        self.args.include_yul = include;
         self
     }
 

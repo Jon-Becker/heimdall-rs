@@ -11,7 +11,7 @@ pub struct Opcode {
 
 // Returns the opcode for the given hexcode, fetched from the hashmap.
 pub fn opcode(code: &str) -> Opcode {
-    return match code {
+    match code {
         "00" => Opcode { name: "STOP", mingas: 0, inputs: 0, outputs: 0 },
         "01" => Opcode { name: "ADD", mingas: 3, inputs: 2, outputs: 1 },
         "02" => Opcode { name: "MUL", mingas: 5, inputs: 2, outputs: 1 },
@@ -156,7 +156,7 @@ pub fn opcode(code: &str) -> Opcode {
         "fe" => Opcode { name: "INVALID", mingas: 0, inputs: 0, outputs: 0 },
         "ff" => Opcode { name: "SELFDESTRUCT", mingas: 5000, inputs: 1, outputs: 0 },
         _ => Opcode { name: "unknown", mingas: 0, inputs: 0, outputs: 0, },
-    };
+    }
 }
 
 // enum allows for Wrapped Opcodes to contain both raw U256 and Opcodes as inputs
@@ -185,8 +185,8 @@ impl Display for WrappedOpcode {
 impl Display for WrappedInput {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match self {
-            WrappedInput::Raw(u256) => write!(f, "{}", u256),
-            WrappedInput::Opcode(opcode) => write!(f, "{}", opcode),
+            WrappedInput::Raw(u256) => write!(f, "{u256}"),
+            WrappedInput::Opcode(opcode) => write!(f, "{opcode}"),
         }
     }
 }

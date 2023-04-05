@@ -10,7 +10,7 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 // encode a hex into a string
 pub fn encode_hex(s: Vec<u8>) -> String {
     s.iter()
-        .map(|b| format!("{:02x}", b))
+        .map(|b| format!("{b:02x}"))
         .collect()
 }
 
@@ -21,16 +21,16 @@ use std::{
 
 pub fn prettify_bytes(bytes: u64) -> String {
     if bytes < 1024 {
-        return format!("{} B", bytes);
+        format!("{bytes} B")
     } else if bytes < 1024 * 1024 {
         let kb = bytes / 1024;
-        return format!("{} KB", kb);
+        return format!("{kb} KB");
     } else if bytes < 1024 * 1024 * 1024 {
         let mb = bytes / (1024 * 1024);
-        return format!("{} MB", mb);
+        return format!("{mb} MB");
     } else {
         let gb = bytes / (1024 * 1024 * 1024);
-        return format!("{} GB", gb);
+        return format!("{gb} GB");
     }
 }
 
@@ -53,7 +53,7 @@ pub fn write_file(_path: &String, contents: &String) -> Option<String> {
         }
     }
 
-    return Some(_path.to_string());
+    Some(_path.to_string())
 }
 
 pub fn read_file(_path: &String) -> Option<String> {
@@ -71,20 +71,20 @@ pub fn read_file(_path: &String) -> Option<String> {
             return None
         }
     }
-    return Some(contents);
+    Some(contents)
 }
 
 pub fn delete_path(_path: &String) -> bool {
     let path = std::path::Path::new(_path);
     match Command::new("rm")
-        .args(&["-rf", &path.to_str().unwrap()])
+        .args(["-rf", (path.to_str().unwrap())])
         .output()
     {
         Ok(_) => {
-            return true;
+            true
         },
         Err(_) => {
-            return false;
+            false
         },
     }
 }

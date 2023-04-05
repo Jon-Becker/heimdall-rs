@@ -26,7 +26,7 @@ pub fn render_tui_help<B: Backend>(
             .borders(Borders::NONE)
             .style(Style::default().fg(Color::White))
             .title(Span::styled(
-                format!("{title}"),
+                title,
                 Style::default().add_modifier(Modifier::BOLD),
             ))
     };

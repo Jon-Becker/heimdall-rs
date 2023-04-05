@@ -11,29 +11,29 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
     let mut function_inputs = Vec::new();
     
     // get only the function input body, removing the name and input wrapping parentheses
-    let string_inputs = match function_signature.split_once("(") {
+    let string_inputs = match function_signature.split_once('(') {
         Some((_, inputs)) => replace_last(inputs.to_string(), ")", ""),
         None => replace_last(function_signature, ")", ""),
     };
 
     // split into individual inputs
-    let temp_inputs: Vec<String> = string_inputs.split(",").map(|s| s.to_string()).collect();
+    let temp_inputs: Vec<String> = string_inputs.split(',').map(|s| s.to_string()).collect();
     let mut inputs: Vec<String> = Vec::new();
 
     // if the input contains complex types, rejoin them. for nested types, this function will recurse.
-    if string_inputs.contains("(") {
+    if string_inputs.contains('(') {
         let mut tuple_depth = 0;
         let mut complex_input: Vec<String> = Vec::new();
 
         for input in temp_inputs {
-            if input.contains("(") {
+            if input.contains('(') {
                 tuple_depth += 1;
             }
 
             if tuple_depth > 0 { complex_input.push(input.to_string()); }
             else { inputs.push(input.to_string()); }
 
-            if input.contains(")") {
+            if input.contains(')') {
                 tuple_depth -= 1;
 
                 if tuple_depth == 0 {
@@ -53,7 +53,7 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
         if solidity_type == "bytes" { function_inputs.push(ParamType::Bytes); continue }
         if solidity_type == "bool" { function_inputs.push(ParamType::Bool); continue }
         if solidity_type == "string" { function_inputs.push(ParamType::String); continue }
-        if solidity_type.starts_with("(") && !solidity_type.ends_with("]") {
+        if solidity_type.starts_with('(') && !solidity_type.ends_with(']') {
             let complex_inputs = match parse_function_parameters(solidity_type.clone()) {
                 Some(inputs) => inputs,
                 None => continue,
@@ -75,9 +75,9 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
             }
             continue
         }
-        if solidity_type.ends_with("]") {
-            let size = match solidity_type.split("[").nth(1) {
-                Some(size) => match size.replace("]", "").parse::<usize>() {
+        if solidity_type.ends_with(']') {
+            let size = match solidity_type.split('[').nth(1) {
+                Some(size) => match size.replace(']', "").parse::<usize>() {
                     Ok(size) => size,
                     Err(_) => continue,
                 },
@@ -97,27 +97,18 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
             continue
         }
         if solidity_type.starts_with("int") {
-            let size = match solidity_type.replace("int", "").parse::<usize>() {
-                Ok(size) => size,
-                Err(_) => 256,
-            };
+            let size = solidity_type.replace("int", "").parse::<usize>().unwrap_or(256);
             function_inputs.push(ParamType::Int(size));
             continue
         }
         if solidity_type.starts_with("uint") {
-            let size = match solidity_type.replace("uint", "").parse::<usize>() {
-                Ok(size) => size,
-                Err(_) => 256,
-            };
+            let size = solidity_type.replace("uint", "").parse::<usize>().unwrap_or(256);
             
             function_inputs.push(ParamType::Uint(size));
             continue
         }
         if solidity_type.starts_with("bytes") {
-            let size = match solidity_type.replace("bytes", "").parse::<usize>() {
-                Ok(size) => size,
-                Err(_) => 32,
-            };
+            let size = solidity_type.replace("bytes", "").parse::<usize>().unwrap_or(32);
         
             function_inputs.push(ParamType::FixedBytes(size));
             continue
@@ -140,8 +131,8 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
     for input in inputs {
         match input {
             Token::Address(_) => output.push(format!("{prefix}{} 0x{input}", "address".blue())),
-            Token::Int(val) => output.push(format!("{prefix}{} {}", "int    ".blue(), val.to_string())),
-            Token::Uint(val) => output.push(format!("{prefix}{} {}", "uint   ".blue(), val.to_string())),
+            Token::Int(val) => output.push(format!("{prefix}{} {}", "int    ".blue(), val)),
+            Token::Uint(val) => output.push(format!("{prefix}{} {}", "uint   ".blue(), val)),
             Token::String(val) => output.push(format!("{prefix}{} {val}", "string ".blue())),
             Token::Bool(val) => {
                 if val { output.push(format!("{prefix}{} true", "bool   ".blue())); }
@@ -160,7 +151,7 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
                 }
             },
             Token::FixedArray(val) | Token::Array(val) => {
-                if val.len() == 0 {
+                if val.is_empty() {
                     output.push(format!("{prefix}[]"));
                 }
                 else {
@@ -170,7 +161,7 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
                 }
             },
             Token::Tuple(val) => {
-                if val.len() == 0 {
+                if val.is_empty() {
                     output.push(format!("{prefix}()"));
                 }
                 else {
@@ -227,7 +218,7 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 
     // push arbitrary types to the array
     potential_types.push(format!("uint{}", byte_size * 8));
-    potential_types.push(format!("bytes{}", byte_size));
+    potential_types.push(format!("bytes{byte_size}"));
     potential_types.push(format!("int{}", byte_size * 8));
 
     // return list of potential type castings, sorted by likelihood descending
@@ -241,12 +232,12 @@ pub fn find_cast(line: String) -> (usize, usize, Option<String>) {
         Some(m) => {
             let start = m.start();
             let end = m.end() - 1;
-            let cast_type = line[start..].split("(").collect::<Vec<&str>>()[0].to_string();
+            let cast_type = line[start..].split('(').collect::<Vec<&str>>()[0].to_string();
 
             // find where the cast ends
             let (a, b, _) = find_balanced_encapsulator(line[end..].to_string(), ('(', ')'));
-            return (end+a, end+b, Some(cast_type))
+            (end+a, end+b, Some(cast_type))
         },
-        None => return (0, 0, None),
+        None => (0, 0, None),
     }
 }

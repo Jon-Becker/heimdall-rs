@@ -16,8 +16,17 @@ lazy_static! {
 
     // detects a memory access
     pub static ref MEM_ACCESS_REGEX: Regex = Regex::new(r"memory\[.*\]").unwrap();
+
+    // detects division by 1
+    pub static ref DIV_BY_ONE_REGEX: Regex = Regex::new(r" \/ 0x01(?!\d)").unwrap();
+
+    // detects multiplication by 1
+    pub static ref MUL_BY_ONE_REGEX: Regex = Regex::new(r"\b0x01\b\s*\*\s*| \*\s*\b0x01\b").unwrap();
     
-    pub static ref DECOMPILED_SOURCE_HEADER: String = 
+    // extracts commas within a certain expression, not including commas within parentheses
+    pub static ref ARGS_SPLIT_REGEX: Regex = Regex::new(r",\s*(?![^()]*\))").unwrap();
+
+    pub static ref DECOMPILED_SOURCE_HEADER_SOL: String = 
 "// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
@@ -32,7 +41,35 @@ pragma solidity >=0.8.0;
 ///                     logic should have been preserved throughout decompiling.
 ///
 /// @custom:github    You can find the open-source decompiler here:
-///                       https://github.com/Jon-Becker/heimdall-rs
+///                       https://heimdall.rs
 ".to_string();
+
+pub static ref DECOMPILED_SOURCE_HEADER_YUL: String = 
+"/// @title            Decompiled Contract
+/// @author           Jonathan Becker <jonathan@jbecker.dev>
+/// @custom:version   heimdall-rs v{}
+///
+/// @notice           This contract was decompiled using the heimdall-rs decompiler.
+///                     It was generated directly by tracing the EVM opcodes from this contract.
+///                     As a result, it may not compile or even be valid yul code.
+///                     Despite this, it should be obvious what each function does. Overall
+///                     logic should have been preserved throughout decompiling.
+///
+/// @custom:github    You can find the open-source decompiler here:
+///                       https://heimdall.rs
+
+object \"DecompiledContract\" {
+object \"runtime\" {
+code {
+
+function selector() -> s {
+s := div(calldataload(0), 0x100000000000000000000000000000000000000000000000000000000)
+}
+
+function castToAddress(x) -> a {
+a := and(x, 0xffffffffffffffffffffffffffffffffffffffff)
+}
+
+switch selector()".to_string();
 
 }
