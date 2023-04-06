@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use strsim::normalized_damerau_levenshtein as similarity;
 
 use ethers::prelude::U256;
 use heimdall_common::{
@@ -188,37 +189,50 @@ pub fn recursive_map(
             match handled_jumps.get(&jump_frame) {
                 Some(historical_stacks) => {
                     if historical_stacks.iter().any(|stack| {
+
                         // compare stacks
                         let mut stack_diff = Vec::new();
                         for (i, frame) in vm.stack.stack.iter().enumerate() {
                             if frame != &stack[i] {
                                 stack_diff.push(frame);
+
+                                // check similarity of stack diff values against the stack, using normalized Levenshtein distance
+                                for stack_frame in stack.iter() {
+                                    let solidified_frame = frame.operation.solidify();
+                                    let solidified_stack_frame = stack_frame.operation.solidify();
+                                    
+                                    if similarity(&solidified_frame, &solidified_stack_frame) > 0.9 {
+                                        return true;
+                                    }
+                                }
                             }
                         }
-                        
+
                         if !stack_diff.is_empty() {
+                    
                             // check if all stack diff values are in the jump condition
-                            let jump_condition =
-                                state.last_instruction.input_operations[1].solidify();
+                            let jump_condition = state.last_instruction.input_operations[1].solidify();
 
                             // if the stack diff is within the jump condition, its likely that we are in a loop
-                            if stack_diff
-                                .iter()
-                                .any(|frame| jump_condition.contains(&frame.operation.solidify()))
-                            {
+                            if stack_diff.iter().map(|frame| frame.operation.solidify()).any(|solidified| jump_condition.contains(&solidified)) {
                                 return true;
                             }
 
+                            // if we repeat conditionals, its likely that we are in a loop
+                            if stack_diff.iter().any(|frame| {
+                                let solidified = frame.operation.solidify();
+                                jump_condition.contains(&solidified) && jump_condition.matches(&solidified).count() > 1
+                            }) {
+                                return true;
+                            }
+                            
                             // if a memory access in the jump condition is modified by the stack diff, its likely that we are in a loop
                             let mut memory_accesses = MEMORY_REGEX.find_iter(&jump_condition);
                             if stack_diff.iter().any(|frame| {
                                 memory_accesses.any(|_match| {
-                                    if _match.is_err() {
-                                        return false;
-                                    }
+                                    if _match.is_err() { return false; }
                                     let memory_access = _match.unwrap();
-                                    let slice =
-                                        &jump_condition[memory_access.start()..memory_access.end()];
+                                    let slice = &jump_condition[memory_access.start()..memory_access.end()];
                                     frame.operation.solidify().contains(slice)
                                 })
                             }) {
@@ -229,12 +243,9 @@ pub fn recursive_map(
                             let mut storage_accesses = STORAGE_REGEX.find_iter(&jump_condition);
                             if stack_diff.iter().any(|frame| {
                                 storage_accesses.any(|_match| {
-                                    if _match.is_err() {
-                                        return false;
-                                    }
+                                    if _match.is_err() { return false; }
                                     let storage_access = _match.unwrap();
-                                    let slice = &jump_condition
-                                        [storage_access.start()..storage_access.end()];
+                                    let slice = &jump_condition[storage_access.start()..storage_access.end()];
                                     frame.operation.solidify().contains(slice)
                                 })
                             }) {
@@ -242,21 +253,23 @@ pub fn recursive_map(
                             }
 
                             false
-                        } else {
+                        }
+                        else {
                             true
                         }
                     }) {
                         vm_trace.loop_detected = true;
                         return vm_trace;
-                    } else {
+                    }
+                    else {
                         // this key exists, but the stack is different, so the jump is new
-                        let historical_stacks: &mut Vec<VecDeque<StackFrame>> =
-                            &mut historical_stacks.clone();
+                        let historical_stacks: &mut Vec<VecDeque<StackFrame>> = &mut historical_stacks.clone();
                         historical_stacks.push(vm.stack.stack.clone());
                         handled_jumps.insert(jump_frame, historical_stacks.to_vec());
                     }
-                }
+                },
                 None => {
+
                     // this key doesnt exist, so the jump is new
                     handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
                 }
