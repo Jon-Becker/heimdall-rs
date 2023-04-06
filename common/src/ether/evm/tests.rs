@@ -288,10 +288,19 @@ mod vm_tests {
 
     #[test]
     fn test_shl() {
-        let mut vm = new_test_vm("0x600160011b0x7fFF0000000000000000000000000000000000000000000000000000000000000060041b");
+        let mut vm = new_test_vm("600160011b7fFF0000000000000000000000000000000000000000000000000000000000000060041b");
         vm.execute();
 
         assert_eq!(vm.stack.peek(1).value, U256::from_str("0x02").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xF000000000000000000000000000000000000000000000000000000000000000").unwrap());
+    }
+
+    #[test]
+    fn test_shl_gt_255() {
+        let mut vm = new_test_vm("600161ffff1b7fFF0000000000000000000000000000000000000000000000000000000000000060041b");
+        vm.execute();
+
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x00").unwrap());
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0xF000000000000000000000000000000000000000000000000000000000000000").unwrap());
     }
 
@@ -302,6 +311,15 @@ mod vm_tests {
 
         assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").unwrap());
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0x0f").unwrap());
+    }
+
+    #[test]
+    fn test_shr_gt_256() {
+        let mut vm = new_test_vm("600261ffff1c61ffff60041c");
+        vm.execute();
+
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x00").unwrap());
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x0fff").unwrap());
     }
 
     #[test]

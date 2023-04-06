@@ -221,8 +221,8 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str(
                     format!(
                             "{} << {}",
-                            self.inputs[0]._solidify(),
-                            self.inputs[1]._solidify()
+                            self.inputs[1]._solidify(),
+                            self.inputs[0]._solidify()
                     ).as_str()
                 );
             },
@@ -230,8 +230,8 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str(
                     format!(
                             "{} >> {}",
-                            self.inputs[0]._solidify(),
-                            self.inputs[1]._solidify()
+                            self.inputs[1]._solidify(),
+                            self.inputs[0]._solidify()
                     ).as_str()
                 );
             },
@@ -239,8 +239,8 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str(
                     format!(
                             "{} >> {}",
-                            self.inputs[0]._solidify(),
-                            self.inputs[1]._solidify()
+                            self.inputs[1]._solidify(),
+                            self.inputs[0]._solidify()
                     ).as_str()
                 );
             },

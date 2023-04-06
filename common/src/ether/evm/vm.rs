@@ -658,7 +658,12 @@ impl VM {
                     let a = self.stack.pop();
                     let b = self.stack.pop();
 
-                    let result = b.value.shl(a.value);
+                    let mut result = b.value.shl(a.value);
+
+                    // if shift is greater than 255, result is 0
+                    if a.value > U256::from(255u8) {
+                        result = U256::zero();
+                    }
 
                     let simplified_operation = 
                         match a.operation.opcode.name.starts_with("PUSH") 
@@ -686,6 +691,11 @@ impl VM {
                     let mut result = U256::zero();
                     if !b.value.is_zero() {
                         result = b.value.shr(a.value);
+                    }
+
+                    // if shift is greater than 255, result is 0
+                    if a.value > U256::from(255u8) {
+                        result = U256::zero();
                     }
 
                     let simplified_operation = 
