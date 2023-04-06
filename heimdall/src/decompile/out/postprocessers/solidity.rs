@@ -362,8 +362,14 @@ fn convert_memory_to_variable(line: String) -> String {
 }
 
 fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
+
     // skip lines that don't contain an assignment
     if !line.contains(" = ") {
+        return false;
+    }
+
+    // skip lines that contain external calls
+    if line.contains("bool success") {
         return false;
     }
 

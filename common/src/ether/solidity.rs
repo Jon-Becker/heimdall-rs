@@ -435,12 +435,12 @@ impl WrappedOpcode {
                             solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
                         }
                         else {
-                            solidified_wrapped_opcode.push_str("ret0");
+                            solidified_wrapped_opcode.push_str("success");
 
                         }
                     },
                     Err(_) => {
-                        solidified_wrapped_opcode.push_str("ret0");
+                        solidified_wrapped_opcode.push_str("success");
                     }
                 };
             }
@@ -451,12 +451,12 @@ impl WrappedOpcode {
                             solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
                         }
                         else {
-                            solidified_wrapped_opcode.push_str("ret0");
+                            solidified_wrapped_opcode.push_str("success");
 
                         }
                     },
                     Err(_) => {
-                        solidified_wrapped_opcode.push_str("ret0");
+                        solidified_wrapped_opcode.push_str("success");
                     }
                 };            }
             "DELEGATECALL" => {
@@ -466,12 +466,12 @@ impl WrappedOpcode {
                             solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
                         }
                         else {
-                            solidified_wrapped_opcode.push_str("ret0");
+                            solidified_wrapped_opcode.push_str("success");
 
                         }
                     },
                     Err(_) => {
-                        solidified_wrapped_opcode.push_str("ret0");
+                        solidified_wrapped_opcode.push_str("success");
                     }
                 };            }
             "STATICCALL" => {
@@ -481,12 +481,12 @@ impl WrappedOpcode {
                             solidified_wrapped_opcode.push_str(&format!("memory[{}]", self.inputs[5]._solidify()));
                         }
                         else {
-                            solidified_wrapped_opcode.push_str("ret0");
+                            solidified_wrapped_opcode.push_str("success");
 
                         }
                     },
                     Err(_) => {
-                        solidified_wrapped_opcode.push_str("ret0");
+                        solidified_wrapped_opcode.push_str("success");
                     }
                 };            }
             "RETURNDATASIZE" => {
