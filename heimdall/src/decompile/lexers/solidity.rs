@@ -45,9 +45,6 @@ impl VMTrace {
             let opcode_name = instruction.opcode_details.clone().unwrap().name;
             let opcode_number = U256::from_str(&instruction.opcode).unwrap().as_usize();
 
-            println!("opcode_name: {}", opcode_name);
-            println!("inputs: {:?}\n", instruction.inputs);
-
             // if the instruction is a state-accessing instruction, the function is no longer pure
             if function.pure
                 && vec![
