@@ -383,6 +383,11 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
         .len()
         - 1];
 
+    // skip lines that contain assignments to storage
+    if var_name.contains("storage") {
+        return false;
+    }
+
     //remove unused vars
     for x in lines {
 
