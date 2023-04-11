@@ -6,6 +6,8 @@ pub mod util;
 
 use heimdall_cache::read_cache;
 use heimdall_cache::store_cache;
+use heimdall_common::ether::compiler::detect_compiler;
+use heimdall_common::ether::selectors::find_function_selectors;
 use indicatif::ProgressBar;
 use std::env;
 use std::fs;
@@ -27,9 +29,7 @@ use heimdall_common::{
 use petgraph::Graph;
 
 use crate::cfg::output::build_output;
-use crate::cfg::util::detect_compiler;
-use crate::cfg::util::find_function_selectors;
-use crate::cfg::util::map_contract;
+use crate::cfg::util::{map_contract};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Generate a visual control flow graph for EVM bytecode",

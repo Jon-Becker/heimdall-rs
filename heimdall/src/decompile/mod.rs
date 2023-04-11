@@ -12,6 +12,10 @@ use crate::decompile::util::*;
 
 use heimdall_cache::read_cache;
 use heimdall_cache::store_cache;
+use heimdall_common::ether::compiler::detect_compiler;
+use heimdall_common::ether::selectors::find_function_selectors;
+use heimdall_common::ether::selectors::resolve_entry_point;
+use heimdall_common::ether::selectors::resolve_function_selectors;
 use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::env;

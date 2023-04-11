@@ -158,6 +158,7 @@ fn simplify_casts(line: String) -> String {
 }
 
 fn simplify_parentheses(line: String, paren_index: usize) -> String {
+
     // helper function to determine if parentheses are necessary
     fn are_parentheses_unnecessary(expression: String) -> bool {
         // safely grab the first and last chars
@@ -384,15 +385,22 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
 
     //remove unused vars
     for x in lines {
+
         // break if the line contains a function definition
         if x.contains("function") {
             break;
         }
 
         if x.contains(" = ") {
-            let assignment = x.split(" = ").collect::<Vec<&str>>();
+            let assignment = x.split(" = ")
+                .map(|x| x.trim())
+                .collect::<Vec<&str>>();
+            println!("var: {}, assignment: {:?}", var_name, assignment);
             if assignment[1].contains(var_name) {
                 return false;
+            }
+            else if assignment[0].split(" ").last() == Some(var_name) {
+                return true;
             }
         } else if x.contains(var_name) {
             return false;
@@ -625,7 +633,7 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
         // only pass in lines further than the current line
         if !contains_unnecessary_assignment(
             line.trim().to_string(),
-            &lines[i..].iter().collect::<Vec<_>>(),
+            &lines[i+1..].iter().collect::<Vec<_>>(),
         ) {
             cleaned_lines.push(line.to_string());
         }
