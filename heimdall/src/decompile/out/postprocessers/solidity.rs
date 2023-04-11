@@ -395,11 +395,10 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
             let assignment = x.split(" = ")
                 .map(|x| x.trim())
                 .collect::<Vec<&str>>();
-            println!("var: {}, assignment: {:?}", var_name, assignment);
             if assignment[1].contains(var_name) {
                 return false;
             }
-            else if assignment[0].split(" ").last() == Some(var_name) {
+            else if assignment[0].split(' ').last() == Some(var_name) {
                 return true;
             }
         } else if x.contains(var_name) {
