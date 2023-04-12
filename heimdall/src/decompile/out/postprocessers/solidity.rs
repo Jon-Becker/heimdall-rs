@@ -1,6 +1,6 @@
 use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
-    NON_ZERO_BYTE_REGEX,
+    NON_ZERO_BYTE_REGEX, STORAGE_ACCESS_REGEX
 };
 use crate::decompile::constants::ENCLOSED_EXPRESSION_REGEX;
 use heimdall_common::{
@@ -15,7 +15,7 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::{HashMap, HashSet}, sync::Mutex};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -642,6 +642,36 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
             cleaned_lines.push(line.to_string());
         }
     }
+
+    // get a set of all unique storage variables
+    let mut storage_vars: HashMap<String, String> = HashMap::new();
+
+    for line in cleaned_lines.iter() {
+        
+        // check for STORAGE_ACCESS_REGEX
+        if let Some(access) = STORAGE_ACCESS_REGEX.find(&line).unwrap() {
+            //storage_vars.insert(access.as_str().to_string());
+
+            // if the line contains an assignment, we can pull the type from the assignment
+            if line.contains(" = ") {
+                let assignment = line.split(" = ")
+                    .map(|x| x.trim())
+                    .collect::<Vec<&str>>();
+
+                // check that lhs is a storage variable
+                if assignment[0].contains("storage") {
+                    println!("assignment: {assignment:?}");
+
+                    continue;
+                }
+            }
+            
+            // otherwise, we can pull a type from a typed memory variable
+                        
+        }
+    }
+
+    println!("storage vars: {storage_vars:?}");
 
     cleaned_lines
 }
