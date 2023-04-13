@@ -492,8 +492,10 @@ impl WrappedOpcode {
             "RETURNDATASIZE" => {
                 solidified_wrapped_opcode.push_str("ret0.length");
             }
+            "PUSH0" => {
+                solidified_wrapped_opcode.push_str("0");
+            }
             opcode => {
-
                 if opcode.starts_with("PUSH") {
                     solidified_wrapped_opcode.push_str(self.inputs[0]._solidify().as_str());
                 }

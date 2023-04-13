@@ -1383,6 +1383,14 @@ impl VM {
                     );
                 }
 
+                // PUSH0
+                if op == 0x5f {
+                    self.stack.push(
+                        U256::from(0u8).encode_hex().as_str(),
+                        operation.clone(),
+                    );
+                }
+
                 // PUSH1 -> PUSH32
                 if (0x60..=0x7F).contains(&op) {
                     // Get the number of bytes to push

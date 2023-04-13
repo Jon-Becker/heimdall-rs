@@ -76,6 +76,7 @@ pub fn opcode(code: &str) -> Opcode {
         "59" => Opcode { name: "MSIZE", mingas: 2, inputs: 0, outputs: 1 },
         "5a" => Opcode { name: "GAS", mingas: 2, inputs: 0, outputs: 1 },
         "5b" => Opcode { name: "JUMPDEST", mingas: 1, inputs: 0, outputs: 0 },
+        "5f" => Opcode { name: "PUSH0", mingas: 3, inputs: 0, outputs: 1 },
         "60" => Opcode { name: "PUSH1", mingas: 3, inputs: 0, outputs: 1 },
         "61" => Opcode { name: "PUSH2", mingas: 3, inputs: 0, outputs: 1 },
         "62" => Opcode { name: "PUSH3", mingas: 3, inputs: 0, outputs: 1 },
