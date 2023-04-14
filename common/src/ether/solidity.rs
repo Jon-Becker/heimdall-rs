@@ -492,8 +492,10 @@ impl WrappedOpcode {
             "RETURNDATASIZE" => {
                 solidified_wrapped_opcode.push_str("ret0.length");
             }
+            "PUSH0" => {
+                solidified_wrapped_opcode.push_str("0");
+            }
             opcode => {
-
                 if opcode.starts_with("PUSH") {
                     solidified_wrapped_opcode.push_str(self.inputs[0]._solidify().as_str());
                 }
@@ -576,6 +578,15 @@ mod tests {
 
     use super::*;
     use ethers::types::U256;
+
+    #[test]
+    fn test_push0() {
+
+        // wraps an ADD operation with 2 raw inputs
+        let add_operation_wrapped = WrappedOpcode::new(0x5f, vec![]);
+        assert_eq!(add_operation_wrapped.solidify(), "0");
+        
+    }
 
     #[test]
     fn test_solidify_add() {

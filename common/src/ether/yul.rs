@@ -6,7 +6,10 @@ impl WrappedOpcode {
 
     // Returns a WrappedOpcode's yul representation.
     pub fn yulify(&self) -> String {
-        if self.opcode.name.starts_with("PUSH") {
+        if self.opcode.name == "PUSH0" {
+            "0".to_string()
+        }
+        else if self.opcode.name.starts_with("PUSH") {
             self.inputs[0]._yulify()
         }
         else {
@@ -39,6 +42,14 @@ mod tests {
 
     use super::*;
     use ethers::types::U256;
+
+    #[test]
+    fn test_push0() {
+
+        // wraps an ADD operation with 2 raw inputs
+        let add_operation_wrapped = WrappedOpcode::new(0x5f, vec![]);
+        assert_eq!(add_operation_wrapped.yulify(), "0");
+    }
 
     #[test]
     fn test_yulify_add() {

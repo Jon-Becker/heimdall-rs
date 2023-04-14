@@ -39,7 +39,7 @@ fn remove_double_negation(line: String) -> String {
                 let subject = second_subject[second_subject_indices.0+1..second_subject_indices.1-1].to_string();
 
                 // replace the double negation with the subject
-                cleaned = cleaned.replace(&format!("iszero(iszero({}))", subject), &subject);
+                cleaned = cleaned.replace(&format!("iszero(iszero({subject}))"), &subject);
             }
         }
     }
@@ -78,13 +78,13 @@ fn convert_bitmask_to_casting(line: String) -> String {
         };
 
         // construct new string with casting
-        let new_str = format!("bytes{}({})", size_bytes, arg2);
+        let new_str = format!("bytes{size_bytes}({arg2})");
 
         // replace old string with new string
         cleaned.replace_range(index..end_index + index, &new_str);
 
         // set index for next iteration of loop
-        index += format!("bytes{}(", size_bytes).len();
+        index += format!("bytes{size_bytes}(").len();
     }
 
     cleaned
@@ -130,7 +130,7 @@ fn remove_replace_casts(line: String) -> String {
         let (cast_start, cast_end, cast_type) = find_cast(cleaned.to_string());
         if let Some(cast_type) = cast_type {
             let cast_arg = &cleaned[cast_start + 1..cast_end-1];
-            let yul_cast = format!("({}) : {}", cast_arg, cast_type);
+            let yul_cast = format!("({cast_arg}) : {cast_type}");
 
             cleaned.replace_range(cast_start-cast_type.len()..=cast_end-1, &yul_cast);
         }
@@ -272,15 +272,11 @@ fn add_resolved_events(line: String, all_resolved_events: HashMap<String, Resolv
 
     // get the event matching the log's selector 
     for (selector, resolved_event) in all_resolved_events.iter() {
-        if log_args.contains(&format!("0x{}", selector)) {       
+        if log_args.contains(&format!("0x{selector}")) {       
             cleaned = format!(
                 "\n/* \"{}({})\" */\n{}",
                 resolved_event.name,
-                resolved_event.inputs
-                    .iter()
-                    .map(|x| x.clone())
-                    .collect::<Vec<String>>()
-                    .join(", "),
+                resolved_event.inputs.join(", "),
                 cleaned
             )
         }
@@ -353,7 +349,7 @@ pub fn postprocess(
         *line = format!(
             "{}{}",
             " ".repeat(indentation * 4),
-            cleaned.replace("\n", &format!("\n{}", " ".repeat(indentation * 4)))
+            cleaned.replace('\n', &format!("\n{}", " ".repeat(indentation * 4)))
         );
 
         // indent due to opening braces

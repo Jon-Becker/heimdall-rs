@@ -305,7 +305,7 @@ pub fn output(
     decompiled_output.extend(
         DECOMPILED_SOURCE_HEADER_YUL
             .replace("{}", env!("CARGO_PKG_VERSION"))
-            .split("\n")
+            .split('\n')
             .map(|x| x.to_string()),
     );
 

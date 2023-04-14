@@ -1,8 +1,8 @@
 use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
-    NON_ZERO_BYTE_REGEX,
+    NON_ZERO_BYTE_REGEX
 };
-use crate::decompile::constants::ENCLOSED_EXPRESSION_REGEX;
+use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
@@ -15,12 +15,13 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::{HashMap}, sync::Mutex};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref VARIABLE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
-    static ref TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref MEMORY_TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref STORAGE_TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
 fn convert_bitmask_to_casting(line: String) -> String {
@@ -158,6 +159,7 @@ fn simplify_casts(line: String) -> String {
 }
 
 fn simplify_parentheses(line: String, paren_index: usize) -> String {
+
     // helper function to determine if parentheses are necessary
     fn are_parentheses_unnecessary(expression: String) -> bool {
         // safely grab the first and last chars
@@ -382,17 +384,28 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
         .len()
         - 1];
 
+    // skip lines that contain assignments to storage
+    if var_name.contains("storage") {
+        return false;
+    }
+
     //remove unused vars
     for x in lines {
+
         // break if the line contains a function definition
         if x.contains("function") {
             break;
         }
 
         if x.contains(" = ") {
-            let assignment = x.split(" = ").collect::<Vec<&str>>();
+            let assignment = x.split(" = ")
+                .map(|x| x.trim())
+                .collect::<Vec<&str>>();
             if assignment[1].contains(var_name) {
                 return false;
+            }
+            else if assignment[0].split(' ').last() == Some(var_name) {
+                return true;
             }
         } else if x.contains(var_name) {
             return false;
@@ -476,7 +489,7 @@ fn replace_expression_with_var(line: String) -> String {
 
 fn inherit_infer_type(line: String) -> String {
     let mut cleaned = line.clone();
-    let mut type_map = TYPE_MAP.lock().unwrap();
+    let mut type_map = MEMORY_TYPE_MAP.lock().unwrap();
 
     // if the line contains a function definition, wipe the type map and get arg types
     if line.contains("function") {
@@ -514,6 +527,7 @@ fn inherit_infer_type(line: String) -> String {
         if !var_type.is_empty() {
             type_map.insert(var_name.to_string(), var_type);
         } else if !line.starts_with("storage") {
+
             // infer the type from args and vars in the expression
             for (var, var_type) in type_map.clone().iter() {
                 if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty()
@@ -625,7 +639,7 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
         // only pass in lines further than the current line
         if !contains_unnecessary_assignment(
             line.trim().to_string(),
-            &lines[i..].iter().collect::<Vec<_>>(),
+            &lines[i+1..].iter().collect::<Vec<_>>(),
         ) {
             cleaned_lines.push(line.to_string());
         }

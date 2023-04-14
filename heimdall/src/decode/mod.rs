@@ -23,6 +23,7 @@ use strsim::normalized_damerau_levenshtein as similarity;
 
 use crate::decode::util::get_explanation;
 
+
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Decode calldata into readable types",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
@@ -239,7 +240,12 @@ pub fn decode(args: DecodeArgs) {
         // build a trace of the calldata
         let decode_call = trace.add_call(0, line!(), "heimdall".to_string(), "decode".to_string(), vec![shortened_target], "()".to_string());
         trace.br(decode_call);
-        trace.add_message(decode_call, line!(), vec![format!("selector: 0x{function_selector}")]);
+        trace.add_message(decode_call, line!(), vec![
+            format!(
+                "selector: 0x{function_selector}{}",
+                if function_selector == "00000000" { " (fallback?)" } else { "" },
+            )
+        ]);
         trace.add_message(decode_call, line!(), vec![format!("calldata: {} bytes", calldata.len() / 2usize)]);
         trace.br(decode_call);
 

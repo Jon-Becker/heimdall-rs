@@ -16,7 +16,7 @@ use super::{super::{
 }, postprocessers::solidity::postprocess};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 struct ABIToken {
     name: String,
     #[serde(rename = "internalType")]
@@ -25,7 +25,7 @@ struct ABIToken {
     type_: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 struct FunctionABI {
     #[serde(rename = "type")]
     type_: String,
@@ -37,7 +37,7 @@ struct FunctionABI {
     constant: bool,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 struct ErrorABI {
     #[serde(rename = "type")]
     type_: String,
@@ -45,7 +45,7 @@ struct ErrorABI {
     inputs: Vec<ABIToken>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 struct EventABI {
     #[serde(rename = "type")]
     type_: String,
@@ -53,7 +53,7 @@ struct EventABI {
     inputs: Vec<ABIToken>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 enum ABIStructure {
     Function(FunctionABI),
     Error(ErrorABI),
@@ -304,6 +304,47 @@ pub fn output(
     // write the header to the output file
     decompiled_output.push(DECOMPILED_SOURCE_HEADER_SOL.replace("{}", env!("CARGO_PKG_VERSION")));
     decompiled_output.push(String::from("contract DecompiledContract {"));
+    
+    // add blank line if there are events
+    if abi.iter().any(|x| matches!(x, ABIStructure::Event(_))) {
+        decompiled_output.push(String::from(""));
+    }
+
+    // write the contract's events
+    for event in abi.iter().filter(|x| matches!(x, ABIStructure::Event(_))) {
+        if let ABIStructure::Event(event) = event {
+            decompiled_output.push(format!(
+                "event {}({});",
+                event.name,
+                event.inputs
+                    .iter()
+                    .map(|x| format!("{} {}", x.type_, x.name))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ));
+        }
+    }
+
+    // add blank line if there are errors
+    if abi.iter().any(|x| matches!(x, ABIStructure::Error(_))) {
+        decompiled_output.push(String::from(""));
+    }
+
+    // write the contract's errors
+    for error in abi.iter().filter(|x| matches!(x, ABIStructure::Error(_))) {
+        if let ABIStructure::Error(error) = error {
+            decompiled_output.push(format!(
+                "error {}({});",
+                error.name,
+                error.inputs
+                    .iter()
+                    .map(|x| format!("{} {}", x.type_, x.name))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ));
+        }
+    }
+    
 
     for function in functions {
         progress_bar.set_message(format!("writing logic for '0x{}'", function.selector));

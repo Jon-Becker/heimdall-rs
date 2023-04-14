@@ -1,0 +1,1 @@
+cargo clippy -- --allow clippy::new_without_default --allow clippy::redundant_field_names --allow clippy::too_many_arguments
