@@ -48,8 +48,7 @@ mod tests {
 
         // wraps an ADD operation with 2 raw inputs
         let add_operation_wrapped = WrappedOpcode::new(0x5f, vec![]);
-        assert_eq!(add_operation_wrapped.yulify(), "0x00");
-        
+        assert_eq!(add_operation_wrapped.yulify(), "0");
     }
 
     #[test]

@@ -580,6 +580,15 @@ mod tests {
     use ethers::types::U256;
 
     #[test]
+    fn test_push0() {
+
+        // wraps an ADD operation with 2 raw inputs
+        let add_operation_wrapped = WrappedOpcode::new(0x5f, vec![]);
+        assert_eq!(add_operation_wrapped.solidify(), "0");
+        
+    }
+
+    #[test]
     fn test_solidify_add() {
 
         // wraps an ADD operation with 2 raw inputs
