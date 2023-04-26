@@ -2,7 +2,7 @@ use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
     NON_ZERO_BYTE_REGEX
 };
-use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX};
+use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
@@ -15,7 +15,7 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::{collections::{HashMap}, sync::Mutex};
+use std::{collections::{HashMap, HashSet}, sync::Mutex};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -533,13 +533,50 @@ fn inherit_infer_type(line: String) -> String {
         // inherit infer types for memory
         else if !line.starts_with("storage") {
 
-            // infer the type from args and vars in the expression
-            for (var, var_type) in type_map.clone().iter() {
-                if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty()
-                {
-                    cleaned = format!("{var_type} {cleaned}");
-                    type_map.insert(var_name.to_string(), var_type.to_string());
-                    break;
+            // get the rhs of the expression
+            let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
+
+            if rhs.contains("storage") {
+
+                // extract the storage accesses using STORAGE_ACCESS_REGEX
+                let storage_accesses = STORAGE_ACCESS_REGEX
+                    .captures_iter(rhs)
+                    .map(|x| x.unwrap().get(0).unwrap().as_str().to_string())
+                    .collect::<HashSet<String>>();
+
+                for storage_access in storage_accesses {
+                    let mut storage_slot = storage_access[8..storage_access.len() - 1].to_owned();
+
+                    // if the storage_slot is a variable, replace it with the value
+                    // ex: storage[var_b] => storage[keccak256(var_a)]
+                    // helps with type inference
+                    if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
+                        for (var, value) in var_map.clone().iter() {
+                            if storage_slot.contains(var) {
+                                storage_slot = storage_slot.replace(var, value);
+                            }
+                        }
+                    }
+
+                    // skip keccak slots, they will be handled later
+                    if storage_slot.contains("keccak256") { continue; }
+                    
+                    // TODO: infer type from storage slot
+                    // add to type map
+                    let var_name = format!("stor_{}", storage_slot.replace("0x", ""));
+                    storage_map.insert(var_name, "bytes32".to_string());
+                }
+            }
+            else {
+
+                // infer the type from args and vars in the expression
+                for (var, var_type) in type_map.clone().iter() {
+                    if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty()
+                    {
+                        cleaned = format!("{var_type} {cleaned}");
+                        type_map.insert(var_name.to_string(), var_type.to_string());
+                        break;
+                    }
                 }
             }
         }
@@ -565,15 +602,15 @@ fn inherit_infer_type(line: String) -> String {
                 }
             }
 
+            // default type is bytes32
+            let mut lhs_type = "bytes32".to_string();
+            let mut rhs_type = "bytes32".to_string();
+
+            // get the rhs of the expression
+            let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
+
             // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull types from both the lhs and rhs
             if storage_slot.contains("keccak256") {
-
-                // get the rhs of the expression
-                let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
-                
-                // default type is bytes32
-                let mut lhs_type = "bytes32".to_string();
-                let mut rhs_type = "bytes32".to_string();
 
                 // find vars in lhs or rhs
                 for (var, var_type) in type_map.clone().iter() {
@@ -600,8 +637,16 @@ fn inherit_infer_type(line: String) -> String {
             }
             else {
 
-                // TODO
-                println!("storage slot: {}", storage_slot);
+                // get the type of the rhs
+                for (var, var_type) in type_map.clone().iter() {
+                    if rhs.contains(var) && !var_type.is_empty() {
+                        rhs_type = var_type.to_string();
+                    }
+                }
+
+                // add to type map
+                let var_name = format!("stor_{}", storage_slot.replace("0x", ""));
+                storage_map.insert(var_name, rhs_type);
             }
         }
 
@@ -705,9 +750,18 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
             
             // insert storage vars
             for (var_name, var_type) in STORAGE_TYPE_MAP.lock().unwrap().clone().iter() {
-                cleaned_lines.push(format!("    {} public {};", var_type, var_name));
+                storage_var_lines.push(
+                    format!(
+                        "    {} public {};",
+                        var_type.replace(" memory", ""),
+                        var_name
+                    )
+                );
             }
-
+            
+            // sort storage vars by length, shortest first, then alphabetically 
+            storage_var_lines.sort_by(|a, b| a.len().cmp(&b.len()).then(a.cmp(b)));
+            
             // if we have storage vars, push to cleaned lines
             if storage_var_lines.len() > 1 {
                 cleaned_lines.append(&mut storage_var_lines);
