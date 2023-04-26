@@ -27,7 +27,7 @@ lazy_static! {
     pub static ref MUL_BY_ONE_REGEX: Regex = Regex::new(r"\b0x01\b\s*\*\s*| \*\s*\b0x01\b").unwrap();
 
     // memory variable regex
-    pub static ref MEM_VAR_REGEX: Regex = Regex::new(r"var_[a-zA-Z]{1,2}").unwrap();
+    pub static ref MEM_VAR_REGEX: Regex = Regex::new(r"^var_[a-zA-Z]{1,2}$").unwrap();
     
     // extracts commas within a certain expression, not including commas within parentheses
     pub static ref ARGS_SPLIT_REGEX: Regex = Regex::new(r",\s*(?![^()]*\))").unwrap();

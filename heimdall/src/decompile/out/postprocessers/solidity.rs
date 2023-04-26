@@ -2,7 +2,7 @@ use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
     NON_ZERO_BYTE_REGEX
 };
-use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
+use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
@@ -490,6 +490,8 @@ fn replace_expression_with_var(line: String) -> String {
 fn inherit_infer_type(line: String) -> String {
     let mut cleaned = line.clone();
     let mut type_map = MEMORY_TYPE_MAP.lock().unwrap();
+    let mut storage_map = STORAGE_TYPE_MAP.lock().unwrap();
+    let var_map = VARIABLE_MAP.lock().unwrap();
 
     // if the line contains a function definition, wipe the type map and get arg types
     if line.contains("function") {
@@ -526,7 +528,10 @@ fn inherit_infer_type(line: String) -> String {
         // add to type map, if the variable is typed
         if !var_type.is_empty() {
             type_map.insert(var_name.to_string(), var_type);
-        } else if !line.starts_with("storage") {
+        }
+
+        // inherit infer types for memory
+        else if !line.starts_with("storage") {
 
             // infer the type from args and vars in the expression
             for (var, var_type) in type_map.clone().iter() {
@@ -538,6 +543,68 @@ fn inherit_infer_type(line: String) -> String {
                 }
             }
         }
+
+        // inherit infer types for storage
+        else if line.starts_with("storage") {
+
+            // copy the line to a mut
+            let mut line = line.clone();
+
+            // get the storage slot
+            let mut storage_slot = var_name[8..var_name.len() - 1].to_owned();
+
+            // if the storage_slot is a variable, replace it with the value
+            // ex: storage[var_b] => storage[keccak256(var_a)]
+            // helps with type inference
+            if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
+                for (var, value) in var_map.clone().iter() {
+                    if storage_slot.contains(var) {
+                        line = line.replace(var, value);
+                        storage_slot = storage_slot.replace(var, value);
+                    }
+                }
+            }
+
+            // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull types from both the lhs and rhs
+            if storage_slot.contains("keccak256") {
+
+                // get the rhs of the expression
+                let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
+                
+                // default type is bytes32
+                let mut lhs_type = "bytes32".to_string();
+                let mut rhs_type = "bytes32".to_string();
+
+                // find vars in lhs or rhs
+                for (var, var_type) in type_map.clone().iter() {
+
+                    // check for vars in lhs
+                    if storage_slot.contains(var) && !var_type.is_empty() {
+                        lhs_type = var_type.to_string();
+
+                        // continue, so we cannot use this var in rhs
+                        continue;
+                    }
+
+                    // check for vars in rhs
+                    if rhs.contains(var) && !var_type.is_empty() {
+                        rhs_type = var_type.to_string();
+                    }
+                }
+
+                // add to type map
+                // TODO get x as the slot for the mapping keccak256(a + x)
+                let var_name = "stor_map_slot_x".to_string();
+                let mapping_type = format!("mapping({lhs_type} => {rhs_type})");
+                storage_map.insert(var_name, mapping_type);
+            }
+            else {
+
+                // TODO
+                println!("storage slot: {}", storage_slot);
+            }
+        }
+
     }
 
     cleaned
@@ -630,6 +697,23 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
 
     // remove unused assignments
     for (i, line) in lines.iter().enumerate() {
+
+        // check if we need to insert storage vars
+        if cleaned_lines.last().unwrap_or(&"".to_string()).contains("DecompiledContract") {
+
+            let mut storage_var_lines: Vec<String> = vec!["    ".to_string()];
+            
+            // insert storage vars
+            for (var_name, var_type) in STORAGE_TYPE_MAP.lock().unwrap().clone().iter() {
+                cleaned_lines.push(format!("    {} public {};", var_type, var_name));
+            }
+
+            // if we have storage vars, push to cleaned lines
+            if storage_var_lines.len() > 1 {
+                cleaned_lines.append(&mut storage_var_lines);
+            }
+        }
+
         // update progress bar
         if line.contains("function") {
             function_count += 1;
