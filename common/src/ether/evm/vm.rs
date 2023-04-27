@@ -1023,13 +1023,14 @@ impl VM {
                         }
                     };
 
-                    let value_offset_safe = if (offset + size) * 2 > self.calldata.len() {
-                        self.calldata.len()
+                    // calculate size_safe to prevent overflow
+                    let size_safe = if ((offset + 1) * 2 + (size * 2)) > self.bytecode.len() {
+                        self.bytecode.len()
                     } else {
-                        (offset + size) * 2
+                        (offset + 1) * 2 + (size * 2)
                     };
-
-                    let mut value = match self.bytecode.get(offset * 2..value_offset_safe) {
+                    
+                    let mut value: String = match self.bytecode.get(((offset + 1) * 2)..size_safe) {
                         Some(x) => x.to_owned(),
                         None => "".to_string(),
                     };
