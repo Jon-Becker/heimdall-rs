@@ -248,11 +248,40 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str(self.inputs[1]._solidify().as_str());
             }
             "SHA3" => {
+                let offset = &self.inputs[0];
+                let size = &self.inputs[1];
+
+                // convert to usize, knowing its a hex string or a decimal
+                let offset = match usize::from_str_radix(&offset._solidify().replace("0x", ""), 16) {
+                    Ok(offset) => offset,
+                    Err(_) => usize::from_str_radix(&offset._solidify().replace("0x", ""), 10).unwrap()
+                };
+                let size = match usize::from_str_radix(&size._solidify().replace("0x", ""), 16) {
+                    Ok(size) => size,
+                    Err(_) => usize::from_str_radix(&size._solidify().replace("0x", ""), 10).unwrap()
+                };
+
+                let mut mem_access = Vec::new();
+
+                // every 32 bytes is a memory slot
+                for i in 0..(size / 32) {
+                    let slot = offset + (i * 32);
+                    mem_access.push(
+                        format!(
+                            "memory[{}]",
+                            if slot == 0 { slot.to_string() }
+                            else { format!("0x{:x}", slot) }
+                        )
+                    )
+                }
                 
+                // we need to check how many bytes we are hashing,
+                // if it is > 32, we need to get multiple memory slots
+
                 solidified_wrapped_opcode.push_str(
                     &format!(
-                        "keccak256(memory[{}])",
-                        self.inputs[0]._solidify().as_str()
+                        "keccak256({})",
+                        mem_access.join(", ")
                     )
                 );
             },

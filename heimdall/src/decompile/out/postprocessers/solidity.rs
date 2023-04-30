@@ -612,6 +612,14 @@ fn inherit_infer_type(line: String) -> String {
             // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull types from both the lhs and rhs
             if storage_slot.contains("keccak256") {
 
+                // extract the mapping slot
+                let mapping_slot = storage_slot.split(", ").collect::<Vec<&str>>()[1].to_owned().replace(")", "");
+                
+
+                // replace the storage slot in rhs with a placeholder
+                // this will prevent us from pulling bad types from the rhs
+                let rhs = rhs.replace(&storage_slot, "_");
+
                 // find vars in lhs or rhs
                 for (var, var_type) in type_map.clone().iter() {
 

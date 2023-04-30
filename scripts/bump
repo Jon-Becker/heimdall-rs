@@ -1,0 +1,55 @@
+#!/bin/bash
+
+set -e
+
+function bump_version() {
+    local file=$1
+    local bump_type=$2
+
+    local version_line=$(grep '^version' $file)
+    local version_string=$(echo $version_line | awk -F'"' '{print $2}')
+    local major=$(echo $version_string | awk -F'.' '{print $1}')
+    local minor=$(echo $version_string | awk -F'.' '{print $2}')
+    local patch=$(echo $version_string | awk -F'.' '{print $3}')
+
+    case "$bump_type" in
+        major)
+            major=$((major + 1))
+            minor=0
+            patch=0
+            ;;
+        minor)
+            minor=$((minor + 1))
+            patch=0
+            ;;
+        patch|*)
+            patch=$((patch + 1))
+            ;;
+    esac
+
+    local new_version="${major}.${minor}.${patch}"
+    sed -i "" "s/^version.*/version = \"${new_version}\"/" $file
+
+    echo "Updated $file to version $new_version"
+}
+
+bump_type="patch"
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        --major)
+            bump_type="major"
+            ;;
+        --minor)
+            bump_type="minor"
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--major|--minor]"
+            exit 1
+            ;;
+    esac
+fi
+
+find . -name 'Cargo.toml' -type f | while read -r file; do
+    bump_version "$file" "$bump_type"
+done
