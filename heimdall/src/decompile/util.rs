@@ -13,7 +13,7 @@ use heimdall_common::{
             opcodes::WrappedOpcode,
             vm::{State, VM}, stack::{StackFrame}
         }, signatures::{ResolvedFunction, ResolvedError, ResolvedLog},
-    }, constants::{MEMORY_REGEX, STORAGE_REGEX},
+    }, constants::{MEMORY_REGEX, STORAGE_REGEX}, utils::strings::decode_hex,
 };
 
 #[derive(Clone, Debug)]
@@ -48,11 +48,11 @@ pub struct Function {
 
     // holds all found events used to generate solidity error definitions
     // as well as ABI specifications.
-    pub events: HashMap<String, (Option<ResolvedLog>, Log)>,
+    pub events: HashMap<U256, (Option<ResolvedLog>, Log)>,
 
     // holds all found custom errors used to generate solidity error definitions
     // as well as ABI specifications.
-    pub errors: HashMap<String, Option<ResolvedError>>,
+    pub errors: HashMap<U256, Option<ResolvedError>>,
 
     // stores the matched resolved function for this Functon
     pub resolved_function: Option<ResolvedFunction>,
@@ -121,10 +121,10 @@ pub fn map_selector(
     entry_point: u128,
 ) -> (VMTrace, u32) {
     let mut vm = evm.clone();
-    vm.calldata = selector;
+    vm.calldata = decode_hex(&selector).unwrap();
 
     // step through the bytecode until we reach the entry point
-    while (vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize)
+    while vm.bytecode.len() >= vm.instruction as usize
         && (vm.instruction <= entry_point)
     {
         vm.step();
@@ -163,12 +163,12 @@ pub fn recursive_map(
     };
 
     // step through the bytecode until we find a JUMPI instruction
-    while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
+    while vm.bytecode.len() >= vm.instruction as usize {
         let state = vm.step();
         vm_trace.operations.push(state.clone());
 
         // if we encounter a JUMPI, create children taking both paths and break
-        if state.last_instruction.opcode == "57" {
+        if state.last_instruction.opcode == 0x57 {
 
             let jump_frame: (u128, U256, usize, bool) = (
                 state.last_instruction.instruction,

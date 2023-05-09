@@ -41,6 +41,7 @@ pub fn encode_hex_reduced(s: U256) -> String {
     }
 }
 
+
 // convert a hex string to ascii
 pub fn hex_to_ascii(s: &str) -> String {
     let mut result = String::new();
@@ -55,6 +56,7 @@ pub fn hex_to_ascii(s: &str) -> String {
 
     result
 }
+
 
 // replace the last occurrence of a string with a new string
 pub fn replace_last(s: String, old: &str, new: &str) -> String {
@@ -86,6 +88,7 @@ pub fn find_balanced_encapsulator(s: String, encap: (char, char)) -> (usize, usi
     (start, end + 1, (open == close && end > start && open > 0))
 }
 
+
 // find balanced parentheses in a string, but backwards
 pub fn find_balanced_encapsulator_backwards(s: String, encap: (char, char)) -> (usize, usize, bool) {
     let mut open = 0;
@@ -109,6 +112,7 @@ pub fn find_balanced_encapsulator_backwards(s: String, encap: (char, char)) -> (
     (s.len() - end - 1, s.len() - start, (open == close && end > start && open > 0))
 }
 
+
 // convert a number into it's base26 encoded form
 pub fn base26_encode(n: usize) -> String {
     let mut s = String::new();
@@ -120,6 +124,7 @@ pub fn base26_encode(n: usize) -> String {
     }
     s.to_lowercase().chars().rev().collect()
 }
+
 
 // splits a string by a given regex
 pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {

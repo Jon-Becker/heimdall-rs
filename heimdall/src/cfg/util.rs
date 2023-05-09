@@ -46,12 +46,12 @@ pub fn recursive_map(
     };
 
     // step through the bytecode until we find a JUMPI instruction
-    while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
+    while vm.bytecode.len() >= vm.instruction as usize {
         let state = vm.step();
         vm_trace.operations.push(state.clone());
 
         // if we encounter a JUMPI, create children taking both paths and break
-        if state.last_instruction.opcode == "57" {
+        if state.last_instruction.opcode == 0x57 {
             let jump_frame: (u128, U256, usize, bool) = (
                 state.last_instruction.instruction,
                 state.last_instruction.inputs[0],

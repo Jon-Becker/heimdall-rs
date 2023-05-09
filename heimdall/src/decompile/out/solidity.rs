@@ -292,12 +292,23 @@ pub fn output(
     // write the decompiled source to file
     let mut decompiled_output: Vec<String> = Vec::new();
 
+    // truncate target for prettier display
+    let mut shortened_target = args.target.clone();
+    if shortened_target.len() > 66 {
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target
+                .chars()
+                .skip(shortened_target.len() - 16)
+                .collect::<String>();
+    }
+
     trace.add_call(
         trace_parent,
         line!(),
         "heimdall".to_string(),
         "build_output".to_string(),
-        vec![args.target.to_string()],
+        vec![shortened_target],
         short_path(&decompiled_output_path),
     );
 

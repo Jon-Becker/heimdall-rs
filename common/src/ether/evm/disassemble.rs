@@ -8,6 +8,8 @@ use ethers::{
 };
 use heimdall_cache::read_cache;
 use heimdall_cache::store_cache;
+use crate::utils::strings::decode_hex;
+use crate::utils::strings::encode_hex;
 use crate::{
     constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
     io::{ logging::*, file::* },
@@ -126,7 +128,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
             // cache the results
             store_cache(&format!("contract.{}", &args.target), bytecode_as_bytes.to_string().replacen("0x", "", 1), None);
 
-            bytecode_as_bytes.to_string().replacen("0x", "", 1)
+            bytecode_as_bytes.to_string()
         });
         
     }
@@ -144,7 +146,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {                
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
-                    contents.replacen("0x", "", 1)
+                    contents
                 }
                 else {
                     logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
@@ -162,22 +164,18 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
     let mut output: String = String::new();
 
     // Iterate over the bytecode, disassembling each instruction.
-    let byte_array = contract_bytecode.chars()
-        .collect::<Vec<char>>()
-        .chunks(2)
-        .map(|c| c.iter().collect::<String>())
-        .collect::<Vec<String>>();
+    let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1)).unwrap();
 
     while program_counter < byte_array.len(){
 
-        let operation = opcode(&byte_array[program_counter]);
+        let operation = opcode(byte_array[program_counter]);
         let mut pushed_bytes: String = String::new();
 
         if operation.name.contains("PUSH") {
             let byte_count_to_push: u8 = operation.name.replace("PUSH", "").parse().unwrap();
         
             pushed_bytes = match  byte_array.get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize) {
-                Some(bytes) => bytes.join(""),
+                Some(bytes) => encode_hex(bytes.to_vec()),
                 None => {
                     break
                 }

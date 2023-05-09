@@ -8,6 +8,9 @@ lazy_static! {
     pub static ref AND_BITMASK_REGEX: Regex = Regex::new(r"\(0x([a-fA-F0-9]{2}){1,32}\) & ").unwrap();
     pub static ref AND_BITMASK_REGEX_2: Regex = Regex::new(r" & \(0x([a-fA-F0-9]{2}){1,32}\)").unwrap();
 
+    // used to detect constant values
+    pub static ref CONSTANT_REGEX: Regex = Regex::new(r"^(?:(?![memorystorage\[\]]).)*$").unwrap();
+
     // used to detect non-zero bytes within a word
     pub static ref NON_ZERO_BYTE_REGEX: Regex = Regex::new(r"[a-fA-F0-9][a-fA-F1-9]").unwrap();
 

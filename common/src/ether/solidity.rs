@@ -248,40 +248,10 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str(self.inputs[1]._solidify().as_str());
             }
             "SHA3" => {
-                let offset = &self.inputs[0];
-                let size = &self.inputs[1];
-
-                // convert to usize, knowing its a hex string or a decimal
-                let offset = match usize::from_str_radix(&offset._solidify().replace("0x", ""), 16) {
-                    Ok(offset) => offset,
-                    Err(_) => usize::from_str_radix(&offset._solidify().replace("0x", ""), 10).unwrap()
-                };
-                let size = match usize::from_str_radix(&size._solidify().replace("0x", ""), 16) {
-                    Ok(size) => size,
-                    Err(_) => usize::from_str_radix(&size._solidify().replace("0x", ""), 10).unwrap()
-                };
-
-                let mut mem_access = Vec::new();
-
-                // every 32 bytes is a memory slot
-                for i in 0..(size / 32) {
-                    let slot = offset + (i * 32);
-                    mem_access.push(
-                        format!(
-                            "memory[{}]",
-                            if slot == 0 { slot.to_string() }
-                            else { format!("0x{:x}", slot) }
-                        )
-                    )
-                }
-                
-                // we need to check how many bytes we are hashing,
-                // if it is > 32, we need to get multiple memory slots
-
                 solidified_wrapped_opcode.push_str(
                     &format!(
-                        "keccak256({})",
-                        mem_access.join(", ")
+                        "keccak256(memory[{}])",
+                        self.inputs[0]._solidify()
                     )
                 );
             },
@@ -539,14 +509,9 @@ impl WrappedOpcode {
 
 
     // creates a new WrappedOpcode from a set of raw inputs
-    pub fn new(opcode_int: usize, inputs: Vec<WrappedInput>) -> WrappedOpcode {
-        let mut opcode_str = format!("{opcode_int:x}");
-        if opcode_str.len() == 1 {
-            opcode_str.insert(0, '0');
-        };
-
+    pub fn new(opcode_int: u8, inputs: Vec<WrappedInput>) -> WrappedOpcode {
         WrappedOpcode {
-            opcode: opcode(&opcode_str),
+            opcode: opcode(opcode_int),
             inputs: inputs,
         }
     }
@@ -557,6 +522,7 @@ impl Default for WrappedOpcode {
     fn default() -> Self {
         WrappedOpcode {
             opcode: Opcode {
+                code: 0,
                 name: "unknown",
                 mingas: 0,
                 inputs: 0,

@@ -28,7 +28,7 @@ jobs:
     - name: Build Binaries
       run:  |
         cargo clean
-        cargo build --release
+        RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
 
     - name: Upload Binaries
       uses: svenstaro/upload-release-action@v2

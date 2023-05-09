@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::{Arc, Mutex}, time::Duration, thread};
 
 use indicatif::ProgressBar;
 
-use crate::io::logging::Logger;
+use crate::{io::logging::Logger, utils::strings::decode_hex};
 
 use super::{evm::vm::VM, signatures::{resolve_function_signature, ResolvedFunction}};
 
@@ -37,12 +37,12 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
     let mut vm = evm.clone();
 
     // execute the EVM call to find the entry point for the given selector
-    vm.calldata = selector.clone();
-    while vm.bytecode.len() >= (vm.instruction * 2 + 2) as usize {
+    vm.calldata = decode_hex(&selector).unwrap();
+    while vm.bytecode.len() >= vm.instruction as usize {
         let call = vm.step();
 
         // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
-        if call.last_instruction.opcode == "57" {
+        if call.last_instruction.opcode == 0x57 {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
             let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
 

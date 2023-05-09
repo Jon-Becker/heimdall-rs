@@ -1,11 +1,5 @@
-
-use std::{str::FromStr};
-
 use ethers::{
     abi::{decode, AbiEncode, ParamType},
-    prelude::{
-        U256,
-    },
 };
 use heimdall_common::{
     ether::{
@@ -41,7 +35,7 @@ impl VMTrace {
             let memory = operation.memory.clone();
 
             let opcode_name = instruction.opcode_details.clone().unwrap().name;
-            let opcode_number = U256::from_str(&instruction.opcode).unwrap().as_usize();
+            let opcode_number = instruction.opcode;
 
             // if the instruction is a state-accessing instruction, the function is no longer pure
             if function.pure
@@ -122,11 +116,11 @@ impl VMTrace {
 
                 // check to see if the event is a duplicate
                 if !function.events.iter().any(|(selector, _)| {
-                    selector == logged_event.topics.first().unwrap()
+                    selector == &*logged_event.topics.first().unwrap()
                 }) {
                     
                     // add the event to the function
-                    function.events.insert(logged_event.topics.first().unwrap().to_string(), (None, logged_event.clone()));
+                    function.events.insert(*logged_event.topics.first().unwrap(), (None, logged_event.clone()));
 
                     // add the event emission to the function's logic
                     function.logic.push(format!(
@@ -166,7 +160,7 @@ impl VMTrace {
                 //       - require(true != false)
 
                 // handle case with error string abiencoded
-                if revert_data.starts_with("4e487b71") {
+                if revert_data.starts_with(&decode_hex("4e487b71").unwrap()) {
                     continue;
                 }
 

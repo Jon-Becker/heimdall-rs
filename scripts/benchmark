@@ -1,25 +1,17 @@
 echo "Compiling..."
 
-RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo build --release --package heimdall  > /dev/null 2>&1
-RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo build --release --package heimdall-config  > /dev/null 2>&1
-RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo build --release --package heimdall-common  > /dev/null 2>&1
+RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
 
 # get optional parameter for bench prefix
 if [ -z "$1" ]
 then
     bench_prefix="benchmark_"
-    echo "Running benchmarks..."
+    echo "Running benchmarks: $bench_prefix"
 else
     bench_prefix="benchmark_$1"
     echo "Running benchmarks: $bench_prefix"
 fi
 
-cargo test --release --package heimdall -- $bench_prefix | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
-cargo test --release --package heimdall-config -- $bench_prefix | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
-cargo test --release --package heimdall-common -- $bench_prefix | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
-
-clear
 echo "Benchmark results:\n"
-cat stdout
-rm stdout
+cargo test --release -- $bench_prefix 2>&1 | grep -E "±|benchmark_\S*:"
 echo "\n"

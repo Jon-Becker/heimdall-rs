@@ -350,13 +350,19 @@ fn convert_memory_to_variable(line: String) -> String {
 
     // if the memory access is an instantiation, save it
     if cleaned.contains(" = ") {
-        let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
+        let instantiation: Vec<String> = cleaned.split(" = ").collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();
+
+        // skip storage
+        if instantiation[0].contains("storage") {
+            return cleaned;
+        }
 
         let mut var_map = VARIABLE_MAP.lock().unwrap();
         var_map.insert(
-            instantiation[0].to_string(),
-            instantiation[1].to_string().replace(';', ""),
+            instantiation[0].clone(),
+            instantiation[1].replace(';', ""),
         );
+
         drop(var_map);
     }
 
@@ -470,8 +476,14 @@ fn replace_expression_with_var(line: String) -> String {
 
     // iterate over variable map
     for (var, expression) in var_map.iter() {
+
         // skip numeric expressions
         if expression.parse::<u128>().is_ok() {
+            continue;
+        }
+
+        // skip expressions that are already variables. i.e, check if they contain a space
+        if !expression.contains(' ') {
             continue;
         }
 
@@ -483,6 +495,26 @@ fn replace_expression_with_var(line: String) -> String {
 
     // drop the mutex
     drop(var_map);
+
+    // if line contains storage
+    if cleaned.contains("storage") {
+        let storage_map = STORAGE_TYPE_MAP.lock().unwrap();
+
+        // iterate over storage map
+        for (var, _) in storage_map.iter() {
+
+            // get the storage slot
+            let storage_slot = match var.split("_").collect::<Vec<&str>>()[1] {
+                "0" => "storage[0]".to_owned(),
+                slot => format!("storage[0x{slot}]").to_owned()
+            };
+
+            // replace the storage slot with the variable
+            if cleaned.contains(&storage_slot) {
+                cleaned = cleaned.replace(&storage_slot, var);
+            }
+        }
+    }
 
     cleaned
 }
@@ -516,148 +548,143 @@ fn inherit_infer_type(line: String) -> String {
         }
     }
 
-    // if the line contains an instantiation, add the type to the map
-    if line.contains(" = ") {
-        let instantiation = line.split(" = ").collect::<Vec<&str>>();
-        let var_type = instantiation[0].split(' ').collect::<Vec<&str>>()
-            [..instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1]
-            .join(" ");
-        let var_name = instantiation[0].split(' ').collect::<Vec<&str>>()
-            [instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1];
+    // if the line does not contains an instantiation, return
+    if !line.contains(" = ") {
+        return cleaned;
+    }
 
-        // add to type map, if the variable is typed
-        if !var_type.is_empty() {
-            type_map.insert(var_name.to_string(), var_type);
-        }
+    let instantiation = line.split(" = ").collect::<Vec<&str>>();
+    let var_type = instantiation[0].split(' ').collect::<Vec<&str>>()
+        [..instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1]
+        .join(" ");
+    let var_name = instantiation[0].split(' ').collect::<Vec<&str>>()
+        [instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1];
 
-        // inherit infer types for memory
-        else if !line.starts_with("storage") {
+    // add to type map, if the variable is typed
+    if !var_type.is_empty() {
+        type_map.insert(var_name.to_string(), var_type);
+    }
 
-            // get the rhs of the expression
-            let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
+    // inherit infer types for memory
+    else if !line.starts_with("storage") {
 
-            if rhs.contains("storage") {
+        // get the rhs of the expression
+        let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
 
-                // extract the storage accesses using STORAGE_ACCESS_REGEX
-                let storage_accesses = STORAGE_ACCESS_REGEX
-                    .captures_iter(rhs)
-                    .map(|x| x.unwrap().get(0).unwrap().as_str().to_string())
-                    .collect::<HashSet<String>>();
+        if rhs.contains("storage") {
 
-                for storage_access in storage_accesses {
-                    let mut storage_slot = storage_access[8..storage_access.len() - 1].to_owned();
+            // extract the storage accesses using STORAGE_ACCESS_REGEX
+            let storage_accesses = STORAGE_ACCESS_REGEX
+                .captures_iter(rhs)
+                .map(|x| x.unwrap().get(0).unwrap().as_str().to_string())
+                .collect::<HashSet<String>>();
 
-                    // if the storage_slot is a variable, replace it with the value
-                    // ex: storage[var_b] => storage[keccak256(var_a)]
-                    // helps with type inference
-                    if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
-                        for (var, value) in var_map.clone().iter() {
-                            if storage_slot.contains(var) {
-                                storage_slot = storage_slot.replace(var, value);
-                            }
+            for storage_access in storage_accesses {
+                let mut storage_slot = storage_access[8..storage_access.len() - 1].to_owned();
+
+                // if the storage_slot is a variable, replace it with the value
+                // ex: storage[var_b] => storage[keccak256(var_a)]
+                // helps with type inference
+                if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
+                    for (var, value) in var_map.clone().iter() {
+                        if storage_slot.contains(var) {
+                            storage_slot = storage_slot.replace(var, value);
                         }
                     }
-
-                    // skip keccak slots, they will be handled later
-                    if storage_slot.contains("keccak256") { continue; }
-                    
-                    // TODO: infer type from storage slot
-                    // add to type map
-                    let var_name = format!("stor_{}", storage_slot.replace("0x", ""));
-                    storage_map.insert(var_name, "bytes32".to_string());
                 }
-            }
-            else {
 
-                // infer the type from args and vars in the expression
-                for (var, var_type) in type_map.clone().iter() {
-                    if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty()
-                    {
-                        cleaned = format!("{var_type} {cleaned}");
-                        type_map.insert(var_name.to_string(), var_type.to_string());
-                        break;
-                    }
-                }
-            }
-        }
-
-        // inherit infer types for storage
-        else if line.starts_with("storage") {
-
-            // copy the line to a mut
-            let mut line = line.clone();
-
-            // get the storage slot
-            let mut storage_slot = var_name[8..var_name.len() - 1].to_owned();
-
-            // if the storage_slot is a variable, replace it with the value
-            // ex: storage[var_b] => storage[keccak256(var_a)]
-            // helps with type inference
-            if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
-                for (var, value) in var_map.clone().iter() {
-                    if storage_slot.contains(var) {
-                        line = line.replace(var, value);
-                        storage_slot = storage_slot.replace(var, value);
-                    }
-                }
-            }
-
-            // default type is bytes32
-            let mut lhs_type = "bytes32".to_string();
-            let mut rhs_type = "bytes32".to_string();
-
-            // get the rhs of the expression
-            let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
-
-            // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull types from both the lhs and rhs
-            if storage_slot.contains("keccak256") {
-
-                // extract the mapping slot
-                let mapping_slot = storage_slot.split(", ").collect::<Vec<&str>>()[1].to_owned().replace(")", "");
+                // skip keccak slots, they will be handled later
+                if storage_slot.contains("keccak256") { continue; }
                 
-
-                // replace the storage slot in rhs with a placeholder
-                // this will prevent us from pulling bad types from the rhs
-                let rhs = rhs.replace(&storage_slot, "_");
-
-                // find vars in lhs or rhs
-                for (var, var_type) in type_map.clone().iter() {
-
-                    // check for vars in lhs
-                    if storage_slot.contains(var) && !var_type.is_empty() {
-                        lhs_type = var_type.to_string();
-
-                        // continue, so we cannot use this var in rhs
-                        continue;
-                    }
-
-                    // check for vars in rhs
-                    if rhs.contains(var) && !var_type.is_empty() {
-                        rhs_type = var_type.to_string();
-                    }
-                }
-
-                // add to type map
-                // TODO get x as the slot for the mapping keccak256(a + x)
-                let var_name = "stor_map_slot_x".to_string();
-                let mapping_type = format!("mapping({lhs_type} => {rhs_type})");
-                storage_map.insert(var_name, mapping_type);
-            }
-            else {
-
-                // get the type of the rhs
-                for (var, var_type) in type_map.clone().iter() {
-                    if rhs.contains(var) && !var_type.is_empty() {
-                        rhs_type = var_type.to_string();
-                    }
-                }
-
                 // add to type map
                 let var_name = format!("stor_{}", storage_slot.replace("0x", ""));
-                storage_map.insert(var_name, rhs_type);
+                storage_map.insert(var_name, "bytes32".to_string());
+            }
+        }
+        else {
+
+            // infer the type from args and vars in the expression
+            for (var, var_type) in type_map.clone().iter() {
+                if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty()
+                {
+                    cleaned = format!("{var_type} {cleaned}");
+                    type_map.insert(var_name.to_string(), var_type.to_string());
+                    break;
+                }
+            }
+        }
+    }
+
+    // inherit infer types for storage
+    else if line.starts_with("storage") {
+
+        // copy the line to a mut
+        let mut line = line.clone();
+
+        // get the storage slot
+        let mut storage_slot = var_name[8..var_name.len() - 1].to_owned();
+
+        // if the storage_slot is a variable, replace it with the value
+        // ex: storage[var_b] => storage[keccak256(var_a)]
+        // helps with type inference
+        if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
+            for (var, value) in var_map.clone().iter() {
+                if storage_slot.contains(var) {
+                    line = line.replace(var, value);
+                    storage_slot = storage_slot.replace(var, value);
+                }
             }
         }
 
+        // default type is bytes32
+        let mut lhs_type = "bytes32".to_string();
+        let mut rhs_type = "bytes32".to_string();
+
+        // get the rhs of the expression
+        let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
+
+        // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull types from both the lhs and rhs
+        if storage_slot.contains("keccak256") {
+
+            // replace the storage slot in rhs with a placeholder
+            // this will prevent us from pulling bad types from the rhs
+            let rhs = rhs.replace(&storage_slot, "_");
+
+            // find vars in lhs or rhs
+            for (var, var_type) in type_map.clone().iter() {
+
+                // check for vars in lhs
+                if storage_slot.contains(var) && !var_type.is_empty() {
+                    lhs_type = var_type.to_string();
+
+                    // continue, so we cannot use this var in rhs
+                    continue;
+                }
+
+                // check for vars in rhs
+                if rhs.contains(var) && !var_type.is_empty() {
+                    rhs_type = var_type.to_string();
+                }
+            }
+
+            // add to type map
+            let var_name = format!("stor_map_slot_x");
+            let mapping_type = format!("mapping({lhs_type} => {rhs_type})");
+            storage_map.insert(var_name, mapping_type);
+        }
+        else {
+
+            // get the type of the rhs
+            for (var, var_type) in type_map.clone().iter() {
+                if rhs.contains(var) && !var_type.is_empty() {
+                    rhs_type = var_type.to_string();
+                }
+            }
+
+            // add to type map
+            let var_name = format!("stor_{}", storage_slot.replace("0x", ""));
+            storage_map.insert(var_name, rhs_type);
+        }
     }
 
     cleaned

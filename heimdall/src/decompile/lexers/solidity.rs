@@ -1,6 +1,3 @@
-
-use std::{str::FromStr};
-
 use ethers::{
     abi::{decode, AbiEncode, ParamType},
     prelude::{
@@ -43,7 +40,7 @@ impl VMTrace {
             let memory = operation.memory.clone();
 
             let opcode_name = instruction.opcode_details.clone().unwrap().name;
-            let opcode_number = U256::from_str(&instruction.opcode).unwrap().as_usize();
+            let opcode_number = instruction.opcode;
 
             // if the instruction is a state-accessing instruction, the function is no longer pure
             if function.pure
@@ -124,11 +121,11 @@ impl VMTrace {
 
                 // check to see if the event is a duplicate
                 if !function.events.iter().any(|(selector, _)| {
-                    selector == logged_event.topics.first().unwrap()
+                    selector == &*logged_event.topics.first().unwrap()
                 }) {
                     
                     // add the event to the function
-                    function.events.insert(logged_event.topics.first().unwrap().to_string(), (None, logged_event.clone()));
+                    function.events.insert(*logged_event.topics.first().unwrap(), (None, logged_event.clone()));
 
                     // decode the data field
                     let data_mem_ops = function.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
@@ -139,10 +136,7 @@ impl VMTrace {
                     function.logic.push(format!(
                         "emit Event_{}({}{});",
                         
-                        match &logged_event.topics.first() {
-                            Some(topic) => topic,
-                            None => "00000000",
-                        },
+                        &logged_event.topics.first().unwrap_or(&U256::from(0)),
                         match logged_event.topics.get(1..) {
                             Some(topics) => match !logged_event.data.is_empty() && !topics.is_empty() {
                                 true => {
@@ -223,16 +217,13 @@ impl VMTrace {
                 let revert_logic;
 
                 // handle case with error string abiencoded
-                if revert_data.starts_with("08c379a0") {
+                if revert_data.starts_with(&decode_hex("08c379a0").unwrap()) {
                     let revert_string = match revert_data.get(8..) {
-                        Some(data) => match decode_hex(data) {
-                            Ok(hex_data) => match decode(&[ParamType::String], &hex_data) {
-                                Ok(revert) => revert[0].to_string(),
-                                Err(_) => "decoding error".to_string(),
-                            },
+                        Some(hex_data) => match decode(&[ParamType::String], &hex_data) {
+                            Ok(revert) => revert[0].to_string(),
                             Err(_) => "decoding error".to_string(),
                         },
-                        None => "".to_string(),
+                        None => "decoding error".to_string(),
                     };
                     revert_logic = match revert_conditional.clone() {
                         Some(condition) => {
@@ -264,7 +255,7 @@ impl VMTrace {
                 }
 
                 // handle case with panics
-                else if revert_data.starts_with("4e487b71") {
+                else if revert_data.starts_with(&decode_hex("4e487b71").unwrap()) {
                     continue;
                 }
 
@@ -272,8 +263,8 @@ impl VMTrace {
                 else {
                     let custom_error_placeholder = match revert_data.get(0..8) {
                         Some(selector) => {
-                            function.errors.insert(selector.to_string(), None);
-                            format!(" CustomError_{selector}()")
+                            function.errors.insert(selector.into(), None);
+                            format!(" CustomError_{}()", encode_hex_reduced(selector.into()))
                         },
                         None => "()".to_string(),
                     };

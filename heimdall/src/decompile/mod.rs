@@ -10,6 +10,7 @@ pub mod util;
 use crate::decompile::resolve::*;
 use crate::decompile::util::*;
 
+use ethers::abi::AbiEncode;
 use heimdall_cache::read_cache;
 use heimdall_cache::store_cache;
 use heimdall_common::ether::compiler::detect_compiler;
@@ -281,6 +282,16 @@ pub fn decompile(args: DecompilerArgs) {
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
         resolved_selectors = resolve_function_selectors(selectors.clone(), &logger);
+
+        // if resolved selectors are empty, we can't perform symbolic execution
+        if resolved_selectors.is_empty() {
+            logger.error(&format!(
+                "failed to resolve any function selectors from '{shortened_target}' .",
+                shortened_target = shortened_target
+            ));
+            std::process::exit(0);
+        }
+
         logger.info(&format!(
             "resolved {} possible functions from {} detected selectors.",
             resolved_selectors.len(),
@@ -292,6 +303,7 @@ pub fn decompile(args: DecompilerArgs) {
             selectors.len()
         ));
     }
+
     logger.info(&format!(
         "performing symbolic execution on '{shortened_target}' ."
     ));
@@ -329,8 +341,9 @@ pub fn decompile(args: DecompilerArgs) {
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdest_count) =
-            map_selector(&evm.clone(), selector.clone(), function_entry_point);
+        logger.debug("start mapping");
+        let (map, jumpdest_count) = map_selector(&evm.clone(), selector.clone(), function_entry_point);
+        logger.debug("done mapping");
 
         trace.add_debug(
             func_analysis_trace,
@@ -338,7 +351,7 @@ pub fn decompile(args: DecompilerArgs) {
             format!(
                 "execution tree {}",
                 match jumpdest_count {
-                    0 => "appears to be linear".to_string(),
+                    0 => {"appears to be linear".to_string()}
                     _ => format!("has {jumpdest_count} unique branches"),
                 }
             )
@@ -450,7 +463,8 @@ pub fn decompile(args: DecompilerArgs) {
                 }
             };
 
-            let matched_resolved_functions = match_parameters(resolved_functions, &analyzed_function);
+            let matched_resolved_functions =
+                match_parameters(resolved_functions, &analyzed_function);
 
             trace.br(func_analysis_trace);
             if matched_resolved_functions.is_empty() {
@@ -510,9 +524,9 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom error signatures
             let mut resolved_counter = 0;
             for (error_selector, _) in analyzed_function.errors.clone() {
-                decompilation_progress
-                    .set_message(format!("resolving error '0x{}'", &error_selector));
-                let resolved_error_selectors = resolve_error_signature(&error_selector);
+                let error_selector_str = error_selector.encode_hex().replace("0x", "");
+                decompilation_progress.set_message(format!("resolving error '0x{}'", &error_selector));
+                let resolved_error_selectors = resolve_error_signature(&error_selector_str);
 
                 // only continue if we have matches
                 if let Some(resolved_error_selectors) = resolved_error_selectors {
@@ -545,7 +559,7 @@ pub fn decompile(args: DecompilerArgs) {
                     analyzed_function
                         .errors
                         .insert(error_selector.clone(), Some(selected_match.clone()));
-                    all_resolved_errors.insert(error_selector.clone(), selected_match.clone());
+                    all_resolved_errors.insert(error_selector_str, selected_match.clone());
                 }
             }
 
@@ -566,11 +580,9 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom event signatures
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
-                decompilation_progress.set_message(format!(
-                    "resolving event '0x{}'",
-                    &event_selector.get(0..8).unwrap().to_string()
-                ));
-                let resolved_event_selectors = resolve_event_signature(&event_selector);
+                let event_selector_str = event_selector.encode_hex().replace("0x", "");
+                decompilation_progress.set_message(format!("resolving event '0x{}'", &event_selector_str));
+                let resolved_event_selectors = resolve_event_signature(&event_selector_str);
 
                 // only continue if we have matches
                 if let Some(resolved_event_selectors) = resolved_event_selectors {
@@ -604,7 +616,7 @@ pub fn decompile(args: DecompilerArgs) {
                         event_selector.clone(),
                         (Some(selected_match.clone()), raw_event),
                     );
-                    all_resolved_events.insert(event_selector, selected_match.clone());
+                    all_resolved_events.insert(event_selector_str, selected_match.clone());
                 }
             }
 
@@ -639,8 +651,7 @@ pub fn decompile(args: DecompilerArgs) {
             &mut trace,
             decompile_call,
         );
-    }
-    else {
+    } else {
         out::solidity::output(
             &args,
             output_dir,
