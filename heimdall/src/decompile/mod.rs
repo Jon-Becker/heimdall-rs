@@ -14,9 +14,10 @@ use ethers::abi::AbiEncode;
 use heimdall_cache::read_cache;
 use heimdall_cache::store_cache;
 use heimdall_common::ether::compiler::detect_compiler;
-use heimdall_common::ether::selectors::find_function_selectors;
-use heimdall_common::ether::selectors::resolve_entry_point;
-use heimdall_common::ether::selectors::resolve_function_selectors;
+use heimdall_common::ether::selectors::{
+    find_function_selectors, resolve_entry_point, resolve_function_selectors,
+};
+use heimdall_common::utils::strings::encode_hex_reduced;
 use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::env;
@@ -342,7 +343,8 @@ pub fn decompile(args: DecompilerArgs) {
 
         // get a map of possible jump destinations
         logger.debug("start mapping");
-        let (map, jumpdest_count) = map_selector(&evm.clone(), selector.clone(), function_entry_point);
+        let (map, jumpdest_count) =
+            map_selector(&evm.clone(), selector.clone(), function_entry_point);
         logger.debug("done mapping");
 
         trace.add_debug(
@@ -351,7 +353,9 @@ pub fn decompile(args: DecompilerArgs) {
             format!(
                 "execution tree {}",
                 match jumpdest_count {
-                    0 => {"appears to be linear".to_string()}
+                    0 => {
+                        "appears to be linear".to_string()
+                    }
                     _ => format!("has {jumpdest_count} unique branches"),
                 }
             )
@@ -524,8 +528,9 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom error signatures
             let mut resolved_counter = 0;
             for (error_selector, _) in analyzed_function.errors.clone() {
-                let error_selector_str = error_selector.encode_hex().replace("0x", "");
-                decompilation_progress.set_message(format!("resolving error '0x{}'", &error_selector));
+                let error_selector_str = encode_hex_reduced(error_selector).replace("0x", "");
+                decompilation_progress
+                    .set_message(format!("resolving error '0x{}'", &error_selector));
                 let resolved_error_selectors = resolve_error_signature(&error_selector_str);
 
                 // only continue if we have matches
@@ -581,7 +586,8 @@ pub fn decompile(args: DecompilerArgs) {
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
                 let event_selector_str = event_selector.encode_hex().replace("0x", "");
-                decompilation_progress.set_message(format!("resolving event '0x{}'", &event_selector_str));
+                decompilation_progress
+                    .set_message(format!("resolving event '0x{}'", &event_selector_str));
                 let resolved_event_selectors = resolve_event_signature(&event_selector_str);
 
                 // only continue if we have matches

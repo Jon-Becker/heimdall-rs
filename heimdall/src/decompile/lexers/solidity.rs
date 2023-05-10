@@ -203,9 +203,6 @@ impl VMTrace {
                 // Safely convert U256 to usize
                 let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
                 let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
-
-                println!("mem: {:?}", memory.memory);
-
                 let revert_data = memory.read(offset, size);
 
                 // (1) if revert_data starts with 0x08c379a0, the folling is an error string abiencoded
@@ -262,15 +259,13 @@ impl VMTrace {
 
                 // handle case with custom error OR empty revert
                 else {
-                    let custom_error_placeholder = match revert_data.get(0..8) {
+                    let custom_error_placeholder = match revert_data.get(0..4) {
                         Some(selector) => {
-                            function.errors.insert(selector.into(), None);
-                            format!(" CustomError_{}()", U256::from(selector).encode_hex().replace("0x", ""))
+                            function.errors.insert(U256::from(selector), None);
+                            format!(" CustomError_{}()", encode_hex_reduced(U256::from(selector)).replace("0x", ""))
                         },
                         None => "()".to_string(),
                     };
-
-                    println!("revert_data: {:?}", revert_data);
 
                     revert_logic = match revert_conditional.clone() {
                         Some(condition) => {
