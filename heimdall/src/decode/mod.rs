@@ -127,7 +127,7 @@ pub fn decode(args: DecodeArgs) {
             raw_transaction
         });
 
-        calldata = raw_transaction.input.to_string().replace("0x", "");
+        calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
     }
     else {
         calldata = args.target.clone();
@@ -381,7 +381,7 @@ pub fn decode_calldata(calldata: String) -> Option<Vec<ResolvedFunction>> {
     let (logger, _) = Logger::new("ERROR");
 
     // parse the two parts of calldata, inputs and selector
-    let function_selector = calldata.replace("0x", "").get(0..8).unwrap_or("0x00000000").to_string();
+    let function_selector = calldata.replacen("0x", "", 1).get(0..8).unwrap_or("0x00000000").to_string();
     let byte_args = match decode_hex(&calldata[8..]) {
         Ok(byte_args) => byte_args,
         Err(_) => {

@@ -597,7 +597,7 @@ fn inherit_infer_type(line: String) -> String {
                 if storage_slot.contains("keccak256") { continue; }
                 
                 // add to type map
-                let var_name = format!("stor_{}", storage_slot.replace("0x", ""));
+                let var_name = format!("stor_{}", storage_slot.replacen("0x", "", 1));
                 storage_map.insert(var_name, "bytes32".to_string());
             }
         }
@@ -682,7 +682,7 @@ fn inherit_infer_type(line: String) -> String {
             }
 
             // add to type map
-            let var_name = format!("stor_{}", storage_slot.replace("0x", ""));
+            let var_name = format!("stor_{}", storage_slot.replacen("0x", "", 1));
             storage_map.insert(var_name, rhs_type);
         }
     }

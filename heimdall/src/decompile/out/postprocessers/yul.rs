@@ -63,8 +63,8 @@ fn convert_bitmask_to_casting(line: String) -> String {
         let arg2 = args_vec[1..].join(", ");
 
         // check if arg1 or arg2 is a bitmask of all 1's
-        let is_lhs_all_ones = arg1.replace("0x", "").chars().all(|c| c == 'f' || c == 'F');
-        let is_rhs_all_ones = arg2.replace("0x", "").chars().all(|c| c == 'f' || c == 'F');
+        let is_lhs_all_ones = arg1.replacen("0x", "", 1).chars().all(|c| c == 'f' || c == 'F');
+        let is_rhs_all_ones = arg2.replacen("0x", "", 1).chars().all(|c| c == 'f' || c == 'F');
         if !is_lhs_all_ones && !is_rhs_all_ones {
             index += end_index + 1;
             continue; // skip if LHS and RHS are not bitwise masks
@@ -72,9 +72,9 @@ fn convert_bitmask_to_casting(line: String) -> String {
 
         // determine size of bytes based on argument 1
         let size_bytes = if is_lhs_all_ones {
-            (arg1.replace("0x", "").len() / 2) as u32
+            (arg1.replacen("0x", "", 1).len() / 2) as u32
         } else {
-            (arg2.replace("0x", "").len() / 2) as u32
+            (arg2.replacen("0x", "", 1).len() / 2) as u32
         };
 
         // construct new string with casting

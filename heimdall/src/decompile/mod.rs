@@ -187,7 +187,7 @@ pub fn decompile(args: DecompilerArgs) {
             bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        contract_bytecode = args.target.clone().replace("0x", "");
+        contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
         // push the address to the output directory
         if output_dir != args.output {
@@ -528,7 +528,7 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom error signatures
             let mut resolved_counter = 0;
             for (error_selector, _) in analyzed_function.errors.clone() {
-                let error_selector_str = encode_hex_reduced(error_selector).replace("0x", "");
+                let error_selector_str = encode_hex_reduced(error_selector).replacen("0x", "", 1);
                 decompilation_progress
                     .set_message(format!("resolving error '0x{}'", &error_selector));
                 let resolved_error_selectors = resolve_error_signature(&error_selector_str);
@@ -585,7 +585,7 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom event signatures
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
-                let event_selector_str = event_selector.encode_hex().replace("0x", "");
+                let event_selector_str = event_selector.encode_hex().replacen("0x", "", 1);
                 decompilation_progress
                     .set_message(format!("resolving event '0x{}'", &event_selector_str));
                 let resolved_event_selectors = resolve_event_signature(&event_selector_str);

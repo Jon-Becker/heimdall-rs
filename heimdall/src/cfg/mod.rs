@@ -172,7 +172,7 @@ pub fn cfg(args: CFGArgs) {
             bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        contract_bytecode = args.target.clone().replace("0x", "");
+        contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
         // push the address to the output directory
         if output_dir != args.output {

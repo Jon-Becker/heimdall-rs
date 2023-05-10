@@ -83,11 +83,11 @@ impl VM {
             memory: Memory::new(),
             storage: Storage::new(),
             instruction: 1,
-            bytecode: decode_hex(&bytecode.replace("0x", "")).unwrap(),
-            calldata: decode_hex(&calldata.replace("0x", "")).unwrap(),
-            address: decode_hex(&address.replace("0x", "")).unwrap(),
-            origin: decode_hex(&origin.replace("0x", "")).unwrap(),
-            caller: decode_hex(&caller.replace("0x", "")).unwrap(),
+            bytecode: decode_hex(&bytecode.replacen("0x", "", 1)).unwrap(),
+            calldata: decode_hex(&calldata.replacen("0x", "", 1)).unwrap(),
+            address: decode_hex(&address.replacen("0x", "", 1)).unwrap(),
+            origin: decode_hex(&origin.replacen("0x", "", 1)).unwrap(),
+            caller: decode_hex(&caller.replacen("0x", "", 1)).unwrap(),
             value: value,
             gas_remaining: gas_limit.max(21000) - 21000,
             gas_used: 21000,
@@ -1641,7 +1641,7 @@ impl VM {
     pub fn call(&mut self, calldata: String, value: u128) -> Result {
         // reset the VM temp state
         self.reset();
-        self.calldata = decode_hex(&calldata.replace("0x", "")).unwrap();
+        self.calldata = decode_hex(&calldata.replacen("0x", "", 1)).unwrap();
         self.value = value;
 
         self.execute()

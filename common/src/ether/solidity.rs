@@ -283,7 +283,7 @@ impl WrappedOpcode {
                     
                     // convert to usize
                     match usize::from_str_radix(
-                        &solidified_slot.replace("0x", ""),
+                        &solidified_slot.replacen("0x", "", 1),
                         16
                     ) {
                         Ok(slot) => {

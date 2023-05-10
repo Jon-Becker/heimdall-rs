@@ -135,7 +135,7 @@ impl VMTrace {
                     // will be decoded during post-processing
                     function.logic.push(format!(
                         "emit Event_{}({}{});",
-                        &logged_event.topics.first().unwrap_or(&U256::from(0)).encode_hex().replace("0x", ""),
+                        &logged_event.topics.first().unwrap_or(&U256::from(0)).encode_hex().replacen("0x", "", 1),
                         match logged_event.topics.get(1..) {
                             Some(topics) => match !logged_event.data.is_empty() && !topics.is_empty() {
                                 true => {
@@ -262,7 +262,7 @@ impl VMTrace {
                     let custom_error_placeholder = match revert_data.get(0..4) {
                         Some(selector) => {
                             function.errors.insert(U256::from(selector), None);
-                            format!(" CustomError_{}()", encode_hex_reduced(U256::from(selector)).replace("0x", ""))
+                            format!(" CustomError_{}()", encode_hex_reduced(U256::from(selector)).replacen("0x", "", 1))
                         },
                         None => "()".to_string(),
                     };
