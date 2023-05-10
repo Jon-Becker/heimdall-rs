@@ -135,8 +135,7 @@ impl VMTrace {
                     // will be decoded during post-processing
                     function.logic.push(format!(
                         "emit Event_{}({}{});",
-                        
-                        &logged_event.topics.first().unwrap_or(&U256::from(0)),
+                        &logged_event.topics.first().unwrap_or(&U256::from(0)).encode_hex().replace("0x", ""),
                         match logged_event.topics.get(1..) {
                             Some(topics) => match !logged_event.data.is_empty() && !topics.is_empty() {
                                 true => {
@@ -205,6 +204,8 @@ impl VMTrace {
                 let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
                 let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
 
+                println!("mem: {:?}", memory.memory);
+
                 let revert_data = memory.read(offset, size);
 
                 // (1) if revert_data starts with 0x08c379a0, the folling is an error string abiencoded
@@ -264,10 +265,12 @@ impl VMTrace {
                     let custom_error_placeholder = match revert_data.get(0..8) {
                         Some(selector) => {
                             function.errors.insert(selector.into(), None);
-                            format!(" CustomError_{}()", encode_hex_reduced(selector.into()))
+                            format!(" CustomError_{}()", U256::from(selector).encode_hex().replace("0x", ""))
                         },
                         None => "()".to_string(),
                     };
+
+                    println!("revert_data: {:?}", revert_data);
 
                     revert_logic = match revert_conditional.clone() {
                         Some(condition) => {

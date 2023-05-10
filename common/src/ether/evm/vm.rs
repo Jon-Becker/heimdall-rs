@@ -1590,11 +1590,8 @@ impl VM {
 
     // Executes the next instruction in the VM and returns a snapshot its the state
     pub fn step(&mut self) -> State {
-        // let start_time = Instant::now();
         let instruction = self._step();
-        // let elapsed: u128 = start_time.elapsed().as_nanos();
-        // println!("{}{:?}  ->  {:?}  TOOK {elapsed}us", &instruction.opcode_details.clone().unwrap().name, &instruction.inputs, &instruction.outputs);
-
+        
         State {
             last_instruction: instruction,
             gas_used: self.gas_used,
