@@ -139,6 +139,9 @@ pub fn decode(args: DecodeArgs) {
         std::process::exit(1);
     }
 
+    // normalize
+    let calldata = calldata.replacen("0x", "", 1);
+
     // check if the calldata length is a standard length
     if calldata.len() % 2 != 0 {
         logger.error("calldata is not a valid hex string.");
