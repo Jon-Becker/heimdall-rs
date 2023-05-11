@@ -1,5 +1,3 @@
-
-
 #[cfg(test)]
 mod logging_tests {
     use std::time::Instant;
@@ -16,10 +14,8 @@ mod logging_tests {
             "log",
             parent,
             234234,
-            vec![
-                "ContractCreated(contractAddress: 0x0000000000000000000000000000000000000000)"
-                    .to_string(),
-            ],
+            vec!["ContractCreated(contractAddress: 0x0000000000000000000000000000000000000000)"
+                .to_string()],
         );
         let inner = trace.add(
             "create",
@@ -48,12 +44,7 @@ mod logging_tests {
             ],
         );
         trace.add("log", deeper, 12344, vec!["Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x0000000000000000000000000000000000000000, amount: 1)".to_string()]);
-        trace.add(
-            "message",
-            inner,
-            12344,
-            vec!["warn: Transfer to the zero address!".to_string()],
-        );
+        trace.add("message", inner, 12344, vec!["warn: Transfer to the zero address!".to_string()]);
         trace.add(
             "message",
             parent,
@@ -65,10 +56,7 @@ mod logging_tests {
         );
 
         trace.display();
-        logger.info(&format!(
-            "Tracing took {}",
-            start_time.elapsed().as_secs_f64()
-        ));
+        logger.info(&format!("Tracing took {}", start_time.elapsed().as_secs_f64()));
     }
 
     #[test]
@@ -111,18 +99,11 @@ mod logging_tests {
         trace.add_message(
             parent,
             128,
-            vec![
-                "test multiple".to_string(),
-                "lines".to_string(),
-                "to tracing".to_string(),
-            ],
+            vec!["test multiple".to_string(), "lines".to_string(), "to tracing".to_string()],
         );
 
         trace.display();
-        logger.info(&format!(
-            "Tracing took {}",
-            start_time.elapsed().as_secs_f64()
-        ));
+        logger.info(&format!("Tracing took {}", start_time.elapsed().as_secs_f64()));
     }
 
     #[test]
@@ -132,11 +113,7 @@ mod logging_tests {
         logger.option(
             "warn",
             "multiple possibilities",
-            vec![
-                "option 1".to_string(),
-                "option 2".to_string(),
-                "option 3".to_string(),
-            ],
+            vec!["option 1".to_string(), "option 2".to_string(), "option 3".to_string()],
             Some(0),
             true,
         );

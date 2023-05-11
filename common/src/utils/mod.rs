@@ -1,4 +1,5 @@
-pub mod strings;
 pub mod http;
-pub mod time;
+pub mod integers;
+pub mod strings;
 pub mod threading;
+pub mod time;

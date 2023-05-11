@@ -1,13 +1,12 @@
 use heimdall_common::{
-    ether::{
-        signatures::{ResolvedLog}, evm::types::find_cast,
-    }, utils::strings::{find_balanced_encapsulator, split_string_by_regex},
+    ether::{evm::types::find_cast, signatures::ResolvedLog},
+    utils::strings::{find_balanced_encapsulator, split_string_by_regex},
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
 use std::{collections::HashMap, sync::Mutex};
 
-use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, ARGS_SPLIT_REGEX};
+use crate::decompile::constants::{ARGS_SPLIT_REGEX, ENCLOSED_EXPRESSION_REGEX};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -18,25 +17,25 @@ lazy_static! {
 fn remove_double_negation(line: String) -> String {
     let mut cleaned = line;
 
-    if cleaned.contains("iszero(iszero(") {         
-
+    if cleaned.contains("iszero(iszero(") {
         // find the indices of the subject
         let subject_indices = cleaned.find("iszero(iszero(").unwrap();
         let subject = cleaned[subject_indices..].to_string();
-        
+
         // get the indices of the subject's first iszero encapsulator
         let first_subject_indices = find_balanced_encapsulator(subject.to_string(), ('(', ')'));
         if first_subject_indices.2 {
-            
             // the subject to search is now the subject without the first iszero encapsulator
-            let second_subject = subject[first_subject_indices.0+1..].to_string();
+            let second_subject = subject[first_subject_indices.0 + 1..].to_string();
 
             // get the indices of the subject's second iszero encapsulator
-            let second_subject_indices = find_balanced_encapsulator(second_subject.to_string(), ('(', ')'));
+            let second_subject_indices =
+                find_balanced_encapsulator(second_subject.to_string(), ('(', ')'));
             if second_subject_indices.2 {
-
                 // the subject is now the subject without the first and second iszero encapsulators
-                let subject = second_subject[second_subject_indices.0+1..second_subject_indices.1-1].to_string();
+                let subject = second_subject
+                    [second_subject_indices.0 + 1..second_subject_indices.1 - 1]
+                    .to_string();
 
                 // replace the double negation with the subject
                 cleaned = cleaned.replace(&format!("iszero(iszero({subject}))"), &subject);
@@ -56,8 +55,9 @@ fn convert_bitmask_to_casting(line: String) -> String {
         index += found_index;
 
         // get indices of arguments
-        let (start_index, end_index, _) = find_balanced_encapsulator(cleaned[index..].to_string(), ('(', ')'));
-        let args = &cleaned[start_index + index + 1..end_index + index-1];
+        let (start_index, end_index, _) =
+            find_balanced_encapsulator(cleaned[index..].to_string(), ('(', ')'));
+        let args = &cleaned[start_index + index + 1..end_index + index - 1];
         let args_vec: Vec<&str> = args.split(", ").collect();
         let arg1 = args_vec[0];
         let arg2 = args_vec[1..].join(", ");
@@ -129,12 +129,11 @@ fn remove_replace_casts(line: String) -> String {
     loop {
         let (cast_start, cast_end, cast_type) = find_cast(cleaned.to_string());
         if let Some(cast_type) = cast_type {
-            let cast_arg = &cleaned[cast_start + 1..cast_end-1];
+            let cast_arg = &cleaned[cast_start + 1..cast_end - 1];
             let yul_cast = format!("({cast_arg}) : {cast_type}");
 
-            cleaned.replace_range(cast_start-cast_type.len()..=cast_end-1, &yul_cast);
-        }
-        else {
+            cleaned.replace_range(cast_start - cast_type.len()..=cast_end - 1, &yul_cast);
+        } else {
             break;
         }
     }
@@ -147,9 +146,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
     fn are_parentheses_unnecessary(expression: String) -> bool {
         // safely grab the first and last chars
         let first_char = expression.get(0..1).unwrap_or("");
-        let last_char = expression
-            .get(expression.len() - 1..expression.len())
-            .unwrap_or("");
+        let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
 
         // if there is a negation of an expression, remove the parentheses
         // helps with double negation
@@ -239,7 +236,6 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
             // don't increment the paren_index because we just removed a set
             cleaned = simplify_parentheses(cleaned, paren_index);
         } else {
-            
             // remove double negation, if one exists
             if cleaned.contains("!!") {
                 cleaned = cleaned.replace("!!", "");
@@ -258,21 +254,26 @@ fn add_resolved_events(line: String, all_resolved_events: HashMap<String, Resolv
 
     // skip lines that not logs
     if !cleaned.contains("log") {
-        return cleaned
+        return cleaned;
     }
 
     // get the inside of the log statement
     let log_statement = find_balanced_encapsulator(cleaned.clone(), ('(', ')'));
 
     // no balance found, break
-    if !log_statement.2 { return cleaned }
+    if !log_statement.2 {
+        return cleaned;
+    }
 
     // use ARGS_SPLIT_REGEX to split the log into its arguments
-    let log_args = split_string_by_regex(&cleaned[log_statement.0+1..log_statement.1-1], ARGS_SPLIT_REGEX.clone());
+    let log_args = split_string_by_regex(
+        &cleaned[log_statement.0 + 1..log_statement.1 - 1],
+        ARGS_SPLIT_REGEX.clone(),
+    );
 
-    // get the event matching the log's selector 
+    // get the event matching the log's selector
     for (selector, resolved_event) in all_resolved_events.iter() {
-        if log_args.contains(&format!("0x{selector}")) {       
+        if log_args.contains(&format!("0x{selector}")) {
             cleaned = format!(
                 "\n/* \"{}({})\" */\n{}",
                 resolved_event.name,
@@ -285,10 +286,7 @@ fn add_resolved_events(line: String, all_resolved_events: HashMap<String, Resolv
     cleaned
 }
 
-fn cleanup(
-    line: String,
-    all_resolved_events: HashMap<String, ResolvedLog>,
-) -> String {
+fn cleanup(line: String, all_resolved_events: HashMap<String, ResolvedLog>) -> String {
     let mut cleaned = line;
 
     // skip comments
@@ -340,10 +338,7 @@ pub fn postprocess(
         }
 
         // cleanup the line
-        let cleaned = cleanup(
-            line.to_string(),
-            all_resolved_events.clone(),
-        );
+        let cleaned = cleanup(line.to_string(), all_resolved_events.clone());
 
         // apply postprocessing and indentation
         *line = format!(
@@ -353,14 +348,7 @@ pub fn postprocess(
         );
 
         // indent due to opening braces
-        if line
-            .split("//")
-            .collect::<Vec<&str>>()
-            .first()
-            .unwrap()
-            .trim()
-            .ends_with('{')
-        {
+        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with('{') {
             indentation += 1;
         }
     }

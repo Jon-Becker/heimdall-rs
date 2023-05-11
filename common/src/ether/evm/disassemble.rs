@@ -1,21 +1,20 @@
 use std::env;
 use std::fs;
 
-use clap::{AppSettings, Parser};
-use ethers::{
-    core::types::{Address},
-    providers::{Middleware, Provider, Http},
-};
-use heimdall_cache::read_cache;
-use heimdall_cache::store_cache;
 use crate::utils::strings::decode_hex;
 use crate::utils::strings::encode_hex;
 use crate::{
-    constants::{ ADDRESS_REGEX, BYTECODE_REGEX },
-    io::{ logging::*, file::* },
-    ether::evm::{ opcodes::opcode }
+    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
+    ether::evm::opcodes::opcode,
+    io::{file::*, logging::*},
 };
-
+use clap::{AppSettings, Parser};
+use ethers::{
+    core::types::Address,
+    providers::{Http, Middleware, Provider},
+};
+use heimdall_cache::read_cache;
+use heimdall_cache::store_cache;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Disassemble EVM bytecode to Assembly",
@@ -23,35 +22,32 @@ use crate::{
        global_setting = AppSettings::DeriveDisplayOrder, 
        override_usage = "heimdall disassemble <TARGET> [OPTIONS]")]
 pub struct DisassemblerArgs {
-    
     /// The target to disassemble, either a file, bytecode, contract address, or ENS name.
-    #[clap(required=true)]
+    #[clap(required = true)]
     pub target: String,
 
     /// Set the output verbosity level, 1 - 5.
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
-    
+
     /// The output directory to write the disassembled bytecode to
-    #[clap(long="output", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
     pub output: String,
 
     /// The RPC provider to use for fetching target bytecode.
-    #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
-
 }
-
 
 pub fn disassemble(args: DisassemblerArgs) -> String {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, _) = Logger::new(args.verbose.log_level().unwrap().as_str());
 
     // parse the output directory
     let mut output_dir: String;
@@ -64,24 +60,19 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
             }
         };
         output_dir.push_str("/output");
-    }
-    else {
+    } else {
         output_dir = args.output.clone();
     }
 
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-
         // push the address to the output directory
         if output_dir != args.output {
             output_dir.push_str(&format!("/{}", &args.target));
         }
 
         // create new runtime block
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();    
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
         // We are disassembling a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
@@ -130,13 +121,9 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
 
             bytecode_as_bytes.to_string()
         });
-        
-    }
-    else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
+    } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target;
-    }
-    else {
-
+    } else {
         // push the address to the output directory
         if output_dir != args.output {
             output_dir.push_str("/local");
@@ -144,15 +131,15 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
 
         // We are disassembling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
-            Ok(contents) => {                
+            Ok(contents) => {
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents
-                }
-                else {
-                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
+                } else {
+                    logger
+                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
                     std::process::exit(1)
                 }
-            },
+            }
             Err(_) => {
                 logger.error(&format!("failed to open file '{}' .", &args.target));
                 std::process::exit(1)
@@ -166,25 +153,25 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
     // Iterate over the bytecode, disassembling each instruction.
     let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1)).unwrap();
 
-    while program_counter < byte_array.len(){
-
+    while program_counter < byte_array.len() {
         let operation = opcode(byte_array[program_counter]);
         let mut pushed_bytes: String = String::new();
 
         if operation.name.contains("PUSH") {
             let byte_count_to_push: u8 = operation.name.replace("PUSH", "").parse().unwrap();
-        
-            pushed_bytes = match  byte_array.get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize) {
+
+            pushed_bytes = match byte_array
+                .get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize)
+            {
                 Some(bytes) => encode_hex(bytes.to_vec()),
-                None => {
-                    break
-                }
+                None => break,
             };
             program_counter += byte_count_to_push as usize;
         }
-        
 
-        output.push_str(format!("{} {} {}\n", program_counter, operation.name, pushed_bytes).as_str());
+        output.push_str(
+            format!("{} {} {}\n", program_counter, operation.name, pushed_bytes).as_str(),
+        );
         program_counter += 1;
     }
 
@@ -197,6 +184,6 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
 
     // log the time it took to disassemble the bytecode
     logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
-    
+
     output
 }

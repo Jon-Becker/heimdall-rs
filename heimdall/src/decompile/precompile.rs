@@ -9,7 +9,6 @@ pub fn decode_precompile(
     extcalldata_memory: Vec<StorageFrame>,
     return_data_offset: WrappedOpcode,
 ) -> (bool, String) {
-
     // safely convert the precompile address to a usize.
     let address: usize = match precompile_address.try_into() {
         Ok(x) => x,
@@ -24,7 +23,11 @@ pub fn decode_precompile(
             ext_call_logic = format!(
                 "address memory[{}] = ecrecover({});",
                 return_data_offset.solidify(),
-                extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
+                extcalldata_memory
+                    .iter()
+                    .map(|x| x.operations.solidify())
+                    .collect::<Vec<String>>()
+                    .join(", ")
             );
         }
         2 => {
@@ -32,7 +35,11 @@ pub fn decode_precompile(
             ext_call_logic = format!(
                 "bytes memory[{}] = sha256({});",
                 return_data_offset.solidify(),
-                extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
+                extcalldata_memory
+                    .iter()
+                    .map(|x| x.operations.solidify())
+                    .collect::<Vec<String>>()
+                    .join(", ")
             );
         }
         3 => {
@@ -40,7 +47,11 @@ pub fn decode_precompile(
             ext_call_logic = format!(
                 "bytes memory[{}] = ripemd160({});",
                 return_data_offset.solidify(),
-                extcalldata_memory.iter().map(|x| x.operations.solidify()).collect::<Vec<String>>().join(", ")
+                extcalldata_memory
+                    .iter()
+                    .map(|x| x.operations.solidify())
+                    .collect::<Vec<String>>()
+                    .join(", ")
             );
         }
         _ => {}

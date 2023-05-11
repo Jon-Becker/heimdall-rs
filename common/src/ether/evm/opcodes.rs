@@ -1,5 +1,5 @@
-use std::fmt::{Display, Formatter, Result};
 use ethers::types::U256;
+use std::fmt::{Display, Formatter, Result};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Opcode {
@@ -157,7 +157,7 @@ pub fn opcode(code: u8) -> Opcode {
         0xfd => Opcode { code: code, name: "REVERT", mingas: 0, inputs: 2, outputs: 0 },
         0xfe => Opcode { code: code, name: "INVALID", mingas: 0, inputs: 0, outputs: 0 },
         0xff => Opcode { code: code, name: "SELFDESTRUCT", mingas: 5000, inputs: 1, outputs: 0 },
-        _ => Opcode { code: code, name: "unknown", mingas: 0, inputs: 0, outputs: 0, },
+        _ => Opcode { code: code, name: "unknown", mingas: 0, inputs: 0, outputs: 0 },
     }
 }
 
@@ -177,11 +177,14 @@ pub struct WrappedOpcode {
 
 // implements pretty printing for WrappedOpcodes
 impl Display for WrappedOpcode {
-
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "{}({})", self.opcode.name, self.inputs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "))
+        write!(
+            f,
+            "{}({})",
+            self.opcode.name,
+            self.inputs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")
+        )
     }
-
 }
 
 impl Display for WrappedInput {

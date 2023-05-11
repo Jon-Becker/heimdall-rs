@@ -1,10 +1,13 @@
-use std::{io::Read, time::{Instant, Duration}};
+use std::{
+    io::Read,
+    time::{Duration, Instant},
+};
 
 use indicatif::ProgressBar;
-use reqwest::header::{HeaderMap};
+use reqwest::header::HeaderMap;
 use serde_json::Value;
 
-use crate::{io::logging::Logger};
+use crate::io::logging::Logger;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,7 +21,7 @@ struct TransposeStats {
 struct TransposeResponse {
     status: String,
     stats: TransposeStats,
-    results: Vec<Value>
+    results: Vec<Value>,
 }
 
 fn _call_transpose(query: String, api_key: &String, logger: &Logger) -> Option<TransposeResponse> {
@@ -28,10 +31,10 @@ fn _call_transpose(query: String, api_key: &String, logger: &Logger) -> Option<T
 
     // make the request
     let client = reqwest::blocking::Client::builder()
-    .redirect(reqwest::redirect::Policy::none())
-    .timeout(Duration::from_secs(999999999))
-    .build()
-    .unwrap();
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(999999999))
+        .build()
+        .unwrap();
 
     let mut response = match client
         .post("https://api.transpose.io/sql")
@@ -50,18 +53,16 @@ fn _call_transpose(query: String, api_key: &String, logger: &Logger) -> Option<T
     // parse body
     let mut body = String::new();
     match response.read_to_string(&mut body) {
-        Ok(_) => {
-            Some(match serde_json::from_str(&body) {
-                Ok(json) => json,
-                Err(e) => {
-                    logger.error("Transpose request unsucessful.");
-                    logger.debug(&format!("curl: curl -X GET \"https://api.transpose.io/sql\" -H \"accept: application/json\" -H \"Content-Type: application/json\" -H \"X-API-KEY: {api_key}\" -d {query}"));
-                    logger.error(&format!("error: {e}"));
-                    logger.debug(&format!("response body: {body:?}"));
-                    std::process::exit(1)
-                }
-            })
-        },
+        Ok(_) => Some(match serde_json::from_str(&body) {
+            Ok(json) => json,
+            Err(e) => {
+                logger.error("Transpose request unsucessful.");
+                logger.debug(&format!("curl: curl -X GET \"https://api.transpose.io/sql\" -H \"accept: application/json\" -H \"Content-Type: application/json\" -H \"X-API-KEY: {api_key}\" -d {query}"));
+                logger.error(&format!("error: {e}"));
+                logger.debug(&format!("response body: {body:?}"));
+                std::process::exit(1)
+            }
+        }),
         Err(e) => {
             logger.error("failed to parse Transpose response body.");
             logger.error(&format!("error: {e}"));
@@ -76,9 +77,8 @@ pub fn get_transaction_list(
     address: &String,
     api_key: &String,
     bounds: (&u128, &u128),
-    logger: &Logger
+    logger: &Logger,
 ) -> Vec<(u128, String)> {
-    
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
     transaction_list_progress.enable_steady_tick(Duration::from_millis(100));
@@ -97,11 +97,7 @@ pub fn get_transaction_list(
         bounds.1
     );
 
-    let response = match _call_transpose(
-        query,
-        api_key,
-        logger
-    ) {
+    let response = match _call_transpose(query, api_key, logger) {
         Some(response) => response,
         None => {
             logger.error("failed to get transaction list from Transpose");
@@ -156,9 +152,8 @@ pub fn get_contract_creation(
     chain: &String,
     address: &String,
     api_key: &String,
-    logger: &Logger
+    logger: &Logger,
 ) -> Option<(u128, String)> {
-    
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
     transaction_list_progress.enable_steady_tick(Duration::from_millis(100));
@@ -171,11 +166,7 @@ pub fn get_contract_creation(
         "{{\"sql\":\"SELECT block_number, transaction_hash FROM {chain}.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM {chain}.accounts WHERE address = '{address}' ) AND contract_address = '{address}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
     );
 
-    let response = match _call_transpose(
-        query,
-        api_key,
-        logger
-    ) {
+    let response = match _call_transpose(query, api_key, logger) {
         Some(response) => response,
         None => {
             logger.error("failed to get creation tx from Transpose");

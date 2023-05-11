@@ -37,10 +37,7 @@ pub struct Trace {
 impl TraceFactory {
     // creates a new empty trace factory
     pub fn new(level: u8) -> TraceFactory {
-        TraceFactory {
-            level: level,
-            traces: Vec::new(),
-        }
+        TraceFactory { level: level, traces: Vec::new() }
     }
 
     // adds a new trace to the factory
@@ -99,9 +96,7 @@ impl TraceFactory {
                 // print the trace title
                 println!(
                     "{} {} {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─")
-                        .bold()
-                        .bright_white(),
+                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
                     trace.message.get(0).unwrap()
                 );
@@ -121,11 +116,7 @@ impl TraceFactory {
                     match trace.message.get(1) {
                         Some(message) => format!(
                             "{}",
-                            if message == "()" {
-                                message.dimmed()
-                            } else {
-                                message.green()
-                            }
+                            if message == "()" { message.dimmed() } else { message.green() }
                         ),
                         None => "()".dimmed().to_string(),
                     }
@@ -134,9 +125,7 @@ impl TraceFactory {
             TraceCategory::Log => {
                 println!(
                     "{} emit {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─")
-                        .bold()
-                        .bright_white(),
+                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
                     trace.message.get(0).unwrap()
                 );
             }
@@ -148,13 +137,9 @@ impl TraceFactory {
                         println!(
                             "{} {} {}: {}",
                             if message_index == 0 {
-                                replace_last(prefix.to_string(), "│ ", " ├─")
-                                    .bold()
-                                    .bright_white()
+                                replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white()
                             } else {
-                                replace_last(prefix.to_string(), "│ ", " │ ")
-                                    .bold()
-                                    .bright_white()
+                                replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white()
                             },
                             if message_index == 0 { "emit" } else { "    " },
                             format!("topic {message_index}").purple(),
@@ -170,9 +155,7 @@ impl TraceFactory {
                 } else {
                     println!(
                         "{} emit {}: {}",
-                        replace_last(prefix.to_string(), "│ ", " ├─")
-                            .bold()
-                            .bright_white(),
+                        replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
                         "data".purple(),
                         trace.message.last().unwrap()
                     );
@@ -184,17 +167,11 @@ impl TraceFactory {
                     println!(
                         "{} {}",
                         if prefix.ends_with("└─") {
-                            prefix.to_string()
-                                .bold()
-                                .bright_white()
+                            prefix.to_string().bold().bright_white()
                         } else if message_index == 0 {
-                            replace_last(prefix.to_string(), "│ ", " ├─")
-                                .bold()
-                                .bright_white()
+                            replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white()
                         } else {
-                            replace_last(prefix.to_string(), "│ ", " │ ")
-                                .bold()
-                                .bright_white()
+                            replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white()
                         },
                         message
                     );
@@ -202,7 +179,6 @@ impl TraceFactory {
 
                 // print the children
                 for (i, child) in trace.children.iter().enumerate() {
-
                     if i == trace.children.len() - 1 {
                         self.print_trace(
                             &format!("{prefix}   └─").bold().bright_white(),
@@ -214,23 +190,15 @@ impl TraceFactory {
                             *child as usize - 1,
                         );
                     }
-                    
                 }
             }
             TraceCategory::Empty => {
-                println!(
-                    "{}",
-                    replace_last(prefix.to_string(), "│ ", " │ ")
-                        .bold()
-                        .bright_white()
-                );
+                println!("{}", replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white());
             }
             TraceCategory::Create => {
                 println!(
                     "{} {} create → {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─")
-                        .bold()
-                        .bright_white(),
+                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
                     trace.message.get(0).unwrap()
                 );
@@ -286,12 +254,7 @@ impl TraceFactory {
         size: u128,
     ) -> u32 {
         let contract = format!("{}@{}", name.green(), pointer.green(),);
-        self.add(
-            "create",
-            parent_index,
-            instruction,
-            vec![contract, format!("{size} bytes")],
-        )
+        self.add("create", parent_index, instruction, vec![contract, format!("{size} bytes")])
     }
 
     // adds a known log trace
@@ -397,11 +360,7 @@ impl Logger {
     }
 
     pub fn fatal(&self, message: &str) {
-        println!(
-            "{}: {}",
-            "fatal".bright_white().on_bright_red().bold(),
-            message
-        );
+        println!("{}: {}", "fatal".bright_white().on_bright_red().bold(), message);
     }
 
     pub fn success(&self, message: &str) {

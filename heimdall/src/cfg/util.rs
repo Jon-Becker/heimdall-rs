@@ -24,10 +24,7 @@ pub fn map_contract(evm: &VM) -> (VMTrace, u32) {
 
     // the VM is at the function entry point, begin tracing
     let mut branch_count = 0;
-    (
-        recursive_map(&vm, &mut branch_count, &mut HashMap::new()),
-        branch_count,
-    )
+    (recursive_map(&vm, &mut branch_count, &mut HashMap::new()), branch_count)
 }
 
 pub fn recursive_map(
@@ -81,7 +78,6 @@ pub fn recursive_map(
             match handled_jumps.get(&jump_frame) {
                 Some(historical_stacks) => {
                     if historical_stacks.iter().any(|stack| {
-
                         // compare stacks
                         let mut stack_diff = Vec::new();
                         for (i, frame) in vm.stack.stack.iter().enumerate() {
@@ -92,8 +88,9 @@ pub fn recursive_map(
                                 for stack_frame in stack.iter() {
                                     let solidified_frame = frame.operation.solidify();
                                     let solidified_stack_frame = stack_frame.operation.solidify();
-                                    
-                                    if similarity(&solidified_frame, &solidified_stack_frame) > 0.9 {
+
+                                    if similarity(&solidified_frame, &solidified_stack_frame) > 0.9
+                                    {
                                         return true;
                                     }
                                 }
@@ -101,30 +98,38 @@ pub fn recursive_map(
                         }
 
                         if !stack_diff.is_empty() {
-                    
                             // check if all stack diff values are in the jump condition
-                            let jump_condition = state.last_instruction.input_operations[1].solidify();
+                            let jump_condition =
+                                state.last_instruction.input_operations[1].solidify();
 
                             // if the stack diff is within the jump condition, its likely that we are in a loop
-                            if stack_diff.iter().map(|frame| frame.operation.solidify()).any(|solidified| jump_condition.contains(&solidified)) {
+                            if stack_diff
+                                .iter()
+                                .map(|frame| frame.operation.solidify())
+                                .any(|solidified| jump_condition.contains(&solidified))
+                            {
                                 return true;
                             }
 
                             // if we repeat conditionals, its likely that we are in a loop
                             if stack_diff.iter().any(|frame| {
                                 let solidified = frame.operation.solidify();
-                                jump_condition.contains(&solidified) && jump_condition.matches(&solidified).count() > 1
+                                jump_condition.contains(&solidified)
+                                    && jump_condition.matches(&solidified).count() > 1
                             }) {
                                 return true;
                             }
-                            
+
                             // if a memory access in the jump condition is modified by the stack diff, its likely that we are in a loop
                             let mut memory_accesses = MEMORY_REGEX.find_iter(&jump_condition);
                             if stack_diff.iter().any(|frame| {
                                 memory_accesses.any(|_match| {
-                                    if _match.is_err() { return false; }
+                                    if _match.is_err() {
+                                        return false;
+                                    }
                                     let memory_access = _match.unwrap();
-                                    let slice = &jump_condition[memory_access.start()..memory_access.end()];
+                                    let slice =
+                                        &jump_condition[memory_access.start()..memory_access.end()];
                                     frame.operation.solidify().contains(slice)
                                 })
                             }) {
@@ -135,9 +140,12 @@ pub fn recursive_map(
                             let mut storage_accesses = STORAGE_REGEX.find_iter(&jump_condition);
                             if stack_diff.iter().any(|frame| {
                                 storage_accesses.any(|_match| {
-                                    if _match.is_err() { return false; }
+                                    if _match.is_err() {
+                                        return false;
+                                    }
                                     let storage_access = _match.unwrap();
-                                    let slice = &jump_condition[storage_access.start()..storage_access.end()];
+                                    let slice = &jump_condition
+                                        [storage_access.start()..storage_access.end()];
                                     frame.operation.solidify().contains(slice)
                                 })
                             }) {
@@ -145,23 +153,21 @@ pub fn recursive_map(
                             }
 
                             false
-                        }
-                        else {
+                        } else {
                             true
                         }
                     }) {
                         vm_trace.loop_detected = true;
                         return vm_trace;
-                    }
-                    else {
+                    } else {
                         // this key exists, but the stack is different, so the jump is new
-                        let historical_stacks: &mut Vec<VecDeque<StackFrame>> = &mut historical_stacks.clone();
+                        let historical_stacks: &mut Vec<VecDeque<StackFrame>> =
+                            &mut historical_stacks.clone();
                         historical_stacks.push(vm.stack.stack.clone());
                         handled_jumps.insert(jump_frame, historical_stacks.to_vec());
                     }
-                },
+                }
                 None => {
-
                     // this key doesnt exist, so the jump is new
                     handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
                 }
@@ -174,27 +180,19 @@ pub fn recursive_map(
                 // push a new vm trace to the children
                 let mut trace_vm = vm.clone();
                 trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
-                vm_trace
-                    .children
-                    .push(recursive_map(&trace_vm, branch_count, handled_jumps));
+                vm_trace.children.push(recursive_map(&trace_vm, branch_count, handled_jumps));
 
                 // push the current path onto the stack
-                vm_trace
-                    .children
-                    .push(recursive_map(&vm.clone(), branch_count, handled_jumps));
+                vm_trace.children.push(recursive_map(&vm.clone(), branch_count, handled_jumps));
                 break;
             } else {
                 // push a new vm trace to the children
                 let mut trace_vm = vm.clone();
                 trace_vm.instruction = state.last_instruction.instruction + 1;
-                vm_trace
-                    .children
-                    .push(recursive_map(&trace_vm, branch_count, handled_jumps));
+                vm_trace.children.push(recursive_map(&trace_vm, branch_count, handled_jumps));
 
                 // push the current path onto the stack
-                vm_trace
-                    .children
-                    .push(recursive_map(&vm.clone(), branch_count, handled_jumps));
+                vm_trace.children.push(recursive_map(&vm.clone(), branch_count, handled_jumps));
                 break;
             }
         }

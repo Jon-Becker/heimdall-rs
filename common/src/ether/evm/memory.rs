@@ -28,7 +28,6 @@ impl Memory {
 
     // stores a bytearray in the memory at offset
     pub fn store(&mut self, mut offset: usize, mut size: usize, value: &[u8]) {
-
         // Cap offset and size to 2**16
         offset = offset.min(65536);
         size = size.min(65536);
@@ -40,7 +39,7 @@ impl Memory {
             value[..size].to_vec()
         } else {
             let mut value = value.to_vec();
-            
+
             // prepend null bytes until the value is the desired size
             // ex, ff with size 4 -> 00 00 00 ff
             let null_bytes = vec![0u8; size - value_len];

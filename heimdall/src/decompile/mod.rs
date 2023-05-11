@@ -97,10 +97,7 @@ pub fn decompile(args: DecompilerArgs) {
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>()
             + "..."
-            + &shortened_target
-                .chars()
-                .skip(shortened_target.len() - 16)
-                .collect::<String>();
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let decompile_call = trace.add_call(
         0,
@@ -134,10 +131,7 @@ pub fn decompile(args: DecompilerArgs) {
         }
 
         // create new runtime block
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
         // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
@@ -200,10 +194,8 @@ pub fn decompile(args: DecompilerArgs) {
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents.replacen("0x", "", 1)
                 } else {
-                    logger.error(&format!(
-                        "file '{}' doesn't contain valid bytecode.",
-                        &args.target
-                    ));
+                    logger
+                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
                     std::process::exit(1)
                 }
             }
@@ -245,9 +237,8 @@ pub fn decompile(args: DecompilerArgs) {
     if compiler == "solc" {
         logger.debug(&format!("detected compiler {compiler} {version}."));
     } else {
-        logger.warn(&format!(
-            "detected compiler {compiler} {version} is not supported by heimdall."
-        ));
+        logger
+            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
     // create a new EVM instance
@@ -264,10 +255,7 @@ pub fn decompile(args: DecompilerArgs) {
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>()
             + "..."
-            + &shortened_target
-                .chars()
-                .skip(shortened_target.len() - 16)
-                .collect::<String>();
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let vm_trace = trace.add_creation(
         decompile_call,
@@ -299,15 +287,10 @@ pub fn decompile(args: DecompilerArgs) {
             selectors.len()
         ));
     } else {
-        logger.info(&format!(
-            "found {} possible function selectors.",
-            selectors.len()
-        ));
+        logger.info(&format!("found {} possible function selectors.", selectors.len()));
     }
 
-    logger.info(&format!(
-        "performing symbolic execution on '{shortened_target}' ."
-    ));
+    logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
 
     // get a new progress bar
     let decompilation_progress = ProgressBar::new_spinner();
@@ -436,11 +419,7 @@ pub fn decompile(args: DecompilerArgs) {
                     vec![format!(
                         "parameter {} {} {} bytes. {}",
                         frame.slot,
-                        if frame.mask_size == 32 {
-                            "has size of"
-                        } else {
-                            "is masked to"
-                        },
+                        if frame.mask_size == 32 { "has size of" } else { "is masked to" },
                         frame.mask_size,
                         if !frame.heuristics.is_empty() {
                             format!("heuristics suggest param used as '{}'", frame.heuristics[0])
@@ -511,11 +490,7 @@ pub fn decompile(args: DecompilerArgs) {
                     format!(
                         "{} resolved signature{} matched this function's parameters",
                         matched_resolved_functions.len(),
-                        if matched_resolved_functions.len() > 1 {
-                            "s"
-                        } else {
-                            ""
-                        }
+                        if matched_resolved_functions.len() > 1 { "s" } else { "" }
                     )
                     .to_string(),
                 );
@@ -618,10 +593,9 @@ pub fn decompile(args: DecompilerArgs) {
                         };
 
                     resolved_counter += 1;
-                    analyzed_function.events.insert(
-                        event_selector.clone(),
-                        (Some(selected_match.clone()), raw_event),
-                    );
+                    analyzed_function
+                        .events
+                        .insert(event_selector.clone(), (Some(selected_match.clone()), raw_event));
                     all_resolved_events.insert(event_selector_str, selected_match.clone());
                 }
             }

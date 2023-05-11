@@ -13,7 +13,7 @@ lazy_static! {
         "string".to_string(),
         "uint256".to_string()
     ];
-    
+
     pub static ref ABOUT_TEXT: Vec<String> = vec![
         format!("heimdall-rs v{}", env!("CARGO_PKG_VERSION")),
         "By Jonathan Becker <jonathan@jbecker.dev>".to_string(),

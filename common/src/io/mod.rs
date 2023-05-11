@@ -1,4 +1,4 @@
-pub mod logging;
-pub mod file;
-mod tests;
 pub mod clipboard;
+pub mod file;
+pub mod logging;
+mod tests;

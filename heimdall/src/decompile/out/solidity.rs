@@ -9,11 +9,10 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 
-use super::{super::{
-    constants::DECOMPILED_SOURCE_HEADER_SOL,
-    util::Function,
-    DecompilerArgs,
-}, postprocessers::solidity::postprocess};
+use super::{
+    super::{constants::DECOMPILED_SOURCE_HEADER_SOL, util::Function, DecompilerArgs},
+    postprocessers::solidity::postprocess,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
@@ -297,10 +296,7 @@ pub fn output(
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>()
             + "..."
-            + &shortened_target
-                .chars()
-                .skip(shortened_target.len() - 16)
-                .collect::<String>();
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     trace.add_call(
@@ -315,7 +311,7 @@ pub fn output(
     // write the header to the output file
     decompiled_output.push(DECOMPILED_SOURCE_HEADER_SOL.replace("{}", env!("CARGO_PKG_VERSION")));
     decompiled_output.push(String::from("contract DecompiledContract {"));
-    
+
     // add blank line if there are events
     if abi.iter().any(|x| matches!(x, ABIStructure::Event(_))) {
         decompiled_output.push(String::from(""));
@@ -327,7 +323,8 @@ pub fn output(
             decompiled_output.push(format!(
                 "event {}({});",
                 event.name,
-                event.inputs
+                event
+                    .inputs
                     .iter()
                     .map(|x| format!("{} {}", x.type_, x.name))
                     .collect::<Vec<String>>()
@@ -347,7 +344,8 @@ pub fn output(
             decompiled_output.push(format!(
                 "error {}({});",
                 error.name,
-                error.inputs
+                error
+                    .inputs
                     .iter()
                     .map(|x| format!("{} {}", x.type_, x.name))
                     .collect::<Vec<String>>()
@@ -355,7 +353,6 @@ pub fn output(
             ));
         }
     }
-    
 
     for function in functions {
         progress_bar.set_message(format!("writing logic for '0x{}'", function.selector));
@@ -408,11 +405,7 @@ pub fn output(
                         .collect::<Vec<String>>()
                         .join(", "),
                     function_modifiers,
-                    if function.returns.is_some() {
-                        function_returns
-                    } else {
-                        String::from("{")
-                    },
+                    if function.returns.is_some() { function_returns } else { String::from("{") },
                 )
             }
             None => {
@@ -443,11 +436,7 @@ pub fn output(
                         .collect::<Vec<String>>()
                         .join(", "),
                     function_modifiers,
-                    if function.returns.is_some() {
-                        function_returns
-                    } else {
-                        String::from("{")
-                    },
+                    if function.returns.is_some() { function_returns } else { String::from("{") },
                 )
             }
         };
@@ -458,11 +447,7 @@ pub fn output(
             format!("/// @custom:selector    0x{}", function.selector),
             format!(
                 "/// @custom:name        {}",
-                function_header
-                    .replace("function ", "")
-                    .split('(')
-                    .next()
-                    .unwrap()
+                function_header.replace("function ", "").split('(').next().unwrap()
             ),
         ]);
 
@@ -475,9 +460,7 @@ pub fn output(
         sorted_arguments.sort_by(|x, y| x.0.cmp(&y.0));
 
         for (index, (_, solidity_type)) in sorted_arguments {
-            decompiled_output.push(format!(
-                "/// @param              arg{index} {solidity_type:?}"
-            ));
+            decompiled_output.push(format!("/// @param              arg{index} {solidity_type:?}"));
         }
 
         decompiled_output.push(function_header);
@@ -493,17 +476,9 @@ pub fn output(
     if args.include_solidity {
         write_lines_to_file(
             &decompiled_output_path,
-            postprocess(
-                decompiled_output,
-                all_resolved_errors,
-                all_resolved_events,
-                &progress_bar,
-            ),
+            postprocess(decompiled_output, all_resolved_errors, all_resolved_events, &progress_bar),
         );
-        logger.success(&format!(
-            "wrote decompiled contract to '{}' .",
-            &decompiled_output_path
-        ));
+        logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path));
         progress_bar.finish_and_clear();
     } else {
         progress_bar.finish_and_clear();

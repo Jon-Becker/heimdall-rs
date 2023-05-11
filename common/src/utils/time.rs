@@ -1,5 +1,4 @@
 pub fn calculate_eta(items_per_second: f64, items_remaining: usize) -> u128 {
-
     (items_remaining as f64 / items_per_second) as u128
 }
 

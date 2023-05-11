@@ -1,10 +1,10 @@
-use std::{time::Duration, process::Command};
+use std::{process::Command, time::Duration};
 
-use heimdall_common::{io::{logging::{Logger}, file::{write_file}}};
+use heimdall_common::io::{file::write_file, logging::Logger};
 use indicatif::ProgressBar;
-use petgraph::{graph::Graph, dot::{Dot}};
+use petgraph::{dot::Dot, graph::Graph};
 
-use super::{CFGArgs};
+use super::CFGArgs;
 
 pub fn build_output(
     contract_cfg: &Graph<String, String>,
@@ -18,10 +18,7 @@ pub fn build_output(
     progress_bar.set_message("writing CFG .dot file".to_string());
 
     let dot_output_path = format!("{output_dir}/cfg.dot");
-    let output = format!(
-        "{}",
-        Dot::with_config(&contract_cfg, &[])
-    );
+    let output = format!("{}", Dot::with_config(&contract_cfg, &[]));
 
     // find regex matches and replace
     let mut output = output.replace(
@@ -30,13 +27,10 @@ pub fn build_output(
     );
 
     if args.color_edges {
-
         // replace edge labels with colors
         output = output.replace("[ label = \"true\" ]", "[ color = \"green\" ]");
         output = output.replace("[ label = \"false\" ]", "[ color = \"red\" ]");
-    }
-    else {
-            
+    } else {
         // remove edge labels
         output = output.replace("[ label = \"true\" ]", "[]");
         output = output.replace("[ label = \"false\" ]", "[]");
@@ -51,49 +45,52 @@ pub fn build_output(
     });
 
     if !args.format.is_empty() {
-
         // check for graphviz
         match Command::new("dot").spawn() {
             Ok(_) => {
                 progress_bar.set_message(format!("generating CFG .{} file", &args.format));
 
                 let image_output_path = format!("{}/cfg.{}", output_dir, &args.format);
-                match Command::new("dot")
-                    .arg("-T")
-                    .arg(&args.format)
-                    .arg(&dot_output_path)
-                    .output()
+                match Command::new("dot").arg("-T").arg(&args.format).arg(&dot_output_path).output()
                 {
                     Ok(output) => {
                         match String::from_utf8(output.stdout) {
                             Ok(output) => {
-
                                 // write the output
                                 write_file(&image_output_path, &output);
                                 progress_bar.suspend(|| {
-                                    logger.success(&format!("wrote generated {} to '{}' .", &args.format, &image_output_path));
+                                    logger.success(&format!(
+                                        "wrote generated {} to '{}' .",
+                                        &args.format, &image_output_path
+                                    ));
                                 });
-                            },
+                            }
                             Err(_) => {
                                 progress_bar.suspend(|| {
-                                    logger.error(&format!("graphviz failed to generate {} file.", &args.format));
+                                    logger.error(&format!(
+                                        "graphviz failed to generate {} file.",
+                                        &args.format
+                                    ));
                                 });
-                            },
+                            }
                         }
-                    },
+                    }
                     Err(_) => {
                         progress_bar.suspend(|| {
-                            logger.error(&format!("graphviz failed to generate {} file.", &args.format));
+                            logger.error(&format!(
+                                "graphviz failed to generate {} file.",
+                                &args.format
+                            ));
                         });
-                    },
+                    }
                 }
-            },
+            }
             Err(_) => {
                 progress_bar.suspend(|| {
                     logger.error("graphviz doesn't appear to be installed. please install graphviz to generate images.");
                 });
-            }, 
-        }        
+            }
+        }
     }
 
     progress_bar.finish_and_clear();

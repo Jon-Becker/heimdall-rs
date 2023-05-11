@@ -1,4 +1,4 @@
-use std::{collections::VecDeque};
+use std::collections::VecDeque;
 
 use ethers::prelude::U256;
 
@@ -20,19 +20,12 @@ pub struct StackFrame {
 
 impl Stack {
     pub fn new() -> Stack {
-        Stack {
-            stack: VecDeque::new(),
-        }
+        Stack { stack: VecDeque::new() }
     }
 
     // Push a value onto the stack.
     pub fn push(&mut self, value: U256, operation: WrappedOpcode) {
-        self.stack.push_front(
-            StackFrame {
-                value: value,
-                operation,
-            }
-        );
+        self.stack.push_front(StackFrame { value: value, operation });
     }
 
     // Pop a value off the stack.
@@ -61,7 +54,6 @@ impl Stack {
             false
         }
     }
-    
 
     // Duplicate the nth value on the stack.
     pub fn dup(&mut self, n: usize) -> bool {

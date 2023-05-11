@@ -1,4 +1,6 @@
-use std::{time::Instant, thread, io, io::Write};
+use std::{io, io::Write, thread, time::Instant};
+
+use crate::utils::integers::ToLocaleString;
 
 pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
     let mut time = 0usize;
@@ -13,7 +15,7 @@ pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
         let start_time = Instant::now();
         to_bench();
         let end_time = start_time.elapsed().as_micros() as usize;
-        
+
         max = std::cmp::max(max, end_time);
         min = std::cmp::min(min, end_time);
         time += end_time;
@@ -30,15 +32,16 @@ pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
         })
         .sum::<i64>()
         / (runs - 1) as i64;
-    let std_dev = f64::sqrt(variance as f64);
+    let std_dev = f64::sqrt(variance as f64) as usize;
 
     let _ = io::stdout().write_all(
         format!(
-            "  {}:\n    {}μs ± {:.0}μs per run ( with {} runs ).\n\n",
+            "  {}:\n    {}μs ± {}μs per run ( with {} runs ).\n\n",
             benchmark_name,
-            mean,
-            std_dev,
+            mean.to_locale_string(),
+            std_dev.to_locale_string(),
             runs
-        ).as_bytes()
+        )
+        .as_bytes(),
     );
 }

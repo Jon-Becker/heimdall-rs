@@ -6,9 +6,7 @@ pub struct Storage {
     pub storage: HashMap<[u8; 32], [u8; 32]>,
 }
 
-
 impl Storage {
-
     // Use sized HashMap of u8 to repr bytes32
     pub fn new() -> Storage {
         Storage { storage: HashMap::new() }
@@ -21,12 +19,10 @@ impl Storage {
 
     // loads a key from the storage map
     pub fn load(&self, key: [u8; 32]) -> [u8; 32] {
-
         // return the value associated with the key, with a null word if it doesn't exist
         return match self.storage.get(&key) {
             Some(value) => value.clone(),
             None => [0u8; 32],
         };
     }
-
 }

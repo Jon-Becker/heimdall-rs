@@ -1,21 +1,21 @@
-mod util;
 mod constants;
-mod tui_views;
 mod structures;
+mod tui_views;
+mod util;
 
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::time::{Instant};
-use std::env;
 use clap::{AppSettings, Parser};
-use ethers::types::{H160};
-use heimdall_common::resources::transpose::{get_transaction_list, get_contract_creation};
-use heimdall_common::{io::{ logging::* }};
+use ethers::types::H160;
+use heimdall_common::io::logging::*;
+use heimdall_common::resources::transpose::{get_contract_creation, get_transaction_list};
+use std::collections::HashMap;
+use std::env;
+use std::str::FromStr;
+use std::time::Instant;
 
-use self::constants::{DUMP_STATE};
+use self::constants::DUMP_STATE;
 use self::structures::dump_state::DumpState;
 use self::structures::transaction::Transaction;
-use self::tui_views::{TUIView};
+use self::tui_views::TUIView;
 use self::util::csv::write_storage_to_csv;
 
 #[derive(Debug, Clone, Parser)]
@@ -25,9 +25,8 @@ use self::util::csv::write_storage_to_csv;
        global_setting = AppSettings::ColoredHelp,
        override_usage = "heimdall dump <TARGET> [OPTIONS]")]
 pub struct DumpArgs {
-
     /// The target to find and dump the storage slots of.
-    #[clap(required=true)]
+    #[clap(required = true)]
     pub target: String,
 
     /// Set the output verbosity level, 1 - 5.
@@ -35,15 +34,15 @@ pub struct DumpArgs {
     pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The output directory to write the output to
-    #[clap(long="output", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
     pub output: String,
 
     /// The RPC URL to use for fetching data.
-    #[clap(long="rpc-url", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// Your Transpose.io API Key
-    #[clap(long="transpose-api-key", short, default_value = "", hide_default_value = true)]
+    #[clap(long = "transpose-api-key", short, default_value = "", hide_default_value = true)]
     pub transpose_api_key: String,
 
     /// The number of threads to use when fetching data.
@@ -68,7 +67,7 @@ pub struct DumpArgs {
 }
 
 pub fn dump(args: DumpArgs) {
-    let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, _) = Logger::new(args.verbose.log_level().unwrap().as_str());
 
     // parse the output directory
     let mut output_dir = args.output.clone();
@@ -91,20 +90,23 @@ pub fn dump(args: DumpArgs) {
     }
 
     // get the contract creation tx
-    let contract_creation_tx = match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key, &logger) {
-        Some(tx) => tx,
-        None => {
-            logger.error("failed to get contract creation transaction. Is the target a contract address?");
-            std::process::exit(1);
-        }
-    };
+    let contract_creation_tx =
+        match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key, &logger) {
+            Some(tx) => tx,
+            None => {
+                logger.error(
+                "failed to get contract creation transaction. Is the target a contract address?",
+            );
+                std::process::exit(1);
+            }
+        };
 
     // add the contract creation tx to the transactions list to be indexed
     let mut transactions: Vec<Transaction> = Vec::new();
     transactions.push(Transaction {
         indexed: false,
         hash: contract_creation_tx.1,
-        block_number: contract_creation_tx.0
+        block_number: contract_creation_tx.0,
     });
 
     // convert the target to an H160
@@ -122,14 +124,20 @@ pub fn dump(args: DumpArgs) {
     }
 
     // fetch transactions
-    let transaction_list = get_transaction_list(&args.chain, &args.target, &args.transpose_api_key, (&args.from_block, &args.to_block), &logger);
+    let transaction_list = get_transaction_list(
+        &args.chain,
+        &args.target,
+        &args.transpose_api_key,
+        (&args.from_block, &args.to_block),
+        &logger,
+    );
 
     // convert to vec of Transaction
     for transaction in transaction_list {
         transactions.push(Transaction {
             indexed: false,
             hash: transaction.1,
-            block_number: transaction.0
+            block_number: transaction.0,
         });
     }
 
@@ -164,18 +172,17 @@ pub fn dump(args: DumpArgs) {
     // if no-tui flag is set, wait for the indexing thread to finish
     if _args.no_tui {
         match dump_thread.join() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 logger.error("failed to join indexer thread.");
                 logger.error(&format!("{e:?}"));
                 std::process::exit(1);
             }
         }
-    }
-    else {
+    } else {
         // wait for the TUI thread to finish
         match tui_thread.join() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 logger.error("failed to join TUI thread.");
                 logger.error(&format!("{e:?}"));
@@ -188,5 +195,9 @@ pub fn dump(args: DumpArgs) {
     let state = DUMP_STATE.lock().unwrap();
     write_storage_to_csv(&_output_dir, &"storage_dump.csv".to_string(), &state);
     logger.success(&format!("Wrote storage dump to '{_output_dir}/storage_dump.csv'."));
-    logger.info(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &_args.target));
+    logger.info(&format!(
+        "Dumped {} storage values from '{}' .",
+        state.storage.len(),
+        &_args.target
+    ));
 }

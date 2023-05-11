@@ -1,7 +1,6 @@
 use fancy_regex::Regex;
 use lazy_static::lazy_static;
 
-
 lazy_static! {
 
     // The following regex is used as a detector for AND bitmasks
@@ -31,11 +30,11 @@ lazy_static! {
 
     // memory variable regex
     pub static ref MEM_VAR_REGEX: Regex = Regex::new(r"^var_[a-zA-Z]{1,2}$").unwrap();
-    
+
     // extracts commas within a certain expression, not including commas within parentheses
     pub static ref ARGS_SPLIT_REGEX: Regex = Regex::new(r",\s*(?![^()]*\))").unwrap();
 
-    pub static ref DECOMPILED_SOURCE_HEADER_SOL: String = 
+    pub static ref DECOMPILED_SOURCE_HEADER_SOL: String =
 "// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
@@ -53,7 +52,7 @@ pragma solidity >=0.8.0;
 ///                       https://heimdall.rs
 ".to_string();
 
-pub static ref DECOMPILED_SOURCE_HEADER_YUL: String = 
+pub static ref DECOMPILED_SOURCE_HEADER_YUL: String =
 "/// @title            Decompiled Contract
 /// @author           Jonathan Becker <jonathan@jbecker.dev>
 /// @custom:version   heimdall-rs v{}

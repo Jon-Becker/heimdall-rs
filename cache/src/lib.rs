@@ -1,16 +1,15 @@
-#[allow(deprecated)]
-use std::{env::home_dir};
 use clap::{AppSettings, Parser};
 use serde::{
     de::DeserializeOwned,
-    {Deserialize, Serialize}
+    {Deserialize, Serialize},
 };
+#[allow(deprecated)]
+use std::env::home_dir;
 
 use util::*;
 
 pub mod tests;
 pub mod util;
-
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Manage heimdall-rs' cached objects",
@@ -21,7 +20,6 @@ pub struct CacheArgs {
     #[clap(subcommand)]
     pub sub: Subcommands,
 }
-
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -40,17 +38,14 @@ pub enum Subcommands {
     Size(NoArguments),
 }
 
-
 #[derive(Debug, Clone, Parser)]
 pub struct NoArguments {}
-
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Cache<T> {
     pub value: T,
     pub expiry: u64,
 }
-
 
 #[allow(deprecated)]
 pub fn clear_cache() {
@@ -64,7 +59,6 @@ pub fn clear_cache() {
     }
 }
 
-
 #[allow(deprecated)]
 pub fn exists(key: &str) -> bool {
     let home = home_dir().unwrap();
@@ -73,7 +67,6 @@ pub fn exists(key: &str) -> bool {
 
     cache_file.exists()
 }
-
 
 #[allow(deprecated)]
 pub fn keys(pattern: &str) -> Vec<String> {
@@ -99,7 +92,6 @@ pub fn keys(pattern: &str) -> Vec<String> {
     keys
 }
 
-
 #[allow(deprecated)]
 pub fn delete_cache(key: &str) {
     let home = home_dir().unwrap();
@@ -111,9 +103,11 @@ pub fn delete_cache(key: &str) {
     }
 }
 
-
 #[allow(deprecated)]
-pub fn check_expiry<T>() -> bool where T: DeserializeOwned {
+pub fn check_expiry<T>() -> bool
+where
+    T: DeserializeOwned,
+{
     let home = home_dir().unwrap();
     let cache_dir = home.join(".bifrost").join("cache");
 
@@ -134,10 +128,11 @@ pub fn check_expiry<T>() -> bool where T: DeserializeOwned {
         if cache.is_err() {
             delete_path(&path.to_str().unwrap().to_string());
         };
-        
-        let cache = cache.unwrap();
-        if cache.expiry < std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() {
 
+        let cache = cache.unwrap();
+        if cache.expiry
+            < std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        {
             // delete file
             delete_path(&path.to_str().unwrap().to_string());
         }
@@ -145,9 +140,11 @@ pub fn check_expiry<T>() -> bool where T: DeserializeOwned {
     true
 }
 
-
 #[allow(deprecated)]
-pub fn read_cache<T>(key: &str) -> Option<T> where T: 'static + DeserializeOwned {
+pub fn read_cache<T>(key: &str) -> Option<T>
+where
+    T: 'static + DeserializeOwned,
+{
     let home = home_dir().unwrap();
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
@@ -170,22 +167,22 @@ pub fn read_cache<T>(key: &str) -> Option<T> where T: 'static + DeserializeOwned
     Some(*Box::new(cache.value))
 }
 
-
 #[allow(deprecated)]
-pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>) where T: Serialize {
+pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>)
+where
+    T: Serialize,
+{
     let home = home_dir().unwrap();
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
     // expire in 90 days
     let expiry = expiry.unwrap_or(
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 60 * 60 * 24 * 90
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+            + 60 * 60 * 24 * 90,
     );
 
-    let cache = Cache {
-        value: value,
-        expiry: expiry,
-    };
+    let cache = Cache { value: value, expiry: expiry };
     let encoded: Vec<u8> = bincode::serialize(&cache).unwrap();
     let binary_string = encode_hex(encoded);
     write_file(&cache_file.to_str().unwrap().to_string(), &binary_string);
@@ -197,7 +194,7 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
         Subcommands::Clean(_) => {
             clear_cache();
             println!("Cache cleared.")
-        },
+        }
         Subcommands::Ls(_) => {
             let keys = keys("*");
             println!("Displaying {} cached objects:", keys.len());
@@ -205,7 +202,7 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
             for (i, key) in keys.iter().enumerate() {
                 println!("{i:>5} : {key}");
             }
-        },
+        }
         Subcommands::Size(_) => {
             let home = home_dir().unwrap();
             let cache_dir = home.join(".bifrost").join("cache");
@@ -222,6 +219,6 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
             println!("Cache size: {}", prettify_bytes(size));
         }
     }
-   
+
     Ok(())
 }

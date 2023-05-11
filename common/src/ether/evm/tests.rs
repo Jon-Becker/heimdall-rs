@@ -494,10 +494,7 @@ mod vm_tests {
         let mut vm = new_test_vm("0x60fe56");
         vm.execute();
 
-        assert_eq!(
-            U256::from(vm.instruction as u128),
-            U256::from_str("0xff").unwrap()
-        );
+        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0xff").unwrap());
     }
 
     #[test]
@@ -505,18 +502,12 @@ mod vm_tests {
         let mut vm = new_test_vm("0x600160fe57");
         vm.execute();
 
-        assert_eq!(
-            U256::from(vm.instruction as u128),
-            U256::from_str("0xff").unwrap()
-        );
+        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0xff").unwrap());
 
         let mut vm = new_test_vm("0x600060fe5758");
         vm.execute();
 
-        assert_eq!(
-            U256::from(vm.instruction as u128),
-            U256::from_str("0x07").unwrap()
-        );
+        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0x07").unwrap());
 
         // PC test
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0x07").unwrap());
@@ -550,10 +541,7 @@ mod opcode_tests {
         // wraps an ADD operation with 2 raw inputs
         let add_operation_wrapped = WrappedOpcode::new(
             0x01,
-            vec![
-                WrappedInput::Raw(U256::from(1u8)),
-                WrappedInput::Raw(U256::from(2u8)),
-            ],
+            vec![WrappedInput::Raw(U256::from(1u8)), WrappedInput::Raw(U256::from(2u8))],
         );
         println!("{}", add_operation_wrapped);
 
@@ -829,10 +817,7 @@ mod types_tests {
     fn test_multiple_signature() {
         let solidity_type = "test(uint256,string)".to_string();
         let param_type = parse_function_parameters(solidity_type);
-        assert_eq!(
-            param_type,
-            Some(vec![ParamType::Uint(256), ParamType::String])
-        );
+        assert_eq!(param_type, Some(vec![ParamType::Uint(256), ParamType::String]));
     }
 
     #[test]
@@ -921,12 +906,14 @@ mod types_tests {
 mod benchmarks {
     use clap_verbosity_flag::Verbosity;
 
-    use crate::{ether::evm::disassemble::{DisassemblerArgs, disassemble}, testing::benchmarks::benchmark};
+    use crate::{
+        ether::evm::disassemble::{disassemble, DisassemblerArgs},
+        testing::benchmarks::benchmark,
+    };
 
     #[test]
     fn benchmark_disassemble_simple() {
         fn bench() {
-
             disassemble(DisassemblerArgs {
                 target: String::from("731bf797219482a29013d804ad96d1c6f84fba4c453014608060405260043610610058576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806319045a251461005d575b600080fd5b6100c56004803603810190808035600019169060200190929190803590602001908201803590602001908080601f0160208091040260200160405190810160405280939291908181526020018383808284378201915050505050509192919290505050610107565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b6000806000806041855114151561012157600093506101f6565b6020850151925060408501519150606085015160001a9050601b8160ff16101561014c57601b810190505b601b8160ff16141580156101645750601c8160ff1614155b1561017257600093506101f6565b600186828585604051600081526020016040526040518085600019166000191681526020018460ff1660ff1681526020018360001916600019168152602001826000191660001916815260200194505050505060206040516020810390808403906000865af11580156101e9573d6000803e3d6000fd5b5050506020604051035193505b505050929150505600a165627a7a72305820aacffa0494cd3f043493eee9c720bca9d5ef505ae7230ffc3d88c49ceeb7441e0029"),
                 verbose: Verbosity::new(0, 0),
