@@ -399,7 +399,7 @@ impl VM {
                     .overflowing_sub(b & sign_bit)
                     .0;
 
-                self.stack.push(result, operation.clone())
+                self.stack.push(result, operation)
             }
 
             // LT
@@ -408,8 +408,8 @@ impl VM {
                 let b = self.stack.pop().value;
 
                 match a.lt(&b) {
-                    true => self.stack.push(U256::from(1u8), operation.clone()),
-                    false => self.stack.push(U256::zero(), operation.clone()),
+                    true => self.stack.push(U256::from(1u8), operation),
+                    false => self.stack.push(U256::zero(), operation),
                 }
             }
 
@@ -419,8 +419,8 @@ impl VM {
                 let b = self.stack.pop().value;
 
                 match a.gt(&b) {
-                    true => self.stack.push(U256::from(1u8), operation.clone()),
-                    false => self.stack.push(U256::zero(), operation.clone()),
+                    true => self.stack.push(U256::from(1u8), operation),
+                    false => self.stack.push(U256::zero(), operation),
                 }
             }
 
@@ -430,8 +430,8 @@ impl VM {
                 let b = self.stack.pop().value;
 
                 match sign_uint(a).lt(&sign_uint(b)) {
-                    true => self.stack.push(U256::from(1u8), operation.clone()),
-                    false => self.stack.push(U256::zero(), operation.clone()),
+                    true => self.stack.push(U256::from(1u8), operation),
+                    false => self.stack.push(U256::zero(), operation),
                 }
             }
 
@@ -441,8 +441,8 @@ impl VM {
                 let b = self.stack.pop().value;
 
                 match sign_uint(a).gt(&sign_uint(b)) {
-                    true => self.stack.push(U256::from(1u8), operation.clone()),
-                    false => self.stack.push(U256::zero(), operation.clone()),
+                    true => self.stack.push(U256::from(1u8), operation),
+                    false => self.stack.push(U256::zero(), operation),
                 }
             }
 
@@ -452,8 +452,8 @@ impl VM {
                 let b = self.stack.pop().value;
 
                 match a.eq(&b) {
-                    true => self.stack.push(U256::from(1u8), operation.clone()),
-                    false => self.stack.push(U256::zero(), operation.clone()),
+                    true => self.stack.push(U256::from(1u8), operation),
+                    false => self.stack.push(U256::zero(), operation),
                 }
             }
 
@@ -462,8 +462,8 @@ impl VM {
                 let a = self.stack.pop().value;
 
                 match a.eq(&U256::from(0u8)) {
-                    true => self.stack.push(U256::from(1u8), operation.clone()),
-                    false => self.stack.push(U256::zero(), operation.clone()),
+                    true => self.stack.push(U256::from(1u8), operation),
+                    false => self.stack.push(U256::zero(), operation),
                 }
             }
 
@@ -542,12 +542,12 @@ impl VM {
                 let a = self.stack.pop().value;
 
                 if b >= U256::from(32u32) {
-                    self.stack.push(U256::zero(), operation.clone())
+                    self.stack.push(U256::zero(), operation)
                 } else {
                     let result =
                         a / (U256::from(256u32).pow(U256::from(31u32) - b)) % U256::from(256u32);
 
-                    self.stack.push(result, operation.clone());
+                    self.stack.push(result, operation);
                 }
             }
 
@@ -679,7 +679,7 @@ impl VM {
                 let data = self.memory.read(offset, size);
                 let result = keccak256(data);
 
-                self.stack.push(U256::from(result), operation.clone());
+                self.stack.push(U256::from(result), operation);
             }
 
             // ADDRESS
@@ -689,7 +689,7 @@ impl VM {
                 // copy address into result
                 result[12..].copy_from_slice(&self.address);
 
-                self.stack.push(U256::from(result), operation.clone());
+                self.stack.push(U256::from(result), operation);
             }
 
             // BALANCE
@@ -697,7 +697,7 @@ impl VM {
                 self.stack.pop();
 
                 // balance is set to 1 wei because we won't run into div by 0 errors
-                self.stack.push(U256::from(1), operation.clone());
+                self.stack.push(U256::from(1), operation);
             }
 
             // ORIGIN
@@ -707,7 +707,7 @@ impl VM {
                 // copy address into result
                 result[12..].copy_from_slice(&self.origin);
 
-                self.stack.push(U256::from(result), operation.clone());
+                self.stack.push(U256::from(result), operation);
             }
 
             // CALLER
@@ -717,12 +717,12 @@ impl VM {
                 // copy address into result
                 result[12..].copy_from_slice(&self.caller);
 
-                self.stack.push(U256::from(result), operation.clone());
+                self.stack.push(U256::from(result), operation);
             }
 
             // CALLVALUE
             0x34 => {
-                self.stack.push(U256::from(self.value), operation.clone());
+                self.stack.push(U256::from(self.value), operation);
             }
 
             // CALLDATALOAD
@@ -758,14 +758,14 @@ impl VM {
                     U256::from(&self.calldata[i..i + 32])
                 };
 
-                self.stack.push(result, operation.clone());
+                self.stack.push(result, operation);
             }
 
             // CALLDATASIZE
             0x36 => {
                 let result = U256::from(self.calldata.len());
 
-                self.stack.push(result, operation.clone());
+                self.stack.push(result, operation);
             }
 
             // CALLDATACOPY
@@ -837,7 +837,7 @@ impl VM {
             0x38 => {
                 let result = U256::from(self.bytecode.len() as u128);
 
-                self.stack.push(result, operation.clone());
+                self.stack.push(result, operation);
             }
 
             // CODECOPY
@@ -907,13 +907,13 @@ impl VM {
 
             // GASPRICE
             0x3A => {
-                self.stack.push(U256::from(1), operation.clone());
+                self.stack.push(U256::from(1), operation);
             }
 
             // EXTCODESIZE
             0x3B => {
                 self.stack.pop();
-                self.stack.push(U256::from(1), operation.clone());
+                self.stack.push(U256::from(1), operation);
             }
 
             // EXTCODECOPY
@@ -963,7 +963,7 @@ impl VM {
 
             // RETURNDATASIZE
             0x3D => {
-                self.stack.push(U256::from(1u8), operation.clone());
+                self.stack.push(U256::from(1u8), operation);
             }
 
             // RETURNDATACOPY
@@ -1014,7 +1014,7 @@ impl VM {
             0x3F | 0x40 => {
                 self.stack.pop();
 
-                self.stack.push(U256::zero(), operation.clone());
+                self.stack.push(U256::zero(), operation);
             }
 
             // COINBASE
@@ -1029,12 +1029,12 @@ impl VM {
             0x42 => {
                 let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
-                self.stack.push(U256::from(timestamp), operation.clone());
+                self.stack.push(U256::from(timestamp), operation);
             }
 
             // NUMBER -> BASEFEE
             (0x43..=0x48) => {
-                self.stack.push(U256::from(1u8), operation.clone());
+                self.stack.push(U256::from(1u8), operation);
             }
 
             // POP
@@ -1065,7 +1065,7 @@ impl VM {
 
                 let result = U256::from(self.memory.read(i, 32).as_slice());
 
-                self.stack.push(result, operation.clone());
+                self.stack.push(result, operation);
             }
 
             // MSTORE
@@ -1122,7 +1122,7 @@ impl VM {
             0x54 => {
                 let key = self.stack.pop().value;
 
-                self.stack.push(U256::from(self.storage.load(key.into())), operation.clone())
+                self.stack.push(U256::from(self.storage.load(key.into())), operation)
             }
 
             // SSTORE
@@ -1221,22 +1221,22 @@ impl VM {
 
             // PC
             0x58 => {
-                self.stack.push(U256::from(self.instruction), operation.clone());
+                self.stack.push(U256::from(self.instruction), operation);
             }
 
             // MSIZE
             0x59 => {
-                self.stack.push(U256::from(self.memory.size()), operation.clone());
+                self.stack.push(U256::from(self.memory.size()), operation);
             }
 
             // GAS
             0x5a => {
-                self.stack.push(U256::from(self.gas_remaining), operation.clone());
+                self.stack.push(U256::from(self.gas_remaining), operation);
             }
 
             // PUSH0
             0x5f => {
-                self.stack.push(U256::zero(), operation.clone());
+                self.stack.push(U256::zero(), operation);
             }
 
             // PUSH1 -> PUSH32
@@ -1255,7 +1255,7 @@ impl VM {
                 operation.inputs = new_operation_inputs;
 
                 // Push the bytes to the stack
-                self.stack.push(U256::from(bytes), operation.clone());
+                self.stack.push(U256::from(bytes), operation);
             }
 
             // DUP1 -> DUP16
@@ -1336,7 +1336,7 @@ impl VM {
             0xF1 | 0xF2 => {
                 self.stack.pop_n(7);
 
-                self.stack.push(U256::from(1u8), operation.clone());
+                self.stack.push(U256::from(1u8), operation);
             }
 
             // RETURN
@@ -1383,7 +1383,7 @@ impl VM {
             0xF4 | 0xFA => {
                 self.stack.pop_n(6);
 
-                self.stack.push(U256::from(1u8), operation.clone());
+                self.stack.push(U256::from(1u8), operation);
             }
 
             // CREATE2
