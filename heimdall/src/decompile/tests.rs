@@ -165,7 +165,7 @@ mod tests {
 
         // assert that the output is correct
         for line in &["function Unresolved_55c241c3(bytes memory arg0, bytes memory arg1, bytes memory arg2) public view payable returns (uint256) {",
-            "if (stor_0) { revert(\"Already solved\"); } else {",
+            "revert(\"Already solved\");",
             "function Unresolved_692a34f4(bytes memory arg0) public view payable returns (uint256) {",
             "function Unresolved_799320bb() public payable {",
             "function Unresolved_9b6deec4() public view payable returns (address) {",
