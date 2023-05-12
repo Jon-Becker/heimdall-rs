@@ -526,7 +526,7 @@ mod vm_tests {
             999999999,
         );
 
-        println!("{:#?}", vm.execute());
+        vm.execute();
     }
 }
 

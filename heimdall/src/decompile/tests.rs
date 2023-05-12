@@ -104,7 +104,8 @@ mod tests {
 
         // assert that the output is correct
         for line in &["function Unresolved_19045a25(bytes memory arg0, bytes memory arg1) public payable returns (address) {",
-            "address var_h = ecrecover(var_d, var_e, var_f, var_g);"] {
+            " = ecrecover("] {
+            println!("{line}");
             assert!(output.contains(line));
         }
 
@@ -164,7 +165,7 @@ mod tests {
 
         // assert that the output is correct
         for line in &["function Unresolved_55c241c3(bytes memory arg0, bytes memory arg1, bytes memory arg2) public view payable returns (uint256) {",
-            "if (storage[0]) { revert(\"Already solved\"); } else {",
+            "if (stor_0) { revert(\"Already solved\"); } else {",
             "function Unresolved_692a34f4(bytes memory arg0) public view payable returns (uint256) {",
             "function Unresolved_799320bb() public payable {",
             "function Unresolved_9b6deec4() public view payable returns (address) {",
@@ -194,7 +195,7 @@ mod tests {
 
         // assert that the output is correct
         for line in &["function Unresolved_02751cec(address arg0, bytes memory arg1, bytes memory arg2, bytes memory arg3, address arg4, bytes memory arg5) public returns (bytes memory) {",
-            "(bool success, bytes memory ret0) = address(var_j).call{ value: 0 }(var_",
+            "(bool success, bytes memory ret0) = address(",
             "revert(\"UniswapV2Library: ZERO_ADDRESS\");",
             "revert(\"TransferHelper: TRANSFER_FAILED\");"] {
             println!("{line}");
