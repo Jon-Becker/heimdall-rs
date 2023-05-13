@@ -10,12 +10,14 @@ pub mod util;
 use crate::decompile::resolve::*;
 use crate::decompile::util::*;
 
+use ethers::abi::AbiEncode;
 use heimdall_cache::read_cache;
 use heimdall_cache::store_cache;
 use heimdall_common::ether::compiler::detect_compiler;
-use heimdall_common::ether::selectors::find_function_selectors;
-use heimdall_common::ether::selectors::resolve_entry_point;
-use heimdall_common::ether::selectors::resolve_function_selectors;
+use heimdall_common::ether::selectors::{
+    find_function_selectors, resolve_entry_point, resolve_function_selectors,
+};
+use heimdall_common::utils::strings::encode_hex_reduced;
 use indicatif::ProgressBar;
 use std::collections::HashMap;
 use std::env;
@@ -95,10 +97,7 @@ pub fn decompile(args: DecompilerArgs) {
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>()
             + "..."
-            + &shortened_target
-                .chars()
-                .skip(shortened_target.len() - 16)
-                .collect::<String>();
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let decompile_call = trace.add_call(
         0,
@@ -132,10 +131,7 @@ pub fn decompile(args: DecompilerArgs) {
         }
 
         // create new runtime block
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
         // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
@@ -185,7 +181,7 @@ pub fn decompile(args: DecompilerArgs) {
             bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        contract_bytecode = args.target.clone();
+        contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
         // push the address to the output directory
         if output_dir != args.output {
@@ -198,10 +194,8 @@ pub fn decompile(args: DecompilerArgs) {
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents.replacen("0x", "", 1)
                 } else {
-                    logger.error(&format!(
-                        "file '{}' doesn't contain valid bytecode.",
-                        &args.target
-                    ));
+                    logger
+                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
                     std::process::exit(1)
                 }
             }
@@ -243,9 +237,8 @@ pub fn decompile(args: DecompilerArgs) {
     if compiler == "solc" {
         logger.debug(&format!("detected compiler {compiler} {version}."));
     } else {
-        logger.warn(&format!(
-            "detected compiler {compiler} {version} is not supported by heimdall."
-        ));
+        logger
+            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
     // create a new EVM instance
@@ -262,10 +255,7 @@ pub fn decompile(args: DecompilerArgs) {
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>()
             + "..."
-            + &shortened_target
-                .chars()
-                .skip(shortened_target.len() - 16)
-                .collect::<String>();
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let vm_trace = trace.add_creation(
         decompile_call,
@@ -281,20 +271,26 @@ pub fn decompile(args: DecompilerArgs) {
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
         resolved_selectors = resolve_function_selectors(selectors.clone(), &logger);
+
+        // if resolved selectors are empty, we can't perform symbolic execution
+        if resolved_selectors.is_empty() {
+            logger.error(&format!(
+                "failed to resolve any function selectors from '{shortened_target}' .",
+                shortened_target = shortened_target
+            ));
+            std::process::exit(0);
+        }
+
         logger.info(&format!(
             "resolved {} possible functions from {} detected selectors.",
             resolved_selectors.len(),
             selectors.len()
         ));
     } else {
-        logger.info(&format!(
-            "found {} possible function selectors.",
-            selectors.len()
-        ));
+        logger.info(&format!("found {} possible function selectors.", selectors.len()));
     }
-    logger.info(&format!(
-        "performing symbolic execution on '{shortened_target}' ."
-    ));
+
+    logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
 
     // get a new progress bar
     let decompilation_progress = ProgressBar::new_spinner();
@@ -329,8 +325,10 @@ pub fn decompile(args: DecompilerArgs) {
         );
 
         // get a map of possible jump destinations
+        logger.debug("start mapping");
         let (map, jumpdest_count) =
             map_selector(&evm.clone(), selector.clone(), function_entry_point);
+        logger.debug("done mapping");
 
         trace.add_debug(
             func_analysis_trace,
@@ -338,7 +336,9 @@ pub fn decompile(args: DecompilerArgs) {
             format!(
                 "execution tree {}",
                 match jumpdest_count {
-                    0 => "appears to be linear".to_string(),
+                    0 => {
+                        "appears to be linear".to_string()
+                    }
                     _ => format!("has {jumpdest_count} unique branches"),
                 }
             )
@@ -419,11 +419,7 @@ pub fn decompile(args: DecompilerArgs) {
                     vec![format!(
                         "parameter {} {} {} bytes. {}",
                         frame.slot,
-                        if frame.mask_size == 32 {
-                            "has size of"
-                        } else {
-                            "is masked to"
-                        },
+                        if frame.mask_size == 32 { "has size of" } else { "is masked to" },
                         frame.mask_size,
                         if !frame.heuristics.is_empty() {
                             format!("heuristics suggest param used as '{}'", frame.heuristics[0])
@@ -450,7 +446,8 @@ pub fn decompile(args: DecompilerArgs) {
                 }
             };
 
-            let matched_resolved_functions = match_parameters(resolved_functions, &analyzed_function);
+            let matched_resolved_functions =
+                match_parameters(resolved_functions, &analyzed_function);
 
             trace.br(func_analysis_trace);
             if matched_resolved_functions.is_empty() {
@@ -493,11 +490,7 @@ pub fn decompile(args: DecompilerArgs) {
                     format!(
                         "{} resolved signature{} matched this function's parameters",
                         matched_resolved_functions.len(),
-                        if matched_resolved_functions.len() > 1 {
-                            "s"
-                        } else {
-                            ""
-                        }
+                        if matched_resolved_functions.len() > 1 { "s" } else { "" }
                     )
                     .to_string(),
                 );
@@ -510,9 +503,10 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom error signatures
             let mut resolved_counter = 0;
             for (error_selector, _) in analyzed_function.errors.clone() {
+                let error_selector_str = encode_hex_reduced(error_selector).replacen("0x", "", 1);
                 decompilation_progress
                     .set_message(format!("resolving error '0x{}'", &error_selector));
-                let resolved_error_selectors = resolve_error_signature(&error_selector);
+                let resolved_error_selectors = resolve_error_signature(&error_selector_str);
 
                 // only continue if we have matches
                 if let Some(resolved_error_selectors) = resolved_error_selectors {
@@ -545,7 +539,7 @@ pub fn decompile(args: DecompilerArgs) {
                     analyzed_function
                         .errors
                         .insert(error_selector.clone(), Some(selected_match.clone()));
-                    all_resolved_errors.insert(error_selector.clone(), selected_match.clone());
+                    all_resolved_errors.insert(error_selector_str, selected_match.clone());
                 }
             }
 
@@ -566,11 +560,10 @@ pub fn decompile(args: DecompilerArgs) {
             // resolve custom event signatures
             resolved_counter = 0;
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
-                decompilation_progress.set_message(format!(
-                    "resolving event '0x{}'",
-                    &event_selector.get(0..8).unwrap().to_string()
-                ));
-                let resolved_event_selectors = resolve_event_signature(&event_selector);
+                let event_selector_str = event_selector.encode_hex().replacen("0x", "", 1);
+                decompilation_progress
+                    .set_message(format!("resolving event '0x{}'", &event_selector_str));
+                let resolved_event_selectors = resolve_event_signature(&event_selector_str);
 
                 // only continue if we have matches
                 if let Some(resolved_event_selectors) = resolved_event_selectors {
@@ -600,11 +593,10 @@ pub fn decompile(args: DecompilerArgs) {
                         };
 
                     resolved_counter += 1;
-                    analyzed_function.events.insert(
-                        event_selector.clone(),
-                        (Some(selected_match.clone()), raw_event),
-                    );
-                    all_resolved_events.insert(event_selector, selected_match.clone());
+                    analyzed_function
+                        .events
+                        .insert(event_selector.clone(), (Some(selected_match.clone()), raw_event));
+                    all_resolved_events.insert(event_selector_str, selected_match.clone());
                 }
             }
 
@@ -639,8 +631,7 @@ pub fn decompile(args: DecompilerArgs) {
             &mut trace,
             decompile_call,
         );
-    }
-    else {
+    } else {
         out::solidity::output(
             &args,
             output_dir,

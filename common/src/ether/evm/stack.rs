@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, str::FromStr};
+use std::collections::VecDeque;
 
 use ethers::prelude::U256;
 
@@ -20,19 +20,12 @@ pub struct StackFrame {
 
 impl Stack {
     pub fn new() -> Stack {
-        Stack {
-            stack: VecDeque::new(),
-        }
+        Stack { stack: VecDeque::new() }
     }
 
     // Push a value onto the stack.
-    pub fn push(&mut self, value: &str, operation: WrappedOpcode) {
-        self.stack.push_front(
-            StackFrame {
-                value: U256::from_str(value).unwrap(),
-                operation,
-            }
-        );
+    pub fn push(&mut self, value: U256, operation: WrappedOpcode) {
+        self.stack.push_front(StackFrame { value: value, operation });
     }
 
     // Pop a value off the stack.
@@ -54,18 +47,17 @@ impl Stack {
 
     // Swap the top value and the nth value on the stack.
     pub fn swap(&mut self, n: usize) -> bool {
-        match self.stack.get(n) {
-            Some(_) => {
-                self.stack.swap(0, n);
-                true
-            }
-            None => false,
+        if let Some(_) = self.stack.get_mut(n) {
+            self.stack.swap(0, n);
+            true
+        } else {
+            false
         }
     }
 
     // Duplicate the nth value on the stack.
     pub fn dup(&mut self, n: usize) -> bool {
-        match self.stack.get(n - 1) {
+        match self.stack.get_mut(n - 1) {
             Some(_) => {
                 self.stack.push_front(self.stack[n - 1].clone());
                 true

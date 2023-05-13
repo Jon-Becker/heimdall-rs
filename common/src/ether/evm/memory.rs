@@ -1,99 +1,77 @@
 #[derive(Clone, Debug)]
 pub struct Memory {
-    pub memory: String,
+    pub memory: Vec<u8>,
 }
 
 impl Memory {
-    // Since bytearrays aren't supported by the Rust standard library,
-    // we're gonna use a String to represent the bytearray.
+    // Repr as a [u8]
     pub fn new() -> Memory {
-        Memory {
-            memory: String::new(),
-        }
+        Memory { memory: Vec::new() }
     }
 
     // get the size of the memory in bytes
     pub fn size(&self) -> u128 {
-        (self.memory.len() / 2) as u128
+        self.memory.len() as u128
     }
 
+    // extend the memory to a given size
     pub fn extend(&mut self, offset: u128, size: u128) {
-        
-        // calculate the new size of the memory
-        let r = (offset + size) % 32;
-        let new_mem_size = if r == 0 {
-            offset + size
-        } else {
-            offset + size + 32 - r
-        };
+        // Calculate the new size of the memory
+        let new_mem_size = (offset + size + 31) / 32 * 32;
 
-        let mut byte_difference = 0;
-        if self.size() <= new_mem_size {
-            byte_difference = new_mem_size - self.size();
-        }
-
-        // for every missing byte, append a null byte
-        if byte_difference > 0 {
-            self.memory.push_str(&"00".repeat(byte_difference as usize));
+        // If the new memory size is greater than the current size, extend the memory
+        if new_mem_size > self.size() {
+            let byte_difference = (new_mem_size - self.size()) as usize;
+            self.memory.resize(self.memory.len() + byte_difference, 0u8);
         }
     }
 
     // stores a bytearray in the memory at offset
-    pub fn store(&mut self, mut offset: usize, mut size: usize, mut value: String) {
-        if value.len() % 2 == 0 {
+    pub fn store(&mut self, mut offset: usize, mut size: usize, value: &[u8]) {
+        // Cap offset and size to 2**16
+        offset = offset.min(65536);
+        size = size.min(65536);
 
-            // cap offset to 2**16 for optimization
-            if offset > 65536 {
-                offset = 65536;
-            }
+        let value_len = value.len();
 
-            // cap size to 2**16 for optimization
-            if size > 65536 {
-                size = 65536;
+        // Truncate or extend value to the desired size
+        let value: Vec<u8> = if value_len >= size {
+            value[..size].to_vec()
+        } else {
+            let mut value = value.to_vec();
 
-                if value.len() / 2 > size {
-                    value = value.get(0..(size * 2)).unwrap().to_string();
-                }
-            }
-            
-            // extend the value to size bytes
-            if value.len() / 2 < size {
-                value.insert_str(0, &"00".repeat(size - value.len() / 2));
-            }
+            // prepend null bytes until the value is the desired size
+            // ex, ff with size 4 -> 00 00 00 ff
+            let null_bytes = vec![0u8; size - value_len];
+            value.splice(0..0, null_bytes);
+            value
+        };
 
-            // extend the memory to allocate for the new space
-            // byte offset is the str offset where we start writing
-            self.extend(offset as u128, size as u128);
+        // Extend the memory to allocate for the new space
+        self.extend(offset as u128, size as u128);
 
-            // reduce the value to size bytes
-            value = value.get(value.len() - (size * 2)..).unwrap().to_string();
-
-            // store the value in memory by replacing bytes in the memory
-            self.memory
-                .replace_range((offset * 2)..(offset * 2) + value.len(), &value);
-        }
+        // Store the value in memory by replacing bytes in the memory
+        self.memory.splice(offset..offset + size, value);
     }
 
     // read a value from the memory at the given offset, with a fixed size
-    pub fn read(&self, offset: usize, size: usize) -> String {
+    pub fn read(&self, offset: usize, size: usize) -> Vec<u8> {
+        // Cap size to 2**16 and offset to 2**16 for optimization
+        let size = size.min(65536);
+        let offset = offset.min(65536);
 
-        // cap size to 2**16 for optimization
-        if size > 65536 || offset > 65536 {
-            return "00".repeat(size);
-        }
-
-        // if the offset + size will be out of bounds, append null bytes until the size is met
+        // If the offset + size will be out of bounds, append null bytes until the size is met
         if offset + size > self.size() as usize {
-            let mut value = String::new();
+            let mut value = Vec::with_capacity(size);
 
             if offset <= self.size() as usize {
-                value = self.memory[(offset * 2)..].to_string();
+                value.extend_from_slice(&self.memory[offset..]);
             }
 
-            value.push_str(&"00".repeat(size - value.len() / 2));
+            value.resize(size, 0u8);
             value
         } else {
-            self.memory[(offset * 2)..(offset * 2) + size * 2].to_string()
+            self.memory[offset..offset + size].to_vec()
         }
     }
 }

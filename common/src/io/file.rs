@@ -1,25 +1,25 @@
 use super::logging::Logger;
 
 use std::{
+    env,
     fs::File,
-    io::{Write, Read}, env, process::Command
+    io::{Read, Write},
+    process::Command,
 };
-
 
 pub fn short_path(path: &str) -> String {
     let current_dir = match env::current_dir() {
         Ok(dir) => dir.into_os_string().into_string().unwrap(),
-        Err(_) => std::process::exit(1)
+        Err(_) => std::process::exit(1),
     };
     path.replace(&current_dir, ".")
 }
-
 
 pub fn write_file(_path: &String, contents: &String) -> String {
     let path = std::path::Path::new(_path);
     let prefix = path.parent().unwrap();
     std::fs::create_dir_all(prefix).unwrap();
-    
+
     let mut file = match File::create(path) {
         Ok(file) => file,
         Err(_) => {
@@ -29,7 +29,7 @@ pub fn write_file(_path: &String, contents: &String) -> String {
         }
     };
     match file.write_all(contents.as_bytes()) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => {
             let (logger, _) = Logger::new("");
             logger.error(&format!("failed to write to file \"{_path}\" ."));
@@ -56,7 +56,7 @@ pub fn read_file(_path: &String) -> String {
     };
     let mut contents = String::new();
     match file.read_to_string(&mut contents) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => {
             let (logger, _) = Logger::new("");
             logger.error(&format!("failed to read file \"{_path}\" ."));
@@ -68,8 +68,5 @@ pub fn read_file(_path: &String) -> String {
 
 pub fn delete_path(_path: &String) -> bool {
     let path = std::path::Path::new(_path);
-    Command::new("rm")
-        .args(["-rf", path.to_str().unwrap()])
-        .output()
-        .is_ok()
+    Command::new("rm").args(["-rf", path.to_str().unwrap()]).output().is_ok()
 }

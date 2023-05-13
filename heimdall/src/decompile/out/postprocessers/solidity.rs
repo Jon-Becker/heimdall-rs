@@ -1,8 +1,8 @@
 use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
-    NON_ZERO_BYTE_REGEX
+    NON_ZERO_BYTE_REGEX,
 };
-use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX};
+use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
@@ -15,7 +15,10 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::{collections::{HashMap}, sync::Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -63,10 +66,8 @@ fn convert_bitmask_to_casting(line: String) -> String {
             };
 
             // apply the cast to the subject
-            cleaned = cleaned.replace(
-                &format!("{cast}{subject}"),
-                &format!("{solidity_type}{subject}"),
-            );
+            cleaned =
+                cleaned.replace(&format!("{cast}{subject}"), &format!("{solidity_type}{subject}"));
 
             // attempt to cast again
             cleaned = convert_bitmask_to_casting(cleaned);
@@ -118,10 +119,8 @@ fn convert_bitmask_to_casting(line: String) -> String {
                 };
 
                 // apply the cast to the subject
-                cleaned = cleaned.replace(
-                    &format!("{subject}{cast}"),
-                    &format!("{solidity_type}{subject}"),
-                );
+                cleaned = cleaned
+                    .replace(&format!("{subject}{cast}"), &format!("{solidity_type}{subject}"));
 
                 // attempt to cast again
                 cleaned = convert_bitmask_to_casting(cleaned);
@@ -159,14 +158,11 @@ fn simplify_casts(line: String) -> String {
 }
 
 fn simplify_parentheses(line: String, paren_index: usize) -> String {
-
     // helper function to determine if parentheses are necessary
     fn are_parentheses_unnecessary(expression: String) -> bool {
         // safely grab the first and last chars
         let first_char = expression.get(0..1).unwrap_or("");
-        let last_char = expression
-            .get(expression.len() - 1..expression.len())
-            .unwrap_or("");
+        let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
 
         // if there is a negation of an expression, remove the parentheses
         // helps with double negation
@@ -266,7 +262,6 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
             // don't increment the paren_index because we just removed a set
             cleaned = simplify_parentheses(cleaned, paren_index);
         } else {
-            
             // remove double negation, if one exists
             if cleaned.contains("!!") {
                 cleaned = cleaned.replace("!!", "");
@@ -316,10 +311,8 @@ fn convert_memory_to_variable(line: String) -> String {
             let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
 
             // safe to unwrap since we know these indices exist
-            let memloc = format!(
-                "memory{}",
-                memory_access.get(matched_loc.0..matched_loc.1).unwrap()
-            );
+            let memloc =
+                format!("memory{}", memory_access.get(matched_loc.0..matched_loc.1).unwrap());
 
             let variable_name = match mem_map.get(&memloc) {
                 Some(loc) => loc.to_owned(),
@@ -350,13 +343,17 @@ fn convert_memory_to_variable(line: String) -> String {
 
     // if the memory access is an instantiation, save it
     if cleaned.contains(" = ") {
-        let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
+        let instantiation: Vec<String> =
+            cleaned.split(" = ").collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();
+
+        // skip storage
+        if instantiation[0].contains("storage") {
+            return cleaned;
+        }
 
         let mut var_map = VARIABLE_MAP.lock().unwrap();
-        var_map.insert(
-            instantiation[0].to_string(),
-            instantiation[1].to_string().replace(';', ""),
-        );
+        var_map.insert(instantiation[0].clone(), instantiation[1].replace(';', ""));
+
         drop(var_map);
     }
 
@@ -364,7 +361,6 @@ fn convert_memory_to_variable(line: String) -> String {
 }
 
 fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
-
     // skip lines that don't contain an assignment
     if !line.contains(" = ") {
         return false;
@@ -376,13 +372,8 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
     }
 
     // get var name
-    let var_name = line.split(" = ").collect::<Vec<&str>>()[0]
-        .split(' ')
-        .collect::<Vec<&str>>()[line.split(" = ").collect::<Vec<&str>>()[0]
-        .split(' ')
-        .collect::<Vec<&str>>()
-        .len()
-        - 1];
+    let var_name = line.split(" = ").collect::<Vec<&str>>()[0].split(' ').collect::<Vec<&str>>()
+        [line.split(" = ").collect::<Vec<&str>>()[0].split(' ').collect::<Vec<&str>>().len() - 1];
 
     // skip lines that contain assignments to storage
     if var_name.contains("storage") {
@@ -391,20 +382,16 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
 
     //remove unused vars
     for x in lines {
-
         // break if the line contains a function definition
         if x.contains("function") {
             break;
         }
 
         if x.contains(" = ") {
-            let assignment = x.split(" = ")
-                .map(|x| x.trim())
-                .collect::<Vec<&str>>();
+            let assignment = x.split(" = ").map(|x| x.trim()).collect::<Vec<&str>>();
             if assignment[1].contains(var_name) {
                 return false;
-            }
-            else if assignment[0].split(' ').last() == Some(var_name) {
+            } else if assignment[0].split(' ').last() == Some(var_name) {
                 return true;
             }
         } else if x.contains(var_name) {
@@ -443,16 +430,9 @@ fn move_casts_to_declaration(line: String) -> String {
             }
 
             // get the inside of the parens
-            let cast_expression = instantiation[1]
-                .get(paren_start + 1..paren_end - 1)
-                .unwrap();
+            let cast_expression = instantiation[1].get(paren_start + 1..paren_end - 1).unwrap();
 
-            format!(
-                "{} {} = {};",
-                x.as_str().replace('(', ""),
-                instantiation[0],
-                cast_expression
-            )
+            format!("{} {} = {};", x.as_str().replace('(', ""), instantiation[0], cast_expression)
         }
         None => cleaned,
     }
@@ -475,6 +455,11 @@ fn replace_expression_with_var(line: String) -> String {
             continue;
         }
 
+        // skip expressions that are already variables. i.e, check if they contain a space
+        if !expression.contains(' ') {
+            continue;
+        }
+
         // replace the expression with the variable
         if cleaned.contains(expression) && !cleaned.starts_with(var) {
             cleaned = cleaned.replace(expression, var);
@@ -484,19 +469,38 @@ fn replace_expression_with_var(line: String) -> String {
     // drop the mutex
     drop(var_map);
 
+    // if line contains storage
+    if cleaned.contains("storage") {
+        let storage_map = STORAGE_TYPE_MAP.lock().unwrap();
+
+        // iterate over storage map
+        for (var, _) in storage_map.iter() {
+            // get the storage slot
+            let storage_slot = match var.split("_").collect::<Vec<&str>>()[1] {
+                "0" => "storage[0]".to_owned(),
+                slot => format!("storage[0x{slot}]").to_owned(),
+            };
+
+            // replace the storage slot with the variable
+            if cleaned.contains(&storage_slot) {
+                cleaned = cleaned.replace(&storage_slot, var);
+            }
+        }
+    }
+
     cleaned
 }
 
 fn inherit_infer_type(line: String) -> String {
     let mut cleaned = line.clone();
     let mut type_map = MEMORY_TYPE_MAP.lock().unwrap();
+    let mut storage_map = STORAGE_TYPE_MAP.lock().unwrap();
+    let var_map = VARIABLE_MAP.lock().unwrap();
 
     // if the line contains a function definition, wipe the type map and get arg types
     if line.contains("function") {
         type_map.clear();
-        let args = line.split('(').collect::<Vec<&str>>()[1]
-            .split(')')
-            .collect::<Vec<&str>>()[0]
+        let args = line.split('(').collect::<Vec<&str>>()[1].split(')').collect::<Vec<&str>>()[0]
             .split(',')
             .collect::<Vec<&str>>();
         for arg in args {
@@ -514,20 +518,58 @@ fn inherit_infer_type(line: String) -> String {
         }
     }
 
-    // if the line contains an instantiation, add the type to the map
-    if line.contains(" = ") {
-        let instantiation = line.split(" = ").collect::<Vec<&str>>();
-        let var_type = instantiation[0].split(' ').collect::<Vec<&str>>()
-            [..instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1]
-            .join(" ");
-        let var_name = instantiation[0].split(' ').collect::<Vec<&str>>()
-            [instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1];
+    // if the line does not contains an instantiation, return
+    if !line.contains(" = ") {
+        return cleaned;
+    }
 
-        // add to type map, if the variable is typed
-        if !var_type.is_empty() {
-            type_map.insert(var_name.to_string(), var_type);
-        } else if !line.starts_with("storage") {
+    let instantiation = line.split(" = ").collect::<Vec<&str>>();
+    let var_type = instantiation[0].split(' ').collect::<Vec<&str>>()
+        [..instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1]
+        .join(" ");
+    let var_name = instantiation[0].split(' ').collect::<Vec<&str>>()
+        [instantiation[0].split(' ').collect::<Vec<&str>>().len() - 1];
 
+    // add to type map, if the variable is typed
+    if !var_type.is_empty() {
+        type_map.insert(var_name.to_string(), var_type);
+    }
+    // inherit infer types for memory
+    else if !line.starts_with("storage") {
+        // get the rhs of the expression
+        let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
+
+        if rhs.contains("storage") {
+            // extract the storage accesses using STORAGE_ACCESS_REGEX
+            let storage_accesses = STORAGE_ACCESS_REGEX
+                .captures_iter(rhs)
+                .map(|x| x.unwrap().get(0).unwrap().as_str().to_string())
+                .collect::<HashSet<String>>();
+
+            for storage_access in storage_accesses {
+                let mut storage_slot = storage_access[8..storage_access.len() - 1].to_owned();
+
+                // if the storage_slot is a variable, replace it with the value
+                // ex: storage[var_b] => storage[keccak256(var_a)]
+                // helps with type inference
+                if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
+                    for (var, value) in var_map.clone().iter() {
+                        if storage_slot.contains(var) {
+                            storage_slot = storage_slot.replace(var, value);
+                        }
+                    }
+                }
+
+                // skip keccak slots, they will be handled later
+                if storage_slot.contains("keccak256") {
+                    continue;
+                }
+
+                // add to type map
+                let var_name = format!("stor_{}", storage_slot.replacen("0x", "", 1));
+                storage_map.insert(var_name, "bytes32".to_string());
+            }
+        } else {
             // infer the type from args and vars in the expression
             for (var, var_type) in type_map.clone().iter() {
                 if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty()
@@ -537,6 +579,72 @@ fn inherit_infer_type(line: String) -> String {
                     break;
                 }
             }
+        }
+    }
+    // inherit infer types for storage
+    else if line.starts_with("storage") {
+        // copy the line to a mut
+        let mut line = line.clone();
+
+        // get the storage slot
+        let mut storage_slot = var_name[8..var_name.len() - 1].to_owned();
+
+        // if the storage_slot is a variable, replace it with the value
+        // ex: storage[var_b] => storage[keccak256(var_a)]
+        // helps with type inference
+        if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
+            for (var, value) in var_map.clone().iter() {
+                if storage_slot.contains(var) {
+                    line = line.replace(var, value);
+                    storage_slot = storage_slot.replace(var, value);
+                }
+            }
+        }
+
+        // default type is bytes32
+        let mut lhs_type = "bytes32".to_string();
+        let mut rhs_type = "bytes32".to_string();
+
+        // get the rhs of the expression
+        let rhs = line.split(" = ").collect::<Vec<&str>>()[1];
+
+        // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull types from both the lhs and rhs
+        if storage_slot.contains("keccak256") {
+            // replace the storage slot in rhs with a placeholder
+            // this will prevent us from pulling bad types from the rhs
+            let rhs = rhs.replace(&storage_slot, "_");
+
+            // find vars in lhs or rhs
+            for (var, var_type) in type_map.clone().iter() {
+                // check for vars in lhs
+                if storage_slot.contains(var) && !var_type.is_empty() {
+                    lhs_type = var_type.to_string();
+
+                    // continue, so we cannot use this var in rhs
+                    continue;
+                }
+
+                // check for vars in rhs
+                if rhs.contains(var) && !var_type.is_empty() {
+                    rhs_type = var_type.to_string();
+                }
+            }
+
+            // add to type map
+            let var_name = format!("stor_map_slot_x");
+            let mapping_type = format!("mapping({lhs_type} => {rhs_type})");
+            storage_map.insert(var_name, mapping_type);
+        } else {
+            // get the type of the rhs
+            for (var, var_type) in type_map.clone().iter() {
+                if rhs.contains(var) && !var_type.is_empty() {
+                    rhs_type = var_type.to_string();
+                }
+            }
+
+            // add to type map
+            let var_name = format!("stor_{}", storage_slot.replacen("0x", "", 1));
+            storage_map.insert(var_name, rhs_type);
         }
     }
 
@@ -630,6 +738,28 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
 
     // remove unused assignments
     for (i, line) in lines.iter().enumerate() {
+        // check if we need to insert storage vars
+        if cleaned_lines.last().unwrap_or(&"".to_string()).contains("DecompiledContract") {
+            let mut storage_var_lines: Vec<String> = vec!["    ".to_string()];
+
+            // insert storage vars
+            for (var_name, var_type) in STORAGE_TYPE_MAP.lock().unwrap().clone().iter() {
+                storage_var_lines.push(format!(
+                    "    {} public {};",
+                    var_type.replace(" memory", ""),
+                    var_name
+                ));
+            }
+
+            // sort storage vars by length, shortest first, then alphabetically
+            storage_var_lines.sort_by(|a, b| a.len().cmp(&b.len()).then(a.cmp(b)));
+
+            // if we have storage vars, push to cleaned lines
+            if storage_var_lines.len() > 1 {
+                cleaned_lines.append(&mut storage_var_lines);
+            }
+        }
+
         // update progress bar
         if line.contains("function") {
             function_count += 1;
@@ -639,7 +769,7 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
         // only pass in lines further than the current line
         if !contains_unnecessary_assignment(
             line.trim().to_string(),
-            &lines[i+1..].iter().collect::<Vec<_>>(),
+            &lines[i + 1..].iter().collect::<Vec<_>>(),
         ) {
             cleaned_lines.push(line.to_string());
         }
@@ -675,22 +805,11 @@ pub fn postprocess(
         *line = format!(
             "{}{}",
             " ".repeat(indentation * 4),
-            cleanup(
-                line.to_string(),
-                all_resolved_errors.clone(),
-                all_resolved_events.clone()
-            )
+            cleanup(line.to_string(), all_resolved_errors.clone(), all_resolved_events.clone())
         );
 
         // indent due to opening braces
-        if line
-            .split("//")
-            .collect::<Vec<&str>>()
-            .first()
-            .unwrap()
-            .trim()
-            .ends_with('{')
-        {
+        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with('{') {
             indentation += 1;
         }
     }

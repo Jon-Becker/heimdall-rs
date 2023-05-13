@@ -2,15 +2,22 @@ pub mod csv;
 pub mod table;
 pub mod threads;
 
-use std::{str::FromStr, io};
+use std::{io, str::FromStr};
 
-use crossterm::{terminal::{disable_raw_mode, LeaveAlternateScreen}, execute, event::DisableMouseCapture};
-use ethers::{types::{StateDiff, H256, TraceType}, providers::{Provider, Http, Middleware}};
+use crossterm::{
+    event::DisableMouseCapture,
+    execute,
+    terminal::{disable_raw_mode, LeaveAlternateScreen},
+};
+use ethers::{
+    providers::{Http, Middleware, Provider},
+    types::{StateDiff, TraceType, H256},
+};
 use heimdall_cache::{read_cache, store_cache};
 use heimdall_common::io::logging::Logger;
 use tui::{backend::CrosstermBackend, Terminal};
 
-use super::{DumpArgs, structures::transaction::Transaction};
+use super::{structures::transaction::Transaction, DumpArgs};
 
 // cleanup the terminal, disable raw mode, and leave the alternate screen
 pub fn cleanup_terminal() {
@@ -24,15 +31,11 @@ pub fn cleanup_terminal() {
 
 // get the state diff for the given transaction
 pub fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<StateDiff> {
-    
     // create new logger
-    let (logger, _)= Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, _) = Logger::new(args.verbose.log_level().unwrap().as_str());
 
     // create new runtime block
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
     rt.block_on(async {
 

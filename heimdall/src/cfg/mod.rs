@@ -29,7 +29,7 @@ use heimdall_common::{
 use petgraph::Graph;
 
 use crate::cfg::output::build_output;
-use crate::cfg::util::{map_contract};
+use crate::cfg::util::map_contract;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Generate a visual control flow graph for EVM bytecode",
@@ -79,10 +79,7 @@ pub fn cfg(args: CFGArgs) {
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>()
             + "..."
-            + &shortened_target
-                .chars()
-                .skip(shortened_target.len() - 16)
-                .collect::<String>();
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     // add the call to the trace
@@ -119,10 +116,7 @@ pub fn cfg(args: CFGArgs) {
         }
 
         // create new runtime block
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
         // We are working with a contract address, so we need to fetch the bytecode from the RPC provider.
         contract_bytecode = rt.block_on(async {
@@ -172,7 +166,7 @@ pub fn cfg(args: CFGArgs) {
             bytecode_as_bytes.to_string().replacen("0x", "", 1)
         });
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        contract_bytecode = args.target.clone();
+        contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
         // push the address to the output directory
         if output_dir != args.output {
@@ -185,10 +179,8 @@ pub fn cfg(args: CFGArgs) {
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
                     contents.replacen("0x", "", 1)
                 } else {
-                    logger.error(&format!(
-                        "file '{}' doesn't contain valid bytecode.",
-                        &args.target
-                    ));
+                    logger
+                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
                     std::process::exit(1)
                 }
             }
@@ -232,9 +224,8 @@ pub fn cfg(args: CFGArgs) {
     if compiler == "solc" {
         logger.debug(&format!("detected compiler {compiler} {version}."));
     } else {
-        logger.warn(&format!(
-            "detected compiler {compiler} {version} is not supported by heimdall."
-        ));
+        logger
+            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
     // create a new EVM instance
@@ -251,10 +242,7 @@ pub fn cfg(args: CFGArgs) {
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>()
             + "..."
-            + &shortened_target
-                .chars()
-                .skip(shortened_target.len() - 16)
-                .collect::<String>();
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     // add the creation to the trace
@@ -268,14 +256,8 @@ pub fn cfg(args: CFGArgs) {
 
     // find all selectors in the bytecode
     let selectors = find_function_selectors(disassembled_bytecode);
-    logger.info(&format!(
-        "found {} possible function selectors.",
-        selectors.len()
-    ));
-    logger.info(&format!(
-        "performing symbolic execution on '{}' .",
-        &shortened_target
-    ));
+    logger.info(&format!("found {} possible function selectors.", selectors.len()));
+    logger.info(&format!("performing symbolic execution on '{}' .", &shortened_target));
 
     // create a new progress bar
     let progress = ProgressBar::new_spinner();
@@ -313,10 +295,7 @@ pub fn cfg(args: CFGArgs) {
     // build the dot file
     build_output(&contract_cfg, &args, output_dir.clone(), &logger);
 
-    logger.debug(&format!(
-        "Control flow graph generated in {:?}.",
-        now.elapsed()
-    ));
+    logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()));
     trace.display();
 }
 

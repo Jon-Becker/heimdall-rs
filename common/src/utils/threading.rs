@@ -1,8 +1,12 @@
+use crossbeam_channel::unbounded;
+use std::sync::Arc;
 use std::thread;
-use std::sync::{Arc};
-use crossbeam_channel::{unbounded};
 
-pub fn task_pool<T: Clone + Send + Sync + 'static, R: Send + 'static, F: Fn(T) -> R + Send + Sync + 'static>(
+pub fn task_pool<
+    T: Clone + Send + Sync + 'static,
+    R: Send + 'static,
+    F: Fn(T) -> R + Send + Sync + 'static,
+>(
     items: Vec<T>,
     num_threads: usize,
     f: F,

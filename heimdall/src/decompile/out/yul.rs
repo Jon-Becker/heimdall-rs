@@ -291,6 +291,14 @@ pub fn output(
     // write the decompiled source to file
     let mut decompiled_output: Vec<String> = Vec::new();
 
+    // truncate target for prettier display
+    let mut shortened_target = args.target.clone();
+    if shortened_target.len() > 66 {
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+    }
+
     // add the call to the trace
     trace.add_call(
         trace_parent,
@@ -298,7 +306,7 @@ pub fn output(
         "heimdall".to_string(),
         "build_output".to_string(),
         vec![args.target.to_string()],
-        short_path(&decompiled_output_path),
+        short_path(&shortened_target),
     );
 
     // write the header to the output file
@@ -374,11 +382,8 @@ pub fn output(
         let mut sorted_arguments: Vec<_> = function.arguments.into_iter().collect();
         sorted_arguments.sort_by(|x, y| x.0.cmp(&y.0));
 
-        decompiled_output.push(format!(
-            "case 0x{} /* \"{}\" */ {{",
-            function.selector,
-            function_header
-        ));
+        decompiled_output
+            .push(format!("case 0x{} /* \"{}\" */ {{", function.selector, function_header));
         decompiled_output.extend(function.logic);
         decompiled_output.push(String::from("}"));
     }
@@ -396,10 +401,7 @@ pub fn output(
             &decompiled_output_path,
             postprocess(decompiled_output, all_resolved_events, &progress_bar),
         );
-        logger.success(&format!(
-            "wrote decompiled contract to '{}' .",
-            &decompiled_output_path
-        ));
+        logger.success(&format!("wrote decompiled contract to '{}' .", &decompiled_output_path));
         progress_bar.finish_and_clear();
     } else {
         progress_bar.finish_and_clear();

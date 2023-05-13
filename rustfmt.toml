@@ -1,0 +1,14 @@
+unstable_options = true
+reorder_imports = true
+imports_granularity = "Crate"
+use_small_heuristics = "Max"
+comment_width = 100
+wrap_comments = true
+binop_separator = "Back"
+trailing_comma = "Vertical"
+trailing_semicolon = false
+use_field_init_shorthand = false
+brace_style = "PreferSameLine"
+control_brace_style = "AlwaysSameLine"
+condense_wildcard_suffixes = true
+fn_args_layout = "Tall"

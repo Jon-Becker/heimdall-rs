@@ -1,30 +1,30 @@
-use std::{panic, io};
 use backtrace::Backtrace;
+use std::{io, panic};
 
 mod cfg;
-mod dump;
 mod decode;
 mod decompile;
+mod dump;
 
 use clap::{Parser, Subcommand};
 
-use colored::Colorize;
-use crossterm::{terminal::{disable_raw_mode, LeaveAlternateScreen}, execute, event::DisableMouseCapture};
-use heimdall_config::{config, get_config, ConfigArgs};
-use heimdall_cache::{cache, CacheArgs};
-use heimdall_common::{ether::evm::disassemble::*, io::{logging::Logger}};
-use decompile::{decompile, DecompilerArgs};
-use decode::{decode, DecodeArgs};
-use dump::{dump, DumpArgs};
 use cfg::{cfg, CFGArgs};
+use colored::Colorize;
+use crossterm::{
+    event::DisableMouseCapture,
+    execute,
+    terminal::{disable_raw_mode, LeaveAlternateScreen},
+};
+use decode::{decode, DecodeArgs};
+use decompile::{decompile, DecompilerArgs};
+use dump::{dump, DumpArgs};
+use heimdall_cache::{cache, CacheArgs};
+use heimdall_common::{ether::evm::disassemble::*, io::logging::Logger};
+use heimdall_config::{config, get_config, ConfigArgs};
 use tui::{backend::CrosstermBackend, Terminal};
 
 #[derive(Debug, Parser)]
-#[clap(
-    name = "heimdall",
-    author = "Jonathan Becker <jonathan@jbecker.dev>",
-    version
-)]
+#[clap(name = "heimdall", author = "Jonathan Becker <jonathan@jbecker.dev>", version)]
 pub struct Arguments {
     #[clap(subcommand)]
     pub sub: Subcommands,
@@ -37,7 +37,6 @@ pub struct Arguments {
 )]
 #[allow(clippy::large_enum_variant)]
 pub enum Subcommands {
-
     #[clap(name = "disassemble", about = "Disassemble EVM bytecode to assembly")]
     Disassemble(DisassemblerArgs),
 
@@ -64,36 +63,28 @@ fn main() {
     let args = Arguments::parse();
 
     // handle catching panics with
-    panic::set_hook(
-        Box::new(|panic_info| {
-            
-            // cleanup the terminal
-            let stdout = io::stdout();
-            let backend = CrosstermBackend::new(stdout);
-            let mut terminal = Terminal::new(backend).unwrap();
-            disable_raw_mode().unwrap();
-            execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture).unwrap();
-            terminal.show_cursor().unwrap();
+    panic::set_hook(Box::new(|panic_info| {
+        // cleanup the terminal
+        let stdout = io::stdout();
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend).unwrap();
+        disable_raw_mode().unwrap();
+        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture).unwrap();
+        terminal.show_cursor().unwrap();
 
-            // print the panic message
-            let backtrace = Backtrace::new();
-            let (logger, _)= Logger::new("TRACE");
-            logger.fatal(
-                &format!(
-                    "thread 'main' encountered a fatal error: '{}'!", 
-                    panic_info.to_string().bright_white().on_bright_red().bold(),
-                )
-            );
-            logger.fatal(&format!("Stack Trace:\n\n{backtrace:#?}"));
-        }
-    ));
+        // print the panic message
+        let backtrace = Backtrace::new();
+        let (logger, _) = Logger::new("TRACE");
+        logger.fatal(&format!(
+            "thread 'main' encountered a fatal error: '{}'!",
+            panic_info.to_string().bright_white().on_bright_red().bold(),
+        ));
+        logger.fatal(&format!("Stack Trace:\n\n{backtrace:#?}"));
+    }));
 
     let configuration = get_config();
     match args.sub {
-
-
         Subcommands::Disassemble(mut cmd) => {
-            
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -102,9 +93,7 @@ fn main() {
             disassemble(cmd);
         }
 
-
         Subcommands::Decompile(mut cmd) => {
-            
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -113,9 +102,7 @@ fn main() {
             decompile(cmd);
         }
 
-
         Subcommands::Decode(mut cmd) => {
-            
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -129,9 +116,7 @@ fn main() {
             decode(cmd);
         }
 
-
         Subcommands::CFG(mut cmd) => {
-            
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -140,9 +125,7 @@ fn main() {
             cfg(cmd);
         }
 
-        
         Subcommands::Dump(mut cmd) => {
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -152,15 +135,13 @@ fn main() {
             if cmd.transpose_api_key.as_str() == "" {
                 cmd.transpose_api_key = configuration.transpose_api_key;
             }
-            
+
             dump(cmd);
         }
-
 
         Subcommands::Config(cmd) => {
             config(cmd);
         }
-
 
         Subcommands::Cache(cmd) => {
             _ = cache(cmd);

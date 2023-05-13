@@ -1,42 +1,33 @@
+use std::num::ParseIntError;
 
-use std::{num::ParseIntError};
-
-use ethers::{prelude::{I256, U256}, abi::AbiEncode};
+use ethers::{
+    abi::AbiEncode,
+    prelude::{I256, U256},
+};
 use fancy_regex::Regex;
 
 use crate::constants::REDUCE_HEX_REGEX;
-
 
 // Convert an unsigned integer into a signed one
 pub fn sign_uint(unsigned: U256) -> I256 {
     I256::from_raw(unsigned)
 }
 
-
 // decode a hex into an array of integer values
 pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
-    (0..s.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
-        .collect()
+    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16)).collect()
 }
-
 
 // encode a hex into a string
 pub fn encode_hex(s: Vec<u8>) -> String {
-    s.iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    s.iter().map(|b| format!("{b:02x}")).collect()
 }
-
 
 // convert a U256 to hex without leading 0s
 pub fn encode_hex_reduced(s: U256) -> String {
-
     if s > U256::from(0) {
         REDUCE_HEX_REGEX.replace(&s.encode_hex(), "0x").to_string()
-    }
-    else {
+    } else {
         String::from("0")
     }
 }
@@ -62,7 +53,6 @@ pub fn replace_last(s: String, old: &str, new: &str) -> String {
     s.chars().rev().collect::<String>().replacen(old, &new, 1).chars().rev().collect::<String>()
 }
 
-
 // find balanced parentheses in a string
 pub fn find_balanced_encapsulator(s: String, encap: (char, char)) -> (usize, usize, bool) {
     let mut open = 0;
@@ -87,7 +77,10 @@ pub fn find_balanced_encapsulator(s: String, encap: (char, char)) -> (usize, usi
 }
 
 // find balanced parentheses in a string, but backwards
-pub fn find_balanced_encapsulator_backwards(s: String, encap: (char, char)) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator_backwards(
+    s: String,
+    encap: (char, char),
+) -> (usize, usize, bool) {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -123,7 +116,6 @@ pub fn base26_encode(n: usize) -> String {
 
 // splits a string by a given regex
 pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
-
     // Find all matches of the pattern in the input string
     let matches = pattern.find_iter(input);
 
