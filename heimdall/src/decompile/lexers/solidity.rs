@@ -121,7 +121,7 @@ impl VMTrace {
                 if !function
                     .events
                     .iter()
-                    .any(|(selector, _)| selector == &*logged_event.topics.first().unwrap())
+                    .any(|(selector, _)| selector == logged_event.topics.first().unwrap())
                 {
                     // add the event to the function
                     function.events.insert(
@@ -233,7 +233,7 @@ impl VMTrace {
                 // handle case with error string abiencoded
                 if revert_data.starts_with(&decode_hex("08c379a0").unwrap()) {
                     let revert_string = match revert_data.get(4..) {
-                        Some(hex_data) => match decode(&[ParamType::String], &hex_data) {
+                        Some(hex_data) => match decode(&[ParamType::String], hex_data) {
                             Ok(revert) => revert[0].to_string(),
                             Err(_) => "decoding error".to_string(),
                         },

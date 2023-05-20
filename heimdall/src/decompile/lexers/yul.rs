@@ -112,7 +112,7 @@ impl VMTrace {
                 if !function
                     .events
                     .iter()
-                    .any(|(selector, _)| selector == &*logged_event.topics.first().unwrap())
+                    .any(|(selector, _)| selector == logged_event.topics.first().unwrap())
                 {
                     // add the event to the function
                     function.events.insert(

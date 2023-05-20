@@ -536,7 +536,7 @@ pub fn decompile(args: DecompilerArgs) {
                     resolved_counter += 1;
                     analyzed_function
                         .errors
-                        .insert(error_selector.clone(), Some(selected_match.clone()));
+                        .insert(error_selector, Some(selected_match.clone()));
                     all_resolved_errors.insert(error_selector_str, selected_match.clone());
                 }
             }
@@ -593,7 +593,7 @@ pub fn decompile(args: DecompilerArgs) {
                     resolved_counter += 1;
                     analyzed_function
                         .events
-                        .insert(event_selector.clone(), (Some(selected_match.clone()), raw_event));
+                        .insert(event_selector, (Some(selected_match.clone()), raw_event));
                     all_resolved_events.insert(event_selector_str, selected_match.clone());
                 }
             }

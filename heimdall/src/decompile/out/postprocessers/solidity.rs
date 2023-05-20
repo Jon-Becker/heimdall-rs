@@ -304,39 +304,35 @@ fn convert_access_to_variable(line: String) -> String {
 
     // since the regex is greedy, match the memory brackets
     let matched_loc = find_balanced_encapsulator(memory_access.to_string(), ('[', ']'));
-    match matched_loc.2 {
-        true => {
-            let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
+    if let true = matched_loc.2 {
+        let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
 
-            // safe to unwrap since we know these indices exist
-            let memloc =
-                format!("memory{}", memory_access.get(matched_loc.0..matched_loc.1).unwrap());
+        // safe to unwrap since we know these indices exist
+        let memloc = format!("memory{}", memory_access.get(matched_loc.0..matched_loc.1).unwrap());
 
-            let variable_name = match mem_map.get(&memloc) {
-                Some(loc) => loc.to_owned(),
-                None => {
-                    // add the memory location to the map
-                    let idex = mem_map.len() + 1;
+        let variable_name = match mem_map.get(&memloc) {
+            Some(loc) => loc.to_owned(),
+            None => {
+                // add the memory location to the map
+                let idex = mem_map.len() + 1;
 
-                    // get the variable name
-                    let variable_name = format!("var_{}", base26_encode(idex));
+                // get the variable name
+                let variable_name = format!("var_{}", base26_encode(idex));
 
-                    // add the variable to the map
-                    mem_map.insert(memloc.clone(), variable_name.clone());
-                    variable_name
-                }
-            };
+                // add the variable to the map
+                mem_map.insert(memloc.clone(), variable_name.clone());
+                variable_name
+            }
+        };
 
-            // unlock the map
-            drop(mem_map);
+        // unlock the map
+        drop(mem_map);
 
-            // upadte the memory name
-            cleaned = cleaned.replace(memloc.as_str(), &variable_name);
+        // upadte the memory name
+        cleaned = cleaned.replace(memloc.as_str(), &variable_name);
 
-            // recurse to replace any other memory accesses
-            cleaned = convert_access_to_variable(cleaned);
-        }
-        _ => (),
+        // recurse to replace any other memory accesses
+        cleaned = convert_access_to_variable(cleaned);
     }
 
     // find a storage access
@@ -347,53 +343,50 @@ fn convert_access_to_variable(line: String) -> String {
 
     // since the regex is greedy, match the memory brackets
     let matched_loc = find_balanced_encapsulator(storage_access.to_string(), ('[', ']'));
-    match matched_loc.2 {
-        true => {
-            let mut stor_map = STORAGE_LOOKUP_MAP.lock().unwrap();
+    if let true = matched_loc.2 {
+        let mut stor_map = STORAGE_LOOKUP_MAP.lock().unwrap();
 
-            // safe to unwrap since we know these indices exist
-            let memloc =
-                format!("storage{}", storage_access.get(matched_loc.0..matched_loc.1).unwrap());
+        // safe to unwrap since we know these indices exist
+        let memloc =
+            format!("storage{}", storage_access.get(matched_loc.0..matched_loc.1).unwrap());
 
-            let variable_name = match stor_map.get(&memloc) {
-                Some(loc) => loc.to_owned(),
-                None => {
-                    // add the memory location to the map
-                    let idex = stor_map.len() + 1;
+        let variable_name = match stor_map.get(&memloc) {
+            Some(loc) => loc.to_owned(),
+            None => {
+                // add the memory location to the map
+                let idex = stor_map.len() + 1;
 
-                    // get the variable name
-                    if memloc.contains("keccak256") {
-                        let keccak_key = find_balanced_encapsulator(memloc.clone(), ('(', ')'));
+                // get the variable name
+                if memloc.contains("keccak256") {
+                    let keccak_key = find_balanced_encapsulator(memloc.clone(), ('(', ')'));
 
-                        let variable_name = format!(
-                            "stor_map_{}[{}]",
-                            base26_encode(idex),
-                            memloc.get(keccak_key.0 + 1..keccak_key.1 - 1).unwrap()
-                        );
+                    let variable_name = format!(
+                        "stor_map_{}[{}]",
+                        base26_encode(idex),
+                        memloc.get(keccak_key.0 + 1..keccak_key.1 - 1).unwrap()
+                    );
 
-                        // add the variable to the map
-                        stor_map.insert(memloc.clone(), variable_name.clone());
-                        variable_name
-                    } else {
-                        let variable_name = format!("stor_{}", base26_encode(idex));
+                    // add the variable to the map
+                    stor_map.insert(memloc.clone(), variable_name.clone());
+                    variable_name
+                } else {
+                    let variable_name = format!("stor_{}", base26_encode(idex));
 
-                        // add the variable to the map
-                        stor_map.insert(memloc.clone(), variable_name.clone());
-                        variable_name
-                    }
+                    // add the variable to the map
+                    stor_map.insert(memloc.clone(), variable_name.clone());
+                    variable_name
                 }
-            };
+            }
+        };
 
-            // unlock the map
-            drop(stor_map);
+        // unlock the map
+        drop(stor_map);
 
-            // upadte the memory name
-            cleaned = cleaned.replace(memloc.as_str(), &variable_name);
+        // upadte the memory name
+        cleaned = cleaned.replace(memloc.as_str(), &variable_name);
 
-            // recurse to replace any other memory accesses
-            cleaned = convert_access_to_variable(cleaned);
-        }
-        _ => return cleaned,
+        // recurse to replace any other memory accesses
+        cleaned = convert_access_to_variable(cleaned);
     }
 
     // if the memory access is an instantiation, save it
@@ -408,7 +401,7 @@ fn convert_access_to_variable(line: String) -> String {
     } else {
         // if var_map doesn't contain the variable, add it
         let mut var_map = VARIABLE_MAP.lock().unwrap();
-        if let None = var_map.get(&cleaned) {
+        if var_map.get(&cleaned).is_none() {
             var_map.insert(cleaned.clone(), "".to_string());
             drop(var_map);
         }
@@ -607,7 +600,7 @@ fn inherit_infer_storage_type(line: String) {
         let mut line = line.clone();
 
         // get the storage slot
-        let storage_access = match STORAGE_ACCESS_REGEX.find(&instantiation[0]).unwrap() {
+        let storage_access = match STORAGE_ACCESS_REGEX.find(instantiation[0]).unwrap() {
             Some(x) => x.as_str(),
             None => return,
         };
