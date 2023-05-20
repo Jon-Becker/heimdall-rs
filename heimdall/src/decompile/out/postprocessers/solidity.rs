@@ -15,10 +15,7 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::{
-    collections::{HashMap},
-    sync::Mutex,
-};
+use std::{collections::HashMap, sync::Mutex};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -339,7 +336,7 @@ fn convert_access_to_variable(line: String) -> String {
             // recurse to replace any other memory accesses
             cleaned = convert_access_to_variable(cleaned);
         }
-        _ => ()
+        _ => (),
     }
 
     // find a storage access
@@ -368,20 +365,22 @@ fn convert_access_to_variable(line: String) -> String {
                     if memloc.contains("keccak256") {
                         let keccak_key = find_balanced_encapsulator(memloc.clone(), ('(', ')'));
 
-                        let variable_name = format!("stor_map_{}[{}]", base26_encode(idex), memloc.get(keccak_key.0+1..keccak_key.1-1).unwrap());
+                        let variable_name = format!(
+                            "stor_map_{}[{}]",
+                            base26_encode(idex),
+                            memloc.get(keccak_key.0 + 1..keccak_key.1 - 1).unwrap()
+                        );
 
                         // add the variable to the map
                         stor_map.insert(memloc.clone(), variable_name.clone());
                         variable_name
                     } else {
                         let variable_name = format!("stor_{}", base26_encode(idex));
-                        
+
                         // add the variable to the map
                         stor_map.insert(memloc.clone(), variable_name.clone());
                         variable_name
                     }
-
-                    
                 }
             };
 
@@ -406,8 +405,7 @@ fn convert_access_to_variable(line: String) -> String {
         var_map.insert(instantiation[0].clone(), instantiation[1].replace(';', ""));
 
         drop(var_map);
-    }
-    else {
+    } else {
         // if var_map doesn't contain the variable, add it
         let mut var_map = VARIABLE_MAP.lock().unwrap();
         if let None = var_map.get(&cleaned) {
@@ -418,7 +416,6 @@ fn convert_access_to_variable(line: String) -> String {
 
     // now we need to check if we should infer types if storage is being assigned
     if line.contains("storage") {
-            
         // infer type of storage slot & add to storage variable map
         inherit_infer_storage_type(line);
     }
@@ -581,11 +578,9 @@ fn inherit_infer_mem_type(line: String) -> String {
     }
     // inherit infer types for memory
     else if !line.starts_with("storage") {
-
         // infer the type from args and vars in the expression
         for (var, var_type) in type_map.clone().iter() {
-            if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty()
-            {
+            if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty() {
                 cleaned = format!("{var_type} {cleaned}");
                 type_map.insert(var_name.to_string(), var_type.to_string());
                 break;
@@ -619,8 +614,11 @@ fn inherit_infer_storage_type(line: String) {
 
         // since the regex is greedy, match the memory brackets
         let matched_loc = find_balanced_encapsulator(storage_access.to_string(), ('[', ']'));
-        if !matched_loc.2 { return }
-        let mut storage_slot = format!("storage{}", storage_access.get(matched_loc.0..matched_loc.1).unwrap());
+        if !matched_loc.2 {
+            return;
+        }
+        let mut storage_slot =
+            format!("storage{}", storage_access.get(matched_loc.0..matched_loc.1).unwrap());
 
         // get the storage slot name from storage_lookup_map
         let mut var_name = match storage_lookup_map.get(&storage_slot) {
@@ -682,9 +680,7 @@ fn inherit_infer_storage_type(line: String) {
             // add to type map
             storage_map.insert(var_name, rhs_type);
         }
-    }
-    else {
-        
+    } else {
         for (access, var_name) in storage_lookup_map.iter() {
             if line.contains(access) {
                 let var_name = var_name.split('[').collect::<Vec<&str>>()[0].to_string();
@@ -715,10 +711,9 @@ fn inherit_infer_storage_type(line: String) {
                     // add to type map
                     let mapping_type = format!("mapping({lhs_type} => {rhs_type})");
                     storage_map.insert(var_name.to_string(), mapping_type);
-                }
-                else {
+                } else {
                     let mut handled = false;
-                
+
                     // get the type of the rhs
                     for (var, var_type) in type_map.clone().iter() {
                         if line.contains(var) && !var_type.is_empty() {
