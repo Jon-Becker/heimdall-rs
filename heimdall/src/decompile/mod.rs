@@ -325,10 +325,8 @@ pub fn decompile(args: DecompilerArgs) {
         );
 
         // get a map of possible jump destinations
-        logger.debug("start mapping");
         let (map, jumpdest_count) =
             map_selector(&evm.clone(), selector.clone(), function_entry_point);
-        logger.debug("done mapping");
 
         trace.add_debug(
             func_analysis_trace,
