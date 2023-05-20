@@ -325,10 +325,8 @@ pub fn decompile(args: DecompilerArgs) {
         );
 
         // get a map of possible jump destinations
-        logger.debug("start mapping");
         let (map, jumpdest_count) =
             map_selector(&evm.clone(), selector.clone(), function_entry_point);
-        logger.debug("done mapping");
 
         trace.add_debug(
             func_analysis_trace,
@@ -538,7 +536,7 @@ pub fn decompile(args: DecompilerArgs) {
                     resolved_counter += 1;
                     analyzed_function
                         .errors
-                        .insert(error_selector.clone(), Some(selected_match.clone()));
+                        .insert(error_selector, Some(selected_match.clone()));
                     all_resolved_errors.insert(error_selector_str, selected_match.clone());
                 }
             }
@@ -595,7 +593,7 @@ pub fn decompile(args: DecompilerArgs) {
                     resolved_counter += 1;
                     analyzed_function
                         .events
-                        .insert(event_selector.clone(), (Some(selected_match.clone()), raw_event));
+                        .insert(event_selector, (Some(selected_match.clone()), raw_event));
                     all_resolved_events.insert(event_selector_str, selected_match.clone());
                 }
             }

@@ -192,7 +192,7 @@ impl VM {
                 let result = a.value.overflowing_add(b.value).0;
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -210,7 +210,7 @@ impl VM {
                 let result = a.value.overflowing_mul(b.value).0;
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -228,7 +228,7 @@ impl VM {
                 let result = a.value.overflowing_sub(b.value).0;
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -249,7 +249,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&numerator.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
                 {
@@ -270,7 +270,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&numerator.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
                 {
@@ -292,7 +292,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
                 {
@@ -313,7 +313,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
                 {
@@ -336,7 +336,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -358,7 +358,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -376,7 +376,7 @@ impl VM {
                 let result = a.value.overflowing_pow(exponent.value).0;
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&exponent.operation.opcode.code)
                 {
@@ -475,7 +475,7 @@ impl VM {
                 let result = a.value & b.value;
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -493,7 +493,7 @@ impl VM {
                 let result = a.value | b.value;
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -511,7 +511,7 @@ impl VM {
                 let result = a.value ^ b.value;
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -528,7 +528,7 @@ impl VM {
                 let result = !a.value;
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code) {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -564,7 +564,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -590,7 +590,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -628,7 +628,7 @@ impl VM {
                 }
 
                 // if both inputs are PUSH instructions, simplify the operation
-                let mut simplified_operation = operation.clone();
+                let mut simplified_operation = operation;
                 if (0x5f..=0x7f).contains(&a.operation.opcode.code)
                     && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
@@ -1021,7 +1021,7 @@ impl VM {
             0x41 => {
                 self.stack.push(
                     U256::from_str("0x6865696d64616c6c00000000636f696e62617365").unwrap(),
-                    operation.clone(),
+                    operation,
                 );
             }
 
@@ -1090,7 +1090,7 @@ impl VM {
                     }
                 };
 
-                self.memory.store(offset, 32, &value.encode().as_slice());
+                self.memory.store(offset, 32, value.encode().as_slice());
             }
 
             // MSTORE8
@@ -1328,7 +1328,7 @@ impl VM {
 
                 self.stack.push(
                     U256::from_str("0x6865696d64616c6c000000000000637265617465").unwrap(),
-                    operation.clone(),
+                    operation,
                 );
             }
 

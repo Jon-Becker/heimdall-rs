@@ -20,7 +20,7 @@ lazy_static! {
     pub static ref MEM_ACCESS_REGEX: Regex = Regex::new(r"memory\[.*\]").unwrap();
 
     // detects a storage access
-    pub static ref STORAGE_ACCESS_REGEX: Regex = Regex::new(r"storage\[.*?\]").unwrap();
+    pub static ref STORAGE_ACCESS_REGEX: Regex = Regex::new(r"storage\[.*\]").unwrap();
 
     // detects division by 1
     pub static ref DIV_BY_ONE_REGEX: Regex = Regex::new(r" \/ 0x01(?!\d)").unwrap();

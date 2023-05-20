@@ -384,7 +384,7 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str("ret0.length");
             }
             "PUSH0" => {
-                solidified_wrapped_opcode.push_str("0");
+                solidified_wrapped_opcode.push('0');
             }
             opcode => {
                 if opcode.starts_with("PUSH") {

@@ -63,8 +63,5 @@ pub fn read_file(_path: &String) -> Option<String> {
 
 pub fn delete_path(_path: &String) -> bool {
     let path = std::path::Path::new(_path);
-    match Command::new("rm").args(["-rf", (path.to_str().unwrap())]).output() {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    Command::new("rm").args(["-rf", (path.to_str().unwrap())]).output().is_ok()
 }

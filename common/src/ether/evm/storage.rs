@@ -21,7 +21,7 @@ impl Storage {
     pub fn load(&self, key: [u8; 32]) -> [u8; 32] {
         // return the value associated with the key, with a null word if it doesn't exist
         return match self.storage.get(&key) {
-            Some(value) => value.clone(),
+            Some(value) => *value,
             None => [0u8; 32],
         };
     }

@@ -47,7 +47,7 @@ impl Stack {
 
     // Swap the top value and the nth value on the stack.
     pub fn swap(&mut self, n: usize) -> bool {
-        if let Some(_) = self.stack.get_mut(n) {
+        if self.stack.get_mut(n).is_some() {
             self.stack.swap(0, n);
             true
         } else {
