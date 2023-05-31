@@ -534,9 +534,7 @@ pub fn decompile(args: DecompilerArgs) {
                         };
 
                     resolved_counter += 1;
-                    analyzed_function
-                        .errors
-                        .insert(error_selector, Some(selected_match.clone()));
+                    analyzed_function.errors.insert(error_selector, Some(selected_match.clone()));
                     all_resolved_errors.insert(error_selector_str, selected_match.clone());
                 }
             }

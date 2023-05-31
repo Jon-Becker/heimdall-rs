@@ -14,7 +14,7 @@ pub mod util;
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Manage heimdall-rs' cached objects",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder, 
+       global_setting = AppSettings::DeriveDisplayOrder,
        override_usage = "heimdall cache <SUBCOMMAND>")]
 pub struct CacheArgs {
     #[clap(subcommand)]
