@@ -465,7 +465,7 @@ pub fn decompile(args: DecompilerArgs) {
                                 .iter()
                                 .map(|x| x.signature.clone())
                                 .collect(),
-                            Some((matched_resolved_functions.len() - 1) as u8),
+                            Some(0 as u8),
                             args.default,
                         );
                     });
