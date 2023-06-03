@@ -12,3 +12,4 @@ brace_style = "PreferSameLine"
 control_brace_style = "AlwaysSameLine"
 condense_wildcard_suffixes = true
 fn_args_layout = "Tall"
+trailing_whitespace = "Deny"

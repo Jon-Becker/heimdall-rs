@@ -649,11 +649,11 @@ fn inherit_infer_storage_type(line: String) {
                     // check for vars in lhs
                     if storage_slot.contains(var) && !var_type.is_empty() {
                         lhs_type = var_type.to_string();
-    
+
                         // continue, so we cannot use this var in rhs
                         continue;
                     }
-    
+
                     // check for vars in rhs
                     if rhs.contains(var) && !var_type.is_empty() {
                         rhs_type = var_type.to_string();

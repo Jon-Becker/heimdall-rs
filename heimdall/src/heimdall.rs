@@ -19,7 +19,11 @@ use decode::{decode, DecodeArgs};
 use decompile::{decompile, DecompilerArgs};
 use dump::{dump, DumpArgs};
 use heimdall_cache::{cache, CacheArgs};
-use heimdall_common::{ether::evm::disassemble::*, io::logging::Logger};
+use heimdall_common::{
+    ether::evm::disassemble::*,
+    io::logging::Logger,
+    utils::version::{current_version, remote_version},
+};
 use heimdall_config::{config, get_config, ConfigArgs};
 use tui::{backend::CrosstermBackend, Terminal};
 
@@ -146,5 +150,17 @@ fn main() {
         Subcommands::Cache(cmd) => {
             _ = cache(cmd);
         }
+    }
+
+    // check if the version is up to date
+    let remote_version = remote_version();
+    let current_version = current_version();
+
+    if remote_version.gt(&current_version) {
+        let (logger, _) = Logger::new("TRACE");
+        println!("");
+        logger.info(&format!("great news! An update is available!"));
+        logger
+            .info(&format!("you can update now by running: `bifrost --version {remote_version}`"));
     }
 }

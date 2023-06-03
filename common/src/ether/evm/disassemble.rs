@@ -19,7 +19,7 @@ use heimdall_cache::store_cache;
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Disassemble EVM bytecode to Assembly",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder, 
+       global_setting = AppSettings::DeriveDisplayOrder,
        override_usage = "heimdall disassemble <TARGET> [OPTIONS]")]
 pub struct DisassemblerArgs {
     /// The target to disassemble, either a file, bytecode, contract address, or ENS name.

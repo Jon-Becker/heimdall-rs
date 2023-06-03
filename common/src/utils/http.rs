@@ -1,11 +1,13 @@
+use serde_json::Value;
 use std::io::Read;
 
-use reqwest::blocking::get;
-use serde_json::Value;
+static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 // make a GET request to the target URL and return the response body as JSON
 pub fn get_json_from_url(url: String, attempts_remaining: u8) -> Option<Value> {
-    let mut res = match get(url.clone()) {
+    let client = reqwest::blocking::Client::builder().user_agent(APP_USER_AGENT).build().unwrap();
+
+    let mut res = match client.get(url.clone()).send() {
         Ok(res) => res,
         Err(_) => {
             // retry if we have attempts remaining
