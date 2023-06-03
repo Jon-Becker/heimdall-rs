@@ -15,7 +15,7 @@ use heimdall_common::{
     constants::TRANSACTION_HASH_REGEX,
     ether::{
         evm::types::{display, parse_function_parameters},
-        signatures::{resolve_function_signature, ResolvedFunction},
+        signatures::{resolve_function_signature, ResolvedFunction, score_signature},
     },
     io::logging::Logger,
     utils::strings::decode_hex,
@@ -310,12 +310,20 @@ pub fn decode(args: DecodeArgs) {
         trace.display();
     } else {
         let mut selection: u8 = 0;
+
+        // sort matches by signature using score heuristic from `score_signature`
+        matches.sort_by(|a, b| {
+            let a_score = score_signature(&a.signature);
+            let b_score = score_signature(&b.signature);
+            b_score.cmp(&a_score)
+        });
+
         if matches.len() > 1 {
             selection = logger.option(
                 "warn",
                 "multiple possible matches found. select an option below",
                 matches.iter().map(|x| x.signature.clone()).collect(),
-                Some((matches.len() - 1) as u8),
+                Some(0u8),
                 args.default,
             );
         }

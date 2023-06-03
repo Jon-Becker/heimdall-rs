@@ -444,7 +444,7 @@ pub fn decompile(args: DecompilerArgs) {
                 }
             };
 
-            let matched_resolved_functions =
+            let mut matched_resolved_functions =
                 match_parameters(resolved_functions, &analyzed_function);
 
             trace.br(func_analysis_trace);
@@ -456,6 +456,14 @@ pub fn decompile(args: DecompilerArgs) {
                 );
             } else {
                 let mut selected_function_index: u8 = 0;
+
+                // sort matches by signature using score heuristic from `score_signature`
+                matched_resolved_functions.sort_by(|a, b| {
+                    let a_score = score_signature(&a.signature);
+                    let b_score = score_signature(&b.signature);
+                    b_score.cmp(&a_score)
+                });
+
                 if matched_resolved_functions.len() > 1 {
                     decompilation_progress.suspend(|| {
                         selected_function_index = logger.option(
@@ -465,7 +473,7 @@ pub fn decompile(args: DecompilerArgs) {
                                 .iter()
                                 .map(|x| x.signature.clone())
                                 .collect(),
-                            Some(0 as u8),
+                            Some(0u8),
                             args.default,
                         );
                     });
@@ -507,8 +515,16 @@ pub fn decompile(args: DecompilerArgs) {
                 let resolved_error_selectors = resolve_error_signature(&error_selector_str);
 
                 // only continue if we have matches
-                if let Some(resolved_error_selectors) = resolved_error_selectors {
+                if let Some(mut resolved_error_selectors) = resolved_error_selectors {
                     let mut selected_error_index: u8 = 0;
+
+                    // sort matches by signature using score heuristic from `score_signature`
+                    resolved_error_selectors.sort_by(|a, b| {
+                        let a_score = score_signature(&a.signature);
+                        let b_score = score_signature(&b.signature);
+                        b_score.cmp(&a_score)
+                    });
+
                     if resolved_error_selectors.len() > 1 {
                         decompilation_progress.suspend(|| {
                             selected_error_index = logger.option(
@@ -518,7 +534,7 @@ pub fn decompile(args: DecompilerArgs) {
                                     .iter()
                                     .map(|x| x.signature.clone())
                                     .collect(),
-                                Some((resolved_error_selectors.len() - 1) as u8),
+                                Some(0u8),
                                 args.default,
                             );
                         });
@@ -564,8 +580,16 @@ pub fn decompile(args: DecompilerArgs) {
                 let resolved_event_selectors = resolve_event_signature(&event_selector_str);
 
                 // only continue if we have matches
-                if let Some(resolved_event_selectors) = resolved_event_selectors {
+                if let Some(mut resolved_event_selectors) = resolved_event_selectors {
                     let mut selected_event_index: u8 = 0;
+
+                    // sort matches by signature using score heuristic from `score_signature`
+                    resolved_event_selectors.sort_by(|a, b| {
+                        let a_score = score_signature(&a.signature);
+                        let b_score = score_signature(&b.signature);
+                        b_score.cmp(&a_score)
+                    });
+
                     if resolved_event_selectors.len() > 1 {
                         decompilation_progress.suspend(|| {
                             selected_event_index = logger.option(
@@ -575,7 +599,7 @@ pub fn decompile(args: DecompilerArgs) {
                                     .iter()
                                     .map(|x| x.signature.clone())
                                     .collect(),
-                                Some((resolved_event_selectors.len() - 1) as u8),
+                                Some(0u8),
                                 args.default,
                             );
                         });
