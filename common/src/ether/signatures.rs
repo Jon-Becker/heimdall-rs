@@ -212,3 +212,18 @@ pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
         _ => Some(signature_list),
     }
 }
+
+pub fn score_signature(signature: &String) -> u32 {
+
+    // the score starts at 1000
+    let mut score = 1000;
+
+    // remove the length of the signature from the score
+    // this will prioritize shorter signatures, which are typically less spammy
+    score -= signature.len() as u32;
+
+    // prioritize signatures with less numbers
+    score -= (signature.matches(|c: char| c.is_numeric()).count() as u32) * 3;
+
+    score
+}
