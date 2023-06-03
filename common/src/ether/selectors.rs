@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -40,6 +40,7 @@ pub fn find_function_selectors(assembly: String) -> Vec<String> {
 // resolve a selector's function entry point from the EVM bytecode
 pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
     let mut vm = evm.clone();
+    let mut handled_jumps = HashSet::new();
 
     // execute the EVM call to find the entry point for the given selector
     vm.calldata = decode_hex(&selector).unwrap();
@@ -57,6 +58,15 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
                 && jump_taken == 1
             {
                 return call.last_instruction.inputs[0].try_into().unwrap_or(0);
+            } else if jump_taken == 1 {
+                // if handled_jumps contains the jumpi, we have already handled this jump.
+                // loops aren't supported in the dispatcher, so we can just return 0
+                if handled_jumps.contains(&call.last_instruction.inputs[0].try_into().unwrap_or(0))
+                {
+                    return 0;
+                } else {
+                    handled_jumps.insert(call.last_instruction.inputs[0].try_into().unwrap_or(0));
+                }
             }
         }
 
