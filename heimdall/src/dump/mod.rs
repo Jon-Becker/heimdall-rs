@@ -67,7 +67,12 @@ pub struct DumpArgs {
 }
 
 pub fn dump(args: DumpArgs) {
-    let (logger, _) = Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, _) = Logger::new(
+        match args.verbose.log_level() {
+            Some(level) => level.as_str(),
+            None => "SILENT",
+        }
+    );
 
     // parse the output directory
     let mut output_dir = args.output.clone();
