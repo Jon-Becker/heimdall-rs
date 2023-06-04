@@ -59,7 +59,12 @@ pub struct DecodeArgs {
 
 #[allow(deprecated)]
 pub fn decode(args: DecodeArgs) {
-    let (logger, mut trace) = Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, mut trace) = Logger::new(
+        match args.verbose.log_level() {
+            Some(level) => level.as_str(),
+            None => "SILENT",
+        }
+    );
     let mut raw_transaction: Transaction = Transaction::default();
     let calldata;
 

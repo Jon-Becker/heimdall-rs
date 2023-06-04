@@ -6,12 +6,12 @@ use colored::*;
 use super::super::utils::strings::replace_last;
 
 pub struct Logger {
-    pub level: u8,
+    pub level: i8,
 }
 
 #[derive(Clone, Debug)]
 pub struct TraceFactory {
-    pub level: u8,
+    pub level: i8,
     pub traces: Vec<Trace>,
 }
 
@@ -36,7 +36,7 @@ pub struct Trace {
 
 impl TraceFactory {
     // creates a new empty trace factory
-    pub fn new(level: u8) -> TraceFactory {
+    pub fn new(level: i8) -> TraceFactory {
         TraceFactory { level: level, traces: Vec::new() }
     }
 
@@ -346,6 +346,7 @@ impl Logger {
     // create a new logger
     pub fn new(verbosity: &str) -> (Logger, TraceFactory) {
         match verbosity {
+            "SILENT" => (Logger { level: -1 }, TraceFactory::new(-1)),
             "ERROR" => (Logger { level: 0 }, TraceFactory::new(0)),
             "WARN" => (Logger { level: 1 }, TraceFactory::new(1)),
             "INFO" => (Logger { level: 2 }, TraceFactory::new(2)),
@@ -364,7 +365,9 @@ impl Logger {
     }
 
     pub fn success(&self, message: &str) {
-        println!("{}: {}", "success".bright_green().bold(), message);
+        if self.level >= 0 {
+            println!("{}: {}", "success".bright_green().bold(), message);
+        }
     }
 
     pub fn info(&self, message: &str) {
@@ -417,6 +420,11 @@ impl Logger {
         default: Option<u8>,
         skip: bool,
     ) -> u8 {
+        // if silent, return the default
+        if self.level == -1 {
+            return default.unwrap();
+        }
+
         // log the message with the given class
         match function {
             "error" => self.error(message),

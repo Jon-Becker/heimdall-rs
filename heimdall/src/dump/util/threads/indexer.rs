@@ -18,7 +18,12 @@ pub fn handle(addr_hash: H160) {
     let num_indexing_threads = std::cmp::min(transactions.len(), args.threads);
 
     // get a new logger
-    let (logger, _) = Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, _) = Logger::new(
+        match args.verbose.log_level() {
+            Some(level) => level.as_str(),
+            None => "SILENT",
+        }
+    );
 
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();

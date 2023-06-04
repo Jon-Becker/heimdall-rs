@@ -32,7 +32,12 @@ pub fn cleanup_terminal() {
 // get the state diff for the given transaction
 pub fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<StateDiff> {
     // create new logger
-    let (logger, _) = Logger::new(args.verbose.log_level().unwrap().as_str());
+    let (logger, _) = Logger::new(
+        match args.verbose.log_level() {
+            Some(level) => level.as_str(),
+            None => "SILENT",
+        }
+    );
 
     // create new runtime block
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
