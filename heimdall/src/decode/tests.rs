@@ -72,6 +72,13 @@ mod benchmark {
 
         benchmark("benchmark_decode_seaport_complex", 100, bench)
     }
+}
+
+#[cfg(test)]
+mod test {
+    use clap_verbosity_flag::Verbosity;
+
+    use crate::decode::DecodeArgs;
 
     #[test]
     fn test_decode_transfer() {

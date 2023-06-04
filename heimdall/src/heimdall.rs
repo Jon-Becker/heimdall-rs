@@ -5,6 +5,7 @@ mod cfg;
 mod decode;
 mod decompile;
 mod dump;
+mod monitor;
 
 use clap::{Parser, Subcommand};
 
@@ -18,6 +19,7 @@ use crossterm::{
 use decode::{decode, DecodeArgs};
 use decompile::{decompile, DecompilerArgs};
 use dump::{dump, DumpArgs};
+use monitor::{monitor, MonitorArgs};
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{
     ether::evm::disassemble::*,
@@ -52,6 +54,9 @@ pub enum Subcommands {
 
     #[clap(name = "decode", about = "Decode calldata into readable types")]
     Decode(DecodeArgs),
+
+    #[clap(name = "monitor", about = "Advanced mempool monitoring, allowing for cURL triggers")]
+    Monitor(MonitorArgs),
 
     #[clap(name = "config", about = "Display and edit the current configuration")]
     Config(ConfigArgs),
@@ -118,6 +123,15 @@ fn main() {
             }
 
             decode(cmd);
+        }
+
+        Subcommands::Monitor(mut cmd) => {
+            // if the user has not specified a rpc url, use the default
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
+            
+            monitor(cmd);
         }
 
         Subcommands::CFG(mut cmd) => {
