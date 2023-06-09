@@ -156,7 +156,7 @@ pub fn recursive_map(
 
         // if we encounter a JUMP, print the jumpdest source
         if state.last_instruction.opcode == 0x56 {
-            println!("JUMP to {:?}", state.last_instruction.input_operations[0])
+            println!("JUMP to {}", state.last_instruction.input_operations[0])
         }
 
         // if we encounter a JUMPI, create children taking both paths and break
