@@ -1,13 +1,11 @@
 mod tests;
 mod util;
 
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 use clap::{AppSettings, Parser};
 use ethers::{
     abi::{decode as decode_abi, AbiEncode, Function, Param, ParamType, StateMutability},
-    core::types::H256,
-    providers::{Http, Middleware, Provider},
     types::Transaction,
 };
 
@@ -15,7 +13,8 @@ use heimdall_common::{
     constants::TRANSACTION_HASH_REGEX,
     ether::{
         evm::types::{display, parse_function_parameters},
-        signatures::{resolve_function_signature, ResolvedFunction, score_signature},
+        rpc::get_transaction,
+        signatures::{resolve_function_signature, score_signature, ResolvedFunction},
     },
     io::logging::Logger,
     utils::strings::decode_hex,
@@ -59,12 +58,10 @@ pub struct DecodeArgs {
 
 #[allow(deprecated)]
 pub fn decode(args: DecodeArgs) {
-    let (logger, mut trace) = Logger::new(
-        match args.verbose.log_level() {
-            Some(level) => level.as_str(),
-            None => "SILENT",
-        }
-    );
+    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
+        Some(level) => level.as_str(),
+        None => "SILENT",
+    });
     let mut raw_transaction: Transaction = Transaction::default();
     let calldata;
 
@@ -76,55 +73,8 @@ pub fn decode(args: DecodeArgs) {
 
     // determine whether or not the target is a transaction hash
     if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
-        // create new runtime block
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
-
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
-        raw_transaction = rt.block_on(async {
-
-            // make sure the RPC provider isn't empty
-            if args.rpc_url.is_empty() {
-                logger.error("decoding an on-chain transaction requires an RPC provider. Use `heimdall decode --help` for more information.");
-                std::process::exit(1);
-            }
-
-            // create new provider
-            let provider = match Provider::<Http>::try_from(&args.rpc_url) {
-                Ok(provider) => provider,
-                Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url));
-                    std::process::exit(1)
-                }
-            };
-
-            // safely unwrap the transaction hash
-            let transaction_hash = match H256::from_str(&args.target) {
-                Ok(transaction_hash) => transaction_hash,
-                Err(_) => {
-                    logger.error(&format!("failed to parse transaction hash '{}' .", &args.target));
-                    std::process::exit(1)
-                }
-            };
-
-            // fetch the transaction from the node
-            let raw_transaction = match provider.get_transaction(transaction_hash).await {
-                Ok(tx) => {
-                    match tx {
-                        Some(tx) => tx,
-                        None => {
-                            logger.error(&format!("transaction '{}' doesn't exist.", &args.target));
-                            std::process::exit(1)
-                        }
-                    }
-                },
-                Err(_) => {
-                    logger.error(&format!("failed to fetch calldata from '{}' .", &args.target));
-                    std::process::exit(1)
-                }
-            };
-
-            raw_transaction
-        });
+        raw_transaction = get_transaction(&args.target, &args.rpc_url, &logger);
 
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
     } else {

@@ -11,9 +11,8 @@ use crate::decompile::resolve::*;
 use crate::decompile::util::*;
 
 use ethers::abi::AbiEncode;
-use heimdall_cache::read_cache;
-use heimdall_cache::store_cache;
 use heimdall_common::ether::compiler::detect_compiler;
+use heimdall_common::ether::rpc::get_code;
 use heimdall_common::ether::selectors::{
     find_function_selectors, resolve_entry_point, resolve_function_selectors,
 };
@@ -25,10 +24,6 @@ use std::fs;
 use std::time::Duration;
 
 use clap::{AppSettings, Parser};
-use ethers::{
-    core::types::Address,
-    providers::{Http, Middleware, Provider},
-};
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::evm::{
@@ -82,12 +77,10 @@ pub fn decompile(args: DecompilerArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, mut trace) = Logger::new(
-        match args.verbose.log_level() {
-            Some(level) => level.as_str(),
-            None => "SILENT",
-        }
-    );
+    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
+        Some(level) => level.as_str(),
+        None => "SILENT",
+    });
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
@@ -135,56 +128,8 @@ pub fn decompile(args: DecompilerArgs) {
             output_dir.push_str(&format!("/{}", &args.target));
         }
 
-        // create new runtime block
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
-
         // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
-        contract_bytecode = rt.block_on(async {
-
-            // check the cache for a matching address
-            if let Some(bytecode) = read_cache(&format!("contract.{}", &args.target)) {
-                logger.debug(&format!("found cached bytecode for '{}' .", &args.target));
-                return bytecode;
-            }
-
-            // make sure the RPC provider isn't empty
-            if args.rpc_url.is_empty() {
-                logger.error("decompiling an on-chain contract requires an RPC provider. Use `heimdall decompile --help` for more information.");
-                std::process::exit(1);
-            }
-
-            // create new provider
-            let provider = match Provider::<Http>::try_from(&args.rpc_url) {
-                Ok(provider) => provider,
-                Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &args.rpc_url));
-                    std::process::exit(1)
-                }
-            };
-
-            // safely unwrap the address
-            let address = match args.target.parse::<Address>() {
-                Ok(address) => address,
-                Err(_) => {
-                    logger.error(&format!("failed to parse address '{}' .", &args.target));
-                    std::process::exit(1)
-                }
-            };
-
-            // fetch the bytecode at the address
-            let bytecode_as_bytes = match provider.get_code(address, None).await {
-                Ok(bytecode) => bytecode,
-                Err(_) => {
-                    logger.error(&format!("failed to fetch bytecode from '{}' .", &args.target));
-                    std::process::exit(1)
-                }
-            };
-
-            // cache the results
-            store_cache(&format!("contract.{}", &args.target), bytecode_as_bytes.to_string().replacen("0x", "", 1), None);
-
-            bytecode_as_bytes.to_string().replacen("0x", "", 1)
-        });
+        contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
