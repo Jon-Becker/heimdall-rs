@@ -8,6 +8,8 @@ out.json
 .idea
 .DS_STORE
 .ideas.txt
+.vscode
+.vscode/*
 
 target
 */target
