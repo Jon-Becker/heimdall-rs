@@ -147,7 +147,7 @@ impl VMTrace {
                             .first()
                             .unwrap_or(&U256::from(0))
                             .encode_hex()
-                            .replacen("0x", "", 1),
+                            .replacen("0x", "", 1)[0..8],
                         match logged_event.topics.get(1..) {
                             Some(topics) => match !logged_event.data.is_empty()
                                 && !topics.is_empty()
