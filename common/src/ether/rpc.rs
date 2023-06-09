@@ -36,7 +36,7 @@ pub fn get_code(contract_address: &String, rpc_url: &String, logger: &Logger) ->
         };
 
         // safely unwrap the address
-        let address = match rpc_url.parse::<Address>() {
+        let address = match contract_address.parse::<Address>() {
             Ok(address) => address,
             Err(_) => {
                 logger.error(&format!("failed to parse address '{}' .", &contract_address));
