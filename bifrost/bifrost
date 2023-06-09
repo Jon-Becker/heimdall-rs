@@ -5,113 +5,113 @@ BIFROST_PATH=${BIFROST_PATH:-"$HOME/.bifrost"}
 BIFROST_BIN_DIR="$BIFROST_PATH/bin"
 
 main() {
-  # ensuring git, curl, and cargo are installed
-  requires_cmd git
-  requires_cmd curl
-  requires_cmd cargo
+    # ensuring git, curl, and cargo are installed
+    requires_cmd git
+    requires_cmd curl
+    requires_cmd cargo
 
-  # parsing parameters
-  while [[ $1 ]]; do
-    case $1 in
-      --)               shift; break;;
+    # parsing parameters
+    while [[ $1 ]]; do
+        case $1 in
+            --)               shift; break ;;
 
-      -u|--upgrade|--update)
-        echo "bifrost: removing old binaries"
+            -u|--upgrade|--update)
+                echo "bifrost: removing old binaries"
 
-        rm -rf "$BIFROST_PATH"
+                rm -rf "$BIFROST_PATH"
 
-        ensure curl -L https://raw.githubusercontent.com/Jon-Becker/heimdall-rs/main/bifrost/install | bash
-        exit 0
-        ;;
-      -v|--version)     shift; TARGET_VERSION=$1;;
-      -B|--binary|--bin) shift; USE_BINARY=true;;
-      -b|--bench)
-        benchmark
-        exit 0
-        ;;
-      -t|--test)
-        test
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      -l|--list|--versions)
-        versions
-        exit 0
-        ;;
-      *)
-        echo "bifrost: option '$1' not recognized\n"
-        exit 1
-        ;;
-    esac; shift
-  done
+                ensure curl -L https://raw.githubusercontent.com/Jon-Becker/heimdall-rs/main/bifrost/install | bash
+                exit 0
+                ;;
+            -v|--version)     shift; TARGET_VERSION=$1 ;;
+            -B|--binary|--bin) shift; USE_BINARY=true ;;
+            -b|--bench)
+                benchmark
+                exit 0
+                ;;
+            -t|--test)
+                test
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -l|--list|--versions)
+                versions
+                exit 0
+                ;;
+            *)
+                echo "bifrost: option '$1' not recognized\n"
+                exit 1
+                ;;
+        esac; shift
+    done
 
-  # remove the current heimdall installation if it exists
-  ensure rm -f "$BIFROST_BIN_DIR/heimdall"
+    # remove the current heimdall installation if it exists
+    ensure rm -f "$BIFROST_BIN_DIR/heimdall"
 
-  # make the build path if it doesn't exist
-  BUILD_PATH="${BIFROST_PATH}/build"
-  if [ ! -d $BUILD_PATH ]; then
-    ensure mkdir -p $BUILD_PATH
-  fi
-
-  # remove the source directory if it exists
-  ensure rm -rf "$BUILD_PATH/heimdall-rs"
-
-  cd $BUILD_PATH
-  echo "bifrost: cloning 'Jon-Becker/heimdall-rs'."
-  ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
-
-  cd "heimdall-rs"
-
-  ensure git fetch origin
-
-  # if they specified a version, use that
-  if [ -n "$TARGET_VERSION" ]; then
-    echo "bifrost: installing version $TARGET_VERSION."
-
-    ensure git checkout $TARGET_VERSION > /dev/null 2>&1
-  else
-
-    # checkout the latest tag
-    tag=$(git describe --tags `git rev-list --tags --max-count=1`)
-
-    echo "bifrost: installing version $tag."
-    TARGET_VERSION=$tag
-
-    ensure git checkout $tag -b latest > /dev/null 2>&1
-  fi
-
-  if [ -n "$USE_BINARY" ]; then
-
-    ensure cd $BIFROST_BIN_DIR
-    echo "bifrost: fetching binary."
-
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-      ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall-linux-amd64" -o heimdall
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-      ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall-macos-amd64" -o heimdall
-    else
-      echo "bifrost: unsupported operating system: $OSTYPE"
-      exit 1
+    # make the build path if it doesn't exist
+    BUILD_PATH="${BIFROST_PATH}/build"
+    if [ ! -d $BUILD_PATH ]; then
+        ensure mkdir -p $BUILD_PATH
     fi
 
-    echo "bifrost: installing binary."
+    # remove the source directory if it exists
+    ensure rm -rf "$BUILD_PATH/heimdall-rs"
 
-    # make the binary executable
-    ensure chmod +x heimdall
-  else
+    cd $BUILD_PATH
+    echo "bifrost: cloning 'Jon-Becker/heimdall-rs'."
+    ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
 
-    # build the binaries
-    RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./heimdall --bins --locked --force --root $BIFROST_PATH
-  fi
+    cd "heimdall-rs"
 
-  echo "bifrost: installation complete."
+    ensure git fetch origin
+
+    # if they specified a version, use that
+    if [ -n "$TARGET_VERSION" ]; then
+        echo "bifrost: installing version $TARGET_VERSION."
+
+        ensure git checkout $TARGET_VERSION > /dev/null 2>&1
+    else
+
+        # checkout the latest tag
+        tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+
+        echo "bifrost: installing version $tag."
+        TARGET_VERSION=$tag
+
+        ensure git checkout $tag -b latest > /dev/null 2>&1
+    fi
+
+    if [ -n "$USE_BINARY" ]; then
+
+        ensure cd $BIFROST_BIN_DIR
+        echo "bifrost: fetching binary."
+
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall-linux-amd64" -o heimdall
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall-macos-amd64" -o heimdall
+        else
+            echo "bifrost: unsupported operating system: $OSTYPE"
+            exit 1
+        fi
+
+        echo "bifrost: installing binary."
+
+        # make the binary executable
+        ensure chmod +x heimdall
+    else
+
+        # build the binaries
+        RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./heimdall --bins --locked --force --root $BIFROST_PATH
+    fi
+
+    echo "bifrost: installation complete."
 }
 
 versions() {
-  cat 1>&2 <<EOF
+    cat 1>&2 <<EOF
 
 
 Available versions of Heimdall:
@@ -119,11 +119,11 @@ Available versions of Heimdall:
 Version                                   |   Tag                      |
 ----------------------------------------- | -------------------------- |
 EOF
-  git ls-remote --tags "https://github.com/Jon-Becker/heimdall-rs"
+    git ls-remote --tags "https://github.com/Jon-Becker/heimdall-rs"
 }
 
 usage() {
-  cat 1>&2 <<EOF
+    cat 1>&2 <<EOF
 
 
 Bifrost is the version manager for Heimdall.
@@ -146,113 +146,113 @@ EOF
 }
 
 ensure() {
-  if ! "$@"; then echo "bifrost: required command '$*' failed."; exit 1; fi
+    if ! "$@"; then echo "bifrost: required command '$*' failed."; exit 1; fi
 }
 
 command_exists() {
-  command -v "$1" > /dev/null 2>&1
+    command -v "$1" > /dev/null 2>&1
 }
 
 requires_cmd() {
-  if ! command_exists "$1"; then
-    echo "bifrost: '$1' is required but not installed on this system"
-    exit 1
-  fi
+    if ! command_exists "$1"; then
+        echo "bifrost: '$1' is required but not installed on this system"
+        exit 1
+    fi
 }
 
 benchmark() {
-  echo "bifrost: fetching..."
-  # remove the current heimdall installation if it exists
-  ensure rm -f "$BIFROST_BIN_DIR/heimdall"
+    echo "bifrost: fetching..."
+    # remove the current heimdall installation if it exists
+    ensure rm -f "$BIFROST_BIN_DIR/heimdall"
 
-  # make the build path if it doesn't exist
-  BUILD_PATH="${BIFROST_PATH}/build"
-  if [ ! -d $BUILD_PATH ]; then
-    ensure mkdir -p $BUILD_PATH
-  fi
+    # make the build path if it doesn't exist
+    BUILD_PATH="${BIFROST_PATH}/build"
+    if [ ! -d $BUILD_PATH ]; then
+        ensure mkdir -p $BUILD_PATH
+    fi
 
-  # remove the source directory if it exists
-  ensure rm -rf "$BUILD_PATH/heimdall-rs"
+    # remove the source directory if it exists
+    ensure rm -rf "$BUILD_PATH/heimdall-rs"
 
-  cd $BUILD_PATH
+    cd $BUILD_PATH
 
-  ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
+    ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
 
-  cd "heimdall-rs"
+    cd "heimdall-rs"
 
-  ensure git fetch origin > /dev/null 2>&1
+    ensure git fetch origin > /dev/null 2>&1
 
-  # if they specified a version, use that
-  if [ -n "$TARGET_VERSION" ]; then
-    ensure git checkout $TARGET_VERSION > /dev/null 2>&1
-  else
+    # if they specified a version, use that
+    if [ -n "$TARGET_VERSION" ]; then
+        ensure git checkout $TARGET_VERSION > /dev/null 2>&1
+    else
 
-    # checkout the latest tag
-    tag=$(git describe --tags `git rev-list --tags --max-count=1`)
-    ensure git checkout $tag -b latest > /dev/null 2>&1
-  fi
+        # checkout the latest tag
+        tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+        ensure git checkout $tag -b latest > /dev/null 2>&1
+    fi
 
-  echo "bifrost: compiling..."
-  ensure cd $BUILD_PATH/heimdall-rs/heimdall
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall > /dev/null 2>&1
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-config  > /dev/null 2>&1
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-common  > /dev/null 2>&1
-  echo "bifrost: running benchmarks..."
+    echo "bifrost: compiling..."
+    ensure cd $BUILD_PATH/heimdall-rs/heimdall
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall > /dev/null 2>&1
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-config  > /dev/null 2>&1
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-common  > /dev/null 2>&1
+    echo "bifrost: running benchmarks..."
 
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-config -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-common -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
-  clear
-  echo "bifrost: benchmark results:\n"
-  cat stdout
-  rm stdout
-  exit 0
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-config -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-common -- benchmark_ | grep -E "±|benchmark_([a-zA-Z_])*:" >> stdout
+    clear
+    echo "bifrost: benchmark results:\n"
+    cat stdout
+    rm stdout
+    exit 0
 }
 
 test() {
-  echo "bifrost: fetching..."
+    echo "bifrost: fetching..."
 
-  # remove the current heimdall installation if it exists
-  ensure rm -f "$BIFROST_BIN_DIR/heimdall"
+    # remove the current heimdall installation if it exists
+    ensure rm -f "$BIFROST_BIN_DIR/heimdall"
 
-  # make the build path if it doesn't exist
-  BUILD_PATH="${BIFROST_PATH}/build"
-  if [ ! -d $BUILD_PATH ]; then
-    ensure mkdir -p $BUILD_PATH
-  fi
+    # make the build path if it doesn't exist
+    BUILD_PATH="${BIFROST_PATH}/build"
+    if [ ! -d $BUILD_PATH ]; then
+        ensure mkdir -p $BUILD_PATH
+    fi
 
-  # remove the source directory if it exists
-  ensure rm -rf "$BUILD_PATH/heimdall-rs"
+    # remove the source directory if it exists
+    ensure rm -rf "$BUILD_PATH/heimdall-rs"
 
-  cd $BUILD_PATH
+    cd $BUILD_PATH
 
-  ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
+    ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
 
-  cd "heimdall-rs"
+    cd "heimdall-rs"
 
-  ensure git fetch origin > /dev/null 2>&1
+    ensure git fetch origin > /dev/null 2>&1
 
-  # if they specified a version, use that
-  if [ -n "$TARGET_VERSION" ]; then
-    ensure git checkout $TARGET_VERSION > /dev/null 2>&1
-  else
+    # if they specified a version, use that
+    if [ -n "$TARGET_VERSION" ]; then
+        ensure git checkout $TARGET_VERSION > /dev/null 2>&1
+    else
 
-    # checkout the latest tag
-    tag=$(git describe --tags `git rev-list --tags --max-count=1`)
-    ensure git checkout $tag -b latest > /dev/null 2>&1
-  fi
+        # checkout the latest tag
+        tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+        ensure git checkout $tag -b latest > /dev/null 2>&1
+    fi
 
-  echo "bifrost: compiling..."
-  ensure cd $BUILD_PATH/heimdall-rs/heimdall
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall > /dev/null 2>&1
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-config  > /dev/null 2>&1
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-common  > /dev/null 2>&1
-  echo "bifrost: running tests..."
+    echo "bifrost: compiling..."
+    ensure cd $BUILD_PATH/heimdall-rs/heimdall
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall > /dev/null 2>&1
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-config  > /dev/null 2>&1
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true ensure cargo build --release --package heimdall-common  > /dev/null 2>&1
+    echo "bifrost: running tests..."
 
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall -- test_ --nocapture
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-config -- test_ --nocapture
-  RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-common -- test_ --nocapture
-  exit 0
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall -- test_ --nocapture
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-config -- test_ --nocapture
+    RUSTFLAGS="-C target-cpu=native" CARGO_PROFILE_RELEASE_LTO=true cargo test --release --package heimdall-common -- test_ --nocapture
+    exit 0
 }
 
 main "$@" || exit 1

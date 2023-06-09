@@ -16,23 +16,23 @@ if [[ ":$PATH:" != *":${BIFROST_BIN_DIR}:"* ]]; then
 
     # Detect the current shell being used for the installation
     case $SHELL in
-    */zsh)
-        SHELL_PROFILE=$HOME/.zshrc
-        echo >> $SHELL_PROFILE && echo "export PATH=\"\$PATH:$BIFROST_BIN_DIR\"" >> $SHELL_PROFILE
-        ;;
-    */bash)
-        SHELL_PROFILE=$HOME/.bashrc
-        echo >> $SHELL_PROFILE && echo "export PATH=\"\$PATH:$BIFROST_BIN_DIR\"" >> $SHELL_PROFILE
-        SHELL_PROFILE=$HOME/.bash_profile
-        echo >> $SHELL_PROFILE && echo "export PATH=\"\$PATH:$BIFROST_BIN_DIR\"" >> $SHELL_PROFILE
-        ;;
-    */fish)
-        SHELL_PROFILE=$HOME/.config/fish/config.fish
-        echo >> $SHELL_PROFILE && echo "export PATH=\"\$PATH:$BIFROST_BIN_DIR\"" >> $SHELL_PROFILE
-        ;;
-    *)
-        echo "bifrost: Look's like you're using a shell that is not recognized by bifrost. Please manually add ${BIFROST_BIN_DIR} to your PATH."
-        exit 1
+        */zsh)
+            SHELL_PROFILE=$HOME/.zshrc
+            echo >> $SHELL_PROFILE && echo "export PATH=\"\$PATH:$BIFROST_BIN_DIR\"" >> $SHELL_PROFILE
+            ;;
+        */bash)
+            SHELL_PROFILE=$HOME/.bashrc
+            echo >> $SHELL_PROFILE && echo "export PATH=\"\$PATH:$BIFROST_BIN_DIR\"" >> $SHELL_PROFILE
+            SHELL_PROFILE=$HOME/.bash_profile
+            echo >> $SHELL_PROFILE && echo "export PATH=\"\$PATH:$BIFROST_BIN_DIR\"" >> $SHELL_PROFILE
+            ;;
+        */fish)
+            SHELL_PROFILE=$HOME/.config/fish/config.fish
+            echo >> $SHELL_PROFILE && echo "export PATH=\"\$PATH:$BIFROST_BIN_DIR\"" >> $SHELL_PROFILE
+            ;;
+        *)
+            echo "bifrost: Look's like you're using a shell that is not recognized by bifrost. Please manually add ${BIFROST_BIN_DIR} to your PATH."
+            exit 1
     esac
 
 fi
