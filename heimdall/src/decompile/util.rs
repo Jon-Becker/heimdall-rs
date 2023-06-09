@@ -154,6 +154,11 @@ pub fn recursive_map(
         let state = vm.step();
         vm_trace.operations.push(state.clone());
 
+        // if we encounter a JUMP, print the jumpdest source
+        if state.last_instruction.opcode == 0x56 {
+            println!("JUMP to {:?}", state.last_instruction.input_operations[0])
+        }
+
         // if we encounter a JUMPI, create children taking both paths and break
         if state.last_instruction.opcode == 0x57 {
             let jump_frame: (u128, U256, usize, bool) = (
