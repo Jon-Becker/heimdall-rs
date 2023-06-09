@@ -40,7 +40,7 @@ main() {
         versions
         exit 0
         ;;
-      *) 
+      *)
         echo "bifrost: option '$1' not recognized\n"
         exit 1
         ;;
@@ -49,7 +49,7 @@ main() {
 
   # remove the current heimdall installation if it exists
   ensure rm -f "$BIFROST_BIN_DIR/heimdall"
-  
+
   # make the build path if it doesn't exist
   BUILD_PATH="${BIFROST_PATH}/build"
   if [ ! -d $BUILD_PATH ]; then
@@ -66,7 +66,7 @@ main() {
   cd "heimdall-rs"
 
   ensure git fetch origin
-  
+
   # if they specified a version, use that
   if [ -n "$TARGET_VERSION" ]; then
     echo "bifrost: installing version $TARGET_VERSION."
@@ -84,7 +84,7 @@ main() {
   fi
 
   if [ -n "$USE_BINARY" ]; then
-  
+
     ensure cd $BIFROST_BIN_DIR
     echo "bifrost: fetching binary."
 
@@ -164,7 +164,7 @@ benchmark() {
   echo "bifrost: fetching..."
   # remove the current heimdall installation if it exists
   ensure rm -f "$BIFROST_BIN_DIR/heimdall"
-  
+
   # make the build path if it doesn't exist
   BUILD_PATH="${BIFROST_PATH}/build"
   if [ ! -d $BUILD_PATH ]; then
@@ -175,13 +175,13 @@ benchmark() {
   ensure rm -rf "$BUILD_PATH/heimdall-rs"
 
   cd $BUILD_PATH
-  
+
   ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
 
   cd "heimdall-rs"
 
   ensure git fetch origin > /dev/null 2>&1
-  
+
   # if they specified a version, use that
   if [ -n "$TARGET_VERSION" ]; then
     ensure git checkout $TARGET_VERSION > /dev/null 2>&1
@@ -211,10 +211,10 @@ benchmark() {
 
 test() {
   echo "bifrost: fetching..."
-      
+
   # remove the current heimdall installation if it exists
   ensure rm -f "$BIFROST_BIN_DIR/heimdall"
-  
+
   # make the build path if it doesn't exist
   BUILD_PATH="${BIFROST_PATH}/build"
   if [ ! -d $BUILD_PATH ]; then
@@ -225,13 +225,13 @@ test() {
   ensure rm -rf "$BUILD_PATH/heimdall-rs"
 
   cd $BUILD_PATH
-  
+
   ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
 
   cd "heimdall-rs"
 
   ensure git fetch origin > /dev/null 2>&1
-  
+
   # if they specified a version, use that
   if [ -n "$TARGET_VERSION" ]; then
     ensure git checkout $TARGET_VERSION > /dev/null 2>&1

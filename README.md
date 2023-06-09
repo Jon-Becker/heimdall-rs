@@ -53,6 +53,7 @@ For more detailed information, see the [contributing guide](https://jbecker.dev/
 If you've found an issue or have a question, please open an issue [here](https://jbecker.dev/r/heimdall-rs/issues). All issues must follow their respective templates.
 
 ## Credits
-- Jonathan Becker \<jonathan@jbecker.dev>
+
+- Jonathan Becker \<<jonathan@jbecker.dev>>
 
 A list of all [contributors](https://jbecker.dev/r/heimdall-rs/wiki/contributors) can be found in the wiki.

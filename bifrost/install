@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e 
+set -e
 
 BIFROST_PATH=${BIFROST_PATH:-"$HOME/.bifrost"}
 BIFROST_BIN_DIR="$BIFROST_PATH/bin"
@@ -34,7 +34,7 @@ if [[ ":$PATH:" != *":${BIFROST_BIN_DIR}:"* ]]; then
         echo "bifrost: Look's like you're using a shell that is not recognized by bifrost. Please manually add ${BIFROST_BIN_DIR} to your PATH."
         exit 1
     esac
-    
+
 fi
 
 echo && echo "bifrost: Installation complete."
