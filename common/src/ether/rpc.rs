@@ -1,15 +1,14 @@
 use std::str::FromStr;
 
-use heimdall_cache::{read_cache, store_cache};
+use crate::io::logging::Logger;
 use ethers::{
     core::types::Address,
-    providers::{Http, Middleware, Provider}, types::{H256, Transaction},
+    providers::{Http, Middleware, Provider},
+    types::{Transaction, H256},
 };
-use crate::io::logging::Logger;
-
+use heimdall_cache::{read_cache, store_cache};
 
 pub fn get_code(contract_address: &String, rpc_url: &String, logger: &Logger) -> String {
-    
     // create new runtime block
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
@@ -61,7 +60,11 @@ pub fn get_code(contract_address: &String, rpc_url: &String, logger: &Logger) ->
     })
 }
 
-pub fn get_transaction(transaction_hash: &String, rpc_url: &String, logger: &Logger) -> Transaction {
+pub fn get_transaction(
+    transaction_hash: &String,
+    rpc_url: &String,
+    logger: &Logger,
+) -> Transaction {
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
 
     // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.

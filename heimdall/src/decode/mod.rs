@@ -1,7 +1,7 @@
 mod tests;
 mod util;
 
-use std::{time::Duration};
+use std::time::Duration;
 
 use clap::{AppSettings, Parser};
 use ethers::{
@@ -13,7 +13,8 @@ use heimdall_common::{
     constants::TRANSACTION_HASH_REGEX,
     ether::{
         evm::types::{display, parse_function_parameters},
-        signatures::{resolve_function_signature, ResolvedFunction, score_signature}, rpc::get_transaction,
+        rpc::get_transaction,
+        signatures::{resolve_function_signature, score_signature, ResolvedFunction},
     },
     io::logging::Logger,
     utils::strings::decode_hex,
@@ -57,12 +58,10 @@ pub struct DecodeArgs {
 
 #[allow(deprecated)]
 pub fn decode(args: DecodeArgs) {
-    let (logger, mut trace) = Logger::new(
-        match args.verbose.log_level() {
-            Some(level) => level.as_str(),
-            None => "SILENT",
-        }
-    );
+    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
+        Some(level) => level.as_str(),
+        None => "SILENT",
+    });
     let mut raw_transaction: Transaction = Transaction::default();
     let calldata;
 
@@ -74,10 +73,9 @@ pub fn decode(args: DecodeArgs) {
 
     // determine whether or not the target is a transaction hash
     if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
-
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
         raw_transaction = get_transaction(&args.target, &args.rpc_url, &logger);
-        
+
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
     } else {
         calldata = args.target.clone();

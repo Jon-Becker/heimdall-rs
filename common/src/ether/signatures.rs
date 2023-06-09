@@ -214,7 +214,6 @@ pub fn resolve_event_signature(signature: &String) -> Option<Vec<ResolvedLog>> {
 }
 
 pub fn score_signature(signature: &String) -> u32 {
-
     // the score starts at 1000
     let mut score = 1000;
 

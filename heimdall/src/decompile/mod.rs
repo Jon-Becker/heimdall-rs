@@ -77,12 +77,10 @@ pub fn decompile(args: DecompilerArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, mut trace) = Logger::new(
-        match args.verbose.log_level() {
-            Some(level) => level.as_str(),
-            None => "SILENT",
-        }
-    );
+    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
+        Some(level) => level.as_str(),
+        None => "SILENT",
+    });
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 

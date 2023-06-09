@@ -67,12 +67,10 @@ pub fn cfg(args: CFGArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, mut trace) = Logger::new(
-        match args.verbose.log_level() {
-            Some(level) => level.as_str(),
-            None => "SILENT",
-        }
-    );
+    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
+        Some(level) => level.as_str(),
+        None => "SILENT",
+    });
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
