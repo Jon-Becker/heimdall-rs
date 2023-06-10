@@ -71,7 +71,7 @@ pub fn handle(addr_hash: H160) {
                         Diff::Changed(changed) => &changed.to,
                         Diff::Died(_) => {
                             state.storage.remove(slot);
-                            continue;
+                            continue
                         }
                         _ => continue,
                     };

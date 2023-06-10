@@ -5,18 +5,18 @@ mod util;
 
 use clap::{AppSettings, Parser};
 use ethers::types::H160;
-use heimdall_common::io::logging::*;
-use heimdall_common::resources::transpose::{get_contract_creation, get_transaction_list};
-use std::collections::HashMap;
-use std::env;
-use std::str::FromStr;
-use std::time::Instant;
+use heimdall_common::{
+    io::logging::*,
+    resources::transpose::{get_contract_creation, get_transaction_list},
+};
+use std::{collections::HashMap, env, str::FromStr, time::Instant};
 
-use self::constants::DUMP_STATE;
-use self::structures::dump_state::DumpState;
-use self::structures::transaction::Transaction;
-use self::tui_views::TUIView;
-use self::util::csv::write_storage_to_csv;
+use self::{
+    constants::DUMP_STATE,
+    structures::{dump_state::DumpState, transaction::Transaction},
+    tui_views::TUIView,
+    util::csv::write_storage_to_csv,
+};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(about = "Dump the value of all storage slots accessed by a contract",

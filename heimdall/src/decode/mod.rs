@@ -73,7 +73,8 @@ pub fn decode(args: DecodeArgs) {
 
     // determine whether or not the target is a transaction hash
     if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
-        // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
+        // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
+        // provider.
         raw_transaction = get_transaction(&args.target, &args.rpc_url, &logger);
 
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
@@ -149,8 +150,9 @@ pub fn decode(args: DecodeArgs) {
                 .encode_input(&result);
                 match decoded_function_call {
                     Ok(decoded_function_call) => {
-                        // decode the function call in trimmed bytes, removing 0s, because contracts can use nonstandard sized words
-                        // and padding is hard
+                        // decode the function call in trimmed bytes, removing 0s, because contracts
+                        // can use nonstandard sized words and padding is
+                        // hard
                         let cleaned_bytes = decoded_function_call.encode_hex().replace('0', "");
                         let decoded_function_call = match cleaned_bytes
                             .split_once(&function_selector.replace('0', ""))
@@ -158,13 +160,14 @@ pub fn decode(args: DecodeArgs) {
                             Some(decoded_function_call) => decoded_function_call.1,
                             None => {
                                 logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
-                                continue;
+                                continue
                             }
                         };
 
-                        // if the decoded function call matches (95%) the function signature, add it to the list of matches
-                        if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs()
-                            >= 0.90
+                        // if the decoded function call matches (95%) the function signature, add it
+                        // to the list of matches
+                        if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs() >=
+                            0.90
                         {
                             let mut found_match = potential_match.clone();
                             found_match.decoded_inputs = Some(result);
@@ -199,9 +202,9 @@ pub fn decode(args: DecodeArgs) {
     // truncate target for prettier display
     let mut shortened_target = args.target;
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     if matches.is_empty() {
@@ -331,7 +334,7 @@ pub fn decode(args: DecodeArgs) {
         for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
             let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
             if decoded_inputs_as_message.is_empty() {
-                break;
+                break
             }
 
             if i == 0 {
@@ -446,8 +449,9 @@ pub fn decode_calldata(calldata: String) -> Option<Vec<ResolvedFunction>> {
                 .encode_input(&result);
                 match decoded_function_call {
                     Ok(decoded_function_call) => {
-                        // decode the function call in trimmed bytes, removing 0s, because contracts can use nonstandard sized words
-                        // and padding is hard
+                        // decode the function call in trimmed bytes, removing 0s, because contracts
+                        // can use nonstandard sized words and padding is
+                        // hard
                         let cleaned_bytes = decoded_function_call.encode_hex().replace('0', "");
                         let decoded_function_call = match cleaned_bytes
                             .split_once(&function_selector.replace('0', ""))
@@ -455,13 +459,14 @@ pub fn decode_calldata(calldata: String) -> Option<Vec<ResolvedFunction>> {
                             Some(decoded_function_call) => decoded_function_call.1,
                             None => {
                                 logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
-                                continue;
+                                continue
                             }
                         };
 
-                        // if the decoded function call matches (95%) the function signature, add it to the list of matches
-                        if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs()
-                            >= 0.90
+                        // if the decoded function call matches (95%) the function signature, add it
+                        // to the list of matches
+                        if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs() >=
+                            0.90
                         {
                             let mut found_match = potential_match.clone();
                             found_match.decoded_inputs = Some(result);
@@ -494,7 +499,7 @@ pub fn decode_calldata(calldata: String) -> Option<Vec<ResolvedFunction>> {
     }
 
     if matches.is_empty() {
-        return None;
+        return None
     }
 
     Some(matches)

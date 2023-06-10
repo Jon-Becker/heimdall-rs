@@ -73,9 +73,9 @@ pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'
                 Cell::from(decoded_value),
             ])
             .style(if storage_iter.len() - state.scroll_index < num_items {
-                if (num_items - i <= storage_iter.len() - state.scroll_index)
-                    && (num_items - i
-                        > storage_iter.len() - state.scroll_index - state.selection_size)
+                if (num_items - i <= storage_iter.len() - state.scroll_index) &&
+                    (num_items - i >
+                        storage_iter.len() - state.scroll_index - state.selection_size)
                 {
                     Style::default().fg(Color::White).bg(Color::DarkGray)
                 } else {

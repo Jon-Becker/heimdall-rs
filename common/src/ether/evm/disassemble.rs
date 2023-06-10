@@ -1,13 +1,10 @@
-use std::env;
-use std::fs;
+use std::{env, fs};
 
-use crate::ether::rpc::get_code;
-use crate::utils::strings::decode_hex;
-use crate::utils::strings::encode_hex;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::evm::opcodes::opcode,
+    ether::{evm::opcodes::opcode, rpc::get_code},
     io::{file::*, logging::*},
+    utils::strings::{decode_hex, encode_hex},
 };
 use clap::{AppSettings, Parser};
 
@@ -69,7 +66,8 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
             output_dir.push_str(&format!("/{}", &args.target));
         }
 
-        // We are disassembling a contract address, so we need to fetch the bytecode from the RPC provider.
+        // We are disassembling a contract address, so we need to fetch the bytecode from the RPC
+        // provider.
         contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target;

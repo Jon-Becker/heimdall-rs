@@ -7,30 +7,30 @@ pub mod precompile;
 pub mod resolve;
 pub mod util;
 
-use crate::decompile::resolve::*;
-use crate::decompile::util::*;
+use crate::decompile::{resolve::*, util::*};
 
 use ethers::abi::AbiEncode;
-use heimdall_common::ether::compiler::detect_compiler;
-use heimdall_common::ether::rpc::get_code;
-use heimdall_common::ether::selectors::{
-    find_function_selectors, resolve_entry_point, resolve_function_selectors,
+use heimdall_common::{
+    ether::{
+        compiler::detect_compiler,
+        rpc::get_code,
+        selectors::{find_function_selectors, resolve_entry_point, resolve_function_selectors},
+    },
+    utils::strings::encode_hex_reduced,
 };
-use heimdall_common::utils::strings::encode_hex_reduced;
 use indicatif::ProgressBar;
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::time::Duration;
+use std::{collections::HashMap, env, fs, time::Duration};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::evm::{
-        disassemble::{disassemble, DisassemblerArgs},
-        vm::VM,
+    ether::{
+        evm::{
+            disassemble::{disassemble, DisassemblerArgs},
+            vm::VM,
+        },
+        signatures::*,
     },
-    ether::signatures::*,
     io::logging::*,
 };
 
@@ -93,9 +93,9 @@ pub fn decompile(args: DecompilerArgs) {
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let decompile_call = trace.add_call(
         0,
@@ -128,7 +128,8 @@ pub fn decompile(args: DecompilerArgs) {
             output_dir.push_str(&format!("/{}", &args.target));
         }
 
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
+        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
+        // provider.
         contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
@@ -203,9 +204,9 @@ pub fn decompile(args: DecompilerArgs) {
     );
     let mut shortened_target = contract_bytecode.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let vm_trace = trace.add_creation(
         decompile_call,
@@ -256,7 +257,7 @@ pub fn decompile(args: DecompilerArgs) {
         let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
 
         if function_entry_point == 0 {
-            continue;
+            continue
         }
 
         let func_analysis_trace = trace.add_call(

@@ -41,7 +41,8 @@ fn convert_bitmask_to_casting(line: String) -> String {
             let subject_indices = find_balanced_encapsulator(subject.to_string(), ('(', ')'));
             subject = match subject_indices.2 {
                 true => {
-                    // get the subject as hte substring between the balanced parentheses found in unbalanced subject
+                    // get the subject as hte substring between the balanced parentheses found in
+                    // unbalanced subject
                     subject[subject_indices.0..subject_indices.1].to_string()
                 }
                 false => {
@@ -95,7 +96,8 @@ fn convert_bitmask_to_casting(line: String) -> String {
 
                 subject = match subject_indices.2 {
                     true => {
-                        // get the subject as hte substring between the balanced parentheses found in unbalanced subject
+                        // get the subject as hte substring between the balanced parentheses found
+                        // in unbalanced subject
                         subject[subject_indices.0..subject_indices.1].to_string()
                     }
                     false => {
@@ -165,12 +167,12 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
         // if there is a negation of an expression, remove the parentheses
         // helps with double negation
         if first_char == "!" && last_char == ")" {
-            return true;
+            return true
         }
 
         // remove the parentheses if the expression is within brackets
         if first_char == "[" && last_char == "]" {
-            return true;
+            return true
         }
 
         // parens required if:
@@ -178,14 +180,14 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
         //  - expression is a function call
         //  - expression is the surrounding parens of a conditional
         if first_char != "(" {
-            return false;
+            return false
         } else if last_char == ")" {
-            return true;
+            return true
         }
 
         // don't include instantiations
         if expression.contains("memory ret") {
-            return false;
+            return false
         }
 
         // handle the inside of the expression
@@ -210,7 +212,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
 
     // skip lines that are defining a function
     if cleaned.contains("function") {
-        return cleaned;
+        return cleaned
     }
 
     // get the nth index of the first open paren
@@ -419,12 +421,12 @@ fn convert_access_to_variable(line: String) -> String {
 fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
     // skip lines that don't contain an assignment
     if !line.contains(" = ") {
-        return false;
+        return false
     }
 
     // skip lines that contain external calls
     if line.contains("bool success") {
-        return false;
+        return false
     }
 
     // get var name
@@ -433,25 +435,25 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
 
     // skip lines that contain assignments to storage
     if var_name.contains("storage") {
-        return false;
+        return false
     }
 
     //remove unused vars
     for x in lines {
         // break if the line contains a function definition
         if x.contains("function") {
-            break;
+            break
         }
 
         if x.contains(" = ") {
             let assignment = x.split(" = ").map(|x| x.trim()).collect::<Vec<&str>>();
             if assignment[1].contains(var_name) {
-                return false;
+                return false
             } else if assignment[0].split(' ').last() == Some(var_name) {
-                return true;
+                return true
             }
         } else if x.contains(var_name) {
-            return false;
+            return false
         }
     }
 
@@ -463,7 +465,7 @@ fn move_casts_to_declaration(line: String) -> String {
 
     // if the line doesn't contain an instantiation, return
     if !cleaned.contains(" = ") {
-        return cleaned;
+        return cleaned
     }
 
     let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
@@ -473,7 +475,7 @@ fn move_casts_to_declaration(line: String) -> String {
         Some(x) => {
             // the match must occur at index 0
             if x.start() != 0 {
-                return cleaned;
+                return cleaned
             }
 
             // find the matching close paren
@@ -482,7 +484,7 @@ fn move_casts_to_declaration(line: String) -> String {
 
             // the close paren must be at the end of the expression
             if paren_end != instantiation[1].len() - 1 {
-                return cleaned;
+                return cleaned
             }
 
             // get the inside of the parens
@@ -501,19 +503,19 @@ fn replace_expression_with_var(line: String) -> String {
 
     // skip function definitions
     if cleaned.contains("function") {
-        return cleaned;
+        return cleaned
     }
 
     // iterate over variable map
     for (var, expression) in var_map.iter() {
         // skip numeric expressions
         if expression.parse::<u128>().is_ok() {
-            continue;
+            continue
         }
 
         // skip expressions that are already variables. i.e, check if they contain a space
         if !expression.contains(' ') {
-            continue;
+            continue
         }
 
         // replace the expression with the variable
@@ -555,7 +557,7 @@ fn inherit_infer_mem_type(line: String) -> String {
 
     // if the line does not contains an instantiation, return
     if !line.contains(" = ") {
-        return cleaned;
+        return cleaned
     }
 
     let instantiation = line.split(" = ").collect::<Vec<&str>>();
@@ -576,7 +578,7 @@ fn inherit_infer_mem_type(line: String) -> String {
             if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty() {
                 cleaned = format!("{var_type} {cleaned}");
                 type_map.insert(var_name.to_string(), var_type.to_string());
-                break;
+                break
             }
         }
     }
@@ -608,7 +610,7 @@ fn inherit_infer_storage_type(line: String) {
         // since the regex is greedy, match the memory brackets
         let matched_loc = find_balanced_encapsulator(storage_access.to_string(), ('[', ']'));
         if !matched_loc.2 {
-            return;
+            return
         }
         let mut storage_slot =
             format!("storage{}", storage_access.get(matched_loc.0..matched_loc.1).unwrap());
@@ -635,7 +637,8 @@ fn inherit_infer_storage_type(line: String) {
         let mut lhs_type = "bytes32".to_string();
         let mut rhs_type = "bytes32".to_string();
 
-        // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull types from both the lhs and rhs
+        // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull
+        // types from both the lhs and rhs
         if storage_slot.contains("keccak256") {
             var_name = var_name.split('[').collect::<Vec<&str>>()[0].to_string();
 
@@ -651,7 +654,7 @@ fn inherit_infer_storage_type(line: String) {
                         lhs_type = var_type.to_string();
 
                         // continue, so we cannot use this var in rhs
-                        continue;
+                        continue
                     }
 
                     // check for vars in rhs
@@ -735,7 +738,7 @@ fn replace_resolved(
 
     // line must contain CustomError_ or Event_
     if !cleaned.contains("CustomError_") && !cleaned.contains("Event_") {
-        return cleaned;
+        return cleaned
     }
 
     // not the best way to do it, can perf later
@@ -772,7 +775,7 @@ fn cleanup(
 
     // skip comments
     if cleaned.starts_with('/') {
-        return cleaned;
+        return cleaned
     }
 
     // Find and convert all castings

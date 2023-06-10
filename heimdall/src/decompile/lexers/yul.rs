@@ -30,8 +30,8 @@ impl VMTrace {
             let opcode_number = instruction.opcode;
 
             // if the instruction is a state-accessing instruction, the function is no longer pure
-            if function.pure
-                && vec![
+            if function.pure &&
+                vec![
                     "BALANCE",
                     "ORIGIN",
                     "CALLER",
@@ -71,8 +71,8 @@ impl VMTrace {
             }
 
             // if the instruction is a state-setting instruction, the function is no longer a view
-            if function.view
-                && vec![
+            if function.view &&
+                vec![
                     "SSTORE",
                     "CREATE",
                     "SELFDESTRUCT",
@@ -104,7 +104,7 @@ impl VMTrace {
                             "unable to decode event emission at instruction {}",
                             instruction.instruction
                         ));
-                        continue;
+                        continue
                     }
                 };
 
@@ -146,9 +146,10 @@ impl VMTrace {
 
                 let revert_data = memory.read(offset, size);
 
-                // (1) if revert_data starts with 0x08c379a0, the folling is an error string abiencoded
-                // (2) if revert_data starts with 0x4e487b71, the following is a compiler panic
-                // (3) if revert_data starts with any other 4byte selector, it is a custom error and should
+                // (1) if revert_data starts with 0x08c379a0, the folling is an error string
+                // abiencoded (2) if revert_data starts with 0x4e487b71, the
+                // following is a compiler panic (3) if revert_data starts with any
+                // other 4byte selector, it is a custom error and should
                 //     be resolved and added to the generated ABI
                 // (4) if revert_data is empty, it is an empty revert. Ex:
                 //       - if (true != false) { revert() };
@@ -156,7 +157,7 @@ impl VMTrace {
 
                 // handle case with error string abiencoded
                 if revert_data.starts_with(&decode_hex("4e487b71").unwrap()) {
-                    continue;
+                    continue
                 }
                 // handle case with custom error OR empty revert
                 else {
@@ -170,15 +171,16 @@ impl VMTrace {
                                 .to_string();
 
                             // we can negate the conditional to get the revert logic
-                            // TODO: make this a require statement, if revert is rlly gross but its technically correct
-                            //       I just ran into issues with ending bracket matching
+                            // TODO: make this a require statement, if revert is rlly gross but its
+                            // technically correct       I just ran into
+                            // issues with ending bracket matching
                             function.logic[i] = format!(
                                 "if {conditional} {{ revert({}, {}); }} else {{",
                                 instruction.input_operations[0].yulify(),
                                 instruction.input_operations[1].yulify()
                             );
 
-                            break;
+                            break
                         }
                     }
                 }
@@ -304,8 +306,8 @@ impl VMTrace {
             } else if ["AND", "OR"].contains(&opcode_name) {
                 if let Some(calldata_slot_operation) =
                     instruction.input_operations.iter().find(|operation| {
-                        operation.opcode.name == "CALLDATALOAD"
-                            || operation.opcode.name == "CALLDATACOPY"
+                        operation.opcode.name == "CALLDATALOAD" ||
+                            operation.opcode.name == "CALLDATACOPY"
                     })
                 {
                     // convert the bitmask to it's potential solidity types
@@ -317,7 +319,8 @@ impl VMTrace {
                             frame.operation == calldata_slot_operation.inputs[0].to_string()
                         })
                     {
-                        // append the current potential types to the new vector and remove duplicates
+                        // append the current potential types to the new vector and remove
+                        // duplicates
                         potential_types.append(&mut arg.1.clone());
                         potential_types.sort();
                         potential_types.dedup();
@@ -361,8 +364,8 @@ impl VMTrace {
                 if let Some((key, (frame, potential_types))) =
                     function.arguments.clone().iter().find(|(_, (frame, _))| {
                         instruction.output_operations.iter().any(|operation| {
-                            operation.to_string().contains(frame.operation.as_str())
-                                && !frame.heuristics.contains(&"integer".to_string())
+                            operation.to_string().contains(frame.operation.as_str()) &&
+                                !frame.heuristics.contains(&"integer".to_string())
                         })
                     })
                 {
@@ -384,8 +387,8 @@ impl VMTrace {
                 if let Some((key, (frame, potential_types))) =
                     function.arguments.clone().iter().find(|(_, (frame, _))| {
                         instruction.output_operations.iter().any(|operation| {
-                            operation.to_string().contains(frame.operation.as_str())
-                                && !frame.heuristics.contains(&"bytes".to_string())
+                            operation.to_string().contains(frame.operation.as_str()) &&
+                                !frame.heuristics.contains(&"bytes".to_string())
                         })
                     })
                 {
@@ -411,14 +414,14 @@ impl VMTrace {
         }
 
         // check if the ending brackets are needed
-        if jumped_conditional.is_some()
-            && conditional_map.contains(&jumped_conditional.clone().unwrap())
+        if jumped_conditional.is_some() &&
+            conditional_map.contains(&jumped_conditional.clone().unwrap())
         {
             // remove the last matching conditional from the conditional map
             for j in (0..conditional_map.len()).rev() {
                 if conditional_map[j] == jumped_conditional.clone().unwrap() {
                     conditional_map.remove(j);
-                    break;
+                    break
                 }
             }
 

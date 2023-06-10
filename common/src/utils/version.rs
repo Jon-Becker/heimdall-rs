@@ -38,7 +38,7 @@ pub fn remote_version() -> Version {
                 let minor = version_parts[1].parse::<u32>().unwrap_or(0);
                 let patch = version_parts[2].parse::<u32>().unwrap_or(0);
 
-                return Version { major, minor, patch };
+                return Version { major, minor, patch }
             }
         }
     }
@@ -58,13 +58,13 @@ impl Version {
     // greater than
     pub fn gt(&self, other: &Version) -> bool {
         if self.major > other.major {
-            return true;
+            return true
         } else if self.major == other.major {
             if self.minor > other.minor {
-                return true;
+                return true
             } else if self.minor == other.minor {
                 if self.patch > other.patch {
-                    return true;
+                    return true
                 }
             }
         }
@@ -75,13 +75,13 @@ impl Version {
     // greater than or equal to
     pub fn gte(&self, other: &Version) -> bool {
         if self.major > other.major {
-            return true;
+            return true
         } else if self.major == other.major {
             if self.minor > other.minor {
-                return true;
+                return true
             } else if self.minor == other.minor {
                 if self.patch >= other.patch {
-                    return true;
+                    return true
                 }
             }
         }
@@ -92,13 +92,13 @@ impl Version {
     // less than
     pub fn lt(&self, other: &Version) -> bool {
         if self.major < other.major {
-            return true;
+            return true
         } else if self.major == other.major {
             if self.minor < other.minor {
-                return true;
+                return true
             } else if self.minor == other.minor {
                 if self.patch < other.patch {
-                    return true;
+                    return true
                 }
             }
         }
@@ -109,13 +109,13 @@ impl Version {
     // less than or equal to
     pub fn lte(&self, other: &Version) -> bool {
         if self.major < other.major {
-            return true;
+            return true
         } else if self.major == other.major {
             if self.minor < other.minor {
-                return true;
+                return true
             } else if self.minor == other.minor {
                 if self.patch <= other.patch {
-                    return true;
+                    return true
                 }
             }
         }
@@ -128,7 +128,7 @@ impl Version {
         if self.major == other.major {
             if self.minor == other.minor {
                 if self.patch == other.patch {
-                    return true;
+                    return true
                 }
             }
         }
@@ -139,11 +139,11 @@ impl Version {
     // not equal to
     pub fn ne(&self, other: &Version) -> bool {
         if self.major != other.major {
-            return true;
+            return true
         } else if self.minor != other.minor {
-            return true;
+            return true
         } else if self.patch != other.patch {
-            return true;
+            return true
         }
 
         false

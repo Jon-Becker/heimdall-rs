@@ -70,7 +70,7 @@ pub fn find_balanced_encapsulator(s: String, encap: (char, char)) -> (usize, usi
         }
         if open == close && open > 0 {
             end = i;
-            break;
+            break
         }
     }
     (start, end + 1, (open == close && end > start && open > 0))
@@ -96,7 +96,7 @@ pub fn find_balanced_encapsulator_backwards(
         }
         if open == close && open > 0 {
             end = i;
-            break;
+            break
         }
     }
     (s.len() - end - 1, s.len() - start, (open == close && end > start && open > 0))

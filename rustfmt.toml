@@ -11,5 +11,5 @@ use_field_init_shorthand = false
 brace_style = "PreferSameLine"
 control_brace_style = "AlwaysSameLine"
 condense_wildcard_suffixes = true
-fn_args_layout = "Tall"
+fn_params_layout = "Tall"
 trailing_whitespace = "Deny"

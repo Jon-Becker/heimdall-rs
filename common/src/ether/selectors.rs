@@ -18,7 +18,8 @@ use super::{
 pub fn find_function_selectors(assembly: String) -> Vec<String> {
     let mut function_selectors = Vec::new();
 
-    // search through assembly for PUSH4 instructions, optimistically assuming that they are function selectors
+    // search through assembly for PUSH4 instructions, optimistically assuming that they are
+    // function selectors
     let assembly: Vec<String> = assembly.split('\n').map(|line| line.trim().to_string()).collect();
     for line in assembly.iter() {
         let instruction_args: Vec<String> = line.split(' ').map(|arg| arg.to_string()).collect();
@@ -52,18 +53,18 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
             let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
 
-            if jump_condition.contains(&selector)
-                && jump_condition.contains("msg.data[0]")
-                && jump_condition.contains(" == ")
-                && jump_taken == 1
+            if jump_condition.contains(&selector) &&
+                jump_condition.contains("msg.data[0]") &&
+                jump_condition.contains(" == ") &&
+                jump_taken == 1
             {
-                return call.last_instruction.inputs[0].try_into().unwrap_or(0);
+                return call.last_instruction.inputs[0].try_into().unwrap_or(0)
             } else if jump_taken == 1 {
                 // if handled_jumps contains the jumpi, we have already handled this jump.
                 // loops aren't supported in the dispatcher, so we can just return 0
                 if handled_jumps.contains(&call.last_instruction.inputs[0].try_into().unwrap_or(0))
                 {
-                    return 0;
+                    return 0
                 } else {
                     handled_jumps.insert(call.last_instruction.inputs[0].try_into().unwrap_or(0));
                 }
@@ -71,7 +72,7 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
         }
 
         if vm.exitcode != 255 || !vm.returndata.is_empty() {
-            break;
+            break
         }
     }
 

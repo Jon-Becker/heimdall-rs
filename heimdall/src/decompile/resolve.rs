@@ -18,20 +18,21 @@ pub fn match_parameters(
             for (index, input) in resolved_function.inputs.iter().enumerate() {
                 match function.arguments.get(&index) {
                     Some((_, potential_types)) => {
-                        // arrays are typically recorded as bytes by the decompiler's potential types
+                        // arrays are typically recorded as bytes by the decompiler's potential
+                        // types
                         if input.contains("[]") {
                             if !potential_types.contains(&"bytes".to_string()) {
-                                continue;
+                                continue
                             }
                         } else if !potential_types.contains(input) {
                             matched = false;
-                            break;
+                            break
                         }
                     }
                     None => {
                         // parameter not found
                         matched = false;
-                        break;
+                        break
                     }
                 }
             }

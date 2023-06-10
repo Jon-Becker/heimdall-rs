@@ -30,8 +30,8 @@ pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
             let diff = x_i64 - mean as i64;
             diff * diff
         })
-        .sum::<i64>()
-        / (runs - 1) as i64;
+        .sum::<i64>() /
+        (runs - 1) as i64;
     let std_dev = f64::sqrt(variance as f64) as usize;
 
     let _ = io::stdout().write_all(

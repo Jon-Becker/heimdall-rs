@@ -107,7 +107,7 @@ impl VM {
     pub fn consume_gas(&mut self, amount: u128) -> bool {
         // REVERT if out of gas
         if amount > self.gas_remaining {
-            return false;
+            return false
         }
 
         self.gas_remaining = self.gas_remaining.saturating_sub(amount);
@@ -128,7 +128,7 @@ impl VM {
                 outputs: Vec::new(),
                 input_operations: Vec::new(),
                 output_operations: Vec::new(),
-            };
+            }
         }
 
         // get the opcode at the current instruction
@@ -157,7 +157,7 @@ impl VM {
                     outputs: Vec::new(),
                     input_operations: input_operations,
                     output_operations: Vec::new(),
-                };
+                }
             }
         }
 
@@ -181,7 +181,7 @@ impl VM {
                     outputs: Vec::new(),
                     input_operations: input_operations,
                     output_operations: Vec::new(),
-                };
+                }
             }
 
             // ADD
@@ -193,8 +193,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -211,8 +211,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -229,8 +229,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -250,8 +250,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -271,8 +271,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -293,8 +293,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -314,8 +314,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -337,8 +337,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -359,8 +359,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -377,8 +377,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&exponent.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&exponent.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -476,8 +476,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -494,8 +494,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -512,8 +512,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -565,8 +565,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -591,8 +591,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -618,7 +618,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -629,8 +629,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
-                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -657,7 +657,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let size: usize = match size.try_into() {
@@ -672,7 +672,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -742,7 +742,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -787,7 +787,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let offset: usize = match offset.try_into() {
@@ -802,7 +802,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let size: usize = match size.try_into() {
@@ -817,7 +817,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -859,7 +859,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let offset: usize = match offset.try_into() {
@@ -874,7 +874,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let size: usize = match size.try_into() {
@@ -889,7 +889,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -936,7 +936,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let size: usize = match size.try_into() {
@@ -951,7 +951,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -985,7 +985,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let size: usize = match size.try_into() {
@@ -1000,7 +1000,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -1059,7 +1059,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -1086,7 +1086,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -1111,7 +1111,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -1150,13 +1150,13 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
                 // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                if (pc <= self.bytecode.len().try_into().unwrap())
-                    && (self.bytecode[pc as usize] != 0x5b)
+                if (pc <= self.bytecode.len().try_into().unwrap()) &&
+                    (self.bytecode[pc as usize] != 0x5b)
                 {
                     self.exit(790, Vec::new());
                     return Instruction {
@@ -1167,7 +1167,7 @@ impl VM {
                         outputs: Vec::new(),
                         input_operations: input_operations,
                         output_operations: Vec::new(),
-                    };
+                    }
                 } else {
                     self.instruction = pc + 1;
                 }
@@ -1191,14 +1191,15 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
                 if !condition.eq(&U256::from(0u8)) {
-                    // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                    if (pc <= self.bytecode.len().try_into().unwrap())
-                        && (self.bytecode[pc as usize] != 0x5b)
+                    // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
+                    // destination)
+                    if (pc <= self.bytecode.len().try_into().unwrap()) &&
+                        (self.bytecode[pc as usize] != 0x5b)
                     {
                         self.exit(790, Vec::new());
                         return Instruction {
@@ -1209,7 +1210,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     } else {
                         self.instruction = pc + 1;
                     }
@@ -1297,7 +1298,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let size: usize = match size.try_into() {
@@ -1312,13 +1313,14 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
                 let data = self.memory.read(offset, size);
 
-                // no need for a panic check because the length of events should never be larger than a u128
+                // no need for a panic check because the length of events should never be larger
+                // than a u128
                 self.events.push(Log::new(self.events.len().try_into().unwrap(), topics, &data))
             }
 
@@ -1357,7 +1359,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let size: usize = match size.try_into() {
@@ -1372,7 +1374,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -1414,7 +1416,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
                 let size: usize = match size.try_into() {
@@ -1429,7 +1431,7 @@ impl VM {
                             outputs: Vec::new(),
                             input_operations: input_operations,
                             output_operations: Vec::new(),
-                        };
+                        }
                     }
                 };
 
@@ -1494,7 +1496,7 @@ impl VM {
             self.step();
 
             if self.exitcode != 255 || !self.returndata.is_empty() {
-                break;
+                break
             }
         }
 

@@ -188,7 +188,7 @@ pub fn output(
                         ABIStructure::Error(x) => x.name == resolved_error.name,
                         _ => false,
                     }) {
-                        continue;
+                        continue
                     }
 
                     abi.push(ABIStructure::Error(ErrorABI {
@@ -201,15 +201,15 @@ pub fn output(
                     // check if the error is already in the ABI
                     if abi.iter().any(|x| match x {
                         ABIStructure::Error(x) => {
-                            x.name
-                                == format!(
+                            x.name ==
+                                format!(
                                     "CustomError_{}",
                                     &error_selector.encode_hex().replacen("0x", "", 1)
                                 )
                         }
                         _ => false,
                     }) {
-                        continue;
+                        continue
                     }
 
                     abi.push(ABIStructure::Error(ErrorABI {
@@ -247,7 +247,7 @@ pub fn output(
                         ABIStructure::Event(x) => x.name == resolved_event.name,
                         _ => false,
                     }) {
-                        continue;
+                        continue
                     }
 
                     abi.push(ABIStructure::Event(EventABI {
@@ -260,15 +260,15 @@ pub fn output(
                     // check if the event is already in the ABI
                     if abi.iter().any(|x| match x {
                         ABIStructure::Event(x) => {
-                            x.name
-                                == format!(
+                            x.name ==
+                                format!(
                                     "Event_{}",
                                     &event_selector.encode_hex().replacen("0x", "", 1)[0..8]
                                 )
                         }
                         _ => false,
                     }) {
-                        continue;
+                        continue
                     }
 
                     abi.push(ABIStructure::Event(EventABI {
@@ -313,9 +313,9 @@ pub fn output(
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     // add the call to the trace
@@ -353,9 +353,9 @@ pub fn output(
                             format!(
                                 "{}{}",
                                 solidity_type,
-                                if solidity_type.contains("[]")
-                                    || solidity_type.contains('(')
-                                    || ["string", "bytes"].contains(&solidity_type.as_str())
+                                if solidity_type.contains("[]") ||
+                                    solidity_type.contains('(') ||
+                                    ["string", "bytes"].contains(&solidity_type.as_str())
                                 {
                                     " memory"
                                 } else {
@@ -381,9 +381,9 @@ pub fn output(
                             format!(
                                 "{}{}",
                                 potential_types[0],
-                                if potential_types[0].contains("[]")
-                                    || potential_types[0].contains('(')
-                                    || ["string", "bytes"].contains(&potential_types[0].as_str())
+                                if potential_types[0].contains("[]") ||
+                                    potential_types[0].contains('(') ||
+                                    ["string", "bytes"].contains(&potential_types[0].as_str())
                                 {
                                     " memory"
                                 } else {

@@ -20,7 +20,7 @@ pub fn complete(prompt: String, api_key: &String, logger: &Logger) -> Option<Str
             Ok(request) => request,
             Err(e) => {
                 logger.error(&format!("failed to create completion request: {e}"));
-                return None;
+                return None
             }
         };
 

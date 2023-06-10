@@ -22,7 +22,8 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
     let temp_inputs: Vec<String> = string_inputs.split(',').map(|s| s.to_string()).collect();
     let mut inputs: Vec<String> = Vec::new();
 
-    // if the input contains complex types, rejoin them. for nested types, this function will recurse.
+    // if the input contains complex types, rejoin them. for nested types, this function will
+    // recurse.
     if string_inputs.contains('(') {
         let mut tuple_depth = 0;
         let mut complex_input: Vec<String> = Vec::new();
@@ -55,19 +56,19 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
     for solidity_type in inputs {
         if solidity_type == "address" {
             function_inputs.push(ParamType::Address);
-            continue;
+            continue
         }
         if solidity_type == "bytes" {
             function_inputs.push(ParamType::Bytes);
-            continue;
+            continue
         }
         if solidity_type == "bool" {
             function_inputs.push(ParamType::Bool);
-            continue;
+            continue
         }
         if solidity_type == "string" {
             function_inputs.push(ParamType::String);
-            continue;
+            continue
         }
         if solidity_type.starts_with('(') && !solidity_type.ends_with(']') {
             let complex_inputs = match parse_function_parameters(solidity_type.clone()) {
@@ -75,7 +76,7 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
                 None => continue,
             };
             function_inputs.push(ParamType::Tuple(complex_inputs));
-            continue;
+            continue
         }
         if solidity_type.ends_with("[]") {
             let array_type = match parse_function_parameters(
@@ -90,7 +91,7 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
             } else {
                 function_inputs.push(ParamType::Array(Box::new(ParamType::Tuple(array_type))));
             }
-            continue;
+            continue
         }
         if solidity_type.ends_with(']') {
             let size = match solidity_type.split('[').nth(1) {
@@ -113,24 +114,24 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
                 function_inputs
                     .push(ParamType::FixedArray(Box::new(ParamType::Tuple(array_type)), size));
             }
-            continue;
+            continue
         }
         if solidity_type.starts_with("int") {
             let size = solidity_type.replace("int", "").parse::<usize>().unwrap_or(256);
             function_inputs.push(ParamType::Int(size));
-            continue;
+            continue
         }
         if solidity_type.starts_with("uint") {
             let size = solidity_type.replace("uint", "").parse::<usize>().unwrap_or(256);
 
             function_inputs.push(ParamType::Uint(size));
-            continue;
+            continue
         }
         if solidity_type.starts_with("bytes") {
             let size = solidity_type.replace("bytes", "").parse::<usize>().unwrap_or(32);
 
             function_inputs.push(ParamType::FixedBytes(size));
-            continue;
+            continue
         }
     }
 

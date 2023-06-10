@@ -8,5 +8,12 @@ repos:
 - repo: https://github.com/doublify/pre-commit-rust
   rev: v1.0
   hooks:
-    - id: fmt
     - id: cargo-check
+- repo: local
+  hooks:
+    - id: fmt
+      name: nightly-fmt
+      entry: cargo +nightly fmt
+      language: system
+      types: [rust]
+      pass_filenames: false

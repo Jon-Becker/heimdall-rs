@@ -11,9 +11,7 @@ use heimdall_common::{
     utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
 };
 
-use super::{
-    super::constants::AND_BITMASK_REGEX, super::precompile::decode_precompile, super::util::*,
-};
+use super::super::{constants::AND_BITMASK_REGEX, precompile::decode_precompile, util::*};
 
 impl VMTrace {
     // converts a VMTrace to a Funciton through lexical and syntactic analysis
@@ -39,8 +37,8 @@ impl VMTrace {
             let opcode_number = instruction.opcode;
 
             // if the instruction is a state-accessing instruction, the function is no longer pure
-            if function.pure
-                && vec![
+            if function.pure &&
+                vec![
                     "BALANCE",
                     "ORIGIN",
                     "CALLER",
@@ -80,8 +78,8 @@ impl VMTrace {
             }
 
             // if the instruction is a state-setting instruction, the function is no longer a view
-            if function.view
-                && vec![
+            if function.view &&
+                vec![
                     "SSTORE",
                     "CREATE",
                     "SELFDESTRUCT",
@@ -113,7 +111,7 @@ impl VMTrace {
                             "unable to decode event emission at instruction {}",
                             instruction.instruction
                         ));
-                        continue;
+                        continue
                     }
                 };
 
@@ -149,8 +147,8 @@ impl VMTrace {
                             .encode_hex()
                             .replacen("0x", "", 1)[0..8],
                         match logged_event.topics.get(1..) {
-                            Some(topics) => match !logged_event.data.is_empty()
-                                && !topics.is_empty()
+                            Some(topics) => match !logged_event.data.is_empty() &&
+                                !topics.is_empty()
                             {
                                 true => {
                                     let mut solidified_topics: Vec<String> = Vec::new();
@@ -184,8 +182,8 @@ impl VMTrace {
                     .opcode_details
                     .clone()
                     .unwrap()
-                    .name
-                    == "REVERT"
+                    .name ==
+                    "REVERT"
                 {
                     revert_conditional = Some(instruction.input_operations[1].solidify());
                     jumped_conditional = Some(revert_conditional.clone().unwrap());
@@ -208,7 +206,7 @@ impl VMTrace {
                             ),
                         );
                         function.payable = false;
-                        continue;
+                        continue
                     }
 
                     function.logic.push(format!("if ({conditional}) {{").to_string());
@@ -221,9 +219,10 @@ impl VMTrace {
                 let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
                 let revert_data = memory.read(offset, size);
 
-                // (1) if revert_data starts with 0x08c379a0, the folling is an error string abiencoded
-                // (2) if revert_data starts with 0x4e487b71, the following is a compiler panic
-                // (3) if revert_data starts with any other 4byte selector, it is a custom error and should
+                // (1) if revert_data starts with 0x08c379a0, the folling is an error string
+                // abiencoded (2) if revert_data starts with 0x4e487b71, the
+                // following is a compiler panic (3) if revert_data starts with any
+                // other 4byte selector, it is a custom error and should
                 //     be resolved and added to the generated ABI
                 // (4) if revert_data is empty, it is an empty revert. Ex:
                 //       - if (true != false) { revert() };
@@ -257,20 +256,21 @@ impl VMTrace {
                                         .unwrap_or("decoding error");
 
                                     // we can negate the conditional to get the revert logic
-                                    // TODO: make this a require statement, if revert is rlly gross but its technically correct
+                                    // TODO: make this a require statement, if revert is rlly gross
+                                    // but its technically correct
                                     //       I just ran into issues with ending bracket matching
                                     function.logic[i] = format!("if (!({conditional})) {{ revert(\"{revert_string}\"); }} else {{");
 
-                                    break;
+                                    break
                                 }
                             }
-                            continue;
+                            continue
                         }
                     }
                 }
                 // handle case with panics
                 else if revert_data.starts_with(&decode_hex("4e487b71").unwrap()) {
-                    continue;
+                    continue
                 }
                 // handle case with custom error OR empty revert
                 else {
@@ -310,14 +310,15 @@ impl VMTrace {
                                             .unwrap();
 
                                         // we can negate the conditional to get the revert logic
-                                        // TODO: make this a require statement, if revert is rlly gross but its technically correct
+                                        // TODO: make this a require statement, if revert is rlly
+                                        // gross but its technically correct
                                         //       I just ran into issues with ending bracket matching
                                         function.logic[i] = format!("if (!({conditional})) {{ revert{custom_error_placeholder}; }} else {{");
                                     }
-                                    break;
+                                    break
                                 }
                             }
-                            continue;
+                            continue
                         }
                     }
                 }
@@ -338,13 +339,14 @@ impl VMTrace {
                 // we don't want to overwrite the return value if it's already been set
                 if function.returns == Some(String::from("uint256")) || function.returns.is_none() {
                     // if the return operation == ISZERO, this is a boolean return
-                    if return_memory_operations.len() == 1
-                        && return_memory_operations[0].operations.opcode.name == "ISZERO"
+                    if return_memory_operations.len() == 1 &&
+                        return_memory_operations[0].operations.opcode.name == "ISZERO"
                     {
                         function.returns = Some(String::from("bool"));
                     } else {
                         function.returns = match size > 32 {
-                            // if the return data is > 32 bytes, we append "memory" to the return type
+                            // if the return data is > 32 bytes, we append "memory" to the return
+                            // type
                             true => Some(format!("{} memory", "bytes")),
                             false => {
                                 // attempt to find a return type within the return memory operations
@@ -404,9 +406,10 @@ impl VMTrace {
                     instruction.input_operations[1].solidify()
                 ));
             } else if opcode_name == "STATICCALL" {
-                // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
-                let modifier = match instruction.input_operations[0]
-                    != WrappedOpcode::new(0x5A, vec![])
+                // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
+                // logic
+                let modifier = match instruction.input_operations[0] !=
+                    WrappedOpcode::new(0x5A, vec![])
                 {
                     true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
                     false => String::from(""),
@@ -439,9 +442,10 @@ impl VMTrace {
                     }
                 }
             } else if opcode_name == "DELEGATECALL" {
-                // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
-                let modifier = match instruction.input_operations[0]
-                    != WrappedOpcode::new(0x5A, vec![])
+                // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
+                // logic
+                let modifier = match instruction.input_operations[0] !=
+                    WrappedOpcode::new(0x5A, vec![])
                 {
                     true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
                     false => String::from(""),
@@ -474,7 +478,8 @@ impl VMTrace {
                     }
                 }
             } else if opcode_name == "CALL" || opcode_name == "CALLCODE" {
-                // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's logic
+                // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
+                // logic
                 let gas = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![])
                 {
                     true => format!("gas: {}, ", instruction.input_operations[0].solidify()),
@@ -588,8 +593,8 @@ impl VMTrace {
             } else if ["AND", "OR"].contains(&opcode_name) {
                 if let Some(calldata_slot_operation) =
                     instruction.input_operations.iter().find(|operation| {
-                        operation.opcode.name == "CALLDATALOAD"
-                            || operation.opcode.name == "CALLDATACOPY"
+                        operation.opcode.name == "CALLDATALOAD" ||
+                            operation.opcode.name == "CALLDATACOPY"
                     })
                 {
                     // convert the bitmask to it's potential solidity types
@@ -601,7 +606,8 @@ impl VMTrace {
                             frame.operation == calldata_slot_operation.inputs[0].to_string()
                         })
                     {
-                        // append the current potential types to the new vector and remove duplicates
+                        // append the current potential types to the new vector and remove
+                        // duplicates
                         potential_types.append(&mut arg.1.clone());
                         potential_types.sort();
                         potential_types.dedup();
@@ -645,8 +651,8 @@ impl VMTrace {
                 if let Some((key, (frame, potential_types))) =
                     function.arguments.clone().iter().find(|(_, (frame, _))| {
                         instruction.output_operations.iter().any(|operation| {
-                            operation.to_string().contains(frame.operation.as_str())
-                                && !frame.heuristics.contains(&"integer".to_string())
+                            operation.to_string().contains(frame.operation.as_str()) &&
+                                !frame.heuristics.contains(&"integer".to_string())
                         })
                     })
                 {
@@ -668,8 +674,8 @@ impl VMTrace {
                 if let Some((key, (frame, potential_types))) =
                     function.arguments.clone().iter().find(|(_, (frame, _))| {
                         instruction.output_operations.iter().any(|operation| {
-                            operation.to_string().contains(frame.operation.as_str())
-                                && !frame.heuristics.contains(&"bytes".to_string())
+                            operation.to_string().contains(frame.operation.as_str()) &&
+                                !frame.heuristics.contains(&"bytes".to_string())
                         })
                     })
                 {
@@ -695,18 +701,19 @@ impl VMTrace {
         }
 
         // check if the ending brackets are needed
-        if jumped_conditional.is_some()
-            && conditional_map.contains(&jumped_conditional.clone().unwrap())
+        if jumped_conditional.is_some() &&
+            conditional_map.contains(&jumped_conditional.clone().unwrap())
         {
             // remove the conditional
             for (i, conditional) in conditional_map.iter().enumerate() {
                 if conditional == &jumped_conditional.clone().unwrap() {
                     conditional_map.remove(i);
-                    break;
+                    break
                 }
             }
 
-            // if the last line is an if statement, this branch is empty and probably stack operations we don't care about
+            // if the last line is an if statement, this branch is empty and probably stack
+            // operations we don't care about
             if function.logic.last().unwrap().contains("if") {
                 function.logic.pop();
             } else {

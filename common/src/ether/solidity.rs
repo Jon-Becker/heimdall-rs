@@ -213,8 +213,8 @@ impl WrappedOpcode {
                                 .push_str(format!("arg{}", (slot - 4) / 32).as_str());
                         }
                         Err(_) => {
-                            if solidified_slot.contains("0x04 + ")
-                                || solidified_slot.contains("+ 0x04")
+                            if solidified_slot.contains("0x04 + ") ||
+                                solidified_slot.contains("+ 0x04")
                             {
                                 solidified_wrapped_opcode.push_str(
                                     solidified_slot
