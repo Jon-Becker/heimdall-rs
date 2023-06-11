@@ -177,8 +177,8 @@ fn main() {
 
     if remote_version.gt(&current_version) {
         let (logger, _) = Logger::new("TRACE");
-        println!("");
-        logger.info(&format!("great news! An update is available!"));
+        println!();
+        logger.info("great news! An update is available!");
         logger
             .info(&format!("you can update now by running: `bifrost --version {remote_version}`"));
     }

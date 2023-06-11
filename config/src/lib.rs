@@ -15,10 +15,12 @@ openai_api_key = \"\"
 ";
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Display and edit the current configuration",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall config [OPTIONS]")]
+#[clap(
+    about = "Display and edit the current configuration",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall config [OPTIONS]"
+)]
 pub struct ConfigArgs {
     /// The target key to update.
     #[clap(required = false, default_value = "")]

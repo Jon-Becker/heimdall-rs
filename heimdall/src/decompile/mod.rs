@@ -35,10 +35,12 @@ use heimdall_common::{
 };
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Decompile EVM bytecode to Solidity",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall decompile <TARGET> [OPTIONS]")]
+#[clap(
+    about = "Decompile EVM bytecode to Solidity",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall decompile <TARGET> [OPTIONS]"
+)]
 pub struct DecompilerArgs {
     /// The target to decompile, either a file, bytecode, contract address, or ENS name.
     #[clap(required = true)]
@@ -160,7 +162,6 @@ pub fn decompile(args: DecompilerArgs) {
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
-        default: args.default,
         verbose: args.verbose.clone(),
         output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),

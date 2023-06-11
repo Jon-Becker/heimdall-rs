@@ -10,6 +10,11 @@ pub fn task_pool<
     num_threads: usize,
     f: F,
 ) -> Vec<R> {
+    // if items is empty, return empty results
+    if items.is_empty() {
+        return Vec::new()
+    }
+
     let (tx, rx) = unbounded();
     let mut handles = Vec::new();
 
@@ -45,4 +50,52 @@ pub fn task_pool<
     }
 
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_task_pool_with_single_thread() {
+        // Test case with a single thread
+        let items = vec![1, 2, 3, 4, 5];
+        let num_threads = 1;
+        let expected_results = vec![2, 4, 6, 8, 10];
+
+        // Define a simple function to double the input
+        let f = |x: i32| x * 2;
+
+        let mut results = task_pool(items, num_threads, f);
+        results.sort();
+        assert_eq!(results, expected_results);
+    }
+
+    #[test]
+    fn test_task_pool_with_multiple_threads() {
+        // Test case with multiple threads
+        let items = vec![1, 2, 3, 4, 5];
+        let num_threads = 3;
+        let expected_results = vec![2, 4, 6, 8, 10];
+
+        // Define a simple function to double the input
+        let f = |x: i32| x * 2;
+
+        let mut results = task_pool(items, num_threads, f);
+        results.sort();
+        assert_eq!(results, expected_results);
+    }
+
+    #[test]
+    fn test_task_pool_with_empty_items() {
+        // Test case with empty items vector
+        let items: Vec<i32> = Vec::new();
+        let num_threads = 2;
+
+        // Define a simple function to double the input
+        let f = |x: i32| x * 2;
+
+        let results = task_pool(items, num_threads, f);
+        assert!(results.len() == 0);
+    }
 }

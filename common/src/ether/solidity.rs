@@ -9,7 +9,7 @@ use crate::{
 
 use super::evm::opcodes::*;
 
-fn is_ext_call_precompile(precompile_address: U256) -> bool {
+pub fn is_ext_call_precompile(precompile_address: U256) -> bool {
     let address: usize = match precompile_address.try_into() {
         Ok(x) => x,
         Err(_) => usize::MAX,
@@ -434,43 +434,5 @@ impl WrappedInput {
         }
 
         solidified_wrapped_input
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use ethers::types::U256;
-
-    #[test]
-    fn test_push0() {
-        // wraps an ADD operation with 2 raw inputs
-        let add_operation_wrapped = WrappedOpcode::new(0x5f, vec![]);
-        assert_eq!(add_operation_wrapped.solidify(), "0");
-    }
-
-    #[test]
-    fn test_solidify_add() {
-        // wraps an ADD operation with 2 raw inputs
-        let add_operation_wrapped = WrappedOpcode::new(
-            0x01,
-            vec![WrappedInput::Raw(U256::from(1u8)), WrappedInput::Raw(U256::from(2u8))],
-        );
-        assert_eq!(add_operation_wrapped.solidify(), "0x01 + 0x02");
-    }
-
-    #[test]
-    fn test_solidify_add_complex() {
-        // wraps an ADD operation with 2 raw inputs
-        let add_operation_wrapped = WrappedOpcode::new(
-            0x01,
-            vec![WrappedInput::Raw(U256::from(1u8)), WrappedInput::Raw(U256::from(2u8))],
-        );
-        let complex_add_operation = WrappedOpcode::new(
-            0x01,
-            vec![WrappedInput::Opcode(add_operation_wrapped), WrappedInput::Raw(U256::from(3u8))],
-        );
-        assert_eq!(complex_add_operation.solidify(), "(0x01 + 0x02) + 0x03");
     }
 }

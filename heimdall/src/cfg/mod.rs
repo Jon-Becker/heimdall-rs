@@ -24,10 +24,12 @@ use petgraph::Graph;
 use crate::cfg::{output::build_output, util::map_contract};
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Generate a visual control flow graph for EVM bytecode",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall cfg <TARGET> [OPTIONS]")]
+#[clap(
+    about = "Generate a visual control flow graph for EVM bytecode",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall cfg <TARGET> [OPTIONS]"
+)]
 pub struct CFGArgs {
     /// The target to generate a CFG for, either a file, bytecode, contract address, or ENS name.
     #[clap(required = true)]
@@ -142,7 +144,6 @@ pub fn cfg(args: CFGArgs) {
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
-        default: args.default,
         verbose: args.verbose.clone(),
         output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),

@@ -29,10 +29,6 @@ pub struct DisassemblerArgs {
     /// The RPC provider to use for fetching target bytecode.
     #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
-
-    /// When prompted, always select the default value.
-    #[clap(long, short)]
-    pub default: bool,
 }
 
 pub fn disassemble(args: DisassemblerArgs) -> String {

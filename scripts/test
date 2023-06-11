@@ -1,3 +1,19 @@
-cargo test --release --package heimdall -- test_ --nocapture
-cargo test --release --package heimdall-config -- test_ --nocapture
-cargo test --release --package heimdall-common -- test_ --nocapture
+
+# if --cov is passed, then we want to run the coverage command
+if [ "$1" = "--cov" ]; then
+
+    # specify regex to ignore files
+    # ignore rpc.rs, logging.rs, http.rs, transpose.rs, resources.rs, tests.rs, heimdall.rs, lib.rs
+    regex=".*rpc\.rs|.*logging\.rs|.*http\.rs|.*transpose\.rs|.*resources.*\.rs|.*test(s)?.rs|heimdall\.rs|.*lib\.rs"
+
+    # if -v or --verbose is passed, then we want to print the coverage report
+    if [ "$2" = "-v" ] || [ "$2" = "--verbose" ]; then
+        cargo llvm-cov --release --ignore-filename-regex=$regex --show-missing-lines --fail-under-lines 80 -- test_
+        exit 0
+    fi
+
+    cargo llvm-cov --release --ignore-filename-regex=$regex --fail-under-lines 80 -- test_
+    exit 0
+fi
+
+cargo test --release -- test_

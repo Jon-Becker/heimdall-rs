@@ -1,4 +1,3 @@
-unstable_options = true
 reorder_imports = true
 imports_granularity = "Crate"
 use_small_heuristics = "Max"
@@ -12,4 +11,3 @@ brace_style = "PreferSameLine"
 control_brace_style = "AlwaysSameLine"
 condense_wildcard_suffixes = true
 fn_params_layout = "Tall"
-trailing_whitespace = "Deny"

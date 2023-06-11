@@ -26,10 +26,12 @@ use strsim::normalized_damerau_levenshtein as similarity;
 use crate::decode::util::get_explanation;
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Decode calldata into readable types",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall decode <TARGET> [OPTIONS]")]
+#[clap(
+    about = "Decode calldata into readable types",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall decode <TARGET> [OPTIONS]"
+)]
 pub struct DecodeArgs {
     /// The target to decode, either a transaction hash or string of bytes.
     #[clap(required = true)]

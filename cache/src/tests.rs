@@ -130,3 +130,107 @@ mod tests {
         delete_cache("does_not_exist");
     }
 }
+
+#[cfg(test)]
+mod test_util {
+    use crate::util::*;
+
+    #[test]
+    fn test_decode_hex_valid_hex() {
+        let hex = "48656c6c6f20576f726c64"; // "Hello World" in hex
+        let result = decode_hex(hex);
+        assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]));
+    }
+
+    #[test]
+    fn test_decode_hex_invalid_hex() {
+        let hex = "48656c6c6f20576f726c4G"; // Invalid hex character 'G'
+        let result = decode_hex(hex);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_encode_hex() {
+        let bytes = vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100];
+        let result = encode_hex(bytes);
+        assert_eq!(result, "48656c6c6f20576f726c64");
+    }
+
+    #[test]
+    fn test_prettify_bytes_less_than_1_kb() {
+        let bytes = 500;
+        let result = prettify_bytes(bytes);
+        assert_eq!(result, "500 B");
+    }
+
+    #[test]
+    fn test_prettify_bytes_less_than_1_mb() {
+        let bytes = 500_000;
+        let result = prettify_bytes(bytes);
+        assert_eq!(result, "488 KB");
+    }
+
+    #[test]
+    fn test_prettify_bytes_less_than_1_gb() {
+        let bytes = 500_000_000;
+        let result = prettify_bytes(bytes);
+        assert_eq!(result, "476 MB");
+    }
+
+    #[test]
+    fn test_prettify_bytes_greater_than_1_gb() {
+        let bytes = 5_000_000_000;
+        let result = prettify_bytes(bytes);
+        assert_eq!(result, "4 GB");
+    }
+
+    #[test]
+    fn test_write_file_successful() {
+        let path = "/tmp/test.txt";
+        let contents = "Hello, World!";
+        let result = write_file(&path.to_string(), &contents.to_string());
+        assert_eq!(result, Some(path.to_string()));
+    }
+
+    #[test]
+    fn test_write_file_failure() {
+        // Assuming the path is read-only or permission denied
+        let path = "/root/test.txt";
+        let contents = "Hello, World!";
+        let result = write_file(&path.to_string(), &contents.to_string());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_read_file_successful() {
+        let path = "/tmp/test.txt";
+        let contents = "Hello, World!";
+        write_file(&path.to_string(), &contents.to_string());
+
+        let result = read_file(&path.to_string());
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_read_file_failure() {
+        let path = "/nonexistent/test.txt";
+        let result = read_file(&path.to_string());
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_delete_path_successful() {
+        let path = "/tmp/test_dir";
+        std::fs::create_dir(&path).unwrap();
+
+        let result = delete_path(&path.to_string());
+        assert!(result);
+    }
+
+    #[test]
+    fn test_delete_path_failure() {
+        let path = "/nonexistent/test_dir";
+        let result = delete_path(&path.to_string());
+        assert!(result);
+    }
+}

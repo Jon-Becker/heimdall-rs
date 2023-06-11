@@ -10,7 +10,7 @@ use tui::{backend::CrosstermBackend, Terminal};
 use crate::dump::{
     constants::{DECODE_AS_TYPES, DUMP_STATE},
     tui_views::{render_ui, TUIView},
-    util::{cleanup_terminal, csv::write_storage_to_csv, table::copy_selected},
+    util::{cleanup_terminal, csv::write_storage_to_csv},
     DumpArgs,
 };
 
@@ -134,13 +134,6 @@ pub fn handle(args: DumpArgs, output_dir: String) {
                         }
 
                         match key.code {
-                            // copy value on MODIFIER + C
-                            crossterm::event::KeyCode::Char('c') => {
-                                if crossterm::event::KeyModifiers::NONE != key.modifiers {
-                                    copy_selected(&mut state)
-                                }
-                            }
-
                             // main on escape
                             crossterm::event::KeyCode::Esc => {
                                 state.filter = String::new();

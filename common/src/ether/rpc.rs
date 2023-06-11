@@ -86,7 +86,7 @@ pub fn get_transaction(
         };
 
         // safely unwrap the transaction hash
-        let transaction_hash = match H256::from_str(&transaction_hash) {
+        let transaction_hash = match H256::from_str(transaction_hash) {
             Ok(transaction_hash) => transaction_hash,
             Err(_) => {
                 logger.error(&format!("failed to parse transaction hash '{}' .", &transaction_hash));
@@ -95,7 +95,7 @@ pub fn get_transaction(
         };
 
         // fetch the transaction from the node
-        let raw_transaction = match provider.get_transaction(transaction_hash).await {
+        match provider.get_transaction(transaction_hash).await {
             Ok(tx) => {
                 match tx {
                     Some(tx) => tx,
@@ -109,8 +109,6 @@ pub fn get_transaction(
                 logger.error(&format!("failed to fetch calldata from '{}' .", &transaction_hash));
                 std::process::exit(1)
             }
-        };
-
-        raw_transaction
+        }
     })
 }

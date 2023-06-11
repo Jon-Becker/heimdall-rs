@@ -4,7 +4,7 @@ use heimdall_cache::{read_cache, store_cache};
 use crate::utils::{http::get_json_from_url, strings::replace_last};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedFunction {
     pub name: String,
     pub signature: String,
@@ -12,14 +12,14 @@ pub struct ResolvedFunction {
     pub decoded_inputs: Option<Vec<Token>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedError {
     pub name: String,
     pub signature: String,
     pub inputs: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedLog {
     pub name: String,
     pub signature: String,

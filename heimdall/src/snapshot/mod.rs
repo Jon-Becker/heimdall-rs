@@ -11,10 +11,12 @@ use heimdall_common::{
     io::logging::*,
 };
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Infer function information from bytecode, including access control, gas consumption, storage accesses, event emissions, and more",
-after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-global_setting = AppSettings::DeriveDisplayOrder,
-override_usage = "heimdall snapshot <TARGET> [OPTIONS]")]
+#[clap(
+    about = "Infer function information from bytecode, including access control, gas consumption, storage accesses, event emissions, and more",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall snapshot <TARGET> [OPTIONS]"
+)]
 pub struct SnapshotArgs {
     /// The target to analyze. This may be a file, bytecode, or contract address.
     #[clap(required = true)]
@@ -87,7 +89,6 @@ pub fn snapshot(args: SnapshotArgs) {
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
-        default: args.default,
         verbose: args.verbose.clone(),
         output: "".to_string(),
         rpc_url: args.rpc_url.clone(),
