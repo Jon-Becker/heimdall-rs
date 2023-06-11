@@ -984,12 +984,11 @@ mod test_disassemble {
         let bytecode = "366000600037611000600036600073";
         let expected = String::from("0 CALLDATASIZE \n2 PUSH1 00\n4 PUSH1 00\n5 CALLDATACOPY \n8 PUSH2 1000\n10 PUSH1 00\n11 CALLDATASIZE \n13 PUSH1 00\n");
 
-        // write bytecode to file
-        let mut file =
-            std::fs::File::create("/tmp/heimdall-rs/test_disassemble_from_file").unwrap();
+        // write bytecode to file at the cwd
+        let mut file = std::fs::File::create("test_disassemble_from_file").unwrap();
         file.write_all(bytecode.as_bytes()).unwrap();
         let assembly = disassemble(DisassemblerArgs {
-            target: "/tmp/heimdall-rs/test_disassemble_from_file".to_owned(),
+            target: String::from("test_disassemble_from_file"),
             verbose: Verbosity::new(0, 0),
             output: String::from("/tmp/heimdall-rs/"),
             rpc_url: String::from(""),
