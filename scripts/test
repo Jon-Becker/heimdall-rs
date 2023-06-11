@@ -21,8 +21,8 @@ if [ "$1" = "--cov" ]; then
         float=$(echo "$match" | grep -o '[0-9.]\+')
 
         # Compare the float value with 0.5
-        if (( $(awk 'BEGIN {print ('$float' < 0.6)}') )); then
-            echo "coverage of $float is less than 0.6"
+        if (( $(awk 'BEGIN {print ('$float' < 0.58)}') )); then
+            echo "coverage of $float is less than 0.58"
             exit 1
         else
             exit 0

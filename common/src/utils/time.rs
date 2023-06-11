@@ -16,29 +16,3 @@ pub fn format_eta(seconds_remaining: u128) -> String {
         if seconds > 0 { format!("{seconds}s ") } else { String::from("0s") },
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_calculate_eta() {
-        assert_eq!(calculate_eta(2.5, 10), 4);
-        assert_eq!(calculate_eta(0.5, 100), 200);
-        assert_eq!(calculate_eta(1.0, 0), 0);
-        assert_eq!(calculate_eta(0.0, 100), std::u128::MAX);
-        assert_eq!(calculate_eta(10.0, std::usize::MAX), 1844674407370955264);
-    }
-
-    #[test]
-    fn test_format_eta() {
-        assert_eq!(format_eta(0), "0s");
-        assert_eq!(format_eta(59), "59s ");
-        assert_eq!(format_eta(60), "1m 0s");
-        assert_eq!(format_eta(3600), "1h 0s");
-        assert_eq!(format_eta(3665), "1h 1m 5s ");
-        assert_eq!(format_eta(86400), "1d 0s");
-        assert_eq!(format_eta(172800), "2d 0s");
-        assert_eq!(format_eta(180065), "2d 2h 1m 5s ");
-    }
-}

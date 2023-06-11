@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod logging_tests {
+mod test_logging {
     use std::time::Instant;
 
     use crate::io::logging::Logger;

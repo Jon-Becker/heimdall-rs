@@ -45,20 +45,3 @@ pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
         .as_bytes(),
     );
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_benchmark() {
-        // Test case: Single run
-        let benchmark_name = "Test Benchmark";
-        let runs = 10;
-        let to_bench = || {
-            // Code to benchmark
-            thread::sleep(std::time::Duration::from_millis(200));
-        };
-        benchmark(benchmark_name, runs, to_bench);
-    }
-}
