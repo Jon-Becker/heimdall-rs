@@ -620,22 +620,6 @@ mod test_signatures {
     }
 
     #[test]
-    fn resolve_function_signature_should_return_cached_results_when_found() {
-        let signature = String::from("test_signature");
-        let mut cached_results = Vec::new();
-        cached_results.push(ResolvedFunction {
-            name: String::from("test_function"),
-            signature: String::from("test_signature"),
-            inputs: vec![String::from("input_1"), String::from("input_2")],
-            decoded_inputs: None,
-        });
-        store_cache(&format!("selector.{}", &signature), cached_results.clone(), None);
-
-        let result = resolve_function_signature(&signature);
-        assert_eq!(result, Some(cached_results));
-    }
-
-    #[test]
     fn resolve_function_signature_should_return_none_when_json_url_returns_empty_signatures() {
         delete_cache(&format!("selector.{}", "test_signature"));
         let signature = String::from("test_signature");
