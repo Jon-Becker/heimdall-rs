@@ -432,7 +432,7 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
         [line.split(" = ").collect::<Vec<&str>>()[0].split(' ').collect::<Vec<&str>>().len() - 1];
 
     // skip lines that contain assignments to storage
-    if var_name.contains("storage") {
+    if var_name.contains("stor_") {
         return false;
     }
 

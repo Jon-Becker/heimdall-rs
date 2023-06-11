@@ -200,7 +200,13 @@ pub fn output(
                 None => {
                     // check if the error is already in the ABI
                     if abi.iter().any(|x| match x {
-                        ABIStructure::Error(x) => x.name == format!("CustomError_{}", &error_selector.encode_hex().replacen("0x", "", 1)),
+                        ABIStructure::Error(x) => {
+                            x.name
+                                == format!(
+                                    "CustomError_{}",
+                                    &error_selector.encode_hex().replacen("0x", "", 1)
+                                )
+                        }
                         _ => false,
                     }) {
                         continue;
@@ -208,7 +214,10 @@ pub fn output(
 
                     abi.push(ABIStructure::Error(ErrorABI {
                         type_: "error".to_string(),
-                        name: format!("CustomError_{}", &error_selector.encode_hex().replacen("0x", "", 1)),
+                        name: format!(
+                            "CustomError_{}",
+                            &error_selector.encode_hex().replacen("0x", "", 1)
+                        ),
                         inputs: Vec::new(),
                     }));
                 }
@@ -250,7 +259,13 @@ pub fn output(
                 None => {
                     // check if the event is already in the ABI
                     if abi.iter().any(|x| match x {
-                        ABIStructure::Event(x) => x.name == format!("Event_{}", &event_selector.encode_hex().replacen("0x", "", 1)[0..8]),
+                        ABIStructure::Event(x) => {
+                            x.name
+                                == format!(
+                                    "Event_{}",
+                                    &event_selector.encode_hex().replacen("0x", "", 1)[0..8]
+                                )
+                        }
                         _ => false,
                     }) {
                         continue;
@@ -258,7 +273,10 @@ pub fn output(
 
                     abi.push(ABIStructure::Event(EventABI {
                         type_: "event".to_string(),
-                        name: format!("Event_{}", &event_selector.encode_hex().replacen("0x", "", 1)[0..8]),
+                        name: format!(
+                            "Event_{}",
+                            &event_selector.encode_hex().replacen("0x", "", 1)[0..8]
+                        ),
                         inputs: Vec::new(),
                     }));
                 }
