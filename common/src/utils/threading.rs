@@ -46,7 +46,7 @@ pub fn task_pool<
 
     // Wait for all threads to finish
     for handle in handles {
-        handle.join().unwrap();
+        if let Ok(_) = handle.join() {}
     }
 
     results

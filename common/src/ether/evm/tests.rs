@@ -995,6 +995,8 @@ mod test_disassemble {
         });
 
         assert_eq!(expected, assembly);
+        // delete the file
+        std::fs::remove_file("test_disassemble_from_file").unwrap();
     }
 
     #[test]

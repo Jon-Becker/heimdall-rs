@@ -34,6 +34,9 @@ lazy_static! {
     // extracts commas within a certain expression, not including commas within parentheses
     pub static ref ARGS_SPLIT_REGEX: Regex = Regex::new(r",\s*(?![^()]*\))").unwrap();
 
+    // used to detect compiler size checks
+    pub static ref VARIABLE_SIZE_CHECK_REGEX: Regex = Regex::new(r"!?\(?0(x01)? < \w+\.length\)?").unwrap();
+
     pub static ref DECOMPILED_SOURCE_HEADER_SOL: String =
 "// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;

@@ -288,6 +288,7 @@ impl WrappedOpcode {
             }
             "MLOAD" => {
                 let memloc = self.inputs[0]._solidify();
+                // TODO: cleanup
 
                 if memloc.contains("memory") {
                     if memloc.contains('+') {

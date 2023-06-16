@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use ethers::{
     abi::{decode, AbiEncode, ParamType},
     prelude::U256,
@@ -259,7 +261,9 @@ impl VMTrace {
                                     // TODO: make this a require statement, if revert is rlly gross
                                     // but its technically correct
                                     //       I just ran into issues with ending bracket matching
-                                    function.logic[i] = format!("if (!({conditional})) {{ revert(\"{revert_string}\"); }} else {{");
+                                    function.logic[i] = format!(
+                                        "require({conditional}, revert(\"{revert_string}\"));"
+                                    );
 
                                     break
                                 }
@@ -278,7 +282,7 @@ impl VMTrace {
                         Some(selector) => {
                             function.errors.insert(U256::from(selector), None);
                             format!(
-                                " CustomError_{}()",
+                                "CustomError_{}()",
                                 encode_hex_reduced(U256::from(selector)).replacen("0x", "", 1)
                             )
                         }
@@ -290,7 +294,7 @@ impl VMTrace {
                             if custom_error_placeholder == *"()" {
                                 format!("require({condition});",)
                             } else {
-                                format!("if (!{condition}) revert{custom_error_placeholder};")
+                                format!("require({condition}, {custom_error_placeholder});")
                             }
                         }
                         None => {
@@ -313,7 +317,11 @@ impl VMTrace {
                                         // TODO: make this a require statement, if revert is rlly
                                         // gross but its technically correct
                                         //       I just ran into issues with ending bracket matching
-                                        function.logic[i] = format!("if (!({conditional})) {{ revert{custom_error_placeholder}; }} else {{");
+                                        if custom_error_placeholder == *"()" {
+                                            function.logic[i] = format!("require({conditional});",);
+                                        } else {
+                                            function.logic[i] = format!("require({conditional}, {custom_error_placeholder});");
+                                        }
                                     }
                                     break
                                 }
@@ -393,10 +401,10 @@ impl VMTrace {
                     instruction.input_operations[0].solidify(),
                     instruction.input_operations[1].solidify(),
                 ));
-            } else if opcode_name.contains("MSTORE") || opcode_name.contains("MSTORE8") {
+            } else if opcode_name.contains("MSTORE") {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
-                let operation = instruction.input_operations[1].clone();
+                let operation: WrappedOpcode = instruction.input_operations[1].clone();
 
                 // add the mstore to the function's memory map
                 function.memory.insert(key, StorageFrame { value: value, operations: operation });
@@ -404,6 +412,44 @@ impl VMTrace {
                     "memory[{}] = {};",
                     encode_hex_reduced(key),
                     instruction.input_operations[1].solidify()
+                ));
+            } else if opcode_name == "CALLDATACOPY" {
+                let memory_offset = &instruction.input_operations[0];
+                let source_offset = instruction.inputs[1];
+                let size_bytes = instruction.inputs[2];
+
+                // add the mstore to the function's memory map
+                function.logic.push(format!(
+                    "memory[{}] = msg.data[{}:{}];",
+                    memory_offset.solidify(),
+                    source_offset,
+                    source_offset.add(size_bytes)
+                ));
+            } else if opcode_name == "CODECOPY" {
+                let memory_offset = &instruction.input_operations[0];
+                let source_offset = instruction.inputs[1];
+                let size_bytes = instruction.inputs[2];
+
+                // add the mstore to the function's memory map
+                function.logic.push(format!(
+                    "memory[{}] = this.code[{}:{}]",
+                    memory_offset.solidify(),
+                    source_offset,
+                    source_offset.add(size_bytes)
+                ));
+            } else if opcode_name == "EXTCODECOPY" {
+                let address = &instruction.input_operations[0];
+                let memory_offset = &instruction.input_operations[1];
+                let source_offset = instruction.inputs[2];
+                let size_bytes = instruction.inputs[3];
+
+                // add the mstore to the function's memory map
+                function.logic.push(format!(
+                    "memory[{}] = address({}).code[{}:{}]",
+                    memory_offset.solidify(),
+                    address.solidify(),
+                    source_offset,
+                    source_offset.add(size_bytes)
                 ));
             } else if opcode_name == "STATICCALL" {
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's

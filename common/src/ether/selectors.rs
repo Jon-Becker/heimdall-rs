@@ -112,7 +112,7 @@ pub fn resolve_function_selectors(
 
     // wait for all threads to finish
     for thread in threads {
-        thread.join().unwrap();
+        if let Ok(_) = thread.join() {}
     }
 
     resolve_progress.lock().unwrap().finish_and_clear();

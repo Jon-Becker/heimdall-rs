@@ -2,7 +2,9 @@ use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
     NON_ZERO_BYTE_REGEX,
 };
-use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
+use crate::decompile::constants::{
+    ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX, VARIABLE_SIZE_CHECK_REGEX,
+};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
@@ -10,7 +12,8 @@ use heimdall_common::{
         signatures::{ResolvedError, ResolvedLog},
     },
     utils::strings::{
-        base26_encode, find_balanced_encapsulator, find_balanced_encapsulator_backwards,
+        base26_encode, extract_condition, find_balanced_encapsulator,
+        find_balanced_encapsulator_backwards,
     },
 };
 use indicatif::ProgressBar;
@@ -164,10 +167,9 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
         let first_char = expression.get(0..1).unwrap_or("");
         let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
 
-        // if there is a negation of an expression, remove the parentheses
-        // helps with double negation
+        // if there is a negation of an expression, dont remove the parentheses
         if first_char == "!" && last_char == ")" {
-            return true
+            return false
         }
 
         // remove the parentheses if the expression is within brackets
@@ -766,6 +768,35 @@ fn simplify_arithmatic(line: String) -> String {
     cleaned.to_string()
 }
 
+fn contains_compiler_condition(line: String) -> bool {
+    // skip lines that don't contain a condition
+    if !line.contains("if") && !line.contains("require") {
+        return false
+    }
+
+    // extract the conditional from the line
+    let cond_type = if line.contains("if") { "if" } else { "require" };
+    let conditional = match extract_condition(&line, cond_type) {
+        Some(x) => x,
+        None => return false,
+    };
+
+    // remove conditionals that check calldatasize
+    if conditional.contains("msg.data.length") && conditional.contains("0x04") {
+        return true
+    }
+
+    // remove conditionals that check variable sizes
+    // against 0, which is always true, and 0x01, which is an empty check
+    if VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) {
+        return true
+    }
+
+    //println!("{}", conditional);
+
+    false
+}
+
 fn cleanup(
     line: String,
     all_resolved_errors: HashMap<String, ResolvedError>,
@@ -814,17 +845,18 @@ fn cleanup(
 fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
     let mut cleaned_lines: Vec<String> = Vec::new();
     let mut function_count = 0;
+    let mut indent_depth = 0;
 
     // remove unused assignments
     for (i, line) in lines.iter().enumerate() {
         // check if we need to insert storage vars
         if cleaned_lines.last().unwrap_or(&"".to_string()).contains("DecompiledContract") {
-            let mut storage_var_lines: Vec<String> = vec!["    ".to_string()];
+            let mut storage_var_lines: Vec<String> = vec!["".to_string()];
 
             // insert storage vars
             for (var_name, var_type) in STORAGE_TYPE_MAP.lock().unwrap().clone().iter() {
                 storage_var_lines.push(format!(
-                    "    {} public {};",
+                    "{} public {};",
                     var_type.replace(" memory", ""),
                     var_name
                 ));
@@ -841,20 +873,67 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
 
         // update progress bar
         if line.contains("function") {
+            // find out how many closing braces we need to remove
+            println!("line: {} , rem: {}", line, indent_depth);
+            for _ in 0..(i32::abs(indent_depth) + 1) {
+                cleaned_lines.pop();
+            }
+            cleaned_lines.push("".to_string());
             function_count += 1;
+            indent_depth = 0;
             bar.set_message(format!("postprocessed {function_count} functions"));
         }
 
-        // only pass in lines further than the current line
-        if !contains_unnecessary_assignment(
-            line.trim().to_string(),
-            &lines[i + 1..].iter().collect::<Vec<_>>(),
-        ) {
+        if
+        // skip unnecessary assignments
+        !contains_unnecessary_assignment(
+                line.trim().to_string(),
+                &lines[i + 1..].iter().collect::<Vec<_>>(),
+            )
+
+            &&
+
+            // skip compiler conditions
+            !contains_compiler_condition(line.to_string())
+        {
             cleaned_lines.push(line.to_string());
+        } else {
+            continue
         }
+
+        // handle removing excess closing braces as a result of removing conditionals
+        if line.ends_with('{') && !line.contains("contract") {
+            indent_depth += 1;
+        } else if line.starts_with('}') {
+            indent_depth -= 1;
+        }
+
+        println!("  > line: {} , depth: {}", line, indent_depth);
     }
 
     cleaned_lines
+}
+
+fn indent_lines(lines: Vec<String>) -> Vec<String> {
+    let mut indentation: usize = 0;
+    let mut indented_lines: Vec<String> = Vec::new();
+
+    for line in lines {
+        // dedent due to closing braces
+        if line.starts_with('}') {
+            indentation = indentation.saturating_sub(1);
+        }
+
+        // apply postprocessing and indentation
+        indented_lines.push(format!("{}{}", " ".repeat(indentation * 4), line));
+
+        // indent due to opening braces
+        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with('{') {
+            indentation += 1;
+        }
+    }
+
+    indented_lines
 }
 
 pub fn postprocess(
@@ -863,36 +942,24 @@ pub fn postprocess(
     all_resolved_events: HashMap<String, ResolvedLog>,
     bar: &ProgressBar,
 ) -> Vec<String> {
-    let mut indentation: usize = 0;
     let mut function_count = 0;
-    let mut cleaned_lines: Vec<String> = lines;
+    let mut cleaned_lines: Vec<String> = Vec::new();
 
     // clean up each line using postprocessing techniques
-    for (_, line) in cleaned_lines.iter_mut().enumerate() {
+    for line in lines.clone() {
         // update progress bar
         if line.contains("function") {
             function_count += 1;
             bar.set_message(format!("postprocessed {function_count} functions"));
         }
 
-        // dedent due to closing braces
-        if line.starts_with('}') {
-            indentation = indentation.saturating_sub(1);
-        }
-
-        // apply postprocessing and indentation
-        *line = format!(
-            "{}{}",
-            " ".repeat(indentation * 4),
-            cleanup(line.to_string(), all_resolved_errors.clone(), all_resolved_events.clone())
-        );
-
-        // indent due to opening braces
-        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with('{') {
-            indentation += 1;
-        }
+        cleaned_lines.push(cleanup(
+            line.to_string(),
+            all_resolved_errors.clone(),
+            all_resolved_events.clone(),
+        ));
     }
 
     // run finalizing postprocessing, which need to operate on cleaned lines
-    finalize(cleaned_lines, bar)
+    indent_lines(finalize(cleaned_lines, bar))
 }

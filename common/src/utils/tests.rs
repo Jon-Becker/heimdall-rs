@@ -225,6 +225,46 @@ mod test_strings {
             vec!["The", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog."]
         );
     }
+
+    #[test]
+    fn test_extract_condition_present_balanced() {
+        let s = "require(arg0 == (address(arg0)));";
+        let keyword = "require";
+        let expected = Some("arg0 == (address(arg0))".to_string());
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_extract_condition_present_unbalanced() {
+        let s = "require(arg0 == (address(arg0));";
+        let keyword = "require";
+        let expected = None;
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_extract_condition_not_present() {
+        let s = "if (0x01 < var_c.length) {";
+        let keyword = "require";
+        let expected = None;
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_extract_condition_multiple_keywords() {
+        let s = "require(var_c.length == var_c.length, \"some revert message\");";
+        let keyword = "require";
+        let expected = Some("var_c.length == var_c.length".to_string());
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_extract_condition_empty_string() {
+        let s = "";
+        let keyword = "require";
+        let expected = None;
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
 }
 
 #[cfg(test)]

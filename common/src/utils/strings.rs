@@ -138,3 +138,28 @@ pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
     // Return the resulting vector of substrings
     substrings
 }
+
+pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
+    // find the keyword
+    if let Some(start) = s.find(keyword) {
+        // slice the string after the keyword
+        let sliced = s[start + keyword.len()..].to_string();
+
+        // find the balanced encapsulator
+        let (start, end, is_balanced) = find_balanced_encapsulator(sliced.clone(), ('(', ')'));
+
+        // extract the condition if balanced encapsulator is found
+        if is_balanced {
+            let mut condition = &sliced[start + 1..end - 1];
+
+            // require() statements can include revert messages or error codes
+            if condition.contains(", ") {
+                condition = condition.split(", ").collect::<Vec<&str>>()[0];
+            }
+
+            return Some(condition.trim().to_string())
+        }
+    }
+
+    None
+}

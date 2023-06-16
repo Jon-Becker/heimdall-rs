@@ -3,7 +3,7 @@ if [ "$1" = "--cov" ]; then
 
     # specify regex to ignore files
     # ignore rpc.rs, logging.rs, http.rs, transpose.rs, resources.rs, tests.rs, heimdall.rs, lib.rs
-    regex=".*rpc\.rs|.*logging\.rs|.*http\.rs|.*transpose\.rs|.*resources.*\.rs|.*test(s)?.rs|heimdall\.rs|.*lib\.rs"
+    regex=".*dump.*\.rs|.*rpc\.rs|.*logging\.rs|.*http\.rs|.*transpose\.rs|.*resources.*\.rs|.*test(s)?.rs|heimdall\.rs|.*lib\.rs"
 
     # if -v or --verbose is passed, then we want to print the coverage report
     if [ "$2" = "-v" ] || [ "$2" = "--verbose" ]; then
