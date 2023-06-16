@@ -2,7 +2,7 @@
 name = "heimdall-cache"
 version = "0.4.6"
 edition = "2021"
-license = "MIT"
+license = "AGPL-3.0"
 readme = "README.md"
 description = "Cache management for Heimdall."
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
