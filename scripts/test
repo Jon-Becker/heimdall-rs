@@ -1,15 +1,22 @@
 # if --cov is passed, then we want to run the coverage command
 if [ "$1" = "--cov" ]; then
 
-    # specify regex to ignore files
-    # ignore rpc.rs, logging.rs, http.rs, transpose.rs, resources.rs, tests.rs, heimdall.rs, lib.rs
-    regex=".*dump.*\.rs|.*rpc\.rs|.*logging\.rs|.*http\.rs|.*transpose\.rs|.*resources.*\.rs|.*test(s)?.rs|heimdall\.rs|.*lib\.rs"
-
-    # if -v or --verbose is passed, then we want to print the coverage report
-    if [ "$2" = "-v" ] || [ "$2" = "--verbose" ]; then
-        cargo llvm-cov --release --ignore-filename-regex=$regex --show-missing-lines --fail-under-lines 100 --cobertura --output-path coverage.xml -- test_
+    # if coverage.xml exists, and git diff shows no .rs files have changed, then we can skip the coverage command
+    if [ -f "coverage.xml" ] && [ -z "$(git diff --name-only | grep -E '\.rs$')" ]; then
+        echo "coverage.xml exists and no .rs files have changed"
+        exit 0
     else
-        cargo llvm-cov --release --ignore-filename-regex=$regex --fail-under-lines 100 --cobertura --output-path coverage.xml -- test_
+
+        # specify regex to ignore files
+        # ignore rpc.rs, logging.rs, http.rs, transpose.rs, resources.rs, tests.rs, heimdall.rs, lib.rs
+        regex=".*dump.*\.rs|.*rpc\.rs|.*logging\.rs|.*http\.rs|.*transpose\.rs|.*resources.*\.rs|.*test(s)?.rs|heimdall\.rs|.*lib\.rs"
+
+        # if -v or --verbose is passed, then we want to print the coverage report
+        if [ "$2" = "-v" ] || [ "$2" = "--verbose" ]; then
+            cargo llvm-cov --release --ignore-filename-regex=$regex --show-missing-lines --fail-under-lines 100 --cobertura --output-path coverage.xml -- test_
+        else
+            cargo llvm-cov --release --ignore-filename-regex=$regex --fail-under-lines 100 --cobertura --output-path coverage.xml -- test_
+        fi
     fi
 
     # Search for the first instance of line-rate="{float}"
