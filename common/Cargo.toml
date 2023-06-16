@@ -2,7 +2,7 @@
 description = "Commonly used resources for heimdall modules."
 edition = "2021"
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
-license = "MIT"
+license = "AGPL-3.0"
 name = "heimdall-common"
 readme = "README.md"
 version = "0.4.6"
