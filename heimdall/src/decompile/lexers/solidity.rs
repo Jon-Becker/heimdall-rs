@@ -10,8 +10,10 @@ use heimdall_common::{
         types::{byte_size_to_type, convert_bitmask},
     },
     io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced, find_balanced_encapsulator},
+    utils::strings::{decode_hex, encode_hex_reduced},
 };
+
+use crate::decompile::constants::{VARIABLE_CAST_CHECK_REGEX, VARIABLE_SIZE_CHECK_REGEX};
 
 use super::super::{constants::AND_BITMASK_REGEX, precompile::decode_precompile, util::*};
 
@@ -27,7 +29,6 @@ impl VMTrace {
         // make a clone of the recursed analysis function
         let mut function = function;
         let mut jumped_conditional: Option<String> = None;
-        let mut revert_conditional: Option<String> = None;
 
         // perform analysis on the operations of the current VMTrace branch
         for operation in &self.operations {
@@ -175,46 +176,42 @@ impl VMTrace {
                     ));
                 }
             } else if opcode_name == "JUMPI" {
-                // if the JUMPI is not taken and the branch reverts, this is a require statement
-                if self
-                    .operations
-                    .last()
-                    .unwrap()
-                    .last_instruction
-                    .opcode_details
-                    .clone()
-                    .unwrap()
-                    .name ==
-                    "REVERT"
-                {
-                    revert_conditional = Some(instruction.input_operations[1].solidify());
-                    jumped_conditional = Some(revert_conditional.clone().unwrap());
-                    conditional_map.push(revert_conditional.clone().unwrap());
-                } else {
-                    revert_conditional = Some(instruction.input_operations[1].solidify());
+                // this is an if conditional for the children branches
+                let conditional = instruction.input_operations[1].solidify();
 
-                    // this is an if conditional for the children branches
-                    let conditional = instruction.input_operations[1].solidify();
-
-                    // check if this if statement is added by the compiler
-                    if conditional == "!msg.value" {
-                        // this is marking the start of a non-payable function
-                        trace.add_info(
-                            trace_parent,
-                            instruction.instruction.try_into().unwrap(),
-                            format!(
-                                "conditional at instruction {} indicates an non-payble function.",
-                                instruction.instruction
-                            ),
-                        );
-                        function.payable = false;
-                        continue
-                    }
-
-                    function.logic.push(format!("if ({conditional}) {{").to_string());
-                    jumped_conditional = Some(conditional.clone());
-                    conditional_map.push(conditional);
+                // remove non-payable check and mark function as non-payable
+                if conditional == "!msg.value" {
+                    // this is marking the start of a non-payable function
+                    trace.add_info(
+                        trace_parent,
+                        instruction.instruction.try_into().unwrap(),
+                        format!(
+                            "conditional at instruction {} indicates an non-payble function.",
+                            instruction.instruction
+                        ),
+                    );
+                    function.payable = false;
+                    continue
                 }
+
+                // perform a series of checks to determine if the condition
+                // is added by the compiler and can be ignored
+
+                if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
+                    VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
+                    (VARIABLE_CAST_CHECK_REGEX
+                        .is_match(&conditional.replace('(', "").replace(')', ""))
+                        .unwrap_or(false) &&
+                        conditional.contains("=="))
+                {
+                    continue
+                }
+
+                function.logic.push(format!("if ({conditional}) {{").to_string());
+
+                // save a copy of the conditional and add it to the conditional map
+                jumped_conditional = Some(conditional.clone());
+                conditional_map.push(conditional);
             } else if opcode_name == "REVERT" {
                 // Safely convert U256 to usize
                 let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
@@ -240,7 +237,7 @@ impl VMTrace {
                         },
                         None => "decoding error".to_string(),
                     };
-                    revert_logic = match revert_conditional.clone() {
+                    revert_logic = match jumped_conditional.clone() {
                         Some(condition) => {
                             format!("require({condition}, \"{revert_string}\");")
                         }
@@ -248,24 +245,13 @@ impl VMTrace {
                             // loop backwards through logic to find the last IF statement
                             for i in (0..function.logic.len()).rev() {
                                 if function.logic[i].starts_with("if") {
-                                    // get matching conditional
-                                    let conditional = find_balanced_encapsulator(
-                                        function.logic[i].to_string(),
-                                        ('(', ')'),
-                                    );
-                                    let conditional = function.logic[i]
-                                        .get(conditional.0 + 1..conditional.1 - 1)
-                                        .unwrap_or("decoding error");
+                                    let conditional = match conditional_map.pop() {
+                                        Some(condition) => condition,
+                                        None => break,
+                                    };
 
-                                    // we can negate the conditional to get the revert logic
-                                    // TODO: make this a require statement, if revert is rlly gross
-                                    // but its technically correct
-                                    //       I just ran into issues with ending bracket matching
-                                    function.logic[i] = format!(
-                                        "require({conditional}, revert(\"{revert_string}\"));"
-                                    );
-
-                                    break
+                                    function.logic[i] =
+                                        format!("require({conditional}, \"{revert_string}\");");
                                 }
                             }
                             continue
@@ -289,7 +275,7 @@ impl VMTrace {
                         None => "()".to_string(),
                     };
 
-                    revert_logic = match revert_conditional.clone() {
+                    revert_logic = match jumped_conditional.clone() {
                         Some(condition) => {
                             if custom_error_placeholder == *"()" {
                                 format!("require({condition});",)
@@ -301,29 +287,18 @@ impl VMTrace {
                             // loop backwards through logic to find the last IF statement
                             for i in (0..function.logic.len()).rev() {
                                 if function.logic[i].starts_with("if") {
-                                    // get matching conditional
-                                    let conditional = find_balanced_encapsulator(
-                                        function.logic[i].to_string(),
-                                        ('(', ')'),
-                                    );
+                                    let conditional = match conditional_map.pop() {
+                                        Some(condition) => condition,
+                                        None => break,
+                                    };
 
-                                    // sanity check
-                                    if conditional.2 {
-                                        let conditional = function.logic[i]
-                                            .get(conditional.0 + 1..conditional.1 - 1)
-                                            .unwrap();
-
-                                        // we can negate the conditional to get the revert logic
-                                        // TODO: make this a require statement, if revert is rlly
-                                        // gross but its technically correct
-                                        //       I just ran into issues with ending bracket matching
-                                        if custom_error_placeholder == *"()" {
-                                            function.logic[i] = format!("require({conditional});",);
-                                        } else {
-                                            function.logic[i] = format!("require({conditional}, {custom_error_placeholder});");
-                                        }
+                                    if custom_error_placeholder == *"()" {
+                                        function.logic[i] = format!("require({conditional});",);
+                                    } else {
+                                        function.logic[i] = format!(
+                                            "require({conditional}, {custom_error_placeholder});"
+                                        );
                                     }
-                                    break
                                 }
                             }
                             continue

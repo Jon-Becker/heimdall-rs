@@ -2,9 +2,7 @@ use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
     NON_ZERO_BYTE_REGEX,
 };
-use crate::decompile::constants::{
-    ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX, VARIABLE_SIZE_CHECK_REGEX,
-};
+use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
@@ -12,8 +10,7 @@ use heimdall_common::{
         signatures::{ResolvedError, ResolvedLog},
     },
     utils::strings::{
-        base26_encode, extract_condition, find_balanced_encapsulator,
-        find_balanced_encapsulator_backwards,
+        base26_encode, find_balanced_encapsulator, find_balanced_encapsulator_backwards,
     },
 };
 use indicatif::ProgressBar;
@@ -768,35 +765,6 @@ fn simplify_arithmatic(line: String) -> String {
     cleaned.to_string()
 }
 
-fn contains_compiler_condition(line: String) -> bool {
-    // skip lines that don't contain a condition
-    if !line.contains("if") && !line.contains("require") {
-        return false
-    }
-
-    // extract the conditional from the line
-    let cond_type = if line.contains("if") { "if" } else { "require" };
-    let conditional = match extract_condition(&line, cond_type) {
-        Some(x) => x,
-        None => return false,
-    };
-
-    // remove conditionals that check calldatasize
-    if conditional.contains("msg.data.length") && conditional.contains("0x04") {
-        return true
-    }
-
-    // remove conditionals that check variable sizes
-    // against 0, which is always true, and 0x01, which is an empty check
-    if VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) {
-        return true
-    }
-
-    //println!("{}", conditional);
-
-    false
-}
-
 fn cleanup(
     line: String,
     all_resolved_errors: HashMap<String, ResolvedError>,
@@ -845,7 +813,6 @@ fn cleanup(
 fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
     let mut cleaned_lines: Vec<String> = Vec::new();
     let mut function_count = 0;
-    let mut indent_depth = 0;
 
     // remove unused assignments
     for (i, line) in lines.iter().enumerate() {
@@ -873,42 +840,18 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
 
         // update progress bar
         if line.contains("function") {
-            // find out how many closing braces we need to remove
-            println!("line: {} , rem: {}", line, indent_depth);
-            for _ in 0..(i32::abs(indent_depth) + 1) {
-                cleaned_lines.pop();
-            }
-            cleaned_lines.push("".to_string());
             function_count += 1;
-            indent_depth = 0;
             bar.set_message(format!("postprocessed {function_count} functions"));
         }
 
-        if
-        // skip unnecessary assignments
-        !contains_unnecessary_assignment(
-                line.trim().to_string(),
-                &lines[i + 1..].iter().collect::<Vec<_>>(),
-            )
-
-            &&
-
-            // skip compiler conditions
-            !contains_compiler_condition(line.to_string())
-        {
+        if !contains_unnecessary_assignment(
+            line.trim().to_string(),
+            &lines[i + 1..].iter().collect::<Vec<_>>(),
+        ) {
             cleaned_lines.push(line.to_string());
         } else {
             continue
         }
-
-        // handle removing excess closing braces as a result of removing conditionals
-        if line.ends_with('{') && !line.contains("contract") {
-            indent_depth += 1;
-        } else if line.starts_with('}') {
-            indent_depth -= 1;
-        }
-
-        println!("  > line: {} , depth: {}", line, indent_depth);
     }
 
     cleaned_lines
@@ -946,7 +889,7 @@ pub fn postprocess(
     let mut cleaned_lines: Vec<String> = Vec::new();
 
     // clean up each line using postprocessing techniques
-    for line in lines.clone() {
+    for line in lines {
         // update progress bar
         if line.contains("function") {
             function_count += 1;
