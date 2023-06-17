@@ -196,13 +196,13 @@ impl VMTrace {
 
                 // perform a series of checks to determine if the condition
                 // is added by the compiler and can be ignored
-
                 if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
                     VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
                     (VARIABLE_CAST_CHECK_REGEX
                         .is_match(&conditional.replace('(', "").replace(')', ""))
                         .unwrap_or(false) &&
-                        conditional.contains("=="))
+                        conditional.contains("==")) ||
+                    (conditional.replace('!', "") == "success")
                 {
                     continue
                 }
