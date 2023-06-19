@@ -2,7 +2,7 @@
 description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
 edition = "2021"
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
-license = "AGPL-3.0"
+license = "MIT"
 name = "heimdall"
 readme = "README.md"
 version = "0.4.6"
