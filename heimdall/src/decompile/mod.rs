@@ -14,7 +14,7 @@ use heimdall_common::{
     ether::{
         compiler::detect_compiler,
         rpc::get_code,
-        selectors::{find_function_selectors, resolve_entry_point, resolve_function_selectors},
+        selectors::{find_function_selectors, resolve_function_selectors},
     },
     utils::strings::encode_hex_reduced,
 };
@@ -218,11 +218,12 @@ pub fn decompile(args: DecompilerArgs) {
     );
 
     // find and resolve all selectors in the bytecode
-    let selectors = find_function_selectors(disassembled_bytecode);
+    let selectors = find_function_selectors(&evm, disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
-        resolved_selectors = resolve_function_selectors(selectors.clone(), &logger);
+        resolved_selectors =
+            resolve_function_selectors(selectors.keys().cloned().collect(), &logger);
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
@@ -251,15 +252,8 @@ pub fn decompile(args: DecompilerArgs) {
 
     // perform EVM analysis
     let mut analyzed_functions = Vec::new();
-    for selector in selectors {
+    for (selector, function_entry_point) in selectors {
         decompilation_progress.set_message(format!("executing '0x{selector}'"));
-
-        // get the function's entry point
-        let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
-
-        if function_entry_point == 0 {
-            continue
-        }
 
         let func_analysis_trace = trace.add_call(
             vm_trace,

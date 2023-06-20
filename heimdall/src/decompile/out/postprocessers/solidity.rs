@@ -2,7 +2,7 @@ use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
     NON_ZERO_BYTE_REGEX,
 };
-use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
+use crate::decompile::constants::{MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
@@ -10,12 +10,15 @@ use heimdall_common::{
         signatures::{ResolvedError, ResolvedLog},
     },
     utils::strings::{
-        base26_encode, find_balanced_encapsulator, find_balanced_encapsulator_backwards,
+        base26_encode, find_balanced_encapsulator, find_balanced_encapsulator_backwards, tokenize,
     },
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Mutex,
+};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -157,121 +160,48 @@ fn simplify_casts(line: String) -> String {
     cleaned
 }
 
-fn simplify_parentheses(line: String, paren_index: usize) -> String {
-    // helper function to determine if parentheses are necessary
-    fn are_parentheses_unnecessary(expression: String) -> bool {
-        // safely grab the first and last chars
-        let first_char = expression.get(0..1).unwrap_or("");
-        let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
+/// Simplifies expressions by removing unnecessary parentheses
+///
+/// # Arguments
+/// line: String - the line to simplify
+///
+/// # Returns
+/// String - the simplified line
+///
+/// # Example
+/// ```no_run
+/// let line = "((a + b))".to_string();
+/// let simplified = simplify_parentheses(line);
+/// assert_eq!(simplified, "a + b");
+///
+/// let line = "((a + b) * (c + d))".to_string();
+/// let simplified = simplify_parentheses(line);
+/// assert_eq!(simplified, "(a + b) * (c + d)");
+///
+/// let line = "if ((((a + b) * (c + d))) > ((arg0 * 10000)) {".to_string();
+/// let simplified = simplify_parentheses(line);
+/// assert_eq!(simplified, "if ((a + b) * (c + d)) > arg0 * 10000 {");
+/// ```
 
-        // if there is a negation of an expression, dont remove the parentheses
-        if first_char == "!" && last_char == ")" {
-            return false
-        }
+struct OperationStackItem {
+    left_paren_position: usize,
+    minimum_operator: String,
+    current_operator: String,
+}
 
-        // remove the parentheses if the expression is within brackets
-        if first_char == "[" && last_char == "]" {
-            return true
-        }
-
-        // parens required if:
-        //  - expression is a cast
-        //  - expression is a function call
-        //  - expression is the surrounding parens of a conditional
-        if first_char != "(" {
-            return false
-        } else if last_char == ")" {
-            return true
-        }
-
-        // don't include instantiations
-        if expression.contains("memory ret") {
-            return false
-        }
-
-        // handle the inside of the expression
-        let inside = match expression.get(2..expression.len() - 2) {
-            Some(x) => ENCLOSED_EXPRESSION_REGEX.replace(x, "x").to_string(),
-            None => "".to_string(),
-        };
-
-        if !inside.is_empty() {
-            let expression_parts = inside
-                .split(|x| ['*', '/', '=', '>', '<', '|', '&', '!'].contains(&x))
-                .filter(|x| !x.is_empty())
-                .collect::<Vec<&str>>();
-
-            expression_parts.len() == 1
-        } else {
-            false
-        }
+fn simplify_parentheses(line: String) -> String {
+    // skip under certain conditions
+    if !line.contains('(') || ["function", "contract"].iter().any(|x| line.contains(x)) {
+        return line
     }
 
-    let mut cleaned = line;
+    let tokens = tokenize(&line);
+    let mut operation_stack: VecDeque<OperationStackItem> = VecDeque::new();
 
-    // skip lines that are defining a function
-    if cleaned.contains("function") {
-        return cleaned
-    }
+    // iterate over tokens
+    for (i, token) in tokens.iter().enumerate() {}
 
-    // get the nth index of the first open paren
-    let nth_paren_index = match cleaned.match_indices('(').nth(paren_index) {
-        Some(x) => x.0,
-        None => return cleaned,
-    };
-
-    //find it's matching close paren
-    let (paren_start, paren_end, found_match) =
-        find_balanced_encapsulator(cleaned[nth_paren_index..].to_string(), ('(', ')'));
-
-    // add the nth open paren to the start of the paren_start
-    let paren_start = paren_start + nth_paren_index;
-    let paren_end = paren_end + nth_paren_index;
-
-    // if a match was found, check if the parens are unnecessary
-    if let true = found_match {
-        // get the logical expression including the char before the parentheses (to detect casts)
-        let logical_expression = match paren_start {
-            0 => match cleaned.get(paren_start..paren_end + 1) {
-                Some(expression) => expression.to_string(),
-                None => cleaned[paren_start..paren_end].to_string(),
-            },
-            _ => match cleaned.get(paren_start - 1..paren_end + 1) {
-                Some(expression) => expression.to_string(),
-                None => cleaned[paren_start - 1..paren_end].to_string(),
-            },
-        };
-
-        // check if the parentheses are unnecessary and remove them if so
-        if are_parentheses_unnecessary(logical_expression.clone()) {
-            cleaned.replace_range(
-                paren_start..paren_end,
-                match logical_expression.get(2..logical_expression.len() - 2) {
-                    Some(x) => x,
-                    None => "",
-                },
-            );
-
-            // remove double negation, if one was created
-            if cleaned.contains("!!") {
-                cleaned = cleaned.replace("!!", "");
-            }
-
-            // recurse into the next set of parentheses
-            // don't increment the paren_index because we just removed a set
-            cleaned = simplify_parentheses(cleaned, paren_index);
-        } else {
-            // remove double negation, if one exists
-            if cleaned.contains("!!") {
-                cleaned = cleaned.replace("!!", "");
-            }
-
-            // recurse into the next set of parentheses
-            cleaned = simplify_parentheses(cleaned, paren_index + 1);
-        }
-    }
-
-    cleaned
+    line
 }
 
 fn convert_iszero_logic_flip(line: String) -> String {
@@ -787,7 +717,7 @@ fn cleanup(
     cleaned = convert_iszero_logic_flip(cleaned);
 
     // Remove all unnecessary parentheses
-    cleaned = simplify_parentheses(cleaned, 0);
+    cleaned = simplify_parentheses(cleaned);
 
     // Convert all memory[] and storage[] accesses to variables, also removes unused variables
     cleaned = convert_access_to_variable(cleaned);

@@ -265,6 +265,133 @@ mod test_strings {
         let expected = None;
         assert_eq!(extract_condition(s, keyword), expected);
     }
+
+    #[test]
+    fn test_tokenize_basic_operators() {
+        let tokens = tokenize("arg0 + arg1");
+        assert_eq!(tokens, vec!["arg0", "+", "arg1"]);
+    }
+
+    #[test]
+    fn test_tokenize_parentheses_and_operators() {
+        let tokens = tokenize("(arg0 + arg1) > (msg.value + 1)");
+        assert_eq!(
+            tokens,
+            vec!["(", "arg0", "+", "arg1", ")", ">", "(", "msg.value", "+", "1", ")"]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_multiple_operators() {
+        let tokens = tokenize("a >= b && c != d");
+        assert_eq!(tokens, vec!["a", ">=", "b", "&&", "c", "!=", "d"]);
+    }
+
+    #[test]
+    fn test_tokenize_no_spaces() {
+        let tokens = tokenize("a+b-c*d/e");
+        assert_eq!(tokens, vec!["a", "+", "b", "-", "c", "*", "d", "/", "e"]);
+    }
+
+    #[test]
+    fn test_tokenize_whitespace_only() {
+        let tokens = tokenize("    ");
+        assert_eq!(tokens, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_tokenize_empty_string() {
+        let tokens = tokenize("");
+        assert_eq!(tokens, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_tokenize_complex_expression() {
+        let tokens = tokenize("if (x > 10 && y < 20) || z == 0 { a = b + c }");
+        assert_eq!(
+            tokens,
+            vec![
+                "if", "(", "x", ">", "10", "&&", "y", "<", "20", ")", "||", "z", "==", "0", "{",
+                "a", "=", "b", "+", "c", "}"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_separators_at_start_and_end() {
+        let tokens = tokenize("==text==");
+        assert_eq!(tokens, vec!["==", "text", "=="]);
+    }
+
+    #[test]
+    fn test_classify_token_parenthesis() {
+        let (classification, precedence) = classify_token("(");
+        assert_eq!(classification, "(");
+        assert_eq!(precedence, 0);
+
+        let (classification, precedence) = classify_token(")");
+        assert_eq!(classification, ")");
+        assert_eq!(precedence, 0);
+    }
+
+    #[test]
+    fn test_classify_token_operators_precedence_1() {
+        for operator in ["+", "-"].iter() {
+            let (classification, precedence) = classify_token(operator);
+            assert_eq!(classification, "operator");
+            assert_eq!(precedence, 1);
+        }
+    }
+
+    #[test]
+    fn test_classify_token_operators_precedence_2() {
+        for operator in
+            ["*", "/", "%", "|", "&", "^", "==", ">=", "<=", "!=", "!", "&&", "||"].iter()
+        {
+            let (classification, precedence) = classify_token(operator);
+            assert_eq!(classification, "operator");
+            assert_eq!(precedence, 2);
+        }
+    }
+
+    #[test]
+    fn test_classify_token_constant() {
+        let (classification, precedence) = classify_token("0x001234567890");
+        assert_eq!(classification, "constant");
+        assert_eq!(precedence, 0);
+    }
+
+    #[test]
+    fn test_classify_token_variable() {
+        for variable in [
+            "memory[0x01]",
+            "storage",
+            "var",
+            "msg.value",
+            "block.timestamp",
+            "this.balance",
+            "tx.origin",
+            "arg0",
+            "ret",
+            "calldata",
+            "abi.encode",
+        ]
+        .iter()
+        {
+            let (classification, precedence) = classify_token(variable);
+            assert_eq!(classification, "variable");
+            assert_eq!(precedence, 0);
+        }
+    }
+
+    #[test]
+    fn test_classify_token_function() {
+        for function in ["uint256", "address", "ecrecover"].iter() {
+            let (classification, precedence) = classify_token(function);
+            assert_eq!(classification, "function");
+            assert_eq!(precedence, 3);
+        }
+    }
 }
 
 #[cfg(test)]

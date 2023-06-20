@@ -204,7 +204,7 @@ pub fn cfg(args: CFGArgs) {
     );
 
     // find all selectors in the bytecode
-    let selectors = find_function_selectors(disassembled_bytecode);
+    let selectors = find_function_selectors(&evm, disassembled_bytecode);
     logger.info(&format!("found {} possible function selectors.", selectors.len()));
     logger.info(&format!("performing symbolic execution on '{}' .", &shortened_target));
 

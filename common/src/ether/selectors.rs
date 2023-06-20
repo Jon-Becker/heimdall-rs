@@ -15,11 +15,11 @@ use super::{
 };
 
 // find all function selectors in the given EVM assembly.
-pub fn find_function_selectors(assembly: String) -> Vec<String> {
-    let mut function_selectors = Vec::new();
+pub fn find_function_selectors(evm: &VM, assembly: String) -> HashMap<String, u128> {
+    let mut function_selectors = HashMap::new();
 
-    // search through assembly for PUSH4 instructions, optimistically assuming that they are
-    // function selectors
+    // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
+    // they are function selectors
     let assembly: Vec<String> = assembly.split('\n').map(|line| line.trim().to_string()).collect();
     for line in assembly.iter() {
         let instruction_args: Vec<String> = line.split(' ').map(|arg| arg.to_string()).collect();
@@ -27,14 +27,20 @@ pub fn find_function_selectors(assembly: String) -> Vec<String> {
         if instruction_args.len() >= 2 {
             let instruction = instruction_args[1].clone();
 
-            if instruction == "PUSH4" {
+            if &instruction == "PUSH4" {
                 let function_selector = instruction_args[2].clone();
-                function_selectors.push(function_selector);
+
+                // get the function's entry point
+                let function_entry_point =
+                    match resolve_entry_point(&evm.clone(), function_selector.clone()) {
+                        0 => continue,
+                        x => x,
+                    };
+
+                function_selectors.insert(function_selector, function_entry_point);
             }
         }
     }
-    function_selectors.sort();
-    function_selectors.dedup();
     function_selectors
 }
 

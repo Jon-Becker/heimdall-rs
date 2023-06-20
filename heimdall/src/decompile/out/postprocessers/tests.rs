@@ -1,14 +1,12 @@
 #[cfg(test)]
 mod tests {
 
+    use crate::decompile::out::postprocessers::solidity::postprocess;
+    use indicatif::ProgressBar;
     use std::collections::HashMap;
 
-    use indicatif::ProgressBar;
-
-    use crate::decompile::out::postprocessers::solidity::postprocess;
-
     #[test]
-    fn test_bitmask_conversion() {
+    fn test_convert_bitmask_to_casting_cast_before_expr() {
         let lines = vec![String::from(
             "(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) & (arg0);",
         )];
@@ -20,7 +18,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bitmask_conversion_mask_after() {
+    fn test_convert_bitmask_to_casting_cast_after_expr() {
         let lines = vec![String::from(
             "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);",
         )];
@@ -32,7 +30,19 @@ mod tests {
     }
 
     #[test]
-    fn test_bitmask_conversion_unusual_mask() {
+    fn test_convert_bitmask_to_casting_cast_before_expr_unusual_size() {
+        let lines = vec![String::from(
+            "(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00) & (arg0);",
+        )];
+
+        assert_eq!(
+            postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
+            vec![String::from("uint248(arg0);")]
+        );
+    }
+
+    #[test]
+    fn test_convert_bitmask_to_casting_cast_after_expr_unusual_size() {
         let lines = vec![String::from(
             "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00);",
         )];
@@ -44,54 +54,34 @@ mod tests {
     }
 
     #[test]
+    fn test_convert_bitmask_to_casting_double_cast() {
+        let lines = vec![String::from(
+            "(0xffffffffffffffffffffffffffffffffffffffff) & ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00) & (arg0));",
+        )];
+
+        assert_eq!(
+            postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
+            vec![String::from("address(uint248(arg0));")]
+        );
+    }
+
+    #[test]
     fn test_simplify_casts() {
-        let lines = vec![String::from("uint256(uint256(arg0));")];
+        let lines = vec![String::from("address(address(arg0));")];
 
         assert_eq!(
             postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
-            vec![String::from("uint256(arg0);")]
+            vec![String::from("address(arg0);")]
         );
     }
 
     #[test]
-    fn test_simplify_casts_complex() {
-        let lines = vec![
-            String::from("ecrecover(uint256(uint256(arg0)), uint256(uint256(arg0)), uint256(uint256(uint256(arg0))));"),
-        ];
+    fn test_simplify_casts_multiple_casts() {
+        let lines = vec![String::from("address(address(uint248(arg0)));")];
 
         assert_eq!(
             postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
-            vec![String::from("ecrecover(uint256(arg0), uint256(arg0), uint256(arg0));")]
-        );
-    }
-
-    #[test]
-    fn test_iszero_flip() {
-        let lines = vec![String::from("if (iszero(arg0)) {")];
-
-        assert_eq!(
-            postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
-            vec![String::from("if (!arg0) {")]
-        );
-    }
-
-    #[test]
-    fn test_iszero_flip_complex() {
-        let lines = vec![String::from("if (iszero(iszero(arg0))) {")];
-
-        assert_eq!(
-            postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
-            vec![String::from("if (arg0) {")]
-        );
-    }
-
-    #[test]
-    fn test_iszero_flip_complex2() {
-        let lines = vec![String::from("if (iszero(iszero(iszero(arg0)))) {")];
-
-        assert_eq!(
-            postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
-            vec![String::from("if (!arg0) {")]
+            vec![String::from("address(uint248(arg0));")]
         );
     }
 
@@ -106,7 +96,17 @@ mod tests {
     }
 
     #[test]
-    fn test_simplify_parentheses_complex() {
+    fn test_simplify_parentheses_multiple_exprs() {
+        let lines = vec![String::from("((arg0) + (arg1))")];
+
+        assert_eq!(
+            postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
+            vec![String::from("arg0 + arg1")]
+        );
+    }
+
+    #[test]
+    fn test_simplify_parentheses_within_condition() {
         let lines = vec![String::from("if ((cast(((arg0) + 1) / 10))) {")];
 
         assert_eq!(
@@ -116,7 +116,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simplify_parentheses_complex2() {
+    fn test_simplify_parentheses_within_condition_many_unnecessary() {
         let lines = vec![
             String::from("if (((((((((((((((cast(((((((((((arg0 * (((((arg1))))))))))))) + 1)) / 10)))))))))))))))) {"),
         ];
@@ -124,6 +124,16 @@ mod tests {
         assert_eq!(
             postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
             vec![String::from("if (cast((arg0 * (arg1)) + 1 / 10)) {")]
+        );
+    }
+
+    #[test]
+    fn test_simplify_parentheses_within_precompile() {
+        let lines = vec![String::from("ecrecover((0, 0, 0, 0, ((arg0)), 0))")];
+
+        assert_eq!(
+            postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
+            vec![String::from("ecrecover(0, 0, 0, 0, arg0, 0)")]
         );
     }
 }

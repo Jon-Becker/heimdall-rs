@@ -1477,6 +1477,24 @@ impl VM {
         }
     }
 
+    // View the next n instructions without executing them
+    pub fn peek(&mut self, n: usize) -> Vec<State> {
+        let mut states = Vec::new();
+        let mut vm_clone = self.clone();
+
+        for _ in 0..n {
+            if vm_clone.bytecode.len() < vm_clone.instruction as usize ||
+                vm_clone.exitcode != 255 ||
+                !vm_clone.returndata.is_empty()
+            {
+                break
+            }
+            states.push(vm_clone.step());
+        }
+
+        states
+    }
+
     // Resets the VM state for a new execution
     pub fn reset(&mut self) {
         self.stack = Stack::new();
