@@ -2,7 +2,7 @@ use super::super::super::constants::{
     AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
     NON_ZERO_BYTE_REGEX,
 };
-use crate::decompile::constants::{MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
+use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
@@ -10,15 +10,13 @@ use heimdall_common::{
         signatures::{ResolvedError, ResolvedLog},
     },
     utils::strings::{
-        base26_encode, find_balanced_encapsulator, find_balanced_encapsulator_backwards, tokenize,
+        base26_encode, classify_token, find_balanced_encapsulator,
+        find_balanced_encapsulator_backwards, tokenize, TokenType,
     },
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Mutex,
-};
+use std::{collections::HashMap, sync::Mutex};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -28,6 +26,24 @@ lazy_static! {
     static ref STORAGE_TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
+/// Convert bitwise operations to a variable type cast
+///
+/// # Arguments
+/// line: String - the line to convert
+///
+/// # Returns
+/// String - the converted line
+///
+/// # Example
+/// ```no_run
+/// let line = "(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) & (arg0);".to_string();
+/// let converted = convert_bitmask_to_casting(line);
+/// assert_eq!(converted, "uint256(arg0);");
+///
+/// let line = "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);".to_string();
+/// let converted = convert_bitmask_to_casting(line);
+/// assert_eq!(converted, "uint256(arg0);");
+/// ```
 fn convert_bitmask_to_casting(line: String) -> String {
     let mut cleaned = line;
 
@@ -134,6 +150,20 @@ fn convert_bitmask_to_casting(line: String) -> String {
     cleaned
 }
 
+/// Removes unnecessary casts
+///
+/// # Arguments
+/// line: String - the line to simplify
+///
+/// # Returns
+/// String - the simplified line
+///
+/// # Example
+/// ```no_run
+/// let line = "uint256(uint256(arg0))".to_string();
+/// let simplified = simplify_casts(line);
+/// assert_eq!(simplified, "uint256(arg0)");
+/// ```
 fn simplify_casts(line: String) -> String {
     let mut cleaned = line;
 
@@ -182,38 +212,134 @@ fn simplify_casts(line: String) -> String {
 /// let simplified = simplify_parentheses(line);
 /// assert_eq!(simplified, "if ((a + b) * (c + d)) > arg0 * 10000 {");
 /// ```
+fn simplify_parentheses(line: String, paren_index: usize) -> String {
+    // helper function to determine if parentheses are necessary
+    fn are_parentheses_unnecessary(expression: String) -> bool {
+        // safely grab the first and last chars
+        let first_char = expression.get(0..1).unwrap_or("");
+        let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
 
-struct OperationStackItem {
-    left_paren_position: usize,
-    minimum_operator: String,
-    current_operator: String,
-}
+        // if there is a negation of an expression, remove the parentheses
+        // helps with double negation
+        if first_char == "!" && last_char == ")" {
+            return true
+        }
 
-fn simplify_parentheses(line: String) -> String {
-    // skip under certain conditions
-    if !line.contains('(') || ["function", "contract"].iter().any(|x| line.contains(x)) {
-        return line
+        // remove the parentheses if the expression is within brackets
+        if first_char == "[" && last_char == "]" {
+            return true
+        }
+
+        // parens required if:
+        //  - expression is a cast
+        //  - expression is a function call
+        //  - expression is the surrounding parens of a conditional
+        if first_char != "(" {
+            return false
+        } else if last_char == ")" {
+            return true
+        }
+
+        // don't include instantiations
+        if expression.contains("memory ret") {
+            return false
+        }
+
+        // handle the inside of the expression
+        let inside = match expression.get(2..expression.len() - 2) {
+            Some(x) => ENCLOSED_EXPRESSION_REGEX.replace(x, "x").to_string(),
+            None => "".to_string(),
+        };
+
+        let inner_tokens = tokenize(&inside);
+        return !inner_tokens.iter().any(|tk| classify_token(&tk) == TokenType::Operator)
     }
 
-    let tokens = tokenize(&line);
-    let mut operation_stack: VecDeque<OperationStackItem> = VecDeque::new();
-
-    // iterate over tokens
-    for (i, token) in tokens.iter().enumerate() {}
-
-    line
-}
-
-fn convert_iszero_logic_flip(line: String) -> String {
     let mut cleaned = line;
 
-    if cleaned.contains("iszero") {
-        cleaned = cleaned.replace("iszero", "!");
+    // skip lines that are defining a function
+    if cleaned.contains("function") {
+        return cleaned
+    }
+
+    // get the nth index of the first open paren
+    let nth_paren_index = match cleaned.match_indices('(').nth(paren_index) {
+        Some(x) => x.0,
+        None => return cleaned,
+    };
+
+    //find it's matching close paren
+    let (paren_start, paren_end, found_match) =
+        find_balanced_encapsulator(cleaned[nth_paren_index..].to_string(), ('(', ')'));
+
+    // add the nth open paren to the start of the paren_start
+    let paren_start = paren_start + nth_paren_index;
+    let paren_end = paren_end + nth_paren_index;
+
+    // if a match was found, check if the parens are unnecessary
+    if let true = found_match {
+        // get the logical expression including the char before the parentheses (to detect casts)
+        let logical_expression = match paren_start {
+            0 => match cleaned.get(paren_start..paren_end + 1) {
+                Some(expression) => expression.to_string(),
+                None => cleaned[paren_start..paren_end].to_string(),
+            },
+            _ => match cleaned.get(paren_start - 1..paren_end + 1) {
+                Some(expression) => expression.to_string(),
+                None => cleaned[paren_start - 1..paren_end].to_string(),
+            },
+        };
+
+        // check if the parentheses are unnecessary and remove them if so
+        if are_parentheses_unnecessary(logical_expression.clone()) {
+            cleaned.replace_range(
+                paren_start..paren_end,
+                match logical_expression.get(2..logical_expression.len() - 2) {
+                    Some(x) => x,
+                    None => "",
+                },
+            );
+
+            // remove double negation, if one was created
+            if cleaned.contains("!!") {
+                cleaned = cleaned.replace("!!", "");
+            }
+
+            // recurse into the next set of parentheses
+            // don't increment the paren_index because we just removed a set
+            cleaned = simplify_parentheses(cleaned, paren_index);
+        } else {
+            // remove double negation, if one exists
+            if cleaned.contains("!!") {
+                cleaned = cleaned.replace("!!", "");
+            }
+
+            // recurse into the next set of parentheses
+            cleaned = simplify_parentheses(cleaned, paren_index + 1);
+        }
     }
 
     cleaned
 }
 
+/// Converts memory and storage accesses to variables
+///
+/// # Arguments
+/// line: String - the line to convert
+///
+/// # Returns
+/// String - the converted line
+///
+/// # Example
+/// ```no_run
+/// let line = "memory[0x40] = 0x60;".to_string();
+/// let converted = convert_access_to_variable(line);
+/// assert_eq!(converted, "var_a = 0x60;");
+///
+/// let line = "storage[0x0] = 0x0;".to_string();
+/// let converted = convert_access_to_variable(line);
+/// assert_eq!(converted, "stor_a = 0x0;");
+/// ```
 fn convert_access_to_variable(line: String) -> String {
     let mut cleaned = line.clone();
 
@@ -294,7 +420,7 @@ fn convert_access_to_variable(line: String) -> String {
                     let variable_name = format!(
                         "stor_map_{}[{}]",
                         base26_encode(idex),
-                        memloc.get(keccak_key.0 + 1..keccak_key.1 - 1).unwrap()
+                        memloc.get(keccak_key.0 + 1..keccak_key.1 - 1).unwrap_or("?")
                     );
 
                     // add the variable to the map
@@ -347,6 +473,33 @@ fn convert_access_to_variable(line: String) -> String {
     cleaned
 }
 
+/// Checks if the current line contains an unnecessary assignment
+///
+/// # Arguments
+/// line: String - the line to check
+/// lines: &Vec<&String> - the lines of the contract. only includes lines after the current line
+///
+/// # Returns
+/// bool - whether or not the line contains an unnecessary assignment
+///
+/// # Example
+/// ```no_run
+/// let line = "var_a = arg0;".to_string();
+/// let lines = vec![
+///     "var_b = var_a;",
+///     "var_c = var_b;",
+/// ].iter().map(|x| x.to_string()).collect();
+///
+/// let contains_unnecessary = contains_unnecessary_assignment(line, &lines);
+/// assert_eq!(contains_unnecessary, false);
+///
+/// let line = "var_a = arg0;".to_string();
+/// let lines = vec![
+///     "var_b = arg1;",
+///     "var_c = var_b;",
+/// ].iter().map(|x| x.to_string()).collect();
+/// assert_eq!(contains_unnecessary_assignment(line, &lines), true);
+/// ```
 fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
     // skip lines that don't contain an assignment
     if !line.contains(" = ") {
@@ -389,6 +542,20 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
     true
 }
 
+/// Moves casts to the declaration
+///
+/// # Arguments
+/// line: String - the line to convert
+///
+/// # Returns
+/// String - the converted line
+///
+/// # Example
+/// ```no_run
+/// let line = "var_a = uint256(arg0);".to_string();
+/// let converted = move_casts_to_declaration(line);
+/// assert_eq!(converted, "uint256 var_a = arg0;");
+/// ```
 fn move_casts_to_declaration(line: String) -> String {
     let cleaned = line;
 
@@ -425,6 +592,20 @@ fn move_casts_to_declaration(line: String) -> String {
     }
 }
 
+/// Replaces an expression with a variable, if the expression matches an existing variable
+///
+/// # Arguments
+/// line: String - the line to convert
+///
+/// # Returns
+/// String - the converted line
+///
+/// # Example
+/// ```no_run
+/// let line = "var_a = arg0 + arg1;".to_string();
+/// let converted = replace_expression_with_var(line);
+/// assert_eq!(converted, "var_a = var_b + var_c;");
+/// ```
 fn replace_expression_with_var(line: String) -> String {
     let mut cleaned = line;
 
@@ -459,6 +640,13 @@ fn replace_expression_with_var(line: String) -> String {
     cleaned
 }
 
+/// Inherits or infers typings for a memory access
+///
+/// # Arguments
+/// line: String - the line to convert
+///
+/// # Returns
+/// String - the converted line
 fn inherit_infer_mem_type(line: String) -> String {
     let mut cleaned = line.clone();
     let mut type_map = MEMORY_TYPE_MAP.lock().unwrap();
@@ -515,6 +703,13 @@ fn inherit_infer_mem_type(line: String) -> String {
     cleaned
 }
 
+/// Inherits or infers typings for a storage access
+///
+/// # Arguments
+/// line: String - the line to convert
+///
+/// # Returns
+/// String - the converted line
 fn inherit_infer_storage_type(line: String) {
     let type_map = MEMORY_TYPE_MAP.lock().unwrap();
     let mut storage_map = STORAGE_TYPE_MAP.lock().unwrap();
@@ -658,6 +853,23 @@ fn inherit_infer_storage_type(line: String) {
     }
 }
 
+/// Replaces resolved errors and events
+///
+/// # Arguments
+/// line: String - the line to convert
+///
+/// # Returns
+/// String - the converted line
+///
+/// # Example
+/// ```no_run
+/// let line = "revert CustomError_00000000(arg0);".to_string();
+/// let converted = replace_resolved(line);
+/// assert_eq!(converted, "CustomError_00000000(arg0);");
+///
+/// let line = "revert CustomError_00000001(arg0);".to_string();
+/// let converted = replace_resolved(line);
+/// assert_eq!(converted, "UrMom(arg0);");
 fn replace_resolved(
     line: String,
     all_resolved_errors: HashMap<String, ResolvedError>,
@@ -688,9 +900,26 @@ fn replace_resolved(
     cleaned
 }
 
+/// Simplifies arithmatic by removing unnecessary operations
+///
+/// # Arguments
+/// line: String - the line to convert
+///
+/// # Returns
+/// String - the converted line
+///
+/// # Example
+/// ```no_run
+/// let line = "var_a = 1 * 2;".to_string();
+/// let converted = simplify_arithmatic(line);
+/// assert_eq!(converted, "var_a = 2;");
+/// ```
 fn simplify_arithmatic(line: String) -> String {
     let cleaned = DIV_BY_ONE_REGEX.replace_all(&line, "");
     let cleaned = MUL_BY_ONE_REGEX.replace_all(&cleaned, "");
+
+    // remove double negation
+    let cleaned = cleaned.replace("!!", "");
 
     cleaned.to_string()
 }
@@ -713,11 +942,8 @@ fn cleanup(
     // Remove all repetitive casts
     cleaned = simplify_casts(cleaned);
 
-    // Find and flip == / != signs for all instances of ISZERO
-    cleaned = convert_iszero_logic_flip(cleaned);
-
     // Remove all unnecessary parentheses
-    cleaned = simplify_parentheses(cleaned);
+    cleaned = simplify_parentheses(cleaned, 0);
 
     // Convert all memory[] and storage[] accesses to variables, also removes unused variables
     cleaned = convert_access_to_variable(cleaned);
@@ -774,6 +1000,7 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
             bar.set_message(format!("postprocessed {function_count} functions"));
         }
 
+        // cleaned_lines.push(line.to_string());
         if !contains_unnecessary_assignment(
             line.trim().to_string(),
             &lines[i + 1..].iter().collect::<Vec<_>>(),

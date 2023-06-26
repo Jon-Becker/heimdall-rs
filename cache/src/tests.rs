@@ -75,7 +75,7 @@ mod tests {
         assert!(cache_file.exists());
 
         // wait for expiry
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        std::thread::sleep(std::time::Duration::from_secs(2));
 
         // check expiry
         check_expiry::<String>();

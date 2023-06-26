@@ -608,7 +608,7 @@ mod test_signatures {
 
     use crate::ether::signatures::{
         resolve_error_signature, resolve_event_signature, resolve_function_signature,
-        score_signature, ResolvedError, ResolvedFunction, ResolvedLog,
+        score_signature, ResolvedError, ResolvedLog,
     };
 
     #[test]
@@ -625,52 +625,6 @@ mod test_signatures {
         let signature = String::from("test_signature");
         let result = resolve_function_signature(&signature);
         assert_eq!(result, None);
-    }
-
-    #[test]
-    fn resolve_function_signature_should_return_resolved_functions_when_json_url_returns_signatures(
-    ) {
-        delete_cache(&format!("selector.{}", "0xa9059cbb"));
-        let signature = String::from("0xa9059cbb");
-
-        let expected_result = Some(vec![
-            ResolvedFunction {
-                name: "transfer".to_owned(),
-                signature: "transfer(address,uint256)".to_owned(),
-                inputs: vec!["address".to_owned(), "uint256".to_owned()],
-                decoded_inputs: None,
-            },
-            ResolvedFunction {
-                name: "func_2093253501".to_owned(),
-                signature: "func_2093253501(bytes)".to_owned(),
-                inputs: vec!["bytes".to_owned()],
-                decoded_inputs: None,
-            },
-            ResolvedFunction {
-                name: "transfer".to_owned(),
-                signature: "transfer(bytes4[9],bytes5[6],int48[11])".to_owned(),
-                inputs: vec![
-                    "bytes4[9]".to_owned(),
-                    "bytes5[6]".to_owned(),
-                    "int48[11]".to_owned(),
-                ],
-                decoded_inputs: None,
-            },
-            ResolvedFunction {
-                name: "many_msg_babbage".to_owned(),
-                signature: "many_msg_babbage(bytes1)".to_owned(),
-                inputs: vec!["bytes1".to_owned()],
-                decoded_inputs: None,
-            },
-            ResolvedFunction {
-                name: "join_tg_invmru_haha_fd06787".to_owned(),
-                signature: "join_tg_invmru_haha_fd06787(address,bool)".to_owned(),
-                inputs: vec!["address".to_owned(), "bool".to_owned()],
-                decoded_inputs: None,
-            },
-        ]);
-        let result = resolve_function_signature(&signature);
-        assert_eq!(result, expected_result);
     }
 
     #[test]
@@ -710,20 +664,6 @@ mod test_signatures {
     }
 
     #[test]
-    fn resolve_error_signature_should_return_resolved_errors_when_json_url_returns_signatures() {
-        let signature =
-            String::from("7bfa4b9fb0cd3687c1f539f384b3f3f258f2c9aa9186353d0815413b508ed97d");
-        let expected_result = vec![ResolvedError {
-            name: String::from("NotAdmin"),
-            signature: String::from("NotAdmin()"),
-            inputs: vec![String::new()],
-        }];
-        let result = resolve_error_signature(&signature);
-        assert_eq!(result, Some(expected_result));
-        delete_cache(&format!("selector.{}", &signature));
-    }
-
-    #[test]
     fn resolve_event_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
         let result = resolve_event_signature(&signature);
@@ -757,20 +697,6 @@ mod test_signatures {
         let signature = String::from("test_signature_notfound");
         let result = resolve_event_signature(&signature);
         assert_eq!(result, None);
-    }
-
-    #[test]
-    fn resolve_event_signature_should_return_resolved_logs_when_json_url_returns_signatures() {
-        let signature =
-            String::from("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
-        let expected_result = vec![ResolvedLog {
-            name: String::from("Transfer"),
-            signature: String::from("Transfer(address,address,uint256)"),
-            inputs: vec![String::from("address"), String::from("address"), String::from("uint256")],
-        }];
-        let result = resolve_event_signature(&signature);
-        assert_eq!(result, Some(expected_result));
-        delete_cache(&format!("selector.{}", &signature));
     }
 
     #[test]

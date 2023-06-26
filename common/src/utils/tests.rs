@@ -325,21 +325,18 @@ mod test_strings {
 
     #[test]
     fn test_classify_token_parenthesis() {
-        let (classification, precedence) = classify_token("(");
-        assert_eq!(classification, "(");
-        assert_eq!(precedence, 0);
+        let classification = classify_token("(");
+        assert_eq!(classification, TokenType::Control);
 
-        let (classification, precedence) = classify_token(")");
-        assert_eq!(classification, ")");
-        assert_eq!(precedence, 0);
+        let classification = classify_token(")");
+        assert_eq!(classification, TokenType::Control);
     }
 
     #[test]
     fn test_classify_token_operators_precedence_1() {
         for operator in ["+", "-"].iter() {
-            let (classification, precedence) = classify_token(operator);
-            assert_eq!(classification, "operator");
-            assert_eq!(precedence, 1);
+            let classification = classify_token(operator);
+            assert_eq!(classification, TokenType::Operator);
         }
     }
 
@@ -348,17 +345,15 @@ mod test_strings {
         for operator in
             ["*", "/", "%", "|", "&", "^", "==", ">=", "<=", "!=", "!", "&&", "||"].iter()
         {
-            let (classification, precedence) = classify_token(operator);
-            assert_eq!(classification, "operator");
-            assert_eq!(precedence, 2);
+            let classification = classify_token(operator);
+            assert_eq!(classification, TokenType::Operator);
         }
     }
 
     #[test]
     fn test_classify_token_constant() {
-        let (classification, precedence) = classify_token("0x001234567890");
-        assert_eq!(classification, "constant");
-        assert_eq!(precedence, 0);
+        let classification = classify_token("0x001234567890");
+        assert_eq!(classification, TokenType::Constant);
     }
 
     #[test]
@@ -378,18 +373,16 @@ mod test_strings {
         ]
         .iter()
         {
-            let (classification, precedence) = classify_token(variable);
-            assert_eq!(classification, "variable");
-            assert_eq!(precedence, 0);
+            let classification = classify_token(variable);
+            assert_eq!(classification, TokenType::Variable);
         }
     }
 
     #[test]
     fn test_classify_token_function() {
-        for function in ["uint256", "address", "ecrecover"].iter() {
-            let (classification, precedence) = classify_token(function);
-            assert_eq!(classification, "function");
-            assert_eq!(precedence, 3);
+        for function in ["uint256", "address", "ecrecover", "if"].iter() {
+            let classification = classify_token(function);
+            assert_eq!(classification, TokenType::Function);
         }
     }
 }

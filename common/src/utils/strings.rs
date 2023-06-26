@@ -438,6 +438,15 @@ pub fn tokenize(s: &str) -> Vec<String> {
     tokens
 }
 
+#[derive(Debug, PartialEq)]
+pub enum TokenType {
+    Control,
+    Operator,
+    Constant,
+    Variable,
+    Function,
+}
+
 /// Classifies a token as a variable, constant, operator, or function call, and returns its
 /// precedence
 ///
@@ -452,63 +461,52 @@ pub fn tokenize(s: &str) -> Vec<String> {
 /// use heimdall::utils::strings::classify_token;
 ///
 /// let (classification, precedence) = classify_token("0x01");
-/// assert_eq!(classification, "constant");
+/// assert_eq!(classification, TokenType::Constant);
 /// assert_eq!(precedence, 0);
 ///
 /// let (classification, precedence) = classify_token("arg0");
-/// assert_eq!(classification, "variable");
+/// assert_eq!(classification, TokenType::Variable);
 /// assert_eq!(precedence, 0);
 ///
 /// let (classification, precedence) = classify_token("+");
-/// assert_eq!(classification, "operator");
+/// assert_eq!(classification, TokenType::Operator);
 /// assert_eq!(precedence, 1);
 ///
 /// let (classification, precedence) = classify_token("*");
-/// assert_eq!(classification, "operator");
+/// assert_eq!(classification, TokenType::Operator);
 /// assert_eq!(precedence, 2);
 ///
 /// let (classification, precedence) = classify_token(">");
-/// assert_eq!(classification, "operator");
+/// assert_eq!(classification, TokenType::Operator);
 /// assert_eq!(precedence, 2);
 ///
 /// let (classification, precedence) = classify_token("==");
-/// assert_eq!(classification, "operator");
+/// assert_eq!(classification, TokenType::Operator);
 /// assert_eq!(precedence, 2);
 ///
 /// let (classification, precedence) = classify_token("memory[0x01]");
-/// assert_eq!(classification, "variable");
-/// assert_eq!(precedence, 0);
+/// assert_eq!(classification, TokenType::Variable);
 ///
 /// let (classification, precedence) = classify_token("uint256");
-/// assert_eq!(classification, "function");
-/// assert_eq!(precedence, 3);
+/// assert_eq!(classification, TokenType::Function);
 ///
 /// let (classification, precedence) = classify_token("keccak256");
-/// assert_eq!(classification, "function");
-/// assert_eq!(precedence, 3);
-pub fn classify_token(token: &str) -> (String, usize) {
+/// assert_eq!(classification, Token::Function);
+pub fn classify_token(token: &str) -> TokenType {
     // return if the token is a parenthesis
     if token == "(" || token == ")" {
-        return (token.to_string(), 0)
+        return TokenType::Control
     }
 
     // check if the token is an operator
     let operators = ['+', '-', '*', '/', '=', '>', '<', '!', '&', '|', '%', '^'];
     if token.chars().all(|c| operators.contains(&c)) {
-        return (
-            String::from("operator"),
-            match token {
-                "+" | "-" => 1,
-                "*" | "/" | "%" | "|" | "&" | "^" | "==" | ">=" | "<=" | "!=" | "!" | "&&" |
-                "||" => 2,
-                _ => 1,
-            },
-        )
+        return TokenType::Operator
     }
 
     // check if the token is a constant
     if token.starts_with("0x") || token.parse::<U256>().is_ok() {
-        return (String::from("constant"), 0)
+        return TokenType::Constant
     }
 
     // check if the token is a variable
@@ -519,9 +517,9 @@ pub fn classify_token(token: &str) -> (String, usize) {
     .iter()
     .any(|keyword| token.contains(keyword))
     {
-        return (String::from("variable"), 0)
+        return TokenType::Variable
     }
 
     // this token must be a function call
-    (String::from("function"), 3)
+    TokenType::Function
 }
