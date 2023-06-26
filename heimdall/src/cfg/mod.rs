@@ -1,5 +1,3 @@
-mod tests;
-
 pub mod graph;
 pub mod output;
 pub mod util;

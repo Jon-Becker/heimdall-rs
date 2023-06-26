@@ -1,5 +1,3 @@
-mod tests;
-
 pub mod constants;
 pub mod lexers;
 pub mod out;
