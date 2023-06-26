@@ -231,7 +231,6 @@ pub fn decompile(args: DecompilerArgs) {
                 "failed to resolve any function selectors from '{shortened_target}' .",
                 shortened_target = shortened_target
             ));
-            std::process::exit(0);
         }
 
         logger.info(&format!(
