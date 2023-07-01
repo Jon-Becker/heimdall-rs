@@ -13,7 +13,7 @@ use heimdall_common::{
     ether::{
         evm::types::{display, parse_function_parameters},
         rpc::get_transaction,
-        signatures::{resolve_function_signature, score_signature, ResolvedFunction},
+        signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
     io::logging::Logger,
     utils::strings::decode_hex,
@@ -114,7 +114,7 @@ pub fn decode(args: DecodeArgs) {
     };
 
     // get the function signature possibilities
-    let potential_matches = match resolve_function_signature(&function_selector) {
+    let potential_matches = match ResolvedFunction::resolve(&function_selector) {
         Some(signatures) => signatures,
         None => Vec::new(),
     };
@@ -413,7 +413,7 @@ pub fn decode_calldata(calldata: String) -> Option<Vec<ResolvedFunction>> {
     };
 
     // get the function signature possibilities
-    let potential_matches = match resolve_function_signature(&function_selector) {
+    let potential_matches = match ResolvedFunction::resolve(&function_selector) {
         Some(signatures) => signatures,
         None => Vec::new(),
     };

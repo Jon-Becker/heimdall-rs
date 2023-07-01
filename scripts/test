@@ -32,5 +32,5 @@ if [ "$1" = "--cov" ]; then
         exit 1
     fi
 else
-    cargo test --release -- test_
+    cargo test --release -- test_$1
 fi

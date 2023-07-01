@@ -43,7 +43,7 @@ mod benchmark {
 }
 
 #[cfg(test)]
-mod tests {
+mod integration_tests {
     use heimdall_common::io::file::{delete_path, read_file};
 
     use heimdall::cfg::CFGBuilder;

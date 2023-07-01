@@ -1,5 +1,3 @@
-use std::ops::Add;
-
 use ethers::{
     abi::{decode, AbiEncode, ParamType},
     prelude::U256,
@@ -398,7 +396,7 @@ impl VMTrace {
                     "memory[{}] = msg.data[{}:{}];",
                     memory_offset.solidify(),
                     source_offset,
-                    source_offset.add(size_bytes)
+                    source_offset.saturating_add(size_bytes)
                 ));
             } else if opcode_name == "CODECOPY" {
                 let memory_offset = &instruction.input_operations[0];
@@ -410,7 +408,7 @@ impl VMTrace {
                     "memory[{}] = this.code[{}:{}]",
                     memory_offset.solidify(),
                     source_offset,
-                    source_offset.add(size_bytes)
+                    source_offset.saturating_add(size_bytes)
                 ));
             } else if opcode_name == "EXTCODECOPY" {
                 let address = &instruction.input_operations[0];
@@ -424,7 +422,7 @@ impl VMTrace {
                     memory_offset.solidify(),
                     address.solidify(),
                     source_offset,
-                    source_offset.add(size_bytes)
+                    source_offset.saturating_add(size_bytes)
                 ));
             } else if opcode_name == "STATICCALL" {
                 // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's

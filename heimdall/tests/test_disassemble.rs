@@ -23,7 +23,7 @@ mod benchmarks {
 }
 
 #[cfg(test)]
-mod test_disassemble {
+mod integration_tests {
     use std::io::Write;
 
     use clap_verbosity_flag::Verbosity;

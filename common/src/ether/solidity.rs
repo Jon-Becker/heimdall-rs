@@ -290,10 +290,20 @@ impl WrappedOpcode {
                 let memloc = self.inputs[0]._solidify();
                 // TODO: cleanup
 
+                println!("memloc: {}", memloc);
+
                 if memloc.contains("memory") {
                     if memloc.contains('+') {
                         let parts = memloc.split(" + ").collect::<Vec<&str>>();
 
+                        println!(
+                            "> {}",
+                            format!(
+                                "memory[{}][{}]",
+                                parts[0].replace("memory[", "").replace(']', ""),
+                                parts[1].replace("memory[", "").replace(']', ""),
+                            )
+                        );
                         solidified_wrapped_opcode.push_str(
                             format!(
                                 "memory[{}][{}]",

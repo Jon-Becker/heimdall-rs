@@ -607,14 +607,13 @@ mod test_signatures {
     use heimdall_cache::{delete_cache, store_cache};
 
     use crate::ether::signatures::{
-        resolve_error_signature, resolve_event_signature, resolve_function_signature,
-        score_signature, ResolvedError, ResolvedLog,
+        score_signature, ResolveSelector, ResolvedError, ResolvedFunction, ResolvedLog,
     };
 
     #[test]
     fn resolve_function_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_nocache");
-        let result = resolve_function_signature(&signature);
+        let result = ResolvedFunction::resolve(&signature);
 
         assert_eq!(result, None,)
     }
@@ -623,14 +622,14 @@ mod test_signatures {
     fn resolve_function_signature_should_return_none_when_json_url_returns_empty_signatures() {
         delete_cache(&format!("selector.{}", "test_signature"));
         let signature = String::from("test_signature");
-        let result = resolve_function_signature(&signature);
+        let result = ResolvedFunction::resolve(&signature);
         assert_eq!(result, None);
     }
 
     #[test]
     fn resolve_error_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
-        let result = resolve_error_signature(&signature);
+        let result = ResolvedError::resolve(&signature);
         assert_eq!(result, None);
     }
 
@@ -645,28 +644,28 @@ mod test_signatures {
         });
         store_cache(&format!("selector.{}", &signature), cached_results.clone(), None);
 
-        let result = resolve_error_signature(&signature);
+        let result = ResolvedError::resolve(&signature);
         assert_eq!(result, Some(cached_results));
     }
 
     #[test]
     fn resolve_error_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
-        let result = resolve_error_signature(&signature);
+        let result = ResolvedError::resolve(&signature);
         assert_eq!(result, None);
     }
 
     #[test]
     fn resolve_error_signature_should_return_none_when_json_url_returns_empty_signatures() {
         let signature = String::from("test_signature_notfound");
-        let result = resolve_error_signature(&signature);
+        let result = ResolvedError::resolve(&signature);
         assert_eq!(result, None);
     }
 
     #[test]
     fn resolve_event_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
-        let result = resolve_event_signature(&signature);
+        let result = ResolvedLog::resolve(&signature);
         assert_eq!(result, None);
     }
 
@@ -681,21 +680,21 @@ mod test_signatures {
         });
         store_cache(&format!("selector.{}", &signature), cached_results.clone(), None);
 
-        let result = resolve_event_signature(&signature);
+        let result = ResolvedLog::resolve(&signature);
         assert_eq!(result, Some(cached_results));
     }
 
     #[test]
     fn resolve_event_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
-        let result = resolve_event_signature(&signature);
+        let result = ResolvedLog::resolve(&signature);
         assert_eq!(result, None);
     }
 
     #[test]
     fn resolve_event_signature_should_return_none_when_json_url_returns_empty_signatures() {
         let signature = String::from("test_signature_notfound");
-        let result = resolve_event_signature(&signature);
+        let result = ResolvedLog::resolve(&signature);
         assert_eq!(result, None);
     }
 

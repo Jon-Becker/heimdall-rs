@@ -9,10 +9,7 @@ use indicatif::ProgressBar;
 
 use crate::{io::logging::Logger, utils::strings::decode_hex};
 
-use super::{
-    evm::vm::VM,
-    signatures::{resolve_function_signature, ResolvedFunction},
-};
+use super::{evm::vm::VM, signatures::ResolveSelector};
 
 // find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(evm: &VM, assembly: String) -> HashMap<String, u128> {
@@ -85,13 +82,12 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
     0
 }
 
-// resolve a function signature from the given selectors
-pub fn resolve_function_selectors(
-    selectors: Vec<String>,
-    logger: &Logger,
-) -> HashMap<String, Vec<ResolvedFunction>> {
-    let resolved_functions: Arc<Mutex<HashMap<String, Vec<ResolvedFunction>>>> =
+pub fn resolve_selectors<T>(selectors: Vec<String>, logger: &Logger) -> HashMap<String, Vec<T>>
+where
+    T: ResolveSelector + Send + Clone + 'static, {
+    let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
         Arc::new(Mutex::new(HashMap::new()));
+
     let resolve_progress: Arc<Mutex<ProgressBar>> =
         Arc::new(Mutex::new(ProgressBar::new_spinner()));
 
@@ -106,7 +102,7 @@ pub fn resolve_function_selectors(
 
         // create a new thread for each selector
         threads.push(thread::spawn(move || {
-            if let Some(function) = resolve_function_signature(&selector) {
+            if let Some(function) = T::resolve(&selector) {
                 let mut _resolved_functions = function_clone.lock().unwrap();
                 let mut _resolve_progress = resolve_progress.lock().unwrap();
                 _resolve_progress
