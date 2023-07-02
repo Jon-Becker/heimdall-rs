@@ -100,8 +100,8 @@ impl VMTrace {
                     .opcode_details
                     .clone()
                     .unwrap()
-                    .name
-                    == "JUMPDEST",
+                    .name ==
+                    "JUMPDEST",
             );
         }
     }

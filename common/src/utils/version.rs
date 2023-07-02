@@ -12,8 +12,7 @@ pub struct Version {
 pub fn current_version() -> Version {
     // get the current version from the cargo package
     let version_string = env!("CARGO_PKG_VERSION");
-
-    let version_parts: Vec<&str> = version_string.split(".").collect();
+    let version_parts: Vec<&str> = version_string.split('.').collect();
 
     Version {
         major: version_parts[0].parse::<u32>().unwrap_or(0),
@@ -30,15 +29,15 @@ pub fn remote_version() -> Version {
     // retrieve the latest release tag from github
     if let Some(release) = get_json_from_url(remote_repository_url.to_string(), 3) {
         if let Some(tag_name) = release["tag_name"].as_str() {
-            let version_string = tag_name.replace("v", "");
-            let version_parts: Vec<&str> = version_string.split(".").collect();
+            let version_string = tag_name.replace('v', "");
+            let version_parts: Vec<&str> = version_string.split('.').collect();
 
             if version_parts.len() == 3 {
                 let major = version_parts[0].parse::<u32>().unwrap_or(0);
                 let minor = version_parts[1].parse::<u32>().unwrap_or(0);
                 let patch = version_parts[2].parse::<u32>().unwrap_or(0);
 
-                return Version { major, minor, patch };
+                return Version { major, minor, patch }
             }
         }
     }
@@ -57,95 +56,39 @@ impl Display for Version {
 impl Version {
     // greater than
     pub fn gt(&self, other: &Version) -> bool {
-        if self.major > other.major {
-            return true;
-        } else if self.major == other.major {
-            if self.minor > other.minor {
-                return true;
-            } else if self.minor == other.minor {
-                if self.patch > other.patch {
-                    return true;
-                }
-            }
-        }
-
-        false
+        self.major > other.major ||
+            (self.major == other.major && self.minor > other.minor) ||
+            (self.major == other.major && self.minor == other.minor && self.patch > other.patch)
     }
 
     // greater than or equal to
     pub fn gte(&self, other: &Version) -> bool {
-        if self.major > other.major {
-            return true;
-        } else if self.major == other.major {
-            if self.minor > other.minor {
-                return true;
-            } else if self.minor == other.minor {
-                if self.patch >= other.patch {
-                    return true;
-                }
-            }
-        }
-
-        false
+        self.major > other.major ||
+            (self.major == other.major && self.minor > other.minor) ||
+            (self.major == other.major && self.minor == other.minor && self.patch >= other.patch)
     }
 
     // less than
     pub fn lt(&self, other: &Version) -> bool {
-        if self.major < other.major {
-            return true;
-        } else if self.major == other.major {
-            if self.minor < other.minor {
-                return true;
-            } else if self.minor == other.minor {
-                if self.patch < other.patch {
-                    return true;
-                }
-            }
-        }
-
-        false
+        self.major < other.major ||
+            (self.major == other.major && self.minor < other.minor) ||
+            (self.major == other.major && self.minor == other.minor && self.patch < other.patch)
     }
 
     // less than or equal to
     pub fn lte(&self, other: &Version) -> bool {
-        if self.major < other.major {
-            return true;
-        } else if self.major == other.major {
-            if self.minor < other.minor {
-                return true;
-            } else if self.minor == other.minor {
-                if self.patch <= other.patch {
-                    return true;
-                }
-            }
-        }
-
-        false
+        self.major < other.major ||
+            (self.major == other.major && self.minor < other.minor) ||
+            (self.major == other.major && self.minor == other.minor && self.patch <= other.patch)
     }
 
     // equal to
     pub fn eq(&self, other: &Version) -> bool {
-        if self.major == other.major {
-            if self.minor == other.minor {
-                if self.patch == other.patch {
-                    return true;
-                }
-            }
-        }
-
-        false
+        self.major == other.major && self.minor == other.minor && self.patch == other.patch
     }
 
     // not equal to
     pub fn ne(&self, other: &Version) -> bool {
-        if self.major != other.major {
-            return true;
-        } else if self.minor != other.minor {
-            return true;
-        } else if self.patch != other.patch {
-            return true;
-        }
-
-        false
+        self.major != other.major || self.minor != other.minor || self.patch != other.patch
     }
 }

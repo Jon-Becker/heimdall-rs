@@ -23,6 +23,6 @@ impl Storage {
         return match self.storage.get(&key) {
             Some(value) => *value,
             None => [0u8; 32],
-        };
+        }
     }
 }

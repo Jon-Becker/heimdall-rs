@@ -67,7 +67,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
         let is_rhs_all_ones = arg2.replacen("0x", "", 1).chars().all(|c| c == 'f' || c == 'F');
         if !is_lhs_all_ones && !is_rhs_all_ones {
             index += end_index + 1;
-            continue; // skip if LHS and RHS are not bitwise masks
+            continue // skip if LHS and RHS are not bitwise masks
         }
 
         // determine size of bytes based on argument 1
@@ -134,7 +134,7 @@ fn remove_replace_casts(line: String) -> String {
 
             cleaned.replace_range(cast_start - cast_type.len()..=cast_end - 1, &yul_cast);
         } else {
-            break;
+            break
         }
     }
 
@@ -151,7 +151,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
         // if there is a negation of an expression, remove the parentheses
         // helps with double negation
         if first_char == "iszero" && last_char == ")" {
-            return true;
+            return true
         }
 
         // parens required if:
@@ -159,14 +159,14 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
         //  - expression is a function call
         //  - expression is the surrounding parens of a conditional
         if first_char != "(" {
-            return false;
+            return false
         } else if last_char == ")" {
-            return true;
+            return true
         }
 
         // don't include instantiations
         if expression.contains(":=") {
-            return false;
+            return false
         }
 
         // handle the inside of the expression
@@ -191,7 +191,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
 
     // skip lines that are defining a function
     if cleaned.contains("case") {
-        return cleaned;
+        return cleaned
     }
 
     // get the nth index of the first open paren
@@ -254,7 +254,7 @@ fn add_resolved_events(line: String, all_resolved_events: HashMap<String, Resolv
 
     // skip lines that not logs
     if !cleaned.contains("log") {
-        return cleaned;
+        return cleaned
     }
 
     // get the inside of the log statement
@@ -262,7 +262,7 @@ fn add_resolved_events(line: String, all_resolved_events: HashMap<String, Resolv
 
     // no balance found, break
     if !log_statement.2 {
-        return cleaned;
+        return cleaned
     }
 
     // use ARGS_SPLIT_REGEX to split the log into its arguments
@@ -291,7 +291,7 @@ fn cleanup(line: String, all_resolved_events: HashMap<String, ResolvedLog>) -> S
 
     // skip comments
     if cleaned.starts_with('/') {
-        return cleaned;
+        return cleaned
     }
 
     // remove double negations

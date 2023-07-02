@@ -15,10 +15,12 @@ openai_api_key = \"\"
 ";
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Display and edit the current configuration",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall config [OPTIONS]")]
+#[clap(
+    about = "Display and edit the current configuration",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall config [OPTIONS]"
+)]
 pub struct ConfigArgs {
     /// The target key to update.
     #[clap(required = false, default_value = "")]
@@ -85,11 +87,11 @@ pub fn read_config() -> String {
 
             if home.as_path().exists() {
                 // the file exists, read it
-                return read_file(&home.into_os_string().to_str().unwrap().to_string());
+                return read_file(&home.into_os_string().to_str().unwrap().to_string())
             } else {
                 // the file does not exist, create it
                 write_config(DEFAULT_CONFIG.to_string());
-                return read_file(&home.into_os_string().to_str().unwrap().to_string());
+                return read_file(&home.into_os_string().to_str().unwrap().to_string())
             }
         }
         None => {
@@ -113,7 +115,7 @@ pub fn get_config() -> Configuration {
             logger.error(&format!("failed to parse config file: {e}"));
             logger.info("regenerating config file...");
             delete_config();
-            return get_config();
+            return get_config()
         }
     };
     config

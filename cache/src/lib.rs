@@ -1,8 +1,5 @@
 use clap::{AppSettings, Parser};
-use serde::{
-    de::DeserializeOwned,
-    {Deserialize, Serialize},
-};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
 
@@ -12,10 +9,12 @@ pub mod tests;
 pub mod util;
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Manage heimdall-rs' cached objects",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall cache <SUBCOMMAND>")]
+#[clap(
+    about = "Manage heimdall-rs' cached objects",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall cache <SUBCOMMAND>"
+)]
 pub struct CacheArgs {
     #[clap(subcommand)]
     pub sub: Subcommands,
@@ -106,8 +105,7 @@ pub fn delete_cache(key: &str) {
 #[allow(deprecated)]
 pub fn check_expiry<T>() -> bool
 where
-    T: DeserializeOwned,
-{
+    T: DeserializeOwned, {
     let home = home_dir().unwrap();
     let cache_dir = home.join(".bifrost").join("cache");
 
@@ -121,7 +119,7 @@ where
 
         let binary_vec = decode_hex(&binary_string);
         if binary_vec.is_err() {
-            return false;
+            return false
         }
 
         let cache: Result<Cache<T>, _> = bincode::deserialize(&binary_vec.unwrap());
@@ -130,8 +128,8 @@ where
         };
 
         let cache = cache.unwrap();
-        if cache.expiry
-            < std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        if cache.expiry <
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
         {
             // delete file
             delete_path(&path.to_str().unwrap().to_string());
@@ -143,8 +141,7 @@ where
 #[allow(deprecated)]
 pub fn read_cache<T>(key: &str) -> Option<T>
 where
-    T: 'static + DeserializeOwned,
-{
+    T: 'static + DeserializeOwned, {
     let home = home_dir().unwrap();
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
@@ -157,7 +154,7 @@ where
     let binary_vec = decode_hex(&binary_string);
 
     if binary_vec.is_err() {
-        return None;
+        return None
     }
 
     let cache: Cache<T> = match bincode::deserialize(&binary_vec.unwrap()) {
@@ -170,16 +167,15 @@ where
 #[allow(deprecated)]
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>)
 where
-    T: Serialize,
-{
+    T: Serialize, {
     let home = home_dir().unwrap();
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
     // expire in 90 days
     let expiry = expiry.unwrap_or(
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
-            + 60 * 60 * 24 * 90,
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() +
+            60 * 60 * 24 * 90,
     );
 
     let cache = Cache { value: value, expiry: expiry };

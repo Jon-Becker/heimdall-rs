@@ -1,3 +1,36 @@
-cargo test --release --package heimdall -- test_ --nocapture
-cargo test --release --package heimdall-config -- test_ --nocapture
-cargo test --release --package heimdall-common -- test_ --nocapture
+# if --cov is passed, then we want to run the coverage command
+if [ "$1" = "--cov" ]; then
+
+    # specify regex to ignore files
+    # ignore rpc.rs, logging.rs, http.rs, transpose.rs, resources.rs, tests.rs, heimdall.rs, lib.rs
+    regex=".*dump.*\.rs|.*rpc\.rs|.*logging\.rs|.*http\.rs|.*transpose\.rs|.*resources.*\.rs|.*test(s)?.rs|heimdall\.rs|.*lib\.rs"
+
+    # if -v or --verbose is passed, then we want to print the coverage report
+    if [ "$2" = "-v" ] || [ "$2" = "--verbose" ]; then
+        cargo llvm-cov --release --ignore-filename-regex=$regex --show-missing-lines --fail-under-lines 100 --cobertura --output-path coverage.xml -- test_
+    else
+        cargo llvm-cov --release --ignore-filename-regex=$regex --fail-under-lines 100 --cobertura --output-path coverage.xml -- test_
+    fi
+
+    # Search for the first instance of line-rate="{float}"
+    match=$(grep -o 'line-rate="[0-9.]\+"' coverage.xml | head -n 1)
+
+    # Check if a match was found
+    if [ -n "$match" ]; then
+        # Extract the float value from the match
+        float=$(echo "$match" | grep -o '[0-9.]\+')
+
+        # Compare the float value with 0.5
+        if (( $(awk 'BEGIN {print ('$float' < 0.58)}') )); then
+            echo "coverage of $float is less than 0.58"
+            exit 1
+        else
+            exit 0
+        fi
+    else
+        echo "coverage.xml not found"
+        exit 1
+    fi
+else
+    cargo test --release -- test_$1
+fi

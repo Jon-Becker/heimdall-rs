@@ -10,14 +10,14 @@ use tui::{backend::CrosstermBackend, Terminal};
 use crate::dump::{
     constants::{DECODE_AS_TYPES, DUMP_STATE},
     tui_views::{render_ui, TUIView},
-    util::{cleanup_terminal, csv::write_storage_to_csv, table::copy_selected},
+    util::{cleanup_terminal, csv::write_storage_to_csv},
     DumpArgs,
 };
 
 pub fn handle(args: DumpArgs, output_dir: String) {
     // if no TUI is requested, just run the dump
     if args.no_tui {
-        return;
+        return
     }
 
     // create new TUI terminal
@@ -66,7 +66,7 @@ pub fn handle(args: DumpArgs, output_dir: String) {
                                     match command {
                                         ":q" | ":quit" => {
                                             state.view = TUIView::Killed;
-                                            break;
+                                            break
                                         }
                                         ":h" | ":help" => {
                                             state.view = TUIView::Help;
@@ -100,8 +100,8 @@ pub fn handle(args: DumpArgs, output_dir: String) {
                                                         }
                                                     }
                                                     "down" => {
-                                                        if state.scroll_index + amount
-                                                            < state.storage.len()
+                                                        if state.scroll_index + amount <
+                                                            state.storage.len()
                                                         {
                                                             state.scroll_index += amount;
                                                         } else {
@@ -130,17 +130,10 @@ pub fn handle(args: DumpArgs, output_dir: String) {
                             }
 
                             drop(state);
-                            continue;
+                            continue
                         }
 
                         match key.code {
-                            // copy value on MODIFIER + C
-                            crossterm::event::KeyCode::Char('c') => {
-                                if crossterm::event::KeyModifiers::NONE != key.modifiers {
-                                    copy_selected(&mut state)
-                                }
-                            }
-
                             // main on escape
                             crossterm::event::KeyCode::Esc => {
                                 state.filter = String::new();
@@ -164,7 +157,7 @@ pub fn handle(args: DumpArgs, output_dir: String) {
                                             value.decode_as_type_index += 1;
                                         }
                                     } else if i >= scroll_index + selection_size {
-                                        break;
+                                        break
                                     }
                                 }
                             }
@@ -186,7 +179,7 @@ pub fn handle(args: DumpArgs, output_dir: String) {
                                             value.decode_as_type_index -= 1;
                                         }
                                     } else if i >= scroll_index + selection_size {
-                                        break;
+                                        break
                                     }
                                 }
                             }

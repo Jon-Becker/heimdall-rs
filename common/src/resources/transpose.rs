@@ -206,7 +206,7 @@ pub fn get_contract_creation(
             }
         };
 
-        return Some((block_number, transaction_hash));
+        return Some((block_number, transaction_hash))
     };
 
     None

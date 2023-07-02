@@ -1,16 +1,12 @@
-mod tests;
-
 pub mod graph;
 pub mod output;
 pub mod util;
 
-use heimdall_common::ether::compiler::detect_compiler;
-use heimdall_common::ether::rpc::get_code;
-use heimdall_common::ether::selectors::find_function_selectors;
+use heimdall_common::ether::{
+    compiler::detect_compiler, rpc::get_code, selectors::find_function_selectors,
+};
 use indicatif::ProgressBar;
-use std::env;
-use std::fs;
-use std::time::Duration;
+use std::{env, fs, time::Duration};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
@@ -23,14 +19,15 @@ use heimdall_common::{
 };
 use petgraph::Graph;
 
-use crate::cfg::output::build_output;
-use crate::cfg::util::map_contract;
+use crate::cfg::{output::build_output, util::map_contract};
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Generate a visual control flow graph for EVM bytecode",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall cfg <TARGET> [OPTIONS]")]
+#[clap(
+    about = "Generate a visual control flow graph for EVM bytecode",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall cfg <TARGET> [OPTIONS]"
+)]
 pub struct CFGArgs {
     /// The target to generate a CFG for, either a file, bytecode, contract address, or ENS name.
     #[clap(required = true)]
@@ -75,9 +72,9 @@ pub fn cfg(args: CFGArgs) {
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     // add the call to the trace
@@ -113,7 +110,8 @@ pub fn cfg(args: CFGArgs) {
             output_dir.push_str(&format!("/{}", &args.target));
         }
 
-        // We are working with a contract address, so we need to fetch the bytecode from the RPC provider.
+        // We are working with a contract address, so we need to fetch the bytecode from the RPC
+        // provider.
         contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.replacen("0x", "", 1);
@@ -144,7 +142,6 @@ pub fn cfg(args: CFGArgs) {
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
-        default: args.default,
         verbose: args.verbose.clone(),
         output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
@@ -190,9 +187,9 @@ pub fn cfg(args: CFGArgs) {
     );
     let mut shortened_target = contract_bytecode.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     // add the creation to the trace
@@ -205,7 +202,7 @@ pub fn cfg(args: CFGArgs) {
     );
 
     // find all selectors in the bytecode
-    let selectors = find_function_selectors(disassembled_bytecode);
+    let selectors = find_function_selectors(&evm, disassembled_bytecode);
     logger.info(&format!("found {} possible function selectors.", selectors.len()));
     logger.info(&format!("performing symbolic execution on '{}' .", &shortened_target));
 

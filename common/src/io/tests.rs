@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod logging_tests {
+mod test_logging {
     use std::time::Instant;
 
     use crate::io::logging::Logger;
@@ -117,5 +117,89 @@ mod logging_tests {
             Some(0),
             true,
         );
+    }
+
+    #[test]
+    fn test_warn() {
+        let (logger, _) = Logger::new("SILENT");
+        logger.warn("log");
+
+        let (logger, _) = Logger::new("ERROR");
+        logger.warn("log");
+
+        let (logger, _) = Logger::new("WARN");
+        logger.warn("log");
+
+        let (logger, _) = Logger::new("INFO");
+        logger.warn("log");
+
+        let (logger, _) = Logger::new("DEBUG");
+        logger.warn("log");
+
+        let (logger, _) = Logger::new("TRACE");
+        logger.warn("log");
+    }
+
+    #[test]
+    fn test_error() {
+        let (logger, _) = Logger::new("SILENT");
+        logger.error("log");
+
+        let (logger, _) = Logger::new("ERROR");
+        logger.error("log");
+
+        let (logger, _) = Logger::new("WARN");
+        logger.error("log");
+
+        let (logger, _) = Logger::new("INFO");
+        logger.error("log");
+
+        let (logger, _) = Logger::new("DEBUG");
+        logger.error("log");
+
+        let (logger, _) = Logger::new("TRACE");
+        logger.error("log");
+    }
+
+    #[test]
+    fn test_info() {
+        let (logger, _) = Logger::new("SILENT");
+        logger.info("log");
+
+        let (logger, _) = Logger::new("ERROR");
+        logger.info("log");
+
+        let (logger, _) = Logger::new("WARN");
+        logger.info("log");
+
+        let (logger, _) = Logger::new("INFO");
+        logger.info("log");
+
+        let (logger, _) = Logger::new("DEBUG");
+        logger.info("log");
+
+        let (logger, _) = Logger::new("TRACE");
+        logger.info("log");
+    }
+
+    #[test]
+    fn test_success() {
+        let (logger, _) = Logger::new("SILENT");
+        logger.success("log");
+
+        let (logger, _) = Logger::new("ERROR");
+        logger.success("log");
+
+        let (logger, _) = Logger::new("WARN");
+        logger.success("log");
+
+        let (logger, _) = Logger::new("INFO");
+        logger.success("log");
+
+        let (logger, _) = Logger::new("DEBUG");
+        logger.success("log");
+
+        let (logger, _) = Logger::new("TRACE");
+        logger.success("log");
     }
 }

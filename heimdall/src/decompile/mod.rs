@@ -1,5 +1,3 @@
-mod tests;
-
 pub mod constants;
 pub mod lexers;
 pub mod out;
@@ -7,38 +5,39 @@ pub mod precompile;
 pub mod resolve;
 pub mod util;
 
-use crate::decompile::resolve::*;
-use crate::decompile::util::*;
+use crate::decompile::{resolve::*, util::*};
 
-use ethers::abi::AbiEncode;
-use heimdall_common::ether::compiler::detect_compiler;
-use heimdall_common::ether::rpc::get_code;
-use heimdall_common::ether::selectors::{
-    find_function_selectors, resolve_entry_point, resolve_function_selectors,
+use heimdall_common::{
+    ether::{
+        compiler::detect_compiler,
+        rpc::get_code,
+        selectors::{find_function_selectors, resolve_selectors},
+    },
+    utils::strings::encode_hex_reduced,
 };
-use heimdall_common::utils::strings::encode_hex_reduced;
 use indicatif::ProgressBar;
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use std::time::Duration;
+use std::{collections::HashMap, env, fs, time::Duration};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::evm::{
-        disassemble::{disassemble, DisassemblerArgs},
-        vm::VM,
+    ether::{
+        evm::{
+            disassemble::{disassemble, DisassemblerArgs},
+            vm::VM,
+        },
+        signatures::*,
     },
-    ether::signatures::*,
     io::logging::*,
 };
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Decompile EVM bytecode to Solidity",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall decompile <TARGET> [OPTIONS]")]
+#[clap(
+    about = "Decompile EVM bytecode to Solidity",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall decompile <TARGET> [OPTIONS]"
+)]
 pub struct DecompilerArgs {
     /// The target to decompile, either a file, bytecode, contract address, or ENS name.
     #[clap(required = true)]
@@ -93,9 +92,9 @@ pub fn decompile(args: DecompilerArgs) {
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let decompile_call = trace.add_call(
         0,
@@ -128,7 +127,8 @@ pub fn decompile(args: DecompilerArgs) {
             output_dir.push_str(&format!("/{}", &args.target));
         }
 
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider.
+        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
+        // provider.
         contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
@@ -159,7 +159,6 @@ pub fn decompile(args: DecompilerArgs) {
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
-        default: args.default,
         verbose: args.verbose.clone(),
         output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
@@ -203,9 +202,9 @@ pub fn decompile(args: DecompilerArgs) {
     );
     let mut shortened_target = contract_bytecode.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let vm_trace = trace.add_creation(
         decompile_call,
@@ -216,11 +215,11 @@ pub fn decompile(args: DecompilerArgs) {
     );
 
     // find and resolve all selectors in the bytecode
-    let selectors = find_function_selectors(disassembled_bytecode);
+    let selectors = find_function_selectors(&evm, disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
-        resolved_selectors = resolve_function_selectors(selectors.clone(), &logger);
+        resolved_selectors = resolve_selectors(selectors.keys().cloned().collect(), &logger);
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
@@ -228,7 +227,6 @@ pub fn decompile(args: DecompilerArgs) {
                 "failed to resolve any function selectors from '{shortened_target}' .",
                 shortened_target = shortened_target
             ));
-            std::process::exit(0);
         }
 
         logger.info(&format!(
@@ -243,21 +241,14 @@ pub fn decompile(args: DecompilerArgs) {
     logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
 
     // get a new progress bar
-    let decompilation_progress = ProgressBar::new_spinner();
+    let mut decompilation_progress = ProgressBar::new_spinner();
     decompilation_progress.enable_steady_tick(Duration::from_millis(100));
     decompilation_progress.set_style(logger.info_spinner());
 
     // perform EVM analysis
     let mut analyzed_functions = Vec::new();
-    for selector in selectors {
+    for (selector, function_entry_point) in selectors {
         decompilation_progress.set_message(format!("executing '0x{selector}'"));
-
-        // get the function's entry point
-        let function_entry_point = resolve_entry_point(&evm.clone(), selector.clone());
-
-        if function_entry_point == 0 {
-            continue;
-        }
 
         let func_analysis_trace = trace.add_call(
             vm_trace,
@@ -456,53 +447,66 @@ pub fn decompile(args: DecompilerArgs) {
                 }
             }
 
+            decompilation_progress.finish_and_clear();
+
             // resolve custom error signatures
             let mut resolved_counter = 0;
+            let resolved_errors: HashMap<String, Vec<ResolvedError>> = resolve_selectors(
+                analyzed_function
+                    .errors
+                    .iter()
+                    .map(|(error_selector, _)| {
+                        encode_hex_reduced(*error_selector).replacen("0x", "", 1)
+                    })
+                    .collect(),
+                &logger,
+            );
             for (error_selector, _) in analyzed_function.errors.clone() {
                 let error_selector_str = encode_hex_reduced(error_selector).replacen("0x", "", 1);
-                decompilation_progress
-                    .set_message(format!("resolving error '0x{}'", &error_selector));
-                let resolved_error_selectors = resolve_error_signature(&error_selector_str);
-
-                // only continue if we have matches
-                if let Some(mut resolved_error_selectors) = resolved_error_selectors {
-                    let mut selected_error_index: u8 = 0;
-
-                    // sort matches by signature using score heuristic from `score_signature`
-                    resolved_error_selectors.sort_by(|a, b| {
-                        let a_score = score_signature(&a.signature);
-                        let b_score = score_signature(&b.signature);
-                        b_score.cmp(&a_score)
-                    });
-
-                    if resolved_error_selectors.len() > 1 {
-                        decompilation_progress.suspend(|| {
-                            selected_error_index = logger.option(
-                                "warn",
-                                "multiple possible matches found. select an option below",
-                                resolved_error_selectors
-                                    .iter()
-                                    .map(|x| x.signature.clone())
-                                    .collect(),
-                                Some(0u8),
-                                args.default,
-                            );
-                        });
+                let mut selected_error_index: u8 = 0;
+                let mut resolved_error_selectors = match resolved_errors.get(&error_selector_str) {
+                    Some(func) => func.clone(),
+                    None => {
+                        trace.add_warn(
+                            func_analysis_trace,
+                            line!(),
+                            "failed to resolve error signature".to_string(),
+                        );
+                        Vec::new()
                     }
+                };
 
-                    let selected_match =
-                        match resolved_error_selectors.get(selected_error_index as usize) {
-                            Some(selected_match) => selected_match,
-                            None => {
-                                logger.error("invalid selection.");
-                                std::process::exit(1)
-                            }
-                        };
+                // sort matches by signature using score heuristic from `score_signature`
+                resolved_error_selectors.sort_by(|a, b| {
+                    let a_score = score_signature(&a.signature);
+                    let b_score = score_signature(&b.signature);
+                    b_score.cmp(&a_score)
+                });
 
-                    resolved_counter += 1;
-                    analyzed_function.errors.insert(error_selector, Some(selected_match.clone()));
-                    all_resolved_errors.insert(error_selector_str, selected_match.clone());
+                if resolved_error_selectors.len() > 1 {
+                    decompilation_progress.suspend(|| {
+                        selected_error_index = logger.option(
+                            "warn",
+                            "multiple possible matches found. select an option below",
+                            resolved_error_selectors.iter().map(|x| x.signature.clone()).collect(),
+                            Some(0u8),
+                            args.default,
+                        );
+                    });
                 }
+
+                let selected_match =
+                    match resolved_error_selectors.get(selected_error_index as usize) {
+                        Some(selected_match) => selected_match,
+                        None => {
+                            logger.error("invalid selection.");
+                            std::process::exit(1)
+                        }
+                    };
+
+                resolved_counter += 1;
+                analyzed_function.errors.insert(error_selector, Some(selected_match.clone()));
+                all_resolved_errors.insert(error_selector_str, selected_match.clone());
             }
 
             if resolved_counter > 0 {
@@ -521,53 +525,65 @@ pub fn decompile(args: DecompilerArgs) {
 
             // resolve custom event signatures
             resolved_counter = 0;
+            let resolved_events: HashMap<String, Vec<ResolvedLog>> = resolve_selectors(
+                analyzed_function
+                    .events
+                    .iter()
+                    .map(|(event_selector, _)| {
+                        encode_hex_reduced(*event_selector).replacen("0x", "", 1)
+                    })
+                    .collect(),
+                &logger,
+            );
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
-                let event_selector_str = event_selector.encode_hex().replacen("0x", "", 1);
-                decompilation_progress
-                    .set_message(format!("resolving event '0x{}'", &event_selector_str));
-                let resolved_event_selectors = resolve_event_signature(&event_selector_str);
-
-                // only continue if we have matches
-                if let Some(mut resolved_event_selectors) = resolved_event_selectors {
-                    let mut selected_event_index: u8 = 0;
-
-                    // sort matches by signature using score heuristic from `score_signature`
-                    resolved_event_selectors.sort_by(|a, b| {
-                        let a_score = score_signature(&a.signature);
-                        let b_score = score_signature(&b.signature);
-                        b_score.cmp(&a_score)
-                    });
-
-                    if resolved_event_selectors.len() > 1 {
-                        decompilation_progress.suspend(|| {
-                            selected_event_index = logger.option(
-                                "warn",
-                                "multiple possible matches found. select an option below",
-                                resolved_event_selectors
-                                    .iter()
-                                    .map(|x| x.signature.clone())
-                                    .collect(),
-                                Some(0u8),
-                                args.default,
-                            );
-                        });
+                let mut selected_event_index: u8 = 0;
+                let event_selector_str =
+                    encode_hex_reduced(event_selector.clone()).replacen("0x", "", 1);
+                let mut resolved_event_selectors = match resolved_events.get(&event_selector_str) {
+                    Some(func) => func.clone(),
+                    None => {
+                        trace.add_warn(
+                            func_analysis_trace,
+                            line!(),
+                            "failed to resolve event signature".to_string(),
+                        );
+                        Vec::new()
                     }
+                };
 
-                    let selected_match =
-                        match resolved_event_selectors.get(selected_event_index as usize) {
-                            Some(selected_match) => selected_match,
-                            None => {
-                                logger.error("invalid selection.");
-                                std::process::exit(1)
-                            }
-                        };
+                // sort matches by signature using score heuristic from `score_signature`
+                resolved_event_selectors.sort_by(|a, b| {
+                    let a_score = score_signature(&a.signature);
+                    let b_score = score_signature(&b.signature);
+                    b_score.cmp(&a_score)
+                });
 
-                    resolved_counter += 1;
-                    analyzed_function
-                        .events
-                        .insert(event_selector, (Some(selected_match.clone()), raw_event));
-                    all_resolved_events.insert(event_selector_str, selected_match.clone());
+                if resolved_event_selectors.len() > 1 {
+                    decompilation_progress.suspend(|| {
+                        selected_event_index = logger.option(
+                            "warn",
+                            "multiple possible matches found. select an option below",
+                            resolved_event_selectors.iter().map(|x| x.signature.clone()).collect(),
+                            Some(0u8),
+                            args.default,
+                        );
+                    });
                 }
+
+                let selected_match =
+                    match resolved_event_selectors.get(selected_event_index as usize) {
+                        Some(selected_match) => selected_match,
+                        None => {
+                            logger.error("invalid selection.");
+                            std::process::exit(1)
+                        }
+                    };
+
+                resolved_counter += 1;
+                analyzed_function
+                    .events
+                    .insert(event_selector, (Some(selected_match.clone()), raw_event));
+                all_resolved_events.insert(event_selector_str, selected_match.clone());
             }
 
             if resolved_counter > 0 {
@@ -583,6 +599,11 @@ pub fn decompile(args: DecompilerArgs) {
                 );
             }
         }
+
+        // get a new progress bar
+        decompilation_progress = ProgressBar::new_spinner();
+        decompilation_progress.enable_steady_tick(Duration::from_millis(100));
+        decompilation_progress.set_style(logger.info_spinner());
 
         analyzed_functions.push(analyzed_function.clone());
     }

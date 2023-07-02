@@ -422,7 +422,7 @@ impl Logger {
     ) -> u8 {
         // if silent, return the default
         if self.level == -1 {
-            return default.unwrap();
+            return default.unwrap()
         }
 
         // log the message with the given class
@@ -466,7 +466,7 @@ impl Logger {
             } else {
                 println!();
             }
-            return default.unwrap();
+            return default.unwrap()
         }
 
         // get input
@@ -475,10 +475,10 @@ impl Logger {
                 // check if default was selected
                 if selection.trim() == "" {
                     if let Some(..) = default {
-                        return default.unwrap();
+                        return default.unwrap()
                     } else {
                         self.error("invalid selection.");
-                        return self.option(function, message, options, default, skip);
+                        return self.option(function, message, options, default, skip)
                     }
                 }
 
@@ -487,7 +487,7 @@ impl Logger {
                     Ok(i) => i,
                     Err(_) => {
                         self.error("invalid selection.");
-                        return self.option(function, message, options, default, skip);
+                        return self.option(function, message, options, default, skip)
                     }
                 };
 

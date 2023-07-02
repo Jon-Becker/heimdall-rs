@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn test_iszero_flip() {
-        let lines = vec![String::from("if (iszero(arg0)) {")];
+        let lines = vec![String::from("if (!(arg0)) {")];
 
         assert_eq!(
             postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_iszero_flip_complex() {
-        let lines = vec![String::from("if (iszero(iszero(arg0))) {")];
+        let lines = vec![String::from("if (!(!(arg0))) {")];
 
         assert_eq!(
             postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_iszero_flip_complex2() {
-        let lines = vec![String::from("if (iszero(iszero(iszero(arg0)))) {")];
+        let lines = vec![String::from("if (!(!(!(arg0)))) {")];
 
         assert_eq!(
             postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
@@ -111,7 +111,7 @@ mod tests {
 
         assert_eq!(
             postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
-            vec![String::from("if (cast(arg0 + 1 / 10)) {")]
+            vec![String::from("if (cast((arg0 + 1) / 10)) {")]
         );
     }
 
@@ -123,7 +123,7 @@ mod tests {
 
         assert_eq!(
             postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
-            vec![String::from("if (cast((arg0 * (arg1)) + 1 / 10)) {")]
+            vec![String::from("if (cast(((arg0 * (arg1)) + 1) / 10)) {")]
         );
     }
 }

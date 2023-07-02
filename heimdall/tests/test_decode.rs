@@ -3,7 +3,7 @@ mod benchmark {
     use clap_verbosity_flag::Verbosity;
     use heimdall_common::testing::benchmarks::benchmark;
 
-    use crate::decode::DecodeArgs;
+    use heimdall::decode::DecodeArgs;
 
     #[test]
     fn benchmark_decode_transfer() {
@@ -16,7 +16,7 @@ mod benchmark {
                 explain: false,
                 default: true,
             };
-            crate::decode::decode(args)
+            heimdall::decode::decode(args)
         }
 
         benchmark("benchmark_decode_transfer", 100, bench)
@@ -33,7 +33,7 @@ mod benchmark {
                 explain: false,
                 default: true,
             };
-            crate::decode::decode(args)
+            heimdall::decode::decode(args)
         }
 
         benchmark("benchmark_decode_uniswap_simple", 100, bench)
@@ -50,7 +50,7 @@ mod benchmark {
                 explain: false,
                 default: true,
             };
-            crate::decode::decode(args)
+            heimdall::decode::decode(args)
         }
 
         benchmark("benchmark_decode_seaport_simple", 100, bench)
@@ -67,7 +67,7 @@ mod benchmark {
                 explain: false,
                 default: true,
             };
-            crate::decode::decode(args)
+            heimdall::decode::decode(args)
         }
 
         benchmark("benchmark_decode_seaport_complex", 100, bench)
@@ -83,7 +83,7 @@ mod benchmark {
             explain: false,
             default: true,
         };
-        crate::decode::decode(args);
+        heimdall::decode::decode(args);
         assert!(true)
     }
 
@@ -97,7 +97,7 @@ mod benchmark {
             explain: false,
             default: true,
         };
-        crate::decode::decode(args);
+        heimdall::decode::decode(args);
         assert!(true)
     }
 }

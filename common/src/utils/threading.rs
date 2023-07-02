@@ -1,6 +1,5 @@
 use crossbeam_channel::unbounded;
-use std::sync::Arc;
-use std::thread;
+use std::{sync::Arc, thread};
 
 pub fn task_pool<
     T: Clone + Send + Sync + 'static,
@@ -11,6 +10,11 @@ pub fn task_pool<
     num_threads: usize,
     f: F,
 ) -> Vec<R> {
+    // if items is empty, return empty results
+    if items.is_empty() {
+        return Vec::new()
+    }
+
     let (tx, rx) = unbounded();
     let mut handles = Vec::new();
 
@@ -42,7 +46,7 @@ pub fn task_pool<
 
     // Wait for all threads to finish
     for handle in handles {
-        handle.join().unwrap();
+        if handle.join().is_ok() {}
     }
 
     results

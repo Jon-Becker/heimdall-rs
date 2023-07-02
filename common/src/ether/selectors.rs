@@ -9,16 +9,14 @@ use indicatif::ProgressBar;
 
 use crate::{io::logging::Logger, utils::strings::decode_hex};
 
-use super::{
-    evm::vm::VM,
-    signatures::{resolve_function_signature, ResolvedFunction},
-};
+use super::{evm::vm::VM, signatures::ResolveSelector};
 
 // find all function selectors in the given EVM assembly.
-pub fn find_function_selectors(assembly: String) -> Vec<String> {
-    let mut function_selectors = Vec::new();
+pub fn find_function_selectors(evm: &VM, assembly: String) -> HashMap<String, u128> {
+    let mut function_selectors = HashMap::new();
 
-    // search through assembly for PUSH4 instructions, optimistically assuming that they are function selectors
+    // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
+    // they are function selectors
     let assembly: Vec<String> = assembly.split('\n').map(|line| line.trim().to_string()).collect();
     for line in assembly.iter() {
         let instruction_args: Vec<String> = line.split(' ').map(|arg| arg.to_string()).collect();
@@ -26,14 +24,20 @@ pub fn find_function_selectors(assembly: String) -> Vec<String> {
         if instruction_args.len() >= 2 {
             let instruction = instruction_args[1].clone();
 
-            if instruction == "PUSH4" {
+            if &instruction == "PUSH4" {
                 let function_selector = instruction_args[2].clone();
-                function_selectors.push(function_selector);
+
+                // get the function's entry point
+                let function_entry_point =
+                    match resolve_entry_point(&evm.clone(), function_selector.clone()) {
+                        0 => continue,
+                        x => x,
+                    };
+
+                function_selectors.insert(function_selector, function_entry_point);
             }
         }
     }
-    function_selectors.sort();
-    function_selectors.dedup();
     function_selectors
 }
 
@@ -52,18 +56,18 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
             let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
 
-            if jump_condition.contains(&selector)
-                && jump_condition.contains("msg.data[0]")
-                && jump_condition.contains(" == ")
-                && jump_taken == 1
+            if jump_condition.contains(&selector) &&
+                jump_condition.contains("msg.data[0]") &&
+                jump_condition.contains(" == ") &&
+                jump_taken == 1
             {
-                return call.last_instruction.inputs[0].try_into().unwrap_or(0);
+                return call.last_instruction.inputs[0].try_into().unwrap_or(0)
             } else if jump_taken == 1 {
                 // if handled_jumps contains the jumpi, we have already handled this jump.
                 // loops aren't supported in the dispatcher, so we can just return 0
                 if handled_jumps.contains(&call.last_instruction.inputs[0].try_into().unwrap_or(0))
                 {
-                    return 0;
+                    return 0
                 } else {
                     handled_jumps.insert(call.last_instruction.inputs[0].try_into().unwrap_or(0));
                 }
@@ -71,20 +75,19 @@ pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
         }
 
         if vm.exitcode != 255 || !vm.returndata.is_empty() {
-            break;
+            break
         }
     }
 
     0
 }
 
-// resolve a function signature from the given selectors
-pub fn resolve_function_selectors(
-    selectors: Vec<String>,
-    logger: &Logger,
-) -> HashMap<String, Vec<ResolvedFunction>> {
-    let resolved_functions: Arc<Mutex<HashMap<String, Vec<ResolvedFunction>>>> =
+pub fn resolve_selectors<T>(selectors: Vec<String>, logger: &Logger) -> HashMap<String, Vec<T>>
+where
+    T: ResolveSelector + Send + Clone + 'static, {
+    let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
         Arc::new(Mutex::new(HashMap::new()));
+
     let resolve_progress: Arc<Mutex<ProgressBar>> =
         Arc::new(Mutex::new(ProgressBar::new_spinner()));
 
@@ -99,7 +102,7 @@ pub fn resolve_function_selectors(
 
         // create a new thread for each selector
         threads.push(thread::spawn(move || {
-            if let Some(function) = resolve_function_signature(&selector) {
+            if let Some(function) = T::resolve(&selector) {
                 let mut _resolved_functions = function_clone.lock().unwrap();
                 let mut _resolve_progress = resolve_progress.lock().unwrap();
                 _resolve_progress
@@ -111,7 +114,7 @@ pub fn resolve_function_selectors(
 
     // wait for all threads to finish
     for thread in threads {
-        thread.join().unwrap();
+        if thread.join().is_ok() {}
     }
 
     resolve_progress.lock().unwrap().finish_and_clear();
