@@ -170,7 +170,6 @@ mod integration_tests {
     }
 
     #[test]
-    #[ignore]
     /// Thorough testing for decompilation across a large number of contracts
     /// Runs on the top 100 contracts for 2023-06-26
     ///

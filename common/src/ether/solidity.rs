@@ -288,40 +288,14 @@ impl WrappedOpcode {
             }
             "MLOAD" => {
                 let memloc = self.inputs[0]._solidify();
-                // TODO: cleanup
-
-                println!("memloc: {}", memloc);
-
                 if memloc.contains("memory") {
-                    if memloc.contains('+') {
-                        let parts = memloc.split(" + ").collect::<Vec<&str>>();
-
-                        println!(
-                            "> {}",
-                            format!(
-                                "memory[{}][{}]",
-                                parts[0].replace("memory[", "").replace(']', ""),
-                                parts[1].replace("memory[", "").replace(']', ""),
-                            )
-                        );
-                        solidified_wrapped_opcode.push_str(
-                            format!(
-                                "memory[{}][{}]",
-                                parts[0].replace("memory[", "").replace(']', ""),
-                                parts[1].replace("memory[", "").replace(']', ""),
-                            )
-                            .as_str(),
-                        );
-                    } else {
-                        match MEMLEN_REGEX.find(&format!("memory[{memloc}]")).unwrap() {
-                            Some(_) => {
-                                solidified_wrapped_opcode
-                                    .push_str(format!("{memloc}.length").as_str());
-                            }
-                            None => {
-                                solidified_wrapped_opcode
-                                    .push_str(format!("memory[{memloc}]").as_str());
-                            }
+                    match MEMLEN_REGEX.find(&format!("memory[{memloc}]")).unwrap() {
+                        Some(_) => {
+                            solidified_wrapped_opcode.push_str(format!("{memloc}.length").as_str());
+                        }
+                        None => {
+                            solidified_wrapped_opcode
+                                .push_str(format!("memory[{memloc}]").as_str());
                         }
                     }
                 } else {
