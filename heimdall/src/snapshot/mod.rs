@@ -35,6 +35,7 @@ pub struct SnapshotArgs {
     pub default: bool,
 }
 
+#[allow(dead_code, unused_variables)]
 pub fn snapshot(args: SnapshotArgs) {
     use std::time::Instant;
     let now = Instant::now();
@@ -62,13 +63,13 @@ pub fn snapshot(args: SnapshotArgs) {
 
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
+        // We are snapshotting a contract address, so we need to fetch the bytecode from the RPC
         // provider.
         contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
-        // We are decompiling a file, so we need to read the bytecode from the file.
+        // We are snapshotting a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {
                 if BYTECODE_REGEX.is_match(&contents).unwrap() && contents.len() % 2 == 0 {
@@ -120,5 +121,8 @@ pub fn snapshot(args: SnapshotArgs) {
             .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
+    // TODO: perform snapshot analysis
+
     trace.display();
+    logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
 }
