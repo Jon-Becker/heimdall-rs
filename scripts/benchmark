@@ -1,6 +1,6 @@
 echo "Compiling..."
 
-RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
+RUSTFLAGS="-C target-cpu=native -C codegen-units=1 -C incremental=false" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
 
 # get optional parameter for bench prefix
 if [ -z "$1" ]

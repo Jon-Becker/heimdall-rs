@@ -752,6 +752,8 @@ impl VMTrace {
             function.logic.push("}".to_string());
         }
 
+        function.logic.push(format!("// branch {branch:?} end", branch = branch));
+
         function
     }
 }

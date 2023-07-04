@@ -95,6 +95,7 @@ where
 
     resolve_progress.lock().unwrap().enable_steady_tick(Duration::from_millis(100));
     resolve_progress.lock().unwrap().set_style(logger.info_spinner());
+    resolve_progress.lock().unwrap().set_message("resolving selectors");
 
     for selector in selectors {
         let function_clone = resolved_functions.clone();
@@ -106,7 +107,7 @@ where
                 let mut _resolved_functions = function_clone.lock().unwrap();
                 let mut _resolve_progress = resolve_progress.lock().unwrap();
                 _resolve_progress
-                    .set_message(format!("resolved {} selectors...", _resolved_functions.len()));
+                    .set_message(format!("resolved {} selectors", _resolved_functions.len()));
                 _resolved_functions.insert(selector, function);
             }
         }));

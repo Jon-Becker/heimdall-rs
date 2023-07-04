@@ -19,7 +19,7 @@ fn _get_json_from_url(url: String, retry_count: u8, retries_remaining: u8) -> Op
     let client = match Client::builder()
         .danger_accept_invalid_certs(true)
         .user_agent(APP_USER_AGENT)
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
         .build()
     {
         Ok(client) => client,
