@@ -333,6 +333,7 @@ pub fn decompile(args: DecompilerArgs) {
                 &mut trace,
                 func_analysis_trace,
                 &mut Vec::new(),
+                (0, 0),
             );
         }
 

@@ -15,14 +15,28 @@ use super::super::{constants::AND_BITMASK_REGEX, precompile::decode_precompile, 
 use crate::decompile::constants::VARIABLE_SIZE_CHECK_REGEX;
 
 impl VMTrace {
-    // converts a VMTrace to a Funciton through lexical and syntactic analysis
+    /// Converts a VMTrace to a Function through lexical and syntactic analysis
+    ///
+    /// ## Parameters
+    /// - `self` - The VMTrace to be analyzed
+    /// - `function` - The function to be updated with the analysis results
+    /// - `trace` - The TraceFactory to be updated with the analysis results
+    /// - `trace_parent` - The parent of the current VMTrace
+    /// - `branch` - Branch metadata for the current trace. In the format of (branch_depth,
+    ///   branch_index)
+    ///
+    /// ## Returns
+    /// - `function` - The function updated with the analysis results
     pub fn analyze_sol(
         &self,
         function: Function,
         trace: &mut TraceFactory,
         trace_parent: u32,
         conditional_map: &mut Vec<String>,
+        branch: (u32, u8),
     ) -> Function {
+        println!("analyzing branch: {:?}", branch);
+
         // make a clone of the recursed analysis function
         let mut function = function;
         let mut jumped_conditional: Option<String> = None;
@@ -175,8 +189,9 @@ impl VMTrace {
             } else if opcode_name == "JUMPI" {
                 // this is an if conditional for the children branches
                 let conditional = instruction.input_operations[1].solidify();
-                function.logic.push(format!("// cnd {conditional}").to_string());
-                println!("cnd: {}", conditional);
+                function
+                    .logic
+                    .push(format!("// cnd {conditional} // branch {branch:?}").to_string());
 
                 // remove non-payable check and mark function as non-payable
                 if conditional == "!msg.value" {
@@ -199,7 +214,6 @@ impl VMTrace {
                     VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
                     (conditional.replace('!', "") == "success")
                 {
-                    println!("skipping bc 1");
                     continue
                 }
 
@@ -713,8 +727,14 @@ impl VMTrace {
         }
 
         // recurse into the children of the VMTrace map
-        for (_, child) in self.children.iter().enumerate() {
-            function = child.analyze_sol(function, trace, trace_parent, conditional_map);
+        for (i, child) in self.children.iter().enumerate() {
+            function = child.analyze_sol(
+                function,
+                trace,
+                trace_parent,
+                conditional_map,
+                (branch.0 + 1, i as u8),
+            );
         }
 
         // check if the ending brackets are needed

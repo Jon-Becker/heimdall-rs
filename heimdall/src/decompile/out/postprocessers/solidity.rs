@@ -529,12 +529,9 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
 
         if x.contains(" = ") {
             let assignment = x.split(" = ").map(|x| x.trim()).collect::<Vec<&str>>();
-            println!("{:?} {}", assignment, var_name);
             if assignment[1].contains(var_name) {
-                println!(" > false");
                 return false
             } else if assignment[0].contains(var_name) {
-                println!(" > true");
                 return true
             }
         } else if x.contains(var_name) {
