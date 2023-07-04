@@ -11,9 +11,8 @@ use heimdall_common::{
     utils::strings::{decode_hex, encode_hex_reduced},
 };
 
-use crate::decompile::constants::{VARIABLE_CAST_CHECK_REGEX, VARIABLE_SIZE_CHECK_REGEX};
-
 use super::super::{constants::AND_BITMASK_REGEX, precompile::decode_precompile, util::*};
+use crate::decompile::constants::VARIABLE_SIZE_CHECK_REGEX;
 
 impl VMTrace {
     // converts a VMTrace to a Funciton through lexical and syntactic analysis
@@ -176,6 +175,8 @@ impl VMTrace {
             } else if opcode_name == "JUMPI" {
                 // this is an if conditional for the children branches
                 let conditional = instruction.input_operations[1].solidify();
+                function.logic.push(format!("// cnd {conditional}").to_string());
+                println!("cnd: {}", conditional);
 
                 // remove non-payable check and mark function as non-payable
                 if conditional == "!msg.value" {
@@ -196,12 +197,9 @@ impl VMTrace {
                 // is added by the compiler and can be ignored
                 if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
                     VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
-                    (VARIABLE_CAST_CHECK_REGEX
-                        .is_match(&conditional.replace('(', "").replace(')', ""))
-                        .unwrap_or(false) &&
-                        conditional.contains("==")) ||
                     (conditional.replace('!', "") == "success")
                 {
+                    println!("skipping bc 1");
                     continue
                 }
 
@@ -731,13 +729,7 @@ impl VMTrace {
                 }
             }
 
-            // if the last line is an if statement, this branch is empty and probably stack
-            // operations we don't care about
-            if function.logic.last().unwrap().contains("if") {
-                function.logic.pop();
-            } else {
-                function.logic.push("}".to_string());
-            }
+            function.logic.push("}".to_string());
         }
 
         function
