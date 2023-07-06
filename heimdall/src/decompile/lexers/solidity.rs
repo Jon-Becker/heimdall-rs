@@ -24,6 +24,8 @@ impl VMTrace {
     /// - `trace_parent` - The parent of the current VMTrace
     /// - `branch` - Branch metadata for the current trace. In the format of (branch_depth,
     ///   branch_index)
+    ///     - @jon-becker: This will be used later to determin if a condition is a require
+    ///
     ///
     /// ## Returns
     /// - `function` - The function updated with the analysis results
@@ -35,8 +37,6 @@ impl VMTrace {
         conditional_map: &mut Vec<String>,
         branch: (u32, u8),
     ) -> Function {
-        println!("analyzing branch: {:?}", branch);
-
         // make a clone of the recursed analysis function
         let mut function = function;
         let mut jumped_conditional: Option<String> = None;
@@ -189,9 +189,6 @@ impl VMTrace {
             } else if opcode_name == "JUMPI" {
                 // this is an if conditional for the children branches
                 let conditional = instruction.input_operations[1].solidify();
-                function
-                    .logic
-                    .push(format!("// cnd {conditional} // branch {branch:?}").to_string());
 
                 // remove non-payable check and mark function as non-payable
                 if conditional == "!msg.value" {
@@ -327,7 +324,7 @@ impl VMTrace {
                     .iter()
                     .map(|x| x.operations.solidify())
                     .collect::<Vec<String>>()
-                    .join("");
+                    .join(", ");
 
                 // we don't want to overwrite the return value if it's already been set
                 if function.returns == Some(String::from("uint256")) || function.returns.is_none() {
@@ -362,8 +359,13 @@ impl VMTrace {
                         };
                     }
                 }
-
-                function.logic.push(format!("return({return_memory_operations_solidified});"));
+                if return_memory_operations.len() <= 1 {
+                    function.logic.push(format!("return {return_memory_operations_solidified};"));
+                } else {
+                    function.logic.push(format!(
+                        "return abi.encodePacked({return_memory_operations_solidified});"
+                    ));
+                }
             } else if opcode_name == "SELDFESTRUCT" {
                 let addr = match decode_hex(&instruction.inputs[0].encode_hex()) {
                     Ok(hex_data) => match decode(&[ParamType::Address], &hex_data) {
@@ -389,7 +391,7 @@ impl VMTrace {
             } else if opcode_name.contains("MSTORE") {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
-                let operation: WrappedOpcode = instruction.input_operations[1].clone();
+                let operation = instruction.input_operations[1].clone();
 
                 // add the mstore to the function's memory map
                 function.memory.insert(key, StorageFrame { value: value, operations: operation });
@@ -461,14 +463,14 @@ impl VMTrace {
                     }
                     _ => {
                         function.logic.push(format!(
-                            "(bool success, bytes memory ret0) = address({}).staticcall{}({});",
+                            "(bool success, bytes memory ret0) = address({}).staticcall{}(abi.encode({}));",
                             address.solidify(),
                             modifier,
                             extcalldata_memory
                                 .iter()
                                 .map(|x| x.operations.solidify())
                                 .collect::<Vec<String>>()
-                                .join(""),
+                                .join(", "),
                         ));
                     }
                 }
@@ -497,14 +499,14 @@ impl VMTrace {
                     }
                     _ => {
                         function.logic.push(format!(
-                            "(bool success, bytes memory ret0) = address({}).delegatecall{}({});",
+                            "(bool success, bytes memory ret0) = address({}).delegatecall{}(abi.encode({}));",
                             address.solidify(),
                             modifier,
                             extcalldata_memory
                                 .iter()
                                 .map(|x| x.operations.solidify())
                                 .collect::<Vec<String>>()
-                                .join(""),
+                                .join(", "),
                         ));
                     }
                 }
@@ -541,14 +543,14 @@ impl VMTrace {
                     }
                     _ => {
                         function.logic.push(format!(
-                            "(bool success, bytes memory ret0) = address({}).call{}({});",
+                            "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
                             address.solidify(),
                             modifier,
                             extcalldata_memory
                                 .iter()
                                 .map(|x| x.operations.solidify())
                                 .collect::<Vec<String>>()
-                                .join("")
+                                .join(", ")
                         ));
                     }
                 }
@@ -751,8 +753,6 @@ impl VMTrace {
 
             function.logic.push("}".to_string());
         }
-
-        function.logic.push(format!("// branch {branch:?} end", branch = branch));
 
         function
     }

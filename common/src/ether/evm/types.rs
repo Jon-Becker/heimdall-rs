@@ -254,7 +254,7 @@ pub fn find_cast(line: String) -> (usize, usize, Option<String>) {
             let cast_type = line[start..].split('(').collect::<Vec<&str>>()[0].to_string();
 
             // find where the cast ends
-            let (a, b, _) = find_balanced_encapsulator(line[end..].to_string(), ('(', ')'));
+            let (a, b, _) = find_balanced_encapsulator(&line[end..], ('(', ')'));
             (end + a, end + b, Some(cast_type))
         }
         None => (0, 0, None),

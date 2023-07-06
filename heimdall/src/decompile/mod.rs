@@ -455,10 +455,8 @@ pub fn decompile(args: DecompilerArgs) {
             let resolved_errors: HashMap<String, Vec<ResolvedError>> = resolve_selectors(
                 analyzed_function
                     .errors
-                    .iter()
-                    .map(|(error_selector, _)| {
-                        encode_hex_reduced(*error_selector).replacen("0x", "", 1)
-                    })
+                    .keys()
+                    .map(|error_selector| encode_hex_reduced(*error_selector).replacen("0x", "", 1))
                     .collect(),
                 &logger,
             );
@@ -526,17 +524,14 @@ pub fn decompile(args: DecompilerArgs) {
             let resolved_events: HashMap<String, Vec<ResolvedLog>> = resolve_selectors(
                 analyzed_function
                     .events
-                    .iter()
-                    .map(|(event_selector, _)| {
-                        encode_hex_reduced(*event_selector).replacen("0x", "", 1)
-                    })
+                    .keys()
+                    .map(|event_selector| encode_hex_reduced(*event_selector).replacen("0x", "", 1))
                     .collect(),
                 &logger,
             );
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
                 let mut selected_event_index: u8 = 0;
-                let event_selector_str =
-                    encode_hex_reduced(event_selector.clone()).replacen("0x", "", 1);
+                let event_selector_str = encode_hex_reduced(event_selector).replacen("0x", "", 1);
                 let mut resolved_event_selectors = match resolved_events.get(&event_selector_str) {
                     Some(func) => func.clone(),
                     None => Vec::new(),

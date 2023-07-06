@@ -168,7 +168,7 @@ pub fn replace_last(s: String, old: &str, new: &str) -> String {
 /// assert_eq!(end, 9);
 /// assert_eq!(is_balanced, true);
 /// ```
-pub fn find_balanced_encapsulator(s: String, encap: (char, char)) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize, bool) {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -209,10 +209,7 @@ pub fn find_balanced_encapsulator(s: String, encap: (char, char)) -> (usize, usi
 /// assert_eq!(end, 9);
 /// assert_eq!(is_balanced, true);
 /// ```
-pub fn find_balanced_encapsulator_backwards(
-    s: String,
-    encap: (char, char),
-) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (usize, usize, bool) {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -339,7 +336,7 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
         let sliced = s[start + keyword.len()..].to_string();
 
         // find the balanced encapsulator
-        let (start, end, is_balanced) = find_balanced_encapsulator(sliced.clone(), ('(', ')'));
+        let (start, end, is_balanced) = find_balanced_encapsulator(&sliced, ('(', ')'));
 
         // extract the condition if balanced encapsulator is found
         if is_balanced {
