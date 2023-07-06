@@ -36,7 +36,6 @@ lazy_static! {
 
     // used to detect compiler size checks
     pub static ref VARIABLE_SIZE_CHECK_REGEX: Regex = Regex::new(r"!?\(?0(x01)? < [a-zA-Z0-9_\[\]]+\.length\)?").unwrap();
-    pub static ref VARIABLE_CAST_CHECK_REGEX: Regex = Regex::new(r"[a-zA-Z0-9_\[\]]* ?(==)? ?[a-zA-Z0-9_\[\]]* ?&? ?0xf+ ?&? ?[a-zA-Z0-9_\[\]]* ?(==)? ?[a-zA-Z0-9_\[\]]*").unwrap();
 
     pub static ref DECOMPILED_SOURCE_HEADER_SOL: String =
 "// SPDX-License-Identifier: MIT

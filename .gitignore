@@ -26,3 +26,8 @@ heimdall/scripts/update
 heimdall/scripts/git
 
 coverage.xml
+*.bin
+*.o
+false
+false/*
+*/false

@@ -333,6 +333,7 @@ pub fn decompile(args: DecompilerArgs) {
                 &mut trace,
                 func_analysis_trace,
                 &mut Vec::new(),
+                (0, 0),
             );
         }
 
@@ -454,10 +455,8 @@ pub fn decompile(args: DecompilerArgs) {
             let resolved_errors: HashMap<String, Vec<ResolvedError>> = resolve_selectors(
                 analyzed_function
                     .errors
-                    .iter()
-                    .map(|(error_selector, _)| {
-                        encode_hex_reduced(*error_selector).replacen("0x", "", 1)
-                    })
+                    .keys()
+                    .map(|error_selector| encode_hex_reduced(*error_selector).replacen("0x", "", 1))
                     .collect(),
                 &logger,
             );
@@ -466,14 +465,7 @@ pub fn decompile(args: DecompilerArgs) {
                 let mut selected_error_index: u8 = 0;
                 let mut resolved_error_selectors = match resolved_errors.get(&error_selector_str) {
                     Some(func) => func.clone(),
-                    None => {
-                        trace.add_warn(
-                            func_analysis_trace,
-                            line!(),
-                            "failed to resolve error signature".to_string(),
-                        );
-                        Vec::new()
-                    }
+                    None => Vec::new(),
                 };
 
                 // sort matches by signature using score heuristic from `score_signature`
@@ -511,7 +503,7 @@ pub fn decompile(args: DecompilerArgs) {
 
             if resolved_counter > 0 {
                 trace.br(func_analysis_trace);
-                trace.add_info(
+                let error_trace = trace.add_info(
                     func_analysis_trace,
                     line!(),
                     format!(
@@ -521,6 +513,10 @@ pub fn decompile(args: DecompilerArgs) {
                     )
                     .to_string(),
                 );
+
+                for resolved_error in all_resolved_errors.values() {
+                    trace.add_message(error_trace, line!(), vec![resolved_error.signature.clone()]);
+                }
             }
 
             // resolve custom event signatures
@@ -528,27 +524,17 @@ pub fn decompile(args: DecompilerArgs) {
             let resolved_events: HashMap<String, Vec<ResolvedLog>> = resolve_selectors(
                 analyzed_function
                     .events
-                    .iter()
-                    .map(|(event_selector, _)| {
-                        encode_hex_reduced(*event_selector).replacen("0x", "", 1)
-                    })
+                    .keys()
+                    .map(|event_selector| encode_hex_reduced(*event_selector).replacen("0x", "", 1))
                     .collect(),
                 &logger,
             );
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
                 let mut selected_event_index: u8 = 0;
-                let event_selector_str =
-                    encode_hex_reduced(event_selector.clone()).replacen("0x", "", 1);
+                let event_selector_str = encode_hex_reduced(event_selector).replacen("0x", "", 1);
                 let mut resolved_event_selectors = match resolved_events.get(&event_selector_str) {
                     Some(func) => func.clone(),
-                    None => {
-                        trace.add_warn(
-                            func_analysis_trace,
-                            line!(),
-                            "failed to resolve event signature".to_string(),
-                        );
-                        Vec::new()
-                    }
+                    None => Vec::new(),
                 };
 
                 // sort matches by signature using score heuristic from `score_signature`
@@ -587,7 +573,7 @@ pub fn decompile(args: DecompilerArgs) {
             }
 
             if resolved_counter > 0 {
-                trace.add_info(
+                let event_trace = trace.add_info(
                     func_analysis_trace,
                     line!(),
                     format!(
@@ -597,6 +583,10 @@ pub fn decompile(args: DecompilerArgs) {
                     )
                     .to_string(),
                 );
+
+                for resolved_event in all_resolved_events.values() {
+                    trace.add_message(event_trace, line!(), vec![resolved_event.signature.clone()]);
+                }
             }
         }
 

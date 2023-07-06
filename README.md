@@ -1,6 +1,21 @@
-![Heimdall-RS](./preview.png?raw=true)
+# heimdall-rs
 
-Heimdall is an advanced EVM toolkit which aims to make dealing with smart contracts on EVM based chains easier.
+![splash preview](./preview.png?raw=true)
+
+![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/jon-becker/heimdall-rs/rust_build.yml?label=Unit%20Tests)
+![GitHub release (with filter)](https://img.shields.io/github/v/release/jon-becker/heimdall-rs?color=success&label=Latest%20Version)
+
+
+## Overview
+
+Heimdall is an advanced EVM smart contract toolkit specializing in bytecode analysis. Heimdall is written in Rust and is designed to be fast, modular, and more accurate than other existing tools.
+
+Currently, Heimdall supports the following operations:
+ * EVM Bytecode Disassembly
+ * EVM Smart-Contract Control Flow Graph Generation
+ * EVM Smart-Contract Decompilation
+ * Smart-Contract Storage Dumping
+ * Transaction Calldata Decoding
 
 ## Installation & Usage
 

@@ -11,18 +11,31 @@ use heimdall_common::{
     utils::strings::{decode_hex, encode_hex_reduced},
 };
 
-use crate::decompile::constants::{VARIABLE_CAST_CHECK_REGEX, VARIABLE_SIZE_CHECK_REGEX};
-
 use super::super::{constants::AND_BITMASK_REGEX, precompile::decode_precompile, util::*};
+use crate::decompile::constants::VARIABLE_SIZE_CHECK_REGEX;
 
 impl VMTrace {
-    // converts a VMTrace to a Funciton through lexical and syntactic analysis
+    /// Converts a VMTrace to a Function through lexical and syntactic analysis
+    ///
+    /// ## Parameters
+    /// - `self` - The VMTrace to be analyzed
+    /// - `function` - The function to be updated with the analysis results
+    /// - `trace` - The TraceFactory to be updated with the analysis results
+    /// - `trace_parent` - The parent of the current VMTrace
+    /// - `branch` - Branch metadata for the current trace. In the format of (branch_depth,
+    ///   branch_index)
+    ///     - @jon-becker: This will be used later to determin if a condition is a require
+    ///
+    ///
+    /// ## Returns
+    /// - `function` - The function updated with the analysis results
     pub fn analyze_sol(
         &self,
         function: Function,
         trace: &mut TraceFactory,
         trace_parent: u32,
         conditional_map: &mut Vec<String>,
+        branch: (u32, u8),
     ) -> Function {
         // make a clone of the recursed analysis function
         let mut function = function;
@@ -196,10 +209,6 @@ impl VMTrace {
                 // is added by the compiler and can be ignored
                 if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
                     VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
-                    (VARIABLE_CAST_CHECK_REGEX
-                        .is_match(&conditional.replace('(', "").replace(')', ""))
-                        .unwrap_or(false) &&
-                        conditional.contains("==")) ||
                     (conditional.replace('!', "") == "success")
                 {
                     continue
@@ -315,7 +324,7 @@ impl VMTrace {
                     .iter()
                     .map(|x| x.operations.solidify())
                     .collect::<Vec<String>>()
-                    .join("");
+                    .join(", ");
 
                 // we don't want to overwrite the return value if it's already been set
                 if function.returns == Some(String::from("uint256")) || function.returns.is_none() {
@@ -350,8 +359,13 @@ impl VMTrace {
                         };
                     }
                 }
-
-                function.logic.push(format!("return({return_memory_operations_solidified});"));
+                if return_memory_operations.len() <= 1 {
+                    function.logic.push(format!("return {return_memory_operations_solidified};"));
+                } else {
+                    function.logic.push(format!(
+                        "return abi.encodePacked({return_memory_operations_solidified});"
+                    ));
+                }
             } else if opcode_name == "SELDFESTRUCT" {
                 let addr = match decode_hex(&instruction.inputs[0].encode_hex()) {
                     Ok(hex_data) => match decode(&[ParamType::Address], &hex_data) {
@@ -377,7 +391,7 @@ impl VMTrace {
             } else if opcode_name.contains("MSTORE") {
                 let key = instruction.inputs[0];
                 let value = instruction.inputs[1];
-                let operation: WrappedOpcode = instruction.input_operations[1].clone();
+                let operation = instruction.input_operations[1].clone();
 
                 // add the mstore to the function's memory map
                 function.memory.insert(key, StorageFrame { value: value, operations: operation });
@@ -449,14 +463,14 @@ impl VMTrace {
                     }
                     _ => {
                         function.logic.push(format!(
-                            "(bool success, bytes memory ret0) = address({}).staticcall{}({});",
+                            "(bool success, bytes memory ret0) = address({}).staticcall{}(abi.encode({}));",
                             address.solidify(),
                             modifier,
                             extcalldata_memory
                                 .iter()
                                 .map(|x| x.operations.solidify())
                                 .collect::<Vec<String>>()
-                                .join(""),
+                                .join(", "),
                         ));
                     }
                 }
@@ -485,14 +499,14 @@ impl VMTrace {
                     }
                     _ => {
                         function.logic.push(format!(
-                            "(bool success, bytes memory ret0) = address({}).delegatecall{}({});",
+                            "(bool success, bytes memory ret0) = address({}).delegatecall{}(abi.encode({}));",
                             address.solidify(),
                             modifier,
                             extcalldata_memory
                                 .iter()
                                 .map(|x| x.operations.solidify())
                                 .collect::<Vec<String>>()
-                                .join(""),
+                                .join(", "),
                         ));
                     }
                 }
@@ -529,14 +543,14 @@ impl VMTrace {
                     }
                     _ => {
                         function.logic.push(format!(
-                            "(bool success, bytes memory ret0) = address({}).call{}({});",
+                            "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
                             address.solidify(),
                             modifier,
                             extcalldata_memory
                                 .iter()
                                 .map(|x| x.operations.solidify())
                                 .collect::<Vec<String>>()
-                                .join("")
+                                .join(", ")
                         ));
                     }
                 }
@@ -715,8 +729,14 @@ impl VMTrace {
         }
 
         // recurse into the children of the VMTrace map
-        for (_, child) in self.children.iter().enumerate() {
-            function = child.analyze_sol(function, trace, trace_parent, conditional_map);
+        for (i, child) in self.children.iter().enumerate() {
+            function = child.analyze_sol(
+                function,
+                trace,
+                trace_parent,
+                conditional_map,
+                (branch.0 + 1, i as u8),
+            );
         }
 
         // check if the ending brackets are needed
@@ -731,13 +751,7 @@ impl VMTrace {
                 }
             }
 
-            // if the last line is an if statement, this branch is empty and probably stack
-            // operations we don't care about
-            if function.logic.last().unwrap().contains("if") {
-                function.logic.pop();
-            } else {
-                function.logic.push("}".to_string());
-            }
+            function.logic.push("}".to_string());
         }
 
         function

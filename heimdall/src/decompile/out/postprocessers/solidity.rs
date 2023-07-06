@@ -57,7 +57,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
             let mut subject = cleaned.get(bitmask.end()..).unwrap().replace(';', "");
 
             // attempt to find matching parentheses
-            let subject_indices = find_balanced_encapsulator(subject.to_string(), ('(', ')'));
+            let subject_indices = find_balanced_encapsulator(&subject, ('(', ')'));
             subject = match subject_indices.2 {
                 true => {
                     // get the subject as hte substring between the balanced parentheses found in
@@ -110,8 +110,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
                 };
 
                 // attempt to find matching parentheses
-                let subject_indices =
-                    find_balanced_encapsulator_backwards(subject.to_string(), ('(', ')'));
+                let subject_indices = find_balanced_encapsulator_backwards(&subject, ('(', ')'));
 
                 subject = match subject_indices.2 {
                     true => {
@@ -252,7 +251,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
         };
 
         let inner_tokens = tokenize(&inside);
-        return !inner_tokens.iter().any(|tk| classify_token(&tk) == TokenType::Operator)
+        return !inner_tokens.iter().any(|tk| classify_token(tk) == TokenType::Operator)
     }
 
     let mut cleaned = line;
@@ -270,7 +269,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
 
     //find it's matching close paren
     let (paren_start, paren_end, found_match) =
-        find_balanced_encapsulator(cleaned[nth_paren_index..].to_string(), ('(', ')'));
+        find_balanced_encapsulator(&cleaned[nth_paren_index..], ('(', ')'));
 
     // add the nth open paren to the start of the paren_start
     let paren_start = paren_start + nth_paren_index;
@@ -360,7 +359,7 @@ fn convert_access_to_variable(line: String) -> String {
     };
 
     // since the regex is greedy, match the memory brackets
-    let matched_loc = find_balanced_encapsulator(memory_access.to_string(), ('[', ']'));
+    let matched_loc = find_balanced_encapsulator(memory_access, ('[', ']'));
     if let true = matched_loc.2 {
         let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
 
@@ -399,7 +398,7 @@ fn convert_access_to_variable(line: String) -> String {
     };
 
     // since the regex is greedy, match the memory brackets
-    let matched_loc = find_balanced_encapsulator(storage_access.to_string(), ('[', ']'));
+    let matched_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
     if let true = matched_loc.2 {
         let mut stor_map = STORAGE_LOOKUP_MAP.lock().unwrap();
 
@@ -415,7 +414,7 @@ fn convert_access_to_variable(line: String) -> String {
 
                 // get the variable name
                 if memloc.contains("keccak256") {
-                    let keccak_key = find_balanced_encapsulator(memloc.clone(), ('(', ')'));
+                    let keccak_key = find_balanced_encapsulator(&memloc, ('(', ')'));
 
                     let variable_name = format!(
                         "stor_map_{}[{}]",
@@ -453,7 +452,6 @@ fn convert_access_to_variable(line: String) -> String {
 
         let mut var_map = VARIABLE_MAP.lock().unwrap();
         var_map.insert(instantiation[0].clone(), instantiation[1].replace(';', ""));
-
         drop(var_map);
     } else {
         // if var_map doesn't contain the variable, add it
@@ -501,13 +499,8 @@ fn convert_access_to_variable(line: String) -> String {
 /// assert_eq!(contains_unnecessary_assignment(line, &lines), true);
 /// ```
 fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
-    // skip lines that don't contain an assignment
-    if !line.contains(" = ") {
-        return false
-    }
-
-    // skip lines that contain external calls
-    if line.contains("bool success") {
+    // skip lines that don't contain an assignment, or contain a return or external calls
+    if !line.contains(" = ") || line.contains("bool success") || line.contains("return") {
         return false
     }
 
@@ -531,7 +524,7 @@ fn contains_unnecessary_assignment(line: String, lines: &Vec<&String>) -> bool {
             let assignment = x.split(" = ").map(|x| x.trim()).collect::<Vec<&str>>();
             if assignment[1].contains(var_name) {
                 return false
-            } else if assignment[0].split(' ').last() == Some(var_name) {
+            } else if assignment[0].contains(var_name) {
                 return true
             }
         } else if x.contains(var_name) {
@@ -576,7 +569,7 @@ fn move_casts_to_declaration(line: String) -> String {
 
             // find the matching close paren
             let (paren_start, paren_end, _) =
-                find_balanced_encapsulator(instantiation[1].to_string(), ('(', ')'));
+                find_balanced_encapsulator(&instantiation[1], ('(', ')'));
 
             // the close paren must be at the end of the expression
             if paren_end != instantiation[1].len() - 1 {
@@ -732,7 +725,7 @@ fn inherit_infer_storage_type(line: String) {
         };
 
         // since the regex is greedy, match the memory brackets
-        let matched_loc = find_balanced_encapsulator(storage_access.to_string(), ('[', ']'));
+        let matched_loc = find_balanced_encapsulator(&storage_access, ('[', ']'));
         if !matched_loc.2 {
             return
         }
@@ -919,9 +912,7 @@ fn simplify_arithmatic(line: String) -> String {
     let cleaned = MUL_BY_ONE_REGEX.replace_all(&cleaned, "");
 
     // remove double negation
-    let cleaned = cleaned.replace("!!", "");
-
-    cleaned.to_string()
+    cleaned.replace("!!", "")
 }
 
 fn cleanup(

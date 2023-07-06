@@ -1,4 +1,4 @@
-name: Rust Build
+name: Unit Tests (On Push)
 
 on: [push]
 

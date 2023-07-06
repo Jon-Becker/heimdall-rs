@@ -146,21 +146,21 @@ mod test_strings {
     fn test_find_balanced_encapsulator() {
         let s = String::from("This is (an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(s, encap);
+        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
         assert_eq!(start, 8);
         assert_eq!(end, 20);
         assert_eq!(is_balanced, true);
 
         let s = String::from("This is an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(s, encap);
+        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
         assert_eq!(start, 0);
         assert_eq!(end, 1);
         assert_eq!(is_balanced, false);
 
         let s = String::from("This is (an example string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(s, encap);
+        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
         assert_eq!(start, 8);
         assert_eq!(end, 1);
         assert_eq!(is_balanced, false);
@@ -170,19 +170,19 @@ mod test_strings {
     fn test_find_balanced_encapsulator_backwards() {
         let s = String::from("This is (an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator_backwards(s, encap);
+        let (start, end, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
         assert_eq!(start, 8);
         assert_eq!(end, 20);
         assert_eq!(is_balanced, true);
 
         let s = String::from("This is an example) string.");
         let encap = ('(', ')');
-        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(s, encap);
+        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
         assert_eq!(is_balanced, false);
 
         let s = String::from("This is (an example string.");
         let encap = ('(', ')');
-        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(s, encap);
+        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
         assert_eq!(is_balanced, false);
     }
 

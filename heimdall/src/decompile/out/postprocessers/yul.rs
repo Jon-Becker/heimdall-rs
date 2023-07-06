@@ -23,14 +23,13 @@ fn remove_double_negation(line: String) -> String {
         let subject = cleaned[subject_indices..].to_string();
 
         // get the indices of the subject's first iszero encapsulator
-        let first_subject_indices = find_balanced_encapsulator(subject.to_string(), ('(', ')'));
+        let first_subject_indices = find_balanced_encapsulator(&subject, ('(', ')'));
         if first_subject_indices.2 {
             // the subject to search is now the subject without the first iszero encapsulator
             let second_subject = subject[first_subject_indices.0 + 1..].to_string();
 
             // get the indices of the subject's second iszero encapsulator
-            let second_subject_indices =
-                find_balanced_encapsulator(second_subject.to_string(), ('(', ')'));
+            let second_subject_indices = find_balanced_encapsulator(&second_subject, ('(', ')'));
             if second_subject_indices.2 {
                 // the subject is now the subject without the first and second iszero encapsulators
                 let subject = second_subject
@@ -55,8 +54,7 @@ fn convert_bitmask_to_casting(line: String) -> String {
         index += found_index;
 
         // get indices of arguments
-        let (start_index, end_index, _) =
-            find_balanced_encapsulator(cleaned[index..].to_string(), ('(', ')'));
+        let (start_index, end_index, _) = find_balanced_encapsulator(&cleaned[index..], ('(', ')'));
         let args = &cleaned[start_index + index + 1..end_index + index - 1];
         let args_vec: Vec<&str> = args.split(", ").collect();
         let arg1 = args_vec[0];
@@ -202,7 +200,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
 
     //find it's matching close paren
     let (paren_start, paren_end, found_match) =
-        find_balanced_encapsulator(cleaned[nth_paren_index..].to_string(), ('(', ')'));
+        find_balanced_encapsulator(&cleaned[nth_paren_index..], ('(', ')'));
 
     // add the nth open paren to the start of the paren_start
     let paren_start = paren_start + nth_paren_index;
@@ -258,7 +256,7 @@ fn add_resolved_events(line: String, all_resolved_events: HashMap<String, Resolv
     }
 
     // get the inside of the log statement
-    let log_statement = find_balanced_encapsulator(cleaned.clone(), ('(', ')'));
+    let log_statement = find_balanced_encapsulator(&cleaned, ('(', ')'));
 
     // no balance found, break
     if !log_statement.2 {

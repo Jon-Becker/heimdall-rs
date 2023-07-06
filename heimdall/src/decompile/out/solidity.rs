@@ -7,11 +7,16 @@ use heimdall_common::{
         file::{short_path, write_file, write_lines_to_file},
         logging::{Logger, TraceFactory},
     },
+    utils::strings::find_balanced_encapsulator,
 };
 use indicatif::ProgressBar;
 
 use super::{
-    super::{constants::DECOMPILED_SOURCE_HEADER_SOL, util::Function, DecompilerArgs},
+    super::{
+        constants::{DECOMPILED_SOURCE_HEADER_SOL, STORAGE_ACCESS_REGEX},
+        util::Function,
+        DecompilerArgs,
+    },
     postprocessers::solidity::postprocess,
 };
 use serde::{Deserialize, Serialize};
@@ -70,6 +75,8 @@ pub fn output(
     trace: &mut TraceFactory,
     trace_parent: u32,
 ) {
+    let mut functions = functions;
+
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar.set_style(logger.info_spinner());
@@ -370,6 +377,33 @@ pub fn output(
                     .collect::<Vec<String>>()
                     .join(", ")
             ));
+        }
+    }
+
+    // check for any constants or storage getters
+    for function in functions.iter_mut() {
+        if function.payable || (!function.pure && !function.view) || !function.arguments.is_empty()
+        {
+            continue
+        }
+
+        // check for RLP encoding. very naive check, but it works for now
+        if function.logic.iter().any(|line| line.contains("0x0100 *")) &&
+            function.logic.iter().any(|line| line.contains("0x01) &"))
+        {
+            // find any storage accesses
+            let joined = function.logic.join(" ");
+            let storage_access = match STORAGE_ACCESS_REGEX.find(&joined).unwrap() {
+                Some(x) => x.as_str(),
+                None => continue,
+            };
+
+            let storage_access_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
+
+            function.logic = vec![format!(
+                "return string(rlp.encodePacked(storage[{}]));",
+                storage_access[storage_access_loc.0 + 1..storage_access_loc.1 - 1].to_string()
+            )]
         }
     }
 
