@@ -12,10 +12,10 @@ backtrace = "0.3"
 clap = {version = "3.1.18", features = ["derive"]}
 clap-verbosity-flag = "1.0.0"
 colored = "2"
-crossterm = "0.25"
+crossterm = "0.26.1"
 dot = "0.1.4"
 ethers = "2.0.4"
-fancy-regex = "0.10.0"
+fancy-regex = "0.11.0"
 heimdall-cache = {path = "./../cache"}
 heimdall-common = {path = "./../common"}
 heimdall-config = {path = "./../config"}

@@ -14,7 +14,7 @@ clap-verbosity-flag = "1.0.0"
 colored = "2"
 crossbeam-channel = "0.5.7"
 ethers = "2.0.4"
-fancy-regex = "0.10.0"
+fancy-regex = "0.11.0"
 heimdall-cache = {path = "./../cache"}
 indicatif = "0.17.0"
 lazy_static = "1.4.0"
