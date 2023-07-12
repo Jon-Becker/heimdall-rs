@@ -31,3 +31,5 @@ coverage.xml
 false
 false/*
 */false
+
+*.svg
