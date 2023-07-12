@@ -424,10 +424,7 @@ pub fn decompile(args: DecompilerArgs) {
                 let selected_match =
                     match matched_resolved_functions.get(selected_function_index as usize) {
                         Some(selected_match) => selected_match,
-                        None => {
-                            logger.error("invalid selection.");
-                            std::process::exit(1)
-                        }
+                        None => continue,
                     };
 
                 analyzed_function.resolved_function = Some(selected_match.clone());
@@ -490,10 +487,7 @@ pub fn decompile(args: DecompilerArgs) {
                 let selected_match =
                     match resolved_error_selectors.get(selected_error_index as usize) {
                         Some(selected_match) => selected_match,
-                        None => {
-                            logger.error("invalid selection.");
-                            std::process::exit(1)
-                        }
+                        None => continue,
                     };
 
                 resolved_counter += 1;
@@ -559,10 +553,7 @@ pub fn decompile(args: DecompilerArgs) {
                 let selected_match =
                     match resolved_event_selectors.get(selected_event_index as usize) {
                         Some(selected_match) => selected_match,
-                        None => {
-                            logger.error("invalid selection.");
-                            std::process::exit(1)
-                        }
+                        None => continue,
                     };
 
                 resolved_counter += 1;
