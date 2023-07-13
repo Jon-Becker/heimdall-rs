@@ -14,3 +14,4 @@ jobs:
           reporter: "github-pr-review"
           github_token: ${{ secrets.GITHUB_TOKEN }}
           clippy_flags: "-- --allow clippy::new_without_default --allow clippy::redundant_field_names --allow clippy::too_many_arguments --allow clippy::format_in_format_args --allow clippy::should_implement_trait --deny clippy::unwrap_used"
+          filter_mode: nofilter
