@@ -1,0 +1,17 @@
+name: Clippy (On Push)
+
+on: [pull_request]
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: giraffate/clippy-action@v1
+        with:
+          reporter: "github-pr-review"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          clippy_flags: "-- --allow clippy::new_without_default --allow clippy::redundant_field_names --allow clippy::too_many_arguments --allow clippy::format_in_format_args --allow clippy::should_implement_trait --deny clippy::unwrap_used"
+          filter_mode: nofilter

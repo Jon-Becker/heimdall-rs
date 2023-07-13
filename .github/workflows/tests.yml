@@ -1,25 +1,19 @@
-name: Unit Tests (On Pull Request)
+name: Unit Tests (On Push)
 
-on:
-  pull_request_review:
-    types: [submitted]
+on: [push]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  test:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
 
-    - name: Build Binaries
+    - name: Compile
       working-directory: ./heimdall
-      run:  |
-        cargo clean
-        cargo build
+      run: cargo build --verbose
 
     - name: Run Tests
       working-directory: ./heimdall
