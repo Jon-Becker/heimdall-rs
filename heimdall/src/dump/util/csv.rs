@@ -9,7 +9,7 @@ use heimdall_common::{
 
 use crate::dump::{constants::DECODE_AS_TYPES, structures::dump_state::DumpState};
 
-pub fn write_storage_to_csv(output_dir: &String, file_name: &String, state: &DumpState) {
+pub fn write_storage_to_csv(output_dir: &str, file_name: &str, state: &DumpState) {
     let mut lines = {
         let mut lines = Vec::new();
 

@@ -14,8 +14,8 @@ lazy_static! {
     static ref TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
-fn remove_double_negation(line: String) -> String {
-    let mut cleaned = line;
+fn remove_double_negation(line: &str) -> String {
+    let mut cleaned = line.to_owned();
 
     if cleaned.contains("iszero(iszero(") {
         // find the indices of the subject
@@ -45,8 +45,8 @@ fn remove_double_negation(line: String) -> String {
     cleaned
 }
 
-fn convert_bitmask_to_casting(line: String) -> String {
-    let mut cleaned = line;
+fn convert_bitmask_to_casting(line: &str) -> String {
+    let mut cleaned = line.to_owned();
 
     // find instances of and(_, _)
     let mut index = 0;
@@ -88,11 +88,11 @@ fn convert_bitmask_to_casting(line: String) -> String {
     cleaned
 }
 
-fn simplify_casts(line: String) -> String {
-    let mut cleaned = line;
+fn simplify_casts(line: &str) -> String {
+    let mut cleaned = line.to_owned();
 
     // remove unnecessary casts
-    let (cast_start, cast_end, cast_type) = find_cast(cleaned.to_string());
+    let (cast_start, cast_end, cast_type) = find_cast(&cleaned);
 
     if let Some(cast) = cast_type {
         let cleaned_cast_pre = cleaned[0..cast_start].to_string();
@@ -102,20 +102,23 @@ fn simplify_casts(line: String) -> String {
         cleaned = format!("{cleaned_cast_pre}{cleaned_cast}{cleaned_cast_post}");
 
         // check if there are remaining casts
-        let (_, _, remaining_cast_type) = find_cast(cleaned_cast_post.clone());
+        let (_, _, remaining_cast_type) = find_cast(&cleaned_cast_post);
         if remaining_cast_type.is_some() {
             // a cast is remaining, simplify it
-            let mut recursive_cleaned = format!("{cleaned_cast_pre}{cleaned_cast}");
-            recursive_cleaned.push_str(simplify_casts(cleaned_cast_post).as_str());
-            cleaned = recursive_cleaned;
+            cleaned = format!(
+                "{}{}{}",
+                cleaned_cast_pre,
+                cleaned_cast,
+                simplify_casts(&cleaned_cast_post)
+            );
         }
     }
 
-    cleaned
+    cleaned.to_owned()
 }
 
-fn remove_replace_casts(line: String) -> String {
-    let mut cleaned = line;
+fn remove_replace_casts(line: &str) -> String {
+    let mut cleaned = line.to_owned();
 
     // remove casts to bytes32
     cleaned = cleaned.replace("bytes32", "");
@@ -125,7 +128,7 @@ fn remove_replace_casts(line: String) -> String {
 
     // convert casts to their yul reprs, for example, bytes1(x) -> (x):bytes1
     loop {
-        let (cast_start, cast_end, cast_type) = find_cast(cleaned.to_string());
+        let (cast_start, cast_end, cast_type) = find_cast(&cleaned);
         if let Some(cast_type) = cast_type {
             let cast_arg = &cleaned[cast_start + 1..cast_end - 1];
             let yul_cast = format!("({cast_arg}) : {cast_type}");
@@ -139,9 +142,9 @@ fn remove_replace_casts(line: String) -> String {
     cleaned
 }
 
-fn simplify_parentheses(line: String, paren_index: usize) -> String {
+fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     // helper function to determine if parentheses are necessary
-    fn are_parentheses_unnecessary(expression: String) -> bool {
+    fn are_parentheses_unnecessary(expression: &str) -> bool {
         // safely grab the first and last chars
         let first_char = expression.get(0..1).unwrap_or("");
         let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
@@ -185,7 +188,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
         }
     }
 
-    let mut cleaned = line;
+    let mut cleaned = line.to_owned();
 
     // skip lines that are defining a function
     if cleaned.contains("case") {
@@ -221,7 +224,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
         };
 
         // check if the parentheses are unnecessary and remove them if so
-        if are_parentheses_unnecessary(logical_expression.clone()) {
+        if are_parentheses_unnecessary(&logical_expression) {
             cleaned.replace_range(
                 paren_start..paren_end,
                 match logical_expression.get(2..logical_expression.len() - 2) {
@@ -232,7 +235,7 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
 
             // recurse into the next set of parentheses
             // don't increment the paren_index because we just removed a set
-            cleaned = simplify_parentheses(cleaned, paren_index);
+            cleaned = simplify_parentheses(&cleaned, paren_index);
         } else {
             // remove double negation, if one exists
             if cleaned.contains("!!") {
@@ -240,15 +243,15 @@ fn simplify_parentheses(line: String, paren_index: usize) -> String {
             }
 
             // recurse into the next set of parentheses
-            cleaned = simplify_parentheses(cleaned, paren_index + 1);
+            cleaned = simplify_parentheses(&cleaned, paren_index + 1);
         }
     }
 
     cleaned
 }
 
-fn add_resolved_events(line: String, all_resolved_events: HashMap<String, ResolvedLog>) -> String {
-    let mut cleaned = line;
+fn add_resolved_events(line: &str, all_resolved_events: HashMap<String, ResolvedLog>) -> String {
+    let mut cleaned = line.to_owned();
 
     // skip lines that not logs
     if !cleaned.contains("log") {
@@ -284,31 +287,31 @@ fn add_resolved_events(line: String, all_resolved_events: HashMap<String, Resolv
     cleaned
 }
 
-fn cleanup(line: String, all_resolved_events: HashMap<String, ResolvedLog>) -> String {
-    let mut cleaned = line;
+fn cleanup(line: &str, all_resolved_events: HashMap<String, ResolvedLog>) -> String {
+    let mut cleaned = line.to_owned();
 
     // skip comments
     if cleaned.starts_with('/') {
-        return cleaned
+        return cleaned.to_owned()
     }
 
     // remove double negations
-    cleaned = remove_double_negation(cleaned);
+    cleaned = remove_double_negation(&cleaned);
 
     // find and replace casts
-    cleaned = convert_bitmask_to_casting(cleaned);
+    cleaned = convert_bitmask_to_casting(&cleaned);
 
     // remove unnecessary casts
-    cleaned = simplify_casts(cleaned);
+    cleaned = simplify_casts(&cleaned);
 
     // remove or replace casts with helper functions
-    cleaned = remove_replace_casts(cleaned);
+    cleaned = remove_replace_casts(&cleaned);
 
     // remove unnecessary parentheses
-    cleaned = simplify_parentheses(cleaned, 0);
+    cleaned = simplify_parentheses(&cleaned, 0);
 
     // add resolved events as comments
-    cleaned = add_resolved_events(cleaned, all_resolved_events);
+    cleaned = add_resolved_events(&cleaned, all_resolved_events);
 
     cleaned
 }
@@ -336,7 +339,7 @@ pub fn postprocess(
         }
 
         // cleanup the line
-        let cleaned = cleanup(line.to_string(), all_resolved_events.clone());
+        let cleaned = cleanup(line, all_resolved_events.clone());
 
         // apply postprocessing and indentation
         *line = format!(

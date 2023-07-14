@@ -1530,7 +1530,7 @@ impl VM {
     }
 
     // Executes provided calldata until finished
-    pub fn call(&mut self, calldata: String, value: u128) -> Result {
+    pub fn call(&mut self, calldata: &str, value: u128) -> Result {
         // reset the VM temp state
         self.reset();
         self.calldata = decode_hex(&calldata.replacen("0x", "", 1)).unwrap();

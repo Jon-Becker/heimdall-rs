@@ -166,7 +166,7 @@ pub fn dump(args: DumpArgs) {
 
     // in a new thread, start the TUI
     let tui_thread = std::thread::spawn(move || {
-        util::threads::tui::handle(args, output_dir);
+        util::threads::tui::handle(&args, &output_dir);
     });
 
     // index transactions in a new thread

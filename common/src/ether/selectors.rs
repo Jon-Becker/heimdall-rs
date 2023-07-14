@@ -12,7 +12,7 @@ use crate::{io::logging::Logger, utils::strings::decode_hex};
 use super::{evm::vm::VM, signatures::ResolveSelector};
 
 // find all function selectors in the given EVM assembly.
-pub fn find_function_selectors(evm: &VM, assembly: String) -> HashMap<String, u128> {
+pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
     let mut function_selectors = HashMap::new();
 
     // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
@@ -29,7 +29,7 @@ pub fn find_function_selectors(evm: &VM, assembly: String) -> HashMap<String, u1
 
                 // get the function's entry point
                 let function_entry_point =
-                    match resolve_entry_point(&evm.clone(), function_selector.clone()) {
+                    match resolve_entry_point(&evm.clone(), &function_selector) {
                         0 => continue,
                         x => x,
                     };
@@ -42,12 +42,12 @@ pub fn find_function_selectors(evm: &VM, assembly: String) -> HashMap<String, u1
 }
 
 // resolve a selector's function entry point from the EVM bytecode
-pub fn resolve_entry_point(evm: &VM, selector: String) -> u128 {
+pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     let mut vm = evm.clone();
     let mut handled_jumps = HashSet::new();
 
     // execute the EVM call to find the entry point for the given selector
-    vm.calldata = decode_hex(&selector).unwrap();
+    vm.calldata = decode_hex(&selector).expect("Failed to decode selector.");
     while vm.bytecode.len() >= vm.instruction as usize {
         let call = vm.step();
 
@@ -93,9 +93,18 @@ where
 
     let mut threads = Vec::new();
 
-    resolve_progress.lock().unwrap().enable_steady_tick(Duration::from_millis(100));
-    resolve_progress.lock().unwrap().set_style(logger.info_spinner());
-    resolve_progress.lock().unwrap().set_message("resolving selectors");
+    resolve_progress
+        .lock()
+        .expect("Could not obtain lock on resolve_progress.")
+        .enable_steady_tick(Duration::from_millis(100));
+    resolve_progress
+        .lock()
+        .expect("Could not obtain lock on resolve_progress.")
+        .set_style(logger.info_spinner());
+    resolve_progress
+        .lock()
+        .expect("Could not obtain lock on resolve_progress.")
+        .set_message("resolving selectors");
 
     for selector in selectors {
         let function_clone = resolved_functions.clone();
@@ -104,8 +113,10 @@ where
         // create a new thread for each selector
         threads.push(thread::spawn(move || {
             if let Some(function) = T::resolve(&selector) {
-                let mut _resolved_functions = function_clone.lock().unwrap();
-                let mut _resolve_progress = resolve_progress.lock().unwrap();
+                let mut _resolved_functions =
+                    function_clone.lock().expect("Could not obtain lock on function_clone.");
+                let mut _resolve_progress =
+                    resolve_progress.lock().expect("Could not obtain lock on resolve_progress.");
                 _resolve_progress
                     .set_message(format!("resolved {} selectors", _resolved_functions.len()));
                 _resolved_functions.insert(selector, function);
@@ -120,6 +131,7 @@ where
 
     resolve_progress.lock().unwrap().finish_and_clear();
 
-    let x = resolved_functions.lock().unwrap().clone();
+    let x =
+        resolved_functions.lock().expect("Could not obtain lock on resolved_functions.").clone();
     x
 }

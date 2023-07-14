@@ -14,7 +14,7 @@ use crate::dump::{
     DumpArgs,
 };
 
-pub fn handle(args: DumpArgs, output_dir: String) {
+pub fn handle(args: &DumpArgs, output_dir: &str) {
     // if no TUI is requested, just run the dump
     if args.no_tui {
         return
