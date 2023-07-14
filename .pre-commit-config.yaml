@@ -25,9 +25,3 @@ repos:
       language: system
       types: [rust]
       pass_filenames: false
-    # - id: coverage
-    #   name: coverage tests
-    #   entry: sh scripts/test --cov
-    #   language: system
-    #   types: [rust]
-    #   pass_filenames: false

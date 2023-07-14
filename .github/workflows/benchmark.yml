@@ -1,0 +1,34 @@
+name: Benchmarks (On Push)
+
+on: [push]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run benchmarks
+        id: benchmark
+        run: |
+          RESULT=$(sh scripts/benchmark)
+          echo "::set-output name=result::$RESULT"
+
+      - name: Create PR comment
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          continue-on-error: true
+          script: |
+            const fs = require('fs');
+            var benchmarks = `${{ steps.benchmark.outputs.result }}`;
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: benchmarks
+            })
