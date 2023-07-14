@@ -24,10 +24,12 @@ struct TransposeResponse {
     results: Vec<Value>,
 }
 
-fn _call_transpose(query: String, api_key: &String, logger: &Logger) -> Option<TransposeResponse> {
+fn _call_transpose(query: &str, api_key: &str, logger: &Logger) -> Option<TransposeResponse> {
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", "application/json".parse().unwrap());
     headers.insert("X-API-KEY", api_key.parse().unwrap());
+
+    let query = query.to_owned();
 
     // make the request
     let client = reqwest::blocking::Client::builder()
@@ -73,9 +75,9 @@ fn _call_transpose(query: String, api_key: &String, logger: &Logger) -> Option<T
 }
 
 pub fn get_transaction_list(
-    chain: &String,
-    address: &String,
-    api_key: &String,
+    chain: &str,
+    address: &str,
+    api_key: &str,
     bounds: (&u128, &u128),
     logger: &Logger,
 ) -> Vec<(u128, String)> {
@@ -97,7 +99,7 @@ pub fn get_transaction_list(
         bounds.1
     );
 
-    let response = match _call_transpose(query, api_key, logger) {
+    let response = match _call_transpose(&query, api_key, logger) {
         Some(response) => response,
         None => {
             logger.error("failed to get transaction list from Transpose");
@@ -149,9 +151,9 @@ pub fn get_transaction_list(
 }
 
 pub fn get_contract_creation(
-    chain: &String,
-    address: &String,
-    api_key: &String,
+    chain: &str,
+    address: &str,
+    api_key: &str,
     logger: &Logger,
 ) -> Option<(u128, String)> {
     // get a new progress bar
@@ -166,7 +168,7 @@ pub fn get_contract_creation(
         "{{\"sql\":\"SELECT block_number, transaction_hash FROM {chain}.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM {chain}.accounts WHERE address = '{address}' ) AND contract_address = '{address}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
     );
 
-    let response = match _call_transpose(query, api_key, logger) {
+    let response = match _call_transpose(&query, api_key, logger) {
         Some(response) => response,
         None => {
             logger.error("failed to get creation tx from Transpose");

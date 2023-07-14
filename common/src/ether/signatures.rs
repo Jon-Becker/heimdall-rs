@@ -45,7 +45,7 @@ impl ResolveSelector for ResolvedError {
         }
 
         // get function possibilities from etherface
-        let signatures = match get_json_from_url(format!(
+        let signatures = match get_json_from_url(&format!(
             "https://api.etherface.io/v1/signatures/hash/error/{}/1",
             &selector
         )) {
@@ -80,7 +80,7 @@ impl ResolveSelector for ResolvedError {
             signature_list.push(ResolvedError {
                 name: function_parts.0.to_string(),
                 signature: text_signature.to_string(),
-                inputs: replace_last(function_parts.1.to_string(), ")", "")
+                inputs: replace_last(&function_parts.1, ")", "")
                     .split(',')
                     .map(|input| input.to_string())
                     .collect(),
@@ -110,7 +110,7 @@ impl ResolveSelector for ResolvedLog {
         }
 
         // get function possibilities from etherface
-        let signatures = match get_json_from_url(format!(
+        let signatures = match get_json_from_url(&format!(
             "https://api.etherface.io/v1/signatures/hash/event/{}/1",
             &selector
         )) {
@@ -145,7 +145,7 @@ impl ResolveSelector for ResolvedLog {
             signature_list.push(ResolvedLog {
                 name: function_parts.0.to_string(),
                 signature: text_signature.to_string(),
-                inputs: replace_last(function_parts.1.to_string(), ")", "")
+                inputs: replace_last(&function_parts.1, ")", "")
                     .split(',')
                     .map(|input| input.to_string())
                     .collect(),
@@ -175,7 +175,7 @@ impl ResolveSelector for ResolvedFunction {
         }
 
         // get function possibilities from etherface
-        let signatures = match get_json_from_url(format!(
+        let signatures = match get_json_from_url(&format!(
             "https://api.etherface.io/v1/signatures/hash/function/{}/1",
             &selector
         )) {
@@ -210,7 +210,7 @@ impl ResolveSelector for ResolvedFunction {
             signature_list.push(ResolvedFunction {
                 name: function_parts.0.to_string(),
                 signature: text_signature.to_string(),
-                inputs: replace_last(function_parts.1.to_string(), ")", "")
+                inputs: replace_last(&function_parts.1, ")", "")
                     .split(',')
                     .map(|input| input.to_string())
                     .collect(),
@@ -228,7 +228,7 @@ impl ResolveSelector for ResolvedFunction {
     }
 }
 
-pub fn score_signature(signature: &String) -> u32 {
+pub fn score_signature(signature: &str) -> u32 {
     // the score starts at 1000
     let mut score = 1000;
 

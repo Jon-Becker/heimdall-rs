@@ -15,7 +15,7 @@ pub fn short_path(path: &str) -> String {
     path.replace(&current_dir, ".")
 }
 
-pub fn write_file(_path: &String, contents: &String) -> String {
+pub fn write_file(_path: &str, contents: &str) -> String {
     let path = std::path::Path::new(_path);
     let prefix = path.parent().unwrap();
     std::fs::create_dir_all(prefix).unwrap();
@@ -40,11 +40,11 @@ pub fn write_file(_path: &String, contents: &String) -> String {
     _path.to_string()
 }
 
-pub fn write_lines_to_file(_path: &String, contents: Vec<String>) {
+pub fn write_lines_to_file(_path: &str, contents: Vec<String>) {
     write_file(_path, &contents.join("\n"));
 }
 
-pub fn read_file(_path: &String) -> String {
+pub fn read_file(_path: &str) -> String {
     let path = std::path::Path::new(_path);
     let mut file = match File::open(path) {
         Ok(file) => file,
@@ -66,7 +66,7 @@ pub fn read_file(_path: &String) -> String {
     contents
 }
 
-pub fn delete_path(_path: &String) -> bool {
+pub fn delete_path(_path: &str) -> bool {
     let path = std::path::Path::new(_path);
     Command::new("rm").args(["-rf", path.to_str().unwrap()]).output().is_ok()
 }

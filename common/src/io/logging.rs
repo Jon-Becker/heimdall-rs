@@ -55,7 +55,8 @@ impl TraceFactory {
         // add the children indices to the parent
         if trace.parent != 0 {
             // get the parent
-            let parent = self.traces.get_mut(trace.parent as usize - 1).unwrap();
+            let parent =
+                self.traces.get_mut(trace.parent as usize - 1).expect("Failed to build trace.");
 
             // add the child index to the parent
             parent.children.push(trace_index);
@@ -73,7 +74,7 @@ impl TraceFactory {
             println!("{}:", "trace".bright_blue().bold());
             for index in 0..self.traces.len() {
                 // safe to unwrap because we just iterated over the traces
-                let trace = self.traces.get(index).unwrap();
+                let trace = self.traces.get(index).expect("Failed to build trace.");
 
                 // match only root traces and print them
                 if trace.parent == 0 {
@@ -96,9 +97,9 @@ impl TraceFactory {
                 // print the trace title
                 println!(
                     "{} {} {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
+                    replace_last(&prefix, "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
-                    trace.message.get(0).unwrap()
+                    trace.message.get(0).expect("Failed to build trace.")
                 );
 
                 // print the children
@@ -125,21 +126,22 @@ impl TraceFactory {
             TraceCategory::Log => {
                 println!(
                     "{} emit {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
-                    trace.message.get(0).unwrap()
+                    replace_last(prefix, "│ ", " ├─").bold().bright_white(),
+                    trace.message.get(0).expect("Failed to build trace.")
                 );
             }
             TraceCategory::LogUnknown => {
                 let log_size = trace.message.len();
                 if log_size > 1 {
                     for message_index in 0..trace.message.len() - 1 {
-                        let message = trace.message.get(message_index).unwrap();
+                        let message =
+                            trace.message.get(message_index).expect("Failed to build trace.");
                         println!(
                             "{} {} {}: {}",
                             if message_index == 0 {
-                                replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white()
+                                replace_last(&prefix, "│ ", " ├─").bold().bright_white()
                             } else {
-                                replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white()
+                                replace_last(&prefix, "│ ", " │ ").bold().bright_white()
                             },
                             if message_index == 0 { "emit" } else { "    " },
                             format!("topic {message_index}").purple(),
@@ -148,30 +150,30 @@ impl TraceFactory {
                     }
                     println!(
                         "{}         {}: {}",
-                        replace_last(prefix.to_string(), "│ ", " │ ").bold().blue(),
+                        replace_last(&prefix, "│ ", " │ ").bold().blue(),
                         "data".purple(),
-                        trace.message.last().unwrap()
+                        trace.message.last().expect("Failed to build trace.")
                     );
                 } else {
                     println!(
                         "{} emit {}: {}",
-                        replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
+                        replace_last(&prefix, "│ ", " ├─").bold().bright_white(),
                         "data".purple(),
-                        trace.message.last().unwrap()
+                        trace.message.last().expect("Failed to build trace.")
                     );
                 }
             }
             TraceCategory::Message => {
                 for message_index in 0..trace.message.len() {
-                    let message = trace.message.get(message_index).unwrap();
+                    let message = trace.message.get(message_index).expect("Failed to build trace.");
                     println!(
                         "{} {}",
                         if prefix.ends_with("└─") {
                             prefix.to_string().bold().bright_white()
                         } else if message_index == 0 {
-                            replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white()
+                            replace_last(&prefix, "│ ", " ├─").bold().bright_white()
                         } else {
-                            replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white()
+                            replace_last(&prefix, "│ ", " │ ").bold().bright_white()
                         },
                         message
                     );
@@ -193,14 +195,14 @@ impl TraceFactory {
                 }
             }
             TraceCategory::Empty => {
-                println!("{}", replace_last(prefix.to_string(), "│ ", " │ ").bold().bright_white());
+                println!("{}", replace_last(&prefix, "│ ", " │ ").bold().bright_white());
             }
             TraceCategory::Create => {
                 println!(
                     "{} {} create → {}",
-                    replace_last(prefix.to_string(), "│ ", " ├─").bold().bright_white(),
+                    replace_last(&prefix, "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
-                    trace.message.get(0).unwrap()
+                    trace.message.get(0).expect("Failed to build trace.")
                 );
 
                 // print the children
@@ -215,7 +217,7 @@ impl TraceFactory {
                 println!(
                     "{} ← {}",
                     format!("{prefix}   └─").bold().bright_white(),
-                    trace.message.get(1).unwrap().bold().green()
+                    trace.message.get(1).expect("Failed to build trace.").bold().green()
                 )
             }
         }
@@ -282,25 +284,25 @@ impl TraceFactory {
     }
 
     // add info to the trace
-    pub fn add_info(&mut self, parent_index: u32, instruction: u32, message: String) -> u32 {
+    pub fn add_info(&mut self, parent_index: u32, instruction: u32, message: &str) -> u32 {
         let message = format!("{} {}", "info:".bright_cyan().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
 
     // add debug to the trace
-    pub fn add_debug(&mut self, parent_index: u32, instruction: u32, message: String) -> u32 {
+    pub fn add_debug(&mut self, parent_index: u32, instruction: u32, message: &str) -> u32 {
         let message = format!("{} {}", "debug:".bright_magenta().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
 
     // add error to the trace
-    pub fn add_error(&mut self, parent_index: u32, instruction: u32, message: String) -> u32 {
+    pub fn add_error(&mut self, parent_index: u32, instruction: u32, message: &str) -> u32 {
         let message = format!("{} {}", "error:".bright_red().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
 
     // add warn to the trace
-    pub fn add_warn(&mut self, parent_index: u32, instruction: u32, message: String) -> u32 {
+    pub fn add_warn(&mut self, parent_index: u32, instruction: u32, message: &str) -> u32 {
         let message = format!("{} {}", "warn:".bright_yellow().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
@@ -398,7 +400,7 @@ impl Logger {
             "info".bright_cyan().bold(),
             "{spinner} {msg}"
         ))
-        .unwrap()
+        .expect("Failed to create spinner.")
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
     }
 
@@ -408,7 +410,7 @@ impl Logger {
             "debug".bright_magenta().bold(),
             "{spinner} {msg}"
         ))
-        .unwrap()
+        .expect("Failed to create spinner.")
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
     }
 
@@ -422,7 +424,7 @@ impl Logger {
     ) -> u8 {
         // if silent, return the default
         if self.level == -1 {
-            return default.unwrap()
+            return default.expect("Failed to get default option.")
         }
 
         // log the message with the given class
@@ -453,7 +455,7 @@ impl Logger {
         print!(
             "\n  Select an option {}: ",
             if let Some(..) = default {
-                format!("(default: {})", default.unwrap())
+                format!("(default: {})", default.expect("Failed to get default option."))
             } else {
                 "".to_string()
             }
@@ -462,11 +464,11 @@ impl Logger {
 
         if skip {
             if let Some(..) = default {
-                println!("{}", default.unwrap());
+                println!("{}", default.expect("Failed to get default option."));
             } else {
                 println!();
             }
-            return default.unwrap()
+            return default.expect("Failed to get default option.")
         }
 
         // get input
@@ -475,7 +477,7 @@ impl Logger {
                 // check if default was selected
                 if selection.trim() == "" {
                     if let Some(..) = default {
-                        return default.unwrap()
+                        return default.expect("Failed to get default option.")
                     } else {
                         self.error("invalid selection.");
                         return self.option(function, message, options, default, skip)

@@ -11,11 +11,11 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 ///
 /// # Returns
 /// `Option<Value>` - the response body as JSON
-pub fn get_json_from_url(url: String) -> Option<Value> {
+pub fn get_json_from_url(url: &str) -> Option<Value> {
     _get_json_from_url(url, 0, 5)
 }
 
-fn _get_json_from_url(url: String, retry_count: u8, retries_remaining: u8) -> Option<Value> {
+fn _get_json_from_url(url: &str, retry_count: u8, retries_remaining: u8) -> Option<Value> {
     let client = match Client::builder()
         .danger_accept_invalid_certs(true)
         .user_agent(APP_USER_AGENT)

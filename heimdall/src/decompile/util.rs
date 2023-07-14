@@ -115,7 +115,7 @@ pub struct VMTrace {
 }
 
 // build a map of function jump possibilities from the EVM bytecode
-pub fn map_selector(evm: &VM, selector: String, entry_point: u128) -> (VMTrace, u32) {
+pub fn map_selector(evm: &VM, selector: &str, entry_point: u128) -> (VMTrace, u32) {
     let mut vm = evm.clone();
     vm.calldata = decode_hex(&selector).unwrap();
 

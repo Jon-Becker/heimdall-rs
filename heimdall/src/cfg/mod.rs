@@ -158,7 +158,7 @@ pub fn cfg(args: CFGArgs) {
     );
 
     // perform versioning and compiler heuristics
-    let (compiler, version) = detect_compiler(contract_bytecode.clone());
+    let (compiler, version) = detect_compiler(&contract_bytecode);
     trace.add_call(
         cfg_call,
         line!(),
@@ -202,7 +202,7 @@ pub fn cfg(args: CFGArgs) {
     );
 
     // find all selectors in the bytecode
-    let selectors = find_function_selectors(&evm, disassembled_bytecode);
+    let selectors = find_function_selectors(&evm, &disassembled_bytecode);
     logger.info(&format!("found {} possible function selectors.", selectors.len()));
     logger.info(&format!("performing symbolic execution on '{}' .", &shortened_target));
 
@@ -231,7 +231,7 @@ pub fn cfg(args: CFGArgs) {
     trace.add_info(
         map_trace,
         line!(),
-        format!("traced and executed {jumpdest_count} possible paths."),
+        &format!("traced and executed {jumpdest_count} possible paths."),
     );
 
     map.build_cfg(&mut contract_cfg, None, false);

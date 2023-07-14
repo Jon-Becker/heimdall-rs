@@ -144,7 +144,7 @@ pub fn hex_to_ascii(s: &str) -> String {
 /// let replaced = replace_last(String::from("arg0 + arg1 + arg1"), "arg1", "arg2");
 /// assert_eq!(replaced, String::from("arg0 + arg1 + arg2"));
 /// ```
-pub fn replace_last(s: String, old: &str, new: &str) -> String {
+pub fn replace_last(s: &str, old: &str, new: &str) -> String {
     let new = new.chars().rev().collect::<String>();
     s.chars().rev().collect::<String>().replacen(old, &new, 1).chars().rev().collect::<String>()
 }

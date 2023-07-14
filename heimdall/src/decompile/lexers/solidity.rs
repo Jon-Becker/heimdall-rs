@@ -84,7 +84,7 @@ impl VMTrace {
                 trace.add_info(
                     trace_parent,
                     instruction.instruction.try_into().unwrap(),
-                    format!(
+                    &format!(
                         "instruction {} ({}) indicates an non-pure function.",
                         instruction.instruction, opcode_name
                     ),
@@ -109,7 +109,7 @@ impl VMTrace {
                 trace.add_info(
                     trace_parent,
                     instruction.instruction.try_into().unwrap(),
-                    format!(
+                    &format!(
                         "instruction {} ({}) indicates a non-view function.",
                         instruction.instruction, opcode_name
                     ),
@@ -196,7 +196,7 @@ impl VMTrace {
                     trace.add_info(
                         trace_parent,
                         instruction.instruction.try_into().unwrap(),
-                        format!(
+                        &format!(
                             "conditional at instruction {} indicates an non-payble function.",
                             instruction.instruction
                         ),

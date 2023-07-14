@@ -94,8 +94,8 @@ mod test_logging {
             ],
             "0x".to_string(),
         );
-        trace.add_error(parent, 126, "Testing errors".to_string());
-        trace.add_info(parent, 127, "Testing info".to_string());
+        trace.add_error(parent, 126, "Testing errors");
+        trace.add_info(parent, 127, "Testing info");
         trace.add_message(
             parent,
             128,

@@ -129,13 +129,13 @@ mod test_strings {
 
     #[test]
     fn test_replace_last() {
-        let s = String::from("Hello, world!");
+        let s = "Hello, world!";
         let old = "o";
         let new = "0";
         let result = replace_last(s, old, new);
         assert_eq!(result, String::from("Hello, w0rld!"));
 
-        let s = String::from("Hello, world!");
+        let s = "Hello, world!";
         let old = "l";
         let new = "L";
         let result = replace_last(s, old, new);

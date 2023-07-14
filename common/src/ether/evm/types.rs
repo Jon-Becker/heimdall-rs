@@ -9,12 +9,12 @@ use crate::{
 use super::vm::Instruction;
 
 // decode a string into an ethereum type
-pub fn parse_function_parameters(function_signature: String) -> Option<Vec<ParamType>> {
+pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamType>> {
     let mut function_inputs = Vec::new();
 
     // get only the function input body, removing the name and input wrapping parentheses
     let string_inputs = match function_signature.split_once('(') {
-        Some((_, inputs)) => replace_last(inputs.to_string(), ")", ""),
+        Some((_, inputs)) => replace_last(&inputs, ")", ""),
         None => replace_last(function_signature, ")", ""),
     };
 
@@ -71,7 +71,7 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
             continue
         }
         if solidity_type.starts_with('(') && !solidity_type.ends_with(']') {
-            let complex_inputs = match parse_function_parameters(solidity_type.clone()) {
+            let complex_inputs = match parse_function_parameters(&solidity_type) {
                 Some(inputs) => inputs,
                 None => continue,
             };
@@ -79,12 +79,11 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
             continue
         }
         if solidity_type.ends_with("[]") {
-            let array_type = match parse_function_parameters(
-                solidity_type[..solidity_type.len() - 2].to_string(),
-            ) {
-                Some(types_) => types_,
-                None => continue,
-            };
+            let array_type =
+                match parse_function_parameters(&solidity_type[..solidity_type.len() - 2]) {
+                    Some(types_) => types_,
+                    None => continue,
+                };
 
             if array_type.len() == 1 {
                 function_inputs.push(ParamType::Array(Box::new(array_type[0].clone())));
@@ -102,7 +101,7 @@ pub fn parse_function_parameters(function_signature: String) -> Option<Vec<Param
                 None => continue,
             };
             let array_type = match parse_function_parameters(
-                solidity_type[..solidity_type.len() - (2 + size.to_string().len())].to_string(),
+                &solidity_type[..solidity_type.len() - (2 + size.to_string().len())],
             ) {
                 Some(types_) => types_,
                 None => continue,
@@ -245,9 +244,9 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
     (byte_size, potential_types)
 }
 
-pub fn find_cast(line: String) -> (usize, usize, Option<String>) {
+pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
     // find the start of the cast
-    match TYPE_CAST_REGEX.find(&line).unwrap() {
+    match TYPE_CAST_REGEX.find(&line).expect("Failed to find type cast.") {
         Some(m) => {
             let start = m.start();
             let end = m.end() - 1;

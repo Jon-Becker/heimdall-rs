@@ -173,7 +173,7 @@ pub fn decompile(args: DecompilerArgs) {
     );
 
     // perform versioning and compiler heuristics
-    let (compiler, version) = detect_compiler(contract_bytecode.clone());
+    let (compiler, version) = detect_compiler(&contract_bytecode);
     trace.add_call(
         decompile_call,
         line!(),
@@ -215,7 +215,7 @@ pub fn decompile(args: DecompilerArgs) {
     );
 
     // find and resolve all selectors in the bytecode
-    let selectors = find_function_selectors(&evm, disassembled_bytecode);
+    let selectors = find_function_selectors(&evm, &disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
@@ -262,17 +262,16 @@ pub fn decompile(args: DecompilerArgs) {
         trace.add_info(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
-            format!("discovered entry point: {function_entry_point}").to_string(),
+            &format!("discovered entry point: {function_entry_point}"),
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdest_count) =
-            map_selector(&evm.clone(), selector.clone(), function_entry_point);
+        let (map, jumpdest_count) = map_selector(&evm.clone(), &selector, function_entry_point);
 
         trace.add_debug(
             func_analysis_trace,
             function_entry_point.try_into().unwrap(),
-            format!(
+            &format!(
                 "execution tree {}",
                 match jumpdest_count {
                     0 => {
@@ -280,8 +279,7 @@ pub fn decompile(args: DecompilerArgs) {
                     }
                     _ => format!("has {jumpdest_count} unique branches"),
                 }
-            )
-            .to_string(),
+            ),
         );
 
         decompilation_progress.set_message(format!("analyzing '0x{selector}'"));
@@ -343,7 +341,7 @@ pub fn decompile(args: DecompilerArgs) {
             let parameter_trace_parent = trace.add_debug(
                 func_analysis_trace,
                 line!(),
-                format!("discovered and analyzed {argument_count} function parameters").to_string(),
+                &format!("discovered and analyzed {argument_count} function parameters"),
             );
 
             let mut parameter_vec = Vec::new();
@@ -380,7 +378,7 @@ pub fn decompile(args: DecompilerArgs) {
                     trace.add_warn(
                         func_analysis_trace,
                         line!(),
-                        "failed to resolve function signature".to_string(),
+                        "failed to resolve function signature",
                     );
                     Vec::new()
                 }
@@ -394,7 +392,7 @@ pub fn decompile(args: DecompilerArgs) {
                 trace.add_warn(
                     func_analysis_trace,
                     line!(),
-                    "no resolved signatures matched this function's parameters".to_string(),
+                    "no resolved signatures matched this function's parameters",
                 );
             } else {
                 let mut selected_function_index: u8 = 0;
@@ -432,7 +430,7 @@ pub fn decompile(args: DecompilerArgs) {
                 let match_trace = trace.add_info(
                     func_analysis_trace,
                     line!(),
-                    format!(
+                    &format!(
                         "{} resolved signature{} matched this function's parameters",
                         matched_resolved_functions.len(),
                         if matched_resolved_functions.len() > 1 { "s" } else { "" }
@@ -500,7 +498,7 @@ pub fn decompile(args: DecompilerArgs) {
                 let error_trace = trace.add_info(
                     func_analysis_trace,
                     line!(),
-                    format!(
+                    &format!(
                         "resolved {} error signatures from {} selectors.",
                         resolved_counter,
                         analyzed_function.errors.len()
@@ -567,12 +565,11 @@ pub fn decompile(args: DecompilerArgs) {
                 let event_trace = trace.add_info(
                     func_analysis_trace,
                     line!(),
-                    format!(
+                    &format!(
                         "resolved {} event signatures from {} selectors.",
                         resolved_counter,
                         analyzed_function.events.len()
-                    )
-                    .to_string(),
+                    ),
                 );
 
                 for resolved_event in all_resolved_events.values() {

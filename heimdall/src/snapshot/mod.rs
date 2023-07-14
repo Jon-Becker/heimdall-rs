@@ -104,7 +104,7 @@ pub fn snapshot(args: SnapshotArgs) {
     );
 
     // perform versioning and compiler heuristics
-    let (compiler, version) = detect_compiler(contract_bytecode.clone());
+    let (compiler, version) = detect_compiler(&contract_bytecode);
     trace.add_call(
         snapshot_call,
         line!(),

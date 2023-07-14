@@ -41,7 +41,7 @@ pub struct Configuration {
 }
 
 #[allow(deprecated)]
-pub fn write_config(contents: String) {
+pub fn write_config(contents: &str) {
     match home_dir() {
         Some(mut home) => {
             home.push(".bifrost");
@@ -90,7 +90,7 @@ pub fn read_config() -> String {
                 return read_file(&home.into_os_string().to_str().unwrap().to_string())
             } else {
                 // the file does not exist, create it
-                write_config(DEFAULT_CONFIG.to_string());
+                write_config(DEFAULT_CONFIG);
                 return read_file(&home.into_os_string().to_str().unwrap().to_string())
             }
         }
@@ -121,11 +121,11 @@ pub fn get_config() -> Configuration {
     config
 }
 
-pub fn update_config(key: &String, value: &String) {
+pub fn update_config(key: &str, value: &str) {
     let mut contents = get_config();
 
     // update the key in the struct and ensure it's the correct type
-    match key.as_str() {
+    match key {
         "rpc_url" => {
             contents.rpc_url = value.to_string();
         }
@@ -150,7 +150,7 @@ pub fn update_config(key: &String, value: &String) {
 
     // write the updated config to disk
     let serialized_config = toml::to_string(&contents).unwrap();
-    write_config(serialized_config);
+    write_config(&serialized_config);
 }
 
 pub fn config(args: ConfigArgs) {

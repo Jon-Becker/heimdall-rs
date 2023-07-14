@@ -819,21 +819,21 @@ mod test_types {
     #[test]
     fn test_simple_signature() {
         let solidity_type = "test(uint256)".to_string();
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type = parse_function_parameters(&solidity_type);
         assert_eq!(param_type, Some(vec![ParamType::Uint(256)]));
     }
 
     #[test]
     fn test_multiple_signature() {
         let solidity_type = "test(uint256,string)".to_string();
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type = parse_function_parameters(&solidity_type);
         assert_eq!(param_type, Some(vec![ParamType::Uint(256), ParamType::String]));
     }
 
     #[test]
     fn test_array_signature() {
-        let solidity_type = "test(uint256,string[],uint256)".to_string();
-        let param_type = parse_function_parameters(solidity_type);
+        let solidity_type = "test(uint256,string[],uint256)";
+        let param_type = parse_function_parameters(&solidity_type);
         assert_eq!(
             param_type,
             Some(vec![
@@ -847,8 +847,7 @@ mod test_types {
     #[test]
     fn test_complex_signature() {
         let solidity_type =
-            "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))"
-                .to_string();
+            "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))";
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
             param_type,
@@ -872,8 +871,7 @@ mod test_types {
     #[test]
     fn test_tuple_signature() {
         let solidity_type =
-            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))"
-                .to_string();
+            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))";
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
             param_type,
@@ -892,7 +890,7 @@ mod test_types {
 
     #[test]
     fn test_nested_tuple_signature() {
-        let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))".to_string();
+        let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))";
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
             param_type,

@@ -123,7 +123,7 @@ pub fn decode(args: DecodeArgs) {
     for potential_match in &potential_matches {
         // convert the string inputs into a vector of decoded types
         let mut inputs: Vec<ParamType> = Vec::new();
-        if let Some(type_) = parse_function_parameters(potential_match.signature.to_owned()) {
+        if let Some(type_) = parse_function_parameters(&potential_match.signature) {
             for input in type_ {
                 inputs.push(input);
             }
@@ -398,7 +398,7 @@ pub fn decode(args: DecodeArgs) {
 /// let potential_matches = decode_calldata(CALLDATA.to_string());
 #[allow(deprecated)]
 #[allow(dead_code)]
-pub fn decode_calldata(calldata: String) -> Option<Vec<ResolvedFunction>> {
+pub fn decode_calldata(calldata: &str) -> Option<Vec<ResolvedFunction>> {
     let (logger, _) = Logger::new("ERROR");
 
     // parse the two parts of calldata, inputs and selector
@@ -422,7 +422,7 @@ pub fn decode_calldata(calldata: String) -> Option<Vec<ResolvedFunction>> {
         // convert the string inputs into a vector of decoded types
         let mut inputs: Vec<ParamType> = Vec::new();
 
-        if let Some(type_) = parse_function_parameters(potential_match.signature.to_owned()) {
+        if let Some(type_) = parse_function_parameters(&potential_match.signature) {
             for input in type_ {
                 inputs.push(input);
             }

@@ -5,7 +5,7 @@ use heimdall_common::io::logging::Logger;
 pub fn get_explanation(
     decoded: String,
     transaction: Transaction,
-    openai_api_key: &String,
+    openai_api_key: &str,
     logger: &Logger,
 ) -> Option<String> {
     let prompt = format!(
@@ -24,5 +24,5 @@ pub fn get_explanation(
         transaction.value,
         decoded
     );
-    heimdall_common::resources::openai::complete(prompt, openai_api_key, logger)
+    heimdall_common::resources::openai::complete(&prompt, openai_api_key, logger)
 }

@@ -30,7 +30,7 @@ pub fn prettify_bytes(bytes: u64) -> String {
     }
 }
 
-pub fn write_file(_path: &String, contents: &String) -> Option<String> {
+pub fn write_file(_path: &str, contents: &str) -> Option<String> {
     let path = std::path::Path::new(_path);
     let prefix = path.parent().unwrap();
     match std::fs::create_dir_all(prefix) {
@@ -50,7 +50,7 @@ pub fn write_file(_path: &String, contents: &String) -> Option<String> {
     Some(_path.to_string())
 }
 
-pub fn read_file(_path: &String) -> Option<String> {
+pub fn read_file(_path: &str) -> Option<String> {
     let path = std::path::Path::new(_path);
     let mut file = match File::open(path) {
         Ok(file) => file,
@@ -64,7 +64,7 @@ pub fn read_file(_path: &String) -> Option<String> {
     Some(contents)
 }
 
-pub fn delete_path(_path: &String) -> bool {
+pub fn delete_path(_path: &str) -> bool {
     let path = match std::path::Path::new(_path).to_str() {
         Some(path) => path,
         None => return false,
