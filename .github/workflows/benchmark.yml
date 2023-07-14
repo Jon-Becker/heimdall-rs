@@ -14,21 +14,22 @@ jobs:
 
       - name: Run benchmarks
         id: benchmark
+        continue-on-error: true
         run: |
-          RESULT=$(sh scripts/benchmark)
+          RESULT=$(sh scripts/benchmark | awk '/Benchmark results:/,0')
           echo "::set-output name=result::$RESULT"
 
       - name: Create PR comment
-        uses: actions/github-script@v3
+        uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           continue-on-error: true
           script: |
             const fs = require('fs');
             var benchmarks = `${{ steps.benchmark.outputs.result }}`;
-            github.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: benchmarks
+            github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '<details>\n<summary>benchmark results</summary>\n\n```text\n' + benchmarks + '\n```\n</details>'
             })
