@@ -7,4 +7,6 @@ pub mod storage;
 pub mod types;
 pub mod vm;
 
+pub mod ext;
+
 mod tests;

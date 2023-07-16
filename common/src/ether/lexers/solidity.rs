@@ -4,10 +4,9 @@ use ethers::types::U256;
 
 use crate::{
     constants::{MEMLEN_REGEX, WORD_REGEX},
+    ether::evm::opcodes::*,
     utils::strings::encode_hex_reduced,
 };
-
-use super::evm::opcodes::*;
 
 pub fn is_ext_call_precompile(precompile_address: U256) -> bool {
     let address: usize = match precompile_address.try_into() {
