@@ -6,7 +6,7 @@ use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STOR
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
-        evm::types::{byte_size_to_type, find_cast},
+        evm::core::types::{byte_size_to_type, find_cast},
         signatures::{ResolvedError, ResolvedLog},
     },
     utils::strings::{

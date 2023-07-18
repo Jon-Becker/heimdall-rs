@@ -4,7 +4,7 @@ use strsim::normalized_damerau_levenshtein as similarity;
 use ethers::prelude::U256;
 use heimdall_common::{
     constants::{MEMORY_REGEX, STORAGE_REGEX},
-    ether::evm::{
+    ether::evm::core::{
         stack::StackFrame,
         vm::{State, VM},
     },

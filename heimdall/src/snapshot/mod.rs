@@ -5,7 +5,7 @@ use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{
         compiler::detect_compiler,
-        evm::disassemble::{disassemble, DisassemblerArgs},
+        evm::ext::disassemble::{disassemble, DisassemblerArgs},
         rpc::get_code,
     },
     io::logging::*,

@@ -7,7 +7,7 @@ use std::{
 use ethers::{abi::AbiEncode, prelude::U256, types::I256, utils::keccak256};
 
 use crate::{
-    ether::evm::opcodes::{Opcode, WrappedInput, WrappedOpcode},
+    ether::evm::core::opcodes::{Opcode, WrappedInput, WrappedOpcode},
     utils::strings::{decode_hex, sign_uint},
 };
 
@@ -137,7 +137,7 @@ impl VM {
         self.instruction += 1;
 
         // add the opcode to the trace
-        let opcode_details = crate::ether::evm::opcodes::opcode(opcode);
+        let opcode_details = crate::ether::evm::core::opcodes::opcode(opcode);
         let input_frames = self.stack.peek_n(opcode_details.inputs as usize);
         let input_operations =
             input_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();

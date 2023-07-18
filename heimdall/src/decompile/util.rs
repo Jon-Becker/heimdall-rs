@@ -5,7 +5,7 @@ use ethers::prelude::U256;
 use heimdall_common::{
     constants::{MEMORY_REGEX, STORAGE_REGEX},
     ether::{
-        evm::{
+        evm::core::{
             log::Log,
             opcodes::WrappedOpcode,
             stack::StackFrame,

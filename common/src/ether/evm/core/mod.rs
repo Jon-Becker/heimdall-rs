@@ -1,4 +1,3 @@
-pub mod disassemble;
 pub mod log;
 pub mod memory;
 pub mod opcodes;

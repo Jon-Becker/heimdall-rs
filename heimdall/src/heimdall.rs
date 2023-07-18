@@ -23,7 +23,7 @@ use dump::{dump, DumpArgs};
 
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{
-    ether::evm::disassemble::*,
+    ether::evm::ext::disassemble::*,
     io::logging::Logger,
     utils::version::{current_version, remote_version},
 };

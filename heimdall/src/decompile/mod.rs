@@ -23,8 +23,8 @@ use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{
         evm::{
-            disassemble::{disassemble, DisassemblerArgs},
-            vm::VM,
+            core::vm::VM,
+            ext::disassemble::{disassemble, DisassemblerArgs},
         },
         signatures::*,
     },

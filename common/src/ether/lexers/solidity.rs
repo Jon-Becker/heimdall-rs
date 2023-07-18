@@ -4,7 +4,7 @@ use ethers::types::U256;
 
 use crate::{
     constants::{MEMLEN_REGEX, WORD_REGEX},
-    ether::evm::opcodes::*,
+    ether::evm::core::opcodes::*,
     utils::strings::encode_hex_reduced,
 };
 

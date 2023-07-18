@@ -9,7 +9,7 @@ use indicatif::ProgressBar;
 
 use crate::{io::logging::Logger, utils::strings::decode_hex};
 
-use super::{evm::vm::VM, signatures::ResolveSelector};
+use super::{evm::core::vm::VM, signatures::ResolveSelector};
 
 // find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {

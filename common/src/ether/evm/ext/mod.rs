@@ -1,4 +1,2 @@
-pub mod exec;
 pub mod disassemble;
-
-mod tests;
+pub mod exec;

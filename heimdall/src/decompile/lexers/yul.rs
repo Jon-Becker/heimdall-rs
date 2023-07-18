@@ -1,6 +1,6 @@
 use ethers::abi::{decode, AbiEncode, ParamType};
 use heimdall_common::{
-    ether::evm::types::convert_bitmask,
+    ether::evm::core::types::convert_bitmask,
     io::logging::TraceFactory,
     utils::strings::{decode_hex, encode_hex_reduced},
 };

@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod test_solidity {
     use crate::ether::{
-        evm::opcodes::{Opcode, WrappedInput, WrappedOpcode},
-        solidity::is_ext_call_precompile,
+        evm::core::opcodes::{Opcode, WrappedInput, WrappedOpcode},
+        lexers::solidity::is_ext_call_precompile,
     };
     use ethers::types::U256;
 
@@ -568,7 +568,7 @@ mod test_yul {
 
     use ethers::types::U256;
 
-    use crate::ether::evm::opcodes::{WrappedInput, WrappedOpcode};
+    use crate::ether::evm::core::opcodes::{WrappedInput, WrappedOpcode};
 
     #[test]
     fn test_push0() {

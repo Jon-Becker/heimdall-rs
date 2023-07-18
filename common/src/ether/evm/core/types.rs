@@ -209,8 +209,8 @@ pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
     // determine which input contains the bitmask
     for (i, input) in mask.inputs.iter().enumerate() {
         match input {
-            crate::ether::evm::opcodes::WrappedInput::Raw(_) => continue,
-            crate::ether::evm::opcodes::WrappedInput::Opcode(opcode) => {
+            crate::ether::evm::core::opcodes::WrappedInput::Raw(_) => continue,
+            crate::ether::evm::core::opcodes::WrappedInput::Opcode(opcode) => {
                 if !(opcode.opcode.name == "CALLDATALOAD" || opcode.opcode.name == "CALLDATACOPY") {
                     if mask.opcode.name == "AND" {
                         type_byte_size = instruction.inputs[i].encode_hex().matches("ff").count();

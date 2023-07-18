@@ -3,7 +3,7 @@ use ethers::{
     prelude::U256,
 };
 use heimdall_common::{
-    ether::evm::{
+    ether::evm::core::{
         opcodes::WrappedOpcode,
         types::{byte_size_to_type, convert_bitmask},
     },

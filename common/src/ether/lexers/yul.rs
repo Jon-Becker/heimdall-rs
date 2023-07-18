@@ -1,4 +1,4 @@
-use crate::{ether::evm::opcodes::*, utils::strings::encode_hex_reduced};
+use crate::{ether::evm::core::opcodes::*, utils::strings::encode_hex_reduced};
 
 impl WrappedOpcode {
     // Returns a WrappedOpcode's yul representation.
