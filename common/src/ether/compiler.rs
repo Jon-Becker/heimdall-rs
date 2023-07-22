@@ -49,7 +49,7 @@ pub fn detect_compiler(bytecode: &str) -> (&'static str, String) {
                 version = version_array
                     .iter()
                     .map(|v| {
-                        u8::from_str_radix(&v, 16)
+                        u8::from_str_radix(v, 16)
                             .expect("Failed to decode cbor encoded metadata.")
                             .to_string()
                     })
@@ -72,7 +72,7 @@ pub fn detect_compiler(bytecode: &str) -> (&'static str, String) {
                 version = version_array
                     .iter()
                     .map(|v| {
-                        u8::from_str_radix(&v, 16)
+                        u8::from_str_radix(v, 16)
                             .expect("Failed to decode cbor encoded metadata.")
                             .to_string()
                     })

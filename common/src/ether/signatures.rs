@@ -80,7 +80,7 @@ impl ResolveSelector for ResolvedError {
             signature_list.push(ResolvedError {
                 name: function_parts.0.to_string(),
                 signature: text_signature.to_string(),
-                inputs: replace_last(&function_parts.1, ")", "")
+                inputs: replace_last(function_parts.1, ")", "")
                     .split(',')
                     .map(|input| input.to_string())
                     .collect(),
@@ -145,7 +145,7 @@ impl ResolveSelector for ResolvedLog {
             signature_list.push(ResolvedLog {
                 name: function_parts.0.to_string(),
                 signature: text_signature.to_string(),
-                inputs: replace_last(&function_parts.1, ")", "")
+                inputs: replace_last(function_parts.1, ")", "")
                     .split(',')
                     .map(|input| input.to_string())
                     .collect(),
@@ -210,7 +210,7 @@ impl ResolveSelector for ResolvedFunction {
             signature_list.push(ResolvedFunction {
                 name: function_parts.0.to_string(),
                 signature: text_signature.to_string(),
-                inputs: replace_last(&function_parts.1, ")", "")
+                inputs: replace_last(function_parts.1, ")", "")
                     .split(',')
                     .map(|input| input.to_string())
                     .collect(),

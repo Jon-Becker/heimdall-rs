@@ -47,7 +47,7 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     let mut handled_jumps = HashSet::new();
 
     // execute the EVM call to find the entry point for the given selector
-    vm.calldata = decode_hex(&selector).expect("Failed to decode selector.");
+    vm.calldata = decode_hex(selector).expect("Failed to decode selector.");
     while vm.bytecode.len() >= vm.instruction as usize {
         let call = vm.step();
 
@@ -56,7 +56,7 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
             let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
 
-            if jump_condition.contains(&selector) &&
+            if jump_condition.contains(selector) &&
                 jump_condition.contains("msg.data[0]") &&
                 jump_condition.contains(" == ") &&
                 jump_taken == 1

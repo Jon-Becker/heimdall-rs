@@ -114,7 +114,7 @@ fn simplify_casts(line: &str) -> String {
         }
     }
 
-    cleaned.to_owned()
+    cleaned
 }
 
 fn remove_replace_casts(line: &str) -> String {
@@ -292,7 +292,7 @@ fn cleanup(line: &str, all_resolved_events: HashMap<String, ResolvedLog>) -> Str
 
     // skip comments
     if cleaned.starts_with('/') {
-        return cleaned.to_owned()
+        return cleaned
     }
 
     // remove double negations

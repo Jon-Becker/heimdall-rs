@@ -198,7 +198,7 @@ pub fn dump(args: DumpArgs) {
 
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
-    write_storage_to_csv(&_output_dir, &"storage_dump.csv".to_string(), &state);
+    write_storage_to_csv(&_output_dir, "storage_dump.csv", &state);
     logger.success(&format!("Wrote storage dump to '{_output_dir}/storage_dump.csv'."));
     logger.info(&format!(
         "Dumped {} storage values from '{}' .",

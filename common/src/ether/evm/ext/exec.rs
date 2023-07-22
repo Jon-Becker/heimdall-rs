@@ -23,7 +23,7 @@ pub struct VMTrace {
 impl VM {
     /// Run symbolic execution on a given function selector within a contract
     pub fn symbolic_exec_selector(&mut self, selector: &str, entry_point: u128) -> (VMTrace, u32) {
-        self.calldata = decode_hex(&selector).unwrap();
+        self.calldata = decode_hex(selector).unwrap();
 
         // step through the bytecode until we reach the entry point
         while self.bytecode.len() >= self.instruction as usize && (self.instruction <= entry_point)

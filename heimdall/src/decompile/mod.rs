@@ -293,7 +293,7 @@ pub fn decompile(args: DecompilerArgs) {
         let mut analyzed_function;
         if args.include_yul {
             analyzed_function = analyze_yul(
-                &map,
+                map,
                 Function {
                     selector: selector.clone(),
                     entry_point: function_entry_point,
@@ -317,7 +317,7 @@ pub fn decompile(args: DecompilerArgs) {
             );
         } else {
             analyzed_function = analyze_sol(
-                &map,
+                map,
                 Function {
                     selector: selector.clone(),
                     entry_point: function_entry_point,

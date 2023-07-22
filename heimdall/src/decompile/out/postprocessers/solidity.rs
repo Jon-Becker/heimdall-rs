@@ -572,7 +572,7 @@ fn move_casts_to_declaration(line: &str) -> String {
 
             // find the matching close paren
             let (paren_start, paren_end, _) =
-                find_balanced_encapsulator(&instantiation[1], ('(', ')'));
+                find_balanced_encapsulator(instantiation[1], ('(', ')'));
 
             // the close paren must be at the end of the expression
             if paren_end != instantiation[1].len() - 1 {
@@ -609,7 +609,7 @@ fn replace_expression_with_var(line: &str) -> String {
 
     // skip function definitions
     if cleaned.contains("function") {
-        return cleaned.to_owned()
+        return cleaned
     }
 
     // iterate over variable map
@@ -728,7 +728,7 @@ fn inherit_infer_storage_type(line: &str) {
         };
 
         // since the regex is greedy, match the memory brackets
-        let matched_loc = find_balanced_encapsulator(&storage_access, ('[', ']'));
+        let matched_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
         if !matched_loc.2 {
             return
         }
@@ -911,7 +911,7 @@ fn replace_resolved(
 /// assert_eq!(converted, "var_a = 2;");
 /// ```
 fn simplify_arithmatic(line: &str) -> String {
-    let cleaned = DIV_BY_ONE_REGEX.replace_all(&line, "");
+    let cleaned = DIV_BY_ONE_REGEX.replace_all(line, "");
     let cleaned = MUL_BY_ONE_REGEX.replace_all(&cleaned, "");
 
     // remove double negation
@@ -927,7 +927,7 @@ fn cleanup(
 
     // skip comments
     if cleaned.starts_with('/') {
-        return cleaned.to_owned()
+        return cleaned
     }
 
     // Find and convert all castings

@@ -27,7 +27,7 @@ pub fn remote_version() -> Version {
         "https://api.github.com/repos/Jon-Becker/heimdall-rs/releases/latest";
 
     // retrieve the latest release tag from github
-    if let Some(release) = get_json_from_url(&remote_repository_url) {
+    if let Some(release) = get_json_from_url(remote_repository_url) {
         if let Some(tag_name) = release["tag_name"].as_str() {
             let version_string = tag_name.replace('v', "");
             let version_parts: Vec<&str> = version_string.split('.').collect();

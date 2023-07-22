@@ -97,7 +97,7 @@ impl TraceFactory {
                 // print the trace title
                 println!(
                     "{} {} {}",
-                    replace_last(&prefix, "│ ", " ├─").bold().bright_white(),
+                    replace_last(prefix, "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
                     trace.message.get(0).expect("Failed to build trace.")
                 );
@@ -139,9 +139,9 @@ impl TraceFactory {
                         println!(
                             "{} {} {}: {}",
                             if message_index == 0 {
-                                replace_last(&prefix, "│ ", " ├─").bold().bright_white()
+                                replace_last(prefix, "│ ", " ├─").bold().bright_white()
                             } else {
-                                replace_last(&prefix, "│ ", " │ ").bold().bright_white()
+                                replace_last(prefix, "│ ", " │ ").bold().bright_white()
                             },
                             if message_index == 0 { "emit" } else { "    " },
                             format!("topic {message_index}").purple(),
@@ -150,14 +150,14 @@ impl TraceFactory {
                     }
                     println!(
                         "{}         {}: {}",
-                        replace_last(&prefix, "│ ", " │ ").bold().blue(),
+                        replace_last(prefix, "│ ", " │ ").bold().blue(),
                         "data".purple(),
                         trace.message.last().expect("Failed to build trace.")
                     );
                 } else {
                     println!(
                         "{} emit {}: {}",
-                        replace_last(&prefix, "│ ", " ├─").bold().bright_white(),
+                        replace_last(prefix, "│ ", " ├─").bold().bright_white(),
                         "data".purple(),
                         trace.message.last().expect("Failed to build trace.")
                     );
@@ -171,9 +171,9 @@ impl TraceFactory {
                         if prefix.ends_with("└─") {
                             prefix.to_string().bold().bright_white()
                         } else if message_index == 0 {
-                            replace_last(&prefix, "│ ", " ├─").bold().bright_white()
+                            replace_last(prefix, "│ ", " ├─").bold().bright_white()
                         } else {
-                            replace_last(&prefix, "│ ", " │ ").bold().bright_white()
+                            replace_last(prefix, "│ ", " │ ").bold().bright_white()
                         },
                         message
                     );
@@ -195,12 +195,12 @@ impl TraceFactory {
                 }
             }
             TraceCategory::Empty => {
-                println!("{}", replace_last(&prefix, "│ ", " │ ").bold().bright_white());
+                println!("{}", replace_last(prefix, "│ ", " │ ").bold().bright_white());
             }
             TraceCategory::Create => {
                 println!(
                     "{} {} create → {}",
-                    replace_last(&prefix, "│ ", " ├─").bold().bright_white(),
+                    replace_last(prefix, "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
                     trace.message.get(0).expect("Failed to build trace.")
                 );

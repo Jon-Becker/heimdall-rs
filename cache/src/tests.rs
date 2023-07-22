@@ -188,7 +188,7 @@ mod test_util {
     fn test_write_file_successful() {
         let path = "/tmp/test.txt";
         let contents = "Hello, World!";
-        let result = write_file(&path.to_string(), &contents.to_string());
+        let result = write_file(path, contents);
         assert_eq!(result, Some(path.to_string()));
     }
 
@@ -197,7 +197,7 @@ mod test_util {
         // Assuming the path is read-only or permission denied
         let path = "/root/test.txt";
         let contents = "Hello, World!";
-        let result = write_file(&path.to_string(), &contents.to_string());
+        let result = write_file(path, contents);
         assert_eq!(result, None);
     }
 
@@ -205,32 +205,32 @@ mod test_util {
     fn test_read_file_successful() {
         let path = "/tmp/test.txt";
         let contents = "Hello, World!";
-        write_file(&path.to_string(), &contents.to_string());
+        write_file(path, contents);
 
-        let result = read_file(&path.to_string());
+        let result = read_file(path);
         assert!(result.is_some());
     }
 
     #[test]
     fn test_read_file_failure() {
         let path = "/nonexistent/test.txt";
-        let result = read_file(&path.to_string());
+        let result = read_file(path);
         assert_eq!(result, None);
     }
 
     #[test]
     fn test_delete_path_successful() {
         let path = "/tmp/test_dir";
-        std::fs::create_dir(&path).unwrap();
+        std::fs::create_dir(path).unwrap();
 
-        let result = delete_path(&path.to_string());
+        let result = delete_path(path);
         assert!(result);
     }
 
     #[test]
     fn test_delete_path_failure() {
         let path = "/nonexistent/test_dir";
-        let result = delete_path(&path.to_string());
+        let result = delete_path(path);
         assert!(result);
     }
 }

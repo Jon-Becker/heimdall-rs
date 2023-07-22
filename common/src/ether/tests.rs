@@ -8,11 +8,11 @@ mod test_solidity {
 
     #[test]
     fn test_is_ext_call_precompile() {
-        assert_eq!(is_ext_call_precompile(U256::from(1)), true);
-        assert_eq!(is_ext_call_precompile(U256::from(2)), true);
-        assert_eq!(is_ext_call_precompile(U256::from(3)), true);
-        assert_eq!(is_ext_call_precompile(U256::from(4)), false);
-        assert_eq!(is_ext_call_precompile(U256::MAX), false);
+        assert!(is_ext_call_precompile(U256::from(1)));
+        assert!(is_ext_call_precompile(U256::from(2)));
+        assert!(is_ext_call_precompile(U256::from(3)));
+        assert!(!is_ext_call_precompile(U256::from(4)));
+        assert!(!is_ext_call_precompile(U256::MAX));
     }
 
     #[test]
