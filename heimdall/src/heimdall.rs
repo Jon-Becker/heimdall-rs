@@ -1,4 +1,5 @@
 use backtrace::Backtrace;
+use snapshot::{snapshot, SnapshotArgs};
 use std::{io, panic};
 
 mod cfg;
@@ -64,11 +65,12 @@ pub enum Subcommands {
 
     #[clap(name = "dump", about = "Dump the value of all storage slots accessed by a contract")]
     Dump(DumpArgs),
-    // #[clap(
-    //     name = "snapshot",
-    //     about = "Infer function information from bytecode, including access control, gas
-    // consumption, storage accesses, event emissions, and more" )]
-    // Snapshot(SnapshotArgs),
+    #[clap(
+        name = "snapshot",
+        about = "Infer function information from bytecode, including access control, gas
+    consumption, storage accesses, event emissions, and more"
+    )]
+    Snapshot(SnapshotArgs),
 }
 
 fn main() {
@@ -151,14 +153,14 @@ fn main() {
             dump(cmd);
         }
 
-        // Subcommands::Snapshot(mut cmd) => {
-        //     // if the user has not specified a rpc url, use the default
-        //     if cmd.rpc_url.as_str() == "" {
-        //         cmd.rpc_url = configuration.rpc_url;
-        //     }
+        Subcommands::Snapshot(mut cmd) => {
+            // if the user has not specified a rpc url, use the default
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
 
-        //     snapshot(cmd);
-        // }
+            snapshot(cmd);
+        }
         Subcommands::Config(cmd) => {
             config(cmd);
         }

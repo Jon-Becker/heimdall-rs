@@ -5,8 +5,12 @@ use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{
         compiler::detect_compiler,
-        evm::ext::disassemble::{disassemble, DisassemblerArgs},
+        evm::{
+            core::vm::VM,
+            ext::disassemble::{disassemble, DisassemblerArgs},
+        },
         rpc::get_code,
+        selectors::find_function_selectors,
     },
     io::logging::*,
 };
@@ -35,7 +39,6 @@ pub struct SnapshotArgs {
     pub default: bool,
 }
 
-#[allow(dead_code, unused_variables)]
 pub fn snapshot(args: SnapshotArgs) {
     use std::time::Instant;
     let now = Instant::now();
@@ -121,7 +124,32 @@ pub fn snapshot(args: SnapshotArgs) {
             .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
-    // TODO: perform snapshot analysis
+    // create a new EVM instance
+    let evm = VM::new(
+        contract_bytecode.clone(),
+        String::from("0x"),
+        String::from("0x6865696d64616c6c000000000061646472657373"),
+        String::from("0x6865696d64616c6c0000000000006f726967696e"),
+        String::from("0x6865696d64616c6c00000000000063616c6c6572"),
+        0,
+        u128::max_value(),
+    );
+    let mut shortened_target = contract_bytecode.clone();
+    if shortened_target.len() > 66 {
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+    }
+    let vm_trace = trace.add_creation(
+        snapshot_call,
+        line!(),
+        "contract".to_string(),
+        shortened_target.clone(),
+        (contract_bytecode.len() / 2usize).try_into().unwrap(),
+    );
+
+    // find and resolve all selectors in the bytecode
+    let selectors = find_function_selectors(&evm, &disassembled_bytecode);
 
     trace.display();
     logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
