@@ -3,7 +3,7 @@ mod benchmarks {
     use clap_verbosity_flag::Verbosity;
 
     use heimdall_common::{
-        ether::evm::disassemble::{disassemble, DisassemblerArgs},
+        ether::evm::ext::disassemble::{disassemble, DisassemblerArgs},
         testing::benchmarks::benchmark,
     };
 
@@ -28,7 +28,7 @@ mod integration_tests {
 
     use clap_verbosity_flag::Verbosity;
 
-    use heimdall_common::ether::evm::disassemble::{disassemble, DisassemblerArgs};
+    use heimdall_common::ether::evm::ext::disassemble::{disassemble, DisassemblerArgs};
 
     #[test]
     fn test_disassemble_nominal() {

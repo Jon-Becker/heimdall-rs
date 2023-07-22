@@ -1,5 +1,5 @@
 use ethers::types::U256;
-use heimdall_common::ether::evm::opcodes::WrappedOpcode;
+use heimdall_common::ether::evm::core::opcodes::WrappedOpcode;
 
 use super::util::StorageFrame;
 

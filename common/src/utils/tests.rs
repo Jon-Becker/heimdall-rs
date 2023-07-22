@@ -149,21 +149,21 @@ mod test_strings {
         let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
         assert_eq!(start, 8);
         assert_eq!(end, 20);
-        assert_eq!(is_balanced, true);
+        assert!(is_balanced);
 
         let s = String::from("This is an example) string.");
         let encap = ('(', ')');
         let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
         assert_eq!(start, 0);
         assert_eq!(end, 1);
-        assert_eq!(is_balanced, false);
+        assert!(!is_balanced);
 
         let s = String::from("This is (an example string.");
         let encap = ('(', ')');
         let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
         assert_eq!(start, 8);
         assert_eq!(end, 1);
-        assert_eq!(is_balanced, false);
+        assert!(!is_balanced);
     }
 
     #[test]
@@ -173,17 +173,17 @@ mod test_strings {
         let (start, end, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
         assert_eq!(start, 8);
         assert_eq!(end, 20);
-        assert_eq!(is_balanced, true);
+        assert!(is_balanced);
 
         let s = String::from("This is an example) string.");
         let encap = ('(', ')');
         let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
-        assert_eq!(is_balanced, false);
+        assert!(!is_balanced);
 
         let s = String::from("This is (an example string.");
         let encap = ('(', ')');
         let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
-        assert_eq!(is_balanced, false);
+        assert!(!is_balanced);
     }
 
     #[test]
@@ -431,7 +431,7 @@ mod test_threading {
         let f = |x: i32| x * 2;
 
         let results = task_pool(items, num_threads, f);
-        assert!(results.len() == 0);
+        assert!(results.is_empty());
     }
 }
 
@@ -552,7 +552,7 @@ mod test_version {
     fn test_version_remote() {
         let version = remote_version();
 
-        assert_eq!(version.minor > 0, true);
-        assert_eq!(version.patch > 0, true);
+        assert!(version.minor > 0);
+        assert!(version.patch > 0);
     }
 }

@@ -54,7 +54,7 @@ pub fn clear_cache() {
     for entry in cache_dir.read_dir().unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        delete_path(&path.to_str().unwrap().to_string());
+        delete_path(path.to_str().unwrap());
     }
 }
 
@@ -112,7 +112,7 @@ where
     for entry in cache_dir.read_dir().unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        let binary_string = match read_file(&path.to_str().unwrap().to_string()) {
+        let binary_string = match read_file(path.to_str().unwrap()) {
             Some(s) => s,
             None => return false,
         };
@@ -124,7 +124,7 @@ where
 
         let cache: Result<Cache<T>, _> = bincode::deserialize(&binary_vec.unwrap());
         if cache.is_err() {
-            delete_path(&path.to_str().unwrap().to_string());
+            delete_path(path.to_str().unwrap());
         };
 
         let cache = cache.unwrap();
@@ -132,7 +132,7 @@ where
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
         {
             // delete file
-            delete_path(&path.to_str().unwrap().to_string());
+            delete_path(path.to_str().unwrap());
         }
     }
     true
@@ -146,7 +146,7 @@ where
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
-    let binary_string = match read_file(&cache_file.to_str().unwrap().to_string()) {
+    let binary_string = match read_file(cache_file.to_str().unwrap()) {
         Some(s) => s,
         None => return None,
     };
@@ -181,7 +181,7 @@ where
     let cache = Cache { value: value, expiry: expiry };
     let encoded: Vec<u8> = bincode::serialize(&cache).unwrap();
     let binary_string = encode_hex(encoded);
-    write_file(&cache_file.to_str().unwrap().to_string(), &binary_string);
+    write_file(cache_file.to_str().unwrap(), &binary_string);
 }
 
 #[allow(deprecated)]

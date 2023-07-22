@@ -2,7 +2,7 @@ use std::{env, fs};
 
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::{evm::opcodes::opcode, rpc::get_code},
+    ether::{evm::core::opcodes::opcode, rpc::get_code},
     io::{file::*, logging::*},
     utils::strings::{decode_hex, encode_hex},
 };

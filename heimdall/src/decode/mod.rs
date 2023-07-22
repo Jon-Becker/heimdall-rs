@@ -11,7 +11,7 @@ use ethers::{
 use heimdall_common::{
     constants::TRANSACTION_HASH_REGEX,
     ether::{
-        evm::types::{display, parse_function_parameters},
+        evm::core::types::{display, parse_function_parameters},
         rpc::get_transaction,
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },

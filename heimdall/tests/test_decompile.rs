@@ -262,16 +262,16 @@ mod integration_tests {
             let output = heimdall_common::io::file::read_file(&String::from(
                 "./output/tests/decompile/test3/decompiled.sol",
             ));
-            let open_brackets = output.matches("{").count();
-            let close_brackets = output.matches("}").count();
+            let open_brackets = output.matches('{').count();
+            let close_brackets = output.matches('}').count();
             assert_eq!(open_brackets, close_brackets);
 
             // let open_parens = output.matches("(").count();
             // let close_parens = output.matches(")").count();
             // assert_eq!(open_parens, close_parens);
 
-            let open_braces = output.matches("[").count();
-            let close_braces = output.matches("]").count();
+            let open_braces = output.matches('[').count();
+            let close_braces = output.matches(']').count();
             assert_eq!(open_braces, close_braces);
 
             // perform flag checks

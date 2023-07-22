@@ -5,7 +5,7 @@ use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{
         compiler::detect_compiler,
-        evm::disassemble::{disassemble, DisassemblerArgs},
+        evm::ext::disassemble::{disassemble, DisassemblerArgs},
         rpc::get_code,
     },
     io::logging::*,
@@ -67,7 +67,7 @@ pub fn snapshot(args: SnapshotArgs) {
         // provider.
         contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        contract_bytecode = args.target.clone().replacen("0x", "", 1);
+        contract_bytecode = args.target.replacen("0x", "", 1);
     } else {
         // We are snapshotting a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
@@ -92,7 +92,7 @@ pub fn snapshot(args: SnapshotArgs) {
         target: contract_bytecode.clone(),
         verbose: args.verbose.clone(),
         output: "".to_string(),
-        rpc_url: args.rpc_url.clone(),
+        rpc_url: args.rpc_url,
     });
     trace.add_call(
         snapshot_call,

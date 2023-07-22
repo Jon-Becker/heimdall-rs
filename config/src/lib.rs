@@ -47,7 +47,7 @@ pub fn write_config(contents: &str) {
             home.push(".bifrost");
             home.push("config.toml");
 
-            let _ = write_file(&home.into_os_string().to_str().unwrap().to_string(), &contents);
+            let _ = write_file(home.into_os_string().to_str().unwrap(), contents);
         }
         None => {
             let (logger, _) = Logger::new("");
@@ -66,7 +66,7 @@ pub fn delete_config() {
             home.push(".bifrost");
             home.push("config.toml");
 
-            let _ = delete_path(&home.into_os_string().to_str().unwrap().to_string());
+            let _ = delete_path(home.into_os_string().to_str().unwrap());
         }
         None => {
             let (logger, _) = Logger::new("");
@@ -87,11 +87,11 @@ pub fn read_config() -> String {
 
             if home.as_path().exists() {
                 // the file exists, read it
-                return read_file(&home.into_os_string().to_str().unwrap().to_string())
+                return read_file(home.into_os_string().to_str().unwrap())
             } else {
                 // the file does not exist, create it
                 write_config(DEFAULT_CONFIG);
-                return read_file(&home.into_os_string().to_str().unwrap().to_string())
+                return read_file(home.into_os_string().to_str().unwrap())
             }
         }
         None => {

@@ -14,7 +14,7 @@ pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamTy
 
     // get only the function input body, removing the name and input wrapping parentheses
     let string_inputs = match function_signature.split_once('(') {
-        Some((_, inputs)) => replace_last(&inputs, ")", ""),
+        Some((_, inputs)) => replace_last(inputs, ")", ""),
         None => replace_last(function_signature, ")", ""),
     };
 
@@ -209,8 +209,8 @@ pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
     // determine which input contains the bitmask
     for (i, input) in mask.inputs.iter().enumerate() {
         match input {
-            crate::ether::evm::opcodes::WrappedInput::Raw(_) => continue,
-            crate::ether::evm::opcodes::WrappedInput::Opcode(opcode) => {
+            crate::ether::evm::core::opcodes::WrappedInput::Raw(_) => continue,
+            crate::ether::evm::core::opcodes::WrappedInput::Opcode(opcode) => {
                 if !(opcode.opcode.name == "CALLDATALOAD" || opcode.opcode.name == "CALLDATACOPY") {
                     if mask.opcode.name == "AND" {
                         type_byte_size = instruction.inputs[i].encode_hex().matches("ff").count();
@@ -246,7 +246,7 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 
 pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
     // find the start of the cast
-    match TYPE_CAST_REGEX.find(&line).expect("Failed to find type cast.") {
+    match TYPE_CAST_REGEX.find(line).expect("Failed to find type cast.") {
         Some(m) => {
             let start = m.start();
             let end = m.end() - 1;

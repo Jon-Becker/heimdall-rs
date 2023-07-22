@@ -26,7 +26,7 @@ fn _get_json_from_url(url: &str, retry_count: u8, retries_remaining: u8) -> Opti
         Err(_) => Client::default(),
     };
 
-    let mut res = match client.get(url.clone()).send() {
+    let mut res = match client.get(url).send() {
         Ok(res) => res,
         Err(_) => {
             if retries_remaining == 0 {
