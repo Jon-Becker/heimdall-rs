@@ -5,7 +5,11 @@ pub mod precompile;
 pub mod resolve;
 pub mod util;
 
-use crate::decompile::{resolve::*, util::*};
+use crate::decompile::{
+    lexers::{solidity::analyze_sol, yul::analyze_yul},
+    resolve::*,
+    util::*,
+};
 
 use heimdall_common::{
     ether::{
@@ -266,7 +270,8 @@ pub fn decompile(args: DecompilerArgs) {
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdest_count) = map_selector(&evm.clone(), &selector, function_entry_point);
+        let (map, jumpdest_count) =
+            &evm.clone().symbolic_exec_selector(&selector, function_entry_point);
 
         trace.add_debug(
             func_analysis_trace,
@@ -287,7 +292,8 @@ pub fn decompile(args: DecompilerArgs) {
         // analyze execution tree
         let mut analyzed_function;
         if args.include_yul {
-            analyzed_function = map.analyze_yul(
+            analyzed_function = analyze_yul(
+                &map,
                 Function {
                     selector: selector.clone(),
                     entry_point: function_entry_point,
@@ -310,7 +316,8 @@ pub fn decompile(args: DecompilerArgs) {
                 &mut Vec::new(),
             );
         } else {
-            analyzed_function = map.analyze_sol(
+            analyzed_function = analyze_sol(
+                &map,
                 Function {
                     selector: selector.clone(),
                     entry_point: function_entry_point,

@@ -1,7 +1,5 @@
 pub mod graph;
 pub mod output;
-pub mod util;
-
 use heimdall_common::ether::{
     compiler::detect_compiler, rpc::get_code, selectors::find_function_selectors,
 };
@@ -19,7 +17,7 @@ use heimdall_common::{
 };
 use petgraph::Graph;
 
-use crate::cfg::{output::build_output, util::map_contract};
+use crate::cfg::{graph::build_cfg, output::build_output};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -225,7 +223,7 @@ pub fn cfg(args: CFGArgs) {
     );
 
     // get a map of possible jump destinations
-    let (map, jumpdest_count) = map_contract(&evm);
+    let (map, jumpdest_count) = &evm.symbolic_exec();
 
     // add jumpdests to the trace
     trace.add_info(
@@ -234,7 +232,7 @@ pub fn cfg(args: CFGArgs) {
         &format!("traced and executed {jumpdest_count} possible paths."),
     );
 
-    map.build_cfg(&mut contract_cfg, None, false);
+    build_cfg(map, &mut contract_cfg, None, false);
 
     progress.finish_and_clear();
     logger.info("symbolic execution completed.");

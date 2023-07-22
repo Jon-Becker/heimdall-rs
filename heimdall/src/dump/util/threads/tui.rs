@@ -80,7 +80,7 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
                                         ":e" | ":export" => {
                                             if !args.is_empty() {
                                                 write_storage_to_csv(
-                                                    &output_dir.clone(),
+                                                    &output_dir,
                                                     &args[0].to_string(),
                                                     &state,
                                                 );
