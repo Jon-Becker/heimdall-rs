@@ -1,4 +1,4 @@
-use std::fs;
+use std::{collections::HashMap, env, fs, time::Duration};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
@@ -10,10 +10,12 @@ use heimdall_common::{
             ext::disassemble::{disassemble, DisassemblerArgs},
         },
         rpc::get_code,
-        selectors::find_function_selectors,
+        selectors::{find_function_selectors, resolve_selectors},
+        signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
     },
     io::logging::*,
 };
+use indicatif::ProgressBar;
 #[derive(Debug, Clone, Parser)]
 #[clap(
     about = "Infer function information from bytecode, including access control, gas consumption, storage accesses, event emissions, and more",
@@ -30,6 +32,10 @@ pub struct SnapshotArgs {
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
 
+    /// The output directory to write the output files to
+    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
+    pub output: String,
+
     /// The RPC provider to use for fetching target bytecode.
     #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
@@ -37,6 +43,10 @@ pub struct SnapshotArgs {
     /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
+
+    /// Whether to skip resolving function selectors.
+    #[clap(long = "skip-resolving")]
+    pub skip_resolving: bool,
 }
 
 pub fn snapshot(args: SnapshotArgs) {
@@ -47,6 +57,8 @@ pub fn snapshot(args: SnapshotArgs) {
         Some(level) => level.as_str(),
         None => "SILENT",
     });
+    let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
+    let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
@@ -64,14 +76,39 @@ pub fn snapshot(args: SnapshotArgs) {
         "()".to_string(),
     );
 
+    // parse the output directory
+    let mut output_dir: String;
+    if args.output.is_empty() {
+        output_dir = match env::current_dir() {
+            Ok(dir) => dir.into_os_string().into_string().unwrap(),
+            Err(_) => {
+                logger.error("failed to get current directory.");
+                std::process::exit(1);
+            }
+        };
+        output_dir.push_str("/output");
+    } else {
+        output_dir = args.output.clone();
+    }
+
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target).unwrap() {
+        // push the address to the output directory
+        if output_dir != args.output {
+            output_dir.push_str(&format!("/{}", &args.target));
+        }
+
         // We are snapshotting a contract address, so we need to fetch the bytecode from the RPC
         // provider.
         contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        contract_bytecode = args.target.replacen("0x", "", 1);
+        contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
+        // push the address to the output directory
+        if output_dir != args.output {
+            output_dir.push_str("/local");
+        }
+
         // We are snapshotting a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {
@@ -94,8 +131,8 @@ pub fn snapshot(args: SnapshotArgs) {
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
         verbose: args.verbose.clone(),
-        output: "".to_string(),
-        rpc_url: args.rpc_url,
+        output: output_dir.clone(),
+        rpc_url: args.rpc_url.clone(),
     });
     trace.add_call(
         snapshot_call,
@@ -150,6 +187,83 @@ pub fn snapshot(args: SnapshotArgs) {
 
     // find and resolve all selectors in the bytecode
     let selectors = find_function_selectors(&evm, &disassembled_bytecode);
+
+    let mut resolved_selectors = HashMap::new();
+    if !args.skip_resolving {
+        resolved_selectors =
+            resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect(), &logger);
+
+        // if resolved selectors are empty, we can't perform symbolic execution
+        if resolved_selectors.is_empty() {
+            logger.error(&format!(
+                "failed to resolve any function selectors from '{shortened_target}' .",
+                shortened_target = shortened_target
+            ));
+        }
+
+        logger.info(&format!(
+            "resolved {} possible functions from {} detected selectors.",
+            resolved_selectors.len(),
+            selectors.len()
+        ));
+    } else {
+        logger.info(&format!("found {} possible function selectors.", selectors.len()));
+    }
+
+    logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
+
+    // get a new progress bar
+    let mut snapshot_progress = ProgressBar::new_spinner();
+    snapshot_progress.enable_steady_tick(Duration::from_millis(100));
+    snapshot_progress.set_style(logger.info_spinner());
+
+    // perform EVM analysis
+    let mut analyzed_functions: Vec<ResolvedFunction> = Vec::new();
+    for (selector, function_entry_point) in selectors {
+        snapshot_progress.set_message(format!("executing '0x{selector}'"));
+
+        let func_analysis_trace = trace.add_call(
+            vm_trace,
+            line!(),
+            "heimdall".to_string(),
+            "analyze".to_string(),
+            vec![format!("0x{selector}")],
+            "()".to_string(),
+        );
+
+        trace.add_info(
+            func_analysis_trace,
+            function_entry_point.try_into().unwrap(),
+            &format!("discovered entry point: {function_entry_point}"),
+        );
+
+        // get a map of possible jump destinations
+        let (map, jumpdest_count) =
+            &evm.clone().symbolic_exec_selector(&selector, function_entry_point);
+
+        trace.add_debug(
+            func_analysis_trace,
+            function_entry_point.try_into().unwrap(),
+            &format!(
+                "execution tree {}",
+                match jumpdest_count {
+                    0 => {
+                        "appears to be linear".to_string()
+                    }
+                    _ => format!("has {jumpdest_count} unique branches"),
+                }
+            ),
+        );
+
+        // TODO: perform snapshot analysis on map
+
+        // get a new progress bar
+        snapshot_progress = ProgressBar::new_spinner();
+        snapshot_progress.enable_steady_tick(Duration::from_millis(100));
+        snapshot_progress.set_style(logger.info_spinner());
+    }
+    snapshot_progress.finish_and_clear();
+    logger.info("symbolic execution completed.");
 
     trace.display();
     logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
