@@ -1,3 +1,7 @@
+pub mod analyze;
+pub mod modules;
+pub mod util;
+
 use std::{collections::HashMap, env, fs, time::Duration};
 
 use clap::{AppSettings, Parser};
@@ -16,6 +20,8 @@ use heimdall_common::{
     io::logging::*,
 };
 use indicatif::ProgressBar;
+
+use crate::snapshot::{analyze::snapshot_trace, util::Snapshot};
 #[derive(Debug, Clone, Parser)]
 #[clap(
     about = "Infer function information from bytecode, including access control, gas consumption, storage accesses, event emissions, and more",
@@ -255,7 +261,27 @@ pub fn snapshot(args: SnapshotArgs) {
             ),
         );
 
-        // TODO: perform snapshot analysis on map
+        let snapshot = snapshot_trace(
+            map,
+            Snapshot {
+                selector: selector.clone(),
+                entry_point: function_entry_point,
+                arguments: HashMap::new(),
+                storage: HashMap::new(),
+                memory: HashMap::new(),
+                returns: None,
+                events: HashMap::new(),
+                errors: HashMap::new(),
+                resolved_function: None,
+                pure: true,
+                view: true,
+                payable: true,
+            },
+            &mut trace,
+            func_analysis_trace,
+        );
+
+        println!("{:#?}", snapshot);
 
         // get a new progress bar
         snapshot_progress = ProgressBar::new_spinner();
