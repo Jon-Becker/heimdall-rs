@@ -1,3 +1,6 @@
+pub mod table;
+pub mod tui;
+
 use std::collections::HashMap;
 
 use ethers::types::U256;

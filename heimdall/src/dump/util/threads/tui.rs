@@ -9,7 +9,7 @@ use tui::{backend::CrosstermBackend, Terminal};
 
 use crate::dump::{
     constants::{DECODE_AS_TYPES, DUMP_STATE},
-    tui_views::{render_ui, TUIView},
+    menus::{render_ui, TUIView},
     util::{cleanup_terminal, csv::write_storage_to_csv},
     DumpArgs,
 };

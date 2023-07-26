@@ -1,5 +1,7 @@
 pub mod analyze;
-pub mod modules;
+pub mod constants;
+pub mod menus;
+pub mod structures;
 pub mod util;
 
 use std::{collections::HashMap, env, fs, time::Duration};
@@ -21,7 +23,10 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 
-use crate::snapshot::{analyze::snapshot_trace, util::Snapshot};
+use crate::snapshot::{
+    analyze::snapshot_trace,
+    util::{tui, Snapshot},
+};
 #[derive(Debug, Clone, Parser)]
 #[clap(
     about = "Infer function information from bytecode, including access control, gas consumption, storage accesses, event emissions, and more",
@@ -53,6 +58,10 @@ pub struct SnapshotArgs {
     /// Whether to skip resolving function selectors.
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
+
+    /// Whether to skip opening the TUI.
+    #[clap(long)]
+    pub no_tui: bool,
 }
 
 pub fn snapshot(args: SnapshotArgs) {
@@ -224,7 +233,7 @@ pub fn snapshot(args: SnapshotArgs) {
     snapshot_progress.set_style(logger.info_spinner());
 
     // perform EVM analysis
-    let mut analyzed_functions: Vec<ResolvedFunction> = Vec::new();
+    let mut snapshots: Vec<Snapshot> = Vec::new();
     for (selector, function_entry_point) in selectors {
         snapshot_progress.set_message(format!("executing '0x{selector}'"));
 
@@ -281,7 +290,10 @@ pub fn snapshot(args: SnapshotArgs) {
             func_analysis_trace,
         );
 
-        println!("{:#?}", snapshot);
+        // TODO resolve
+
+        // push
+        snapshots.push(snapshot);
 
         // get a new progress bar
         snapshot_progress = ProgressBar::new_spinner();
@@ -290,6 +302,11 @@ pub fn snapshot(args: SnapshotArgs) {
     }
     snapshot_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
+
+    // open the tui
+    if !args.no_tui {
+        tui::handle(snapshots);
+    }
 
     trace.display();
     logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
