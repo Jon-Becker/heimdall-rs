@@ -64,7 +64,11 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
         if snapshot.payable { "payable" } else { "" },
         if snapshot.pure { "pure" } else { "" },
         if snapshot.view && !snapshot.pure { "view" } else { "" },
-    ];
+    ]
+    .iter()
+    .filter(|x| x.len() > 0)
+    .map(|x| x.to_string())
+    .collect::<Vec<_>>();
 
     // build argument list
     let mut arg_strings: Vec<String> = Vec::new();
@@ -75,17 +79,40 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
     }
 
     let text = vec![
-        // add modifiers
+        // add modifiers and arguments
         Spans::from(""), // buffer
         Spans::from(Span::styled(
-            " Modifiers       Arguments",
+            " Modifiers       Returns        Arguments",
             Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
         )),
         Spans::from(format!(
-            " {:<16}{}",
+            " {:<16}{:<15}{}",
             modifiers.join(" "),
+            snapshot.returns.clone().unwrap_or("None".to_owned()),
             if arg_strings.len() > 0 { arg_strings.join(", ") } else { "None".to_owned() }
         )),
+        // add events
+        Spans::from(""), // buffer
+        Spans::from(Span::styled(
+            " Events ",
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        )),
+        Spans::from(if snapshot.events.len() > 0 {
+            snapshot.events.iter().map(|x| x.0.to_string()).collect::<Vec<_>>().join(", ")
+        } else {
+            " None".to_owned()
+        }),
+        // add errors
+        Spans::from(""), // buffer
+        Spans::from(Span::styled(
+            " Errors ",
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        )),
+        Spans::from(if snapshot.errors.len() > 0 {
+            snapshot.errors.iter().map(|x| x.0.to_string()).collect::<Vec<_>>().join(", ")
+        } else {
+            " None".to_owned()
+        }),
     ];
 
     // about text

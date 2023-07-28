@@ -66,3 +66,25 @@ pub struct CalldataFrame {
     pub mask_size: usize,
     pub heuristics: Vec<String>,
 }
+
+impl Snapshot {
+    // get a specific memory slot
+    pub fn get_memory_range(&self, _offset: U256, _size: U256) -> Vec<StorageFrame> {
+        let mut memory_slice: Vec<StorageFrame> = Vec::new();
+
+        // Safely convert U256 to usize
+        let mut offset: usize = std::cmp::min(_offset.try_into().unwrap_or(0), 2048);
+        let mut size: usize = std::cmp::min(_size.try_into().unwrap_or(0), 2048);
+
+        // get the memory range
+        while size > 0 {
+            if let Some(memory) = self.memory.get(&U256::from(offset)) {
+                memory_slice.push(memory.clone());
+            }
+            offset += 32;
+            size = size.saturating_sub(32);
+        }
+
+        memory_slice
+    }
+}

@@ -1,6 +1,11 @@
+use crate::decompile::constants::AND_BITMASK_REGEX;
+
 use super::util::{CalldataFrame, Snapshot, StorageFrame};
 use heimdall_common::{
-    ether::evm::{core::types::convert_bitmask, ext::exec::VMTrace},
+    ether::evm::{
+        core::types::{byte_size_to_type, convert_bitmask},
+        ext::exec::VMTrace,
+    },
     io::logging::TraceFactory,
 };
 
@@ -119,6 +124,51 @@ pub fn snapshot_trace(
             // this is an if conditional for the children branches
             let conditional = instruction.input_operations[1].yulify();
             // TODO
+        } else if opcode_name == "RETURN" {
+            // Safely convert U256 to usize
+            let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
+
+            let return_memory_operations =
+                snapshot.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
+            let return_memory_operations_solidified = return_memory_operations
+                .iter()
+                .map(|x| x.operations.solidify())
+                .collect::<Vec<String>>()
+                .join(", ");
+
+            // we don't want to overwrite the return value if it's already been set
+            if snapshot.returns == Some(String::from("uint256")) || snapshot.returns.is_none() {
+                // if the return operation == ISZERO, this is a boolean return
+                if return_memory_operations.len() == 1 &&
+                    return_memory_operations[0].operations.opcode.name == "ISZERO"
+                {
+                    snapshot.returns = Some(String::from("bool"));
+                } else {
+                    snapshot.returns = match size > 32 {
+                        // if the return data is > 32 bytes, we append "memory" to the return
+                        // type
+                        true => Some(format!("{} memory", "bytes")),
+                        false => {
+                            // attempt to find a return type within the return memory operations
+                            let byte_size = match AND_BITMASK_REGEX
+                                .find(&return_memory_operations_solidified)
+                                .unwrap()
+                            {
+                                Some(bitmask) => {
+                                    let cast = bitmask.as_str();
+
+                                    cast.matches("ff").count()
+                                }
+                                None => 32,
+                            };
+
+                            // convert the cast size to a string
+                            let (_, cast_types) = byte_size_to_type(byte_size);
+                            Some(cast_types[0].to_string())
+                        }
+                    };
+                }
+            }
         } else if opcode_name == "SSTORE" {
             let key = instruction.inputs[0];
             let value = instruction.inputs[1];
