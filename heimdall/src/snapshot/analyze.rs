@@ -1,9 +1,16 @@
 use crate::decompile::constants::AND_BITMASK_REGEX;
 
 use super::util::{CalldataFrame, Snapshot, StorageFrame};
+use ethers::{
+    abi::{decode, ParamType},
+    types::U256,
+};
 use heimdall_common::{
     ether::evm::{
-        core::types::{byte_size_to_type, convert_bitmask},
+        core::{
+            opcodes::WrappedOpcode,
+            types::{byte_size_to_type, convert_bitmask},
+        },
         ext::exec::VMTrace,
     },
     io::logging::TraceFactory,
@@ -32,6 +39,7 @@ pub fn snapshot_trace(
     for operation in &vm_trace.operations {
         let instruction = operation.last_instruction.clone();
         let _storage = operation.storage.clone();
+        let memory = operation.memory.clone();
 
         let opcode_name = instruction.opcode_details.clone().unwrap().name;
         let opcode_number = instruction.opcode;
@@ -122,11 +130,38 @@ pub fn snapshot_trace(
             }
         } else if opcode_name == "JUMPI" {
             // this is an if conditional for the children branches
-            let conditional = instruction.input_operations[1].yulify();
+            let _conditional = instruction.input_operations[1].yulify();
             // TODO
+        } else if opcode_name == "REVERT" {
+            // Safely convert U256 to usize
+            let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
+            let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
+            let revert_data = memory.read(offset, size);
+
+            if let Some(hex_data) = revert_data.get(4..) {
+                if let Ok(reverts_with) = decode(&[ParamType::String], hex_data) {
+                    if !reverts_with[0].to_string().is_empty() &&
+                        reverts_with[0].to_string().chars().all(|c| c != '\0')
+                    {
+                        snapshot.strings.insert(reverts_with[0].to_string().to_owned());
+                    }
+                }
+            }
         } else if opcode_name == "RETURN" {
             // Safely convert U256 to usize
+            let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
             let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
+            let return_data = memory.read(offset, size);
+
+            if let Some(hex_data) = return_data.get(4..) {
+                if let Ok(returns) = decode(&[ParamType::String], hex_data) {
+                    if !returns[0].to_string().is_empty() &&
+                        returns[0].to_string().chars().all(|c| c != '\0')
+                    {
+                        snapshot.strings.insert(returns[0].to_string());
+                    }
+                }
+            }
 
             let return_memory_operations =
                 snapshot.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
@@ -266,6 +301,107 @@ pub fn snapshot_trace(
                     );
                 }
             };
+        } else if opcode_name.contains("MSTORE") {
+            let key = instruction.inputs[0];
+            let value = instruction.inputs[1];
+            let operation = instruction.input_operations[1].clone();
+
+            // add the mstore to the function's memory map
+            snapshot.memory.insert(key, StorageFrame { value: value, operations: operation });
+        } else if opcode_name == "CODECOPY" {
+            let memory_offset = &instruction.inputs[0];
+            let source_offset = instruction.inputs[1].try_into().unwrap_or(usize::MAX);
+            let size_bytes = instruction.inputs[2].try_into().unwrap_or(usize::MAX);
+
+            // get the code from the source offset and size
+            let code = snapshot.bytecode[source_offset..(source_offset + size_bytes)].to_vec();
+
+            // add the code to the function's memory map in chunks of 32 bytes
+            for (index, chunk) in code.chunks(32).enumerate() {
+                let key = memory_offset + (index * 32);
+                let value = U256::from_big_endian(chunk);
+
+                snapshot.memory.insert(
+                    key,
+                    StorageFrame { value: value, operations: WrappedOpcode::new(0x39, vec![]) },
+                );
+            }
+        } else if opcode_name == "STATICCALL" {
+            // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
+            // logic
+            let modifier = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![])
+            {
+                true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
+                false => String::from(""),
+            };
+
+            let address = &instruction.input_operations[1];
+            let extcalldata_memory =
+                snapshot.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
+
+            snapshot.external_calls.push(format!(
+                "address({}).staticcall{}({});",
+                address.solidify(),
+                modifier,
+                extcalldata_memory
+                    .iter()
+                    .map(|x| x.operations.solidify())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+            ));
+        } else if opcode_name == "DELEGATECALL" {
+            // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
+            // logic
+            let modifier = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![])
+            {
+                true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
+                false => String::from(""),
+            };
+
+            let address = &instruction.input_operations[1];
+            let extcalldata_memory =
+                snapshot.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
+
+            snapshot.external_calls.push(format!(
+                "address({}).delegatecall{}({});",
+                address.solidify(),
+                modifier,
+                extcalldata_memory
+                    .iter()
+                    .map(|x| x.operations.solidify())
+                    .collect::<Vec<String>>()
+                    .join(", "),
+            ));
+        } else if opcode_name == "CALL" || opcode_name == "CALLCODE" {
+            // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
+            // logic
+            let gas = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
+                true => format!("gas: {}, ", instruction.input_operations[0].solidify()),
+                false => String::from(""),
+            };
+            let value = match instruction.input_operations[2] != WrappedOpcode::new(0x5A, vec![]) {
+                true => format!("value: {}", instruction.input_operations[2].solidify()),
+                false => String::from(""),
+            };
+            let modifier = match !gas.is_empty() || !value.is_empty() {
+                true => format!("{{ {gas}{value} }}"),
+                false => String::from(""),
+            };
+
+            let address = &instruction.input_operations[1];
+            let extcalldata_memory =
+                snapshot.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
+
+            snapshot.external_calls.push(format!(
+                "address({}).call{}({});",
+                address.solidify(),
+                modifier,
+                extcalldata_memory
+                    .iter()
+                    .map(|x| x.operations.solidify())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ));
         }
 
         // handle type heuristics

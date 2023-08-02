@@ -5,7 +5,11 @@ pub mod resolve;
 pub mod structures;
 pub mod util;
 
-use std::{collections::HashMap, env, fs, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs,
+    time::Duration,
+};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
@@ -21,7 +25,7 @@ use heimdall_common::{
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
     },
     io::logging::*,
-    utils::strings::encode_hex_reduced,
+    utils::strings::{decode_hex, encode_hex_reduced},
 };
 use indicatif::ProgressBar;
 
@@ -277,6 +281,7 @@ pub fn snapshot(args: SnapshotArgs) {
             map,
             Snapshot {
                 selector: selector.clone(),
+                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1)).unwrap(),
                 entry_point: function_entry_point,
                 arguments: HashMap::new(),
                 storage: HashMap::new(),
@@ -288,6 +293,8 @@ pub fn snapshot(args: SnapshotArgs) {
                 pure: true,
                 view: true,
                 payable: true,
+                strings: HashSet::new(),
+                external_calls: Vec::new(),
             },
             &mut trace,
             func_analysis_trace,
@@ -512,7 +519,13 @@ pub fn snapshot(args: SnapshotArgs) {
 
     // open the tui
     if !args.no_tui {
-        tui::handle(snapshots);
+        tui::handle(
+            snapshots,
+            all_resolved_errors,
+            all_resolved_events,
+            if args.target.len() > 64 { &shortened_target } else { args.target.as_str() },
+            (compiler, &version),
+        )
     }
 
     trace.display();

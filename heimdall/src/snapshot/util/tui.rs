@@ -1,10 +1,11 @@
-use std::{io, time::Duration};
+use std::{collections::HashMap, io, time::Duration};
 
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use heimdall_common::ether::signatures::{ResolvedError, ResolvedLog};
 use tui::{backend::CrosstermBackend, Terminal};
 
 use crate::snapshot::{
@@ -24,7 +25,13 @@ pub fn cleanup_terminal() {
     terminal.show_cursor().unwrap();
 }
 
-pub fn handle(snapshots: Vec<Snapshot>) {
+pub fn handle(
+    snapshots: Vec<Snapshot>,
+    resolved_errors: HashMap<String, ResolvedError>,
+    resolved_events: HashMap<String, ResolvedLog>,
+    target: &str,
+    compiler: (&str, &str),
+) {
     // create new TUI terminal
     enable_raw_mode().unwrap();
     let mut stdout = io::stdout();
@@ -35,6 +42,10 @@ pub fn handle(snapshots: Vec<Snapshot>) {
     // initialize state
     let mut state = STATE.lock().unwrap();
     state.snapshots = snapshots;
+    state.resolved_errors = resolved_errors;
+    state.resolved_events = resolved_events;
+    state.target = target.to_string();
+    state.compiler = (compiler.0.to_string(), compiler.1.to_string());
     drop(state);
 
     loop {
@@ -70,7 +81,7 @@ pub fn handle(snapshots: Vec<Snapshot>) {
                                 crossterm::event::KeyCode::Enter => {
                                     let mut split = state.input_buffer.split(' ');
                                     let command = split.next().unwrap();
-                                    let args = split.collect::<Vec<&str>>();
+                                    let _args = split.collect::<Vec<&str>>();
 
                                     match command {
                                         ":q" | ":quit" => {

@@ -17,7 +17,7 @@ pub fn render_tui_help<B: Backend>(f: &mut Frame<B>, _: &mut State) {
         .constraints(
             [
                 Constraint::Length(6),
-                Constraint::Length((0 + 2).try_into().unwrap()),
+                Constraint::Length(2.try_into().unwrap()),
                 Constraint::Percentage(100),
             ]
             .as_ref(),

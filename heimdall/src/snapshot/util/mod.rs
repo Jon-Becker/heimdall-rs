@@ -1,7 +1,7 @@
 pub mod table;
 pub mod tui;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use ethers::types::U256;
 use heimdall_common::ether::{
@@ -13,6 +13,9 @@ use heimdall_common::ether::{
 pub struct Snapshot {
     // the function's 4byte selector
     pub selector: String,
+
+    // the bytecode of the contract
+    pub bytecode: Vec<u8>,
 
     // the function's entry point in the code.
     // the entry point is the instruction the dispatcher JUMPs to when called.
@@ -51,6 +54,12 @@ pub struct Snapshot {
     pub pure: bool,
     pub view: bool,
     pub payable: bool,
+
+    // stores strings found within the function
+    pub strings: HashSet<String>,
+
+    // store external calls made by the function
+    pub external_calls: Vec<String>,
 }
 
 #[derive(Clone, Debug)]

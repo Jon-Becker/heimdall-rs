@@ -5,7 +5,7 @@ keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
 name = "heimdall-common"
 readme = "README.md"
-version = "0.4.8"
+version = "0.5.0"
 
 [dependencies]
 async-openai = "0.10.0"
