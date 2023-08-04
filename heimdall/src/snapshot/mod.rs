@@ -93,6 +93,7 @@ pub fn snapshot(args: SnapshotArgs) {
         verbose: args.verbose.clone(),
         output: "".to_string(),
         rpc_url: args.rpc_url,
+        decimal_counter: false,
     });
     trace.add_call(
         snapshot_call,
