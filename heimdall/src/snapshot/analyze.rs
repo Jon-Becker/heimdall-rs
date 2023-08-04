@@ -35,6 +35,11 @@ pub fn snapshot_trace(
     // make a clone of the recursed analysis function
     let mut snapshot = snapshot;
 
+    // update snapshot.gas (min, max, avg) with the value from vm_trace.gas_used
+    snapshot.gas_used.min = snapshot.gas_used.min.min(vm_trace.gas_used);
+    snapshot.gas_used.max = snapshot.gas_used.max.max(vm_trace.gas_used);
+    snapshot.gas_used.avg = (snapshot.gas_used.avg + vm_trace.gas_used) / 2;
+
     // perform analysis on the operations of the current VMTrace branch
     for operation in &vm_trace.operations {
         let instruction = operation.last_instruction.clone();

@@ -127,6 +127,21 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
             snapshot.entry_point
         )),
     ]);
+
+    // add gas consumptions
+    text.append(&mut vec![
+        // add modifiers and arguments
+        Spans::from(""), // buffer
+        Spans::from(Span::styled(
+            " Minimum Gas Consumed    Maximum Gas Consumed    Average Gas Consumed",
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        )),
+        Spans::from(format!(
+            " {:<24}{:<25}{}",
+            snapshot.gas_used.min, snapshot.gas_used.max, snapshot.gas_used.avg
+        )),
+    ]);
+
     // add events
     if !snapshot.events.is_empty() {
         text.append(&mut vec![

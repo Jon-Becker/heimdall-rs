@@ -60,6 +60,16 @@ pub struct Snapshot {
 
     // store external calls made by the function
     pub external_calls: Vec<String>,
+
+    // stores min, max, and avg gas used by the function
+    pub gas_used: GasUsed,
+}
+
+#[derive(Clone, Debug)]
+pub struct GasUsed {
+    pub min: u128,
+    pub max: u128,
+    pub avg: u128,
 }
 
 #[derive(Clone, Debug)]

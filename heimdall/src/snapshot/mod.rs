@@ -32,7 +32,7 @@ use indicatif::ProgressBar;
 use crate::snapshot::{
     analyze::snapshot_trace,
     resolve::match_parameters,
-    util::{tui, Snapshot},
+    util::{tui, GasUsed, Snapshot},
 };
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -295,10 +295,13 @@ pub fn snapshot(args: SnapshotArgs) {
                 payable: true,
                 strings: HashSet::new(),
                 external_calls: Vec::new(),
+                gas_used: GasUsed { min: u128::MAX, max: 0, avg: 0 },
             },
             &mut trace,
             func_analysis_trace,
         );
+
+        println!("function {}, gas used: {:?}", selector, snapshot.gas_used);
 
         // resolve signatures
         if !args.skip_resolving {
