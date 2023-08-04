@@ -10,7 +10,7 @@ use tui::{
 
 use crate::dump::{constants::DECODE_AS_TYPES, structures::dump_state::DumpState};
 
-pub fn build_rows(mut state: &mut DumpState, max_row_height: usize) -> Vec<Row<'static>> {
+pub fn build_rows(state: &mut DumpState, max_row_height: usize) -> Vec<Row<'static>> {
     // ensure scroll index is within bounds
     if state.scroll_index >= state.storage.len() && state.scroll_index != 0 {
         state.scroll_index = state.storage.len() - 1;
