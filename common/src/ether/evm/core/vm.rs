@@ -383,6 +383,11 @@ impl VM {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
 
+                // consume dynamic gas
+                let exponent_byte_size = exponent.value.bits() / 8;
+                let gas_cost = 50 * exponent_byte_size;
+                self.consume_gas(gas_cost.try_into().unwrap());
+
                 self.stack.push(result, simplified_operation);
             }
 

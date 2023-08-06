@@ -54,7 +54,7 @@ impl VM {
     fn recursive_map(
         &mut self,
         branch_count: &mut u32,
-        handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>,
+        handled_jumps: &mut HashMap<(u128, U256, usize), Vec<VecDeque<StackFrame>>>,
     ) -> VMTrace {
         let mut vm = self.clone();
 
@@ -76,11 +76,10 @@ impl VM {
 
             // if we encounter a JUMPI, create children taking both paths and break
             if state.last_instruction.opcode == 0x57 {
-                let jump_frame: (u128, U256, usize, bool) = (
+                let jump_frame: (u128, U256, usize) = (
                     state.last_instruction.instruction,
                     state.last_instruction.inputs[0],
                     vm.stack.size(),
-                    state.last_instruction.inputs[1].is_zero(),
                 );
 
                 // if the stack has over 16 items of the same source, it's probably a loop
