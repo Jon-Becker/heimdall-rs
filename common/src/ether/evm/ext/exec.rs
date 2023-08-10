@@ -61,7 +61,7 @@ impl VM {
         // create a new VMTrace object
         let mut vm_trace = VMTrace {
             instruction: vm.instruction,
-            gas_used: 0,
+            gas_used: 21000,
             operations: Vec::new(),
             children: Vec::new(),
         };
@@ -72,7 +72,7 @@ impl VM {
 
             // update vm_trace
             vm_trace.operations.push(state.clone());
-            vm_trace.gas_used = state.gas_used;
+            vm_trace.gas_used = vm.gas_used;
 
             // if we encounter a JUMPI, create children taking both paths and break
             if state.last_instruction.opcode == 0x57 {

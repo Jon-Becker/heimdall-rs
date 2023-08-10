@@ -1,5 +1,0 @@
-{
-    "rust-analyzer.linkedProjects": [
-        "./heimdall/Cargo.toml"
-    ]
-}
