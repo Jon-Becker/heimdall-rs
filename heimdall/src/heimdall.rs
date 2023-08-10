@@ -1,5 +1,4 @@
 use backtrace::Backtrace;
-use snapshot::{snapshot, SnapshotArgs};
 use std::{io, panic};
 
 mod cfg;
@@ -21,6 +20,7 @@ use crossterm::{
 use decode::{decode, DecodeArgs};
 use decompile::{decompile, DecompilerArgs};
 use dump::{dump, DumpArgs};
+use snapshot::{snapshot, SnapshotArgs};
 
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{

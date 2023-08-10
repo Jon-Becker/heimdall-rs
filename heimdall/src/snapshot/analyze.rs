@@ -38,7 +38,11 @@ pub fn snapshot_trace(
     // update snapshot.gas (min, max, avg) with the value from vm_trace.gas_used
     snapshot.gas_used.min = snapshot.gas_used.min.min(vm_trace.gas_used);
     snapshot.gas_used.max = snapshot.gas_used.max.max(vm_trace.gas_used);
-    snapshot.gas_used.avg = (snapshot.gas_used.avg + vm_trace.gas_used) / 2;
+    snapshot.gas_used.avg = if snapshot.gas_used.avg != 0 {
+        (snapshot.gas_used.avg + vm_trace.gas_used) / 2
+    } else {
+        vm_trace.gas_used
+    };
 
     // perform analysis on the operations of the current VMTrace branch
     for operation in &vm_trace.operations {

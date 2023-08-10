@@ -250,7 +250,7 @@ mod integration_tests {
         for contract in contracts {
             println!("Testing contract: {contract}");
             DecompileBuilder::new(contract)
-                .output("./output/tests/decompile/test3")
+                .output("./output/tests/decompile/integration")
                 .rpc("https://eth.llamarpc.com")
                 .include_sol(true)
                 .default(true)
@@ -260,7 +260,7 @@ mod integration_tests {
             // assert that the number of opening and closing brackets, parentheses, and curly braces
             // are equal
             let output = heimdall_common::io::file::read_file(&String::from(
-                "./output/tests/decompile/test3/decompiled.sol",
+                "./output/tests/decompile/integration/decompiled.sol",
             ));
             let open_brackets = output.matches('{').count();
             let close_brackets = output.matches('}').count();
@@ -294,5 +294,7 @@ mod integration_tests {
         assert!(is_event_covered);
         assert!(is_require_covered);
         assert!(is_error_covered);
+
+        delete_path(&String::from("./output/tests/decompile/integration"));
     }
 }

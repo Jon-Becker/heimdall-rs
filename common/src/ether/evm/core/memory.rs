@@ -74,4 +74,19 @@ impl Memory {
             self.memory[offset..offset + size].to_vec()
         }
     }
+
+    // calculate the current memory cost
+    pub fn memory_cost(&self) -> u128 {
+        // Calculate the new size of the memory
+        let memory_word_size = (self.size() + 31) / 32;
+        (memory_word_size.pow(2)) / 512 + (3 * memory_word_size)
+    }
+
+    // calculate the memory cost of extending the memory to a given size
+    pub fn expansion_cost(&self, offset: usize, size: usize) -> u128 {
+        // Calculate the new size of the memory
+        let new_memory_word_size = ((offset + size + 31) / 32) as u128;
+        let new_memory_cost = (new_memory_word_size.pow(2)) / 512 + (3 * new_memory_word_size);
+        new_memory_cost - self.memory_cost()
+    }
 }
