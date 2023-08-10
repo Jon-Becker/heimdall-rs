@@ -21,7 +21,9 @@ impl Storage {
     }
 
     // loads a key from the storage map
-    pub fn load(&self, key: [u8; 32]) -> [u8; 32] {
+    pub fn load(&mut self, key: [u8; 32]) -> [u8; 32] {
+        self.access_set.insert(key);
+
         // return the value associated with the key, with a null word if it doesn't exist
         match self.storage.get(&key) {
             Some(value) => *value,
