@@ -87,6 +87,10 @@ impl Memory {
         // Calculate the new size of the memory
         let new_memory_word_size = ((offset + size + 31) / 32) as u128;
         let new_memory_cost = (new_memory_word_size.pow(2)) / 512 + (3 * new_memory_word_size);
-        new_memory_cost - self.memory_cost()
+        if new_memory_cost < self.memory_cost() {
+            0
+        } else {
+            new_memory_cost - self.memory_cost()
+        }
     }
 }
