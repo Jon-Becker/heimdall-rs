@@ -10,6 +10,7 @@ out.json
 .ideas.txt
 .vscode
 .vscode/*
+*/.vscode
 
 target
 */target
