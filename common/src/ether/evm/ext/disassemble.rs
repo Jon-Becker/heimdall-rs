@@ -29,6 +29,10 @@ pub struct DisassemblerArgs {
     /// The RPC provider to use for fetching target bytecode.
     #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
+
+    /// Whether to use base-10 for the program counter.
+    #[clap(long = "decimal-counter", short = 'd')]
+    pub decimal_counter: bool,
 }
 
 pub fn disassemble(args: DisassemblerArgs) -> String {
@@ -114,7 +118,17 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         }
 
         output.push_str(
-            format!("{} {} {}\n", program_counter, operation.name, pushed_bytes).as_str(),
+            format!(
+                "{} {} {}\n",
+                if args.decimal_counter {
+                    program_counter.to_string()
+                } else {
+                    format!("{:06x}", program_counter)
+                },
+                operation.name,
+                pushed_bytes
+            )
+            .as_str(),
         );
         program_counter += 1;
     }

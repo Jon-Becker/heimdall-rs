@@ -143,6 +143,7 @@ pub fn cfg(args: CFGArgs) {
         verbose: args.verbose.clone(),
         output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
+        decimal_counter: false,
     });
 
     // add the call to the trace

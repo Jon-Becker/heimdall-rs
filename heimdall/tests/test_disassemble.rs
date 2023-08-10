@@ -15,6 +15,7 @@ mod benchmarks {
                 verbose: Verbosity::new(0, 0),
                 output: String::from(""),
                 rpc_url: String::from(""),
+                decimal_counter: true,
             });
         }
 
@@ -33,6 +34,22 @@ mod integration_tests {
     #[test]
     fn test_disassemble_nominal() {
         let bytecode = "366000600037611000600036600073";
+        let expected = String::from("000000 CALLDATASIZE \n000002 PUSH1 00\n000004 PUSH1 00\n000005 CALLDATACOPY \n000008 PUSH2 1000\n00000a PUSH1 00\n00000b CALLDATASIZE \n00000d PUSH1 00\n");
+
+        let assembly = disassemble(DisassemblerArgs {
+            target: bytecode.to_owned(),
+            verbose: Verbosity::new(0, 0),
+            output: String::from(""),
+            rpc_url: String::from(""),
+            decimal_counter: false,
+        });
+
+        assert_eq!(expected, assembly);
+    }
+
+    #[test]
+    fn test_disassemble_decimal_counter_nominal() {
+        let bytecode = "366000600037611000600036600073";
         let expected = String::from("0 CALLDATASIZE \n2 PUSH1 00\n4 PUSH1 00\n5 CALLDATACOPY \n8 PUSH2 1000\n10 PUSH1 00\n11 CALLDATASIZE \n13 PUSH1 00\n");
 
         let assembly = disassemble(DisassemblerArgs {
@@ -40,6 +57,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             output: String::from(""),
             rpc_url: String::from(""),
+            decimal_counter: true,
         });
 
         assert_eq!(expected, assembly);
@@ -55,6 +73,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             output: String::from("/tmp/heimdall-rs/"),
             rpc_url: String::from(""),
+            decimal_counter: true,
         });
 
         assert_eq!(expected, assembly);
@@ -70,6 +89,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 1),
             output: String::from("/tmp/heimdall-rs/"),
             rpc_url: String::from(""),
+            decimal_counter: true,
         });
 
         assert_eq!(expected, assembly);
@@ -88,6 +108,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             output: String::from("/tmp/heimdall-rs/"),
             rpc_url: String::from(""),
+            decimal_counter: true,
         });
 
         assert_eq!(expected, assembly);
@@ -104,6 +125,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             output: String::from("/tmp/heimdall-rs/"),
             rpc_url: String::from("https://eth.llamarpc.com"),
+            decimal_counter: true,
         });
 
         assert_eq!(expected, assembly);
