@@ -1,19 +1,26 @@
 use crate::decompile::constants::AND_BITMASK_REGEX;
 
-use super::util::{CalldataFrame, Snapshot, StorageFrame};
+use super::{
+    constants::VARIABLE_SIZE_CHECK_REGEX,
+    structures::snapshot::{CalldataFrame, Snapshot, StorageFrame},
+};
 use ethers::{
     abi::{decode, ParamType},
     types::U256,
 };
 use heimdall_common::{
-    ether::evm::{
-        core::{
-            opcodes::WrappedOpcode,
-            types::{byte_size_to_type, convert_bitmask},
+    ether::{
+        evm::{
+            core::{
+                opcodes::WrappedOpcode,
+                types::{byte_size_to_type, convert_bitmask},
+            },
+            ext::exec::VMTrace,
         },
-        ext::exec::VMTrace,
+        lexers::cleanup::Cleanup,
     },
     io::logging::TraceFactory,
+    utils::strings::encode_hex_reduced,
 };
 
 /// Generates a snapshot of a VMTrace's underlying function
@@ -139,8 +146,36 @@ pub fn snapshot_trace(
             }
         } else if opcode_name == "JUMPI" {
             // this is an if conditional for the children branches
-            let _conditional = instruction.input_operations[1].yulify();
-            // TODO
+            let conditional = instruction.input_operations[1].solidify().cleanup();
+
+            // remove non-payable check and mark function as non-payable
+            if conditional == "!msg.value" {
+                // this is marking the start of a non-payable function
+                trace.add_info(
+                    trace_parent,
+                    instruction.instruction.try_into().unwrap(),
+                    &format!(
+                        "conditional at instruction {} indicates an non-payble function.",
+                        instruction.instruction
+                    ),
+                );
+                snapshot.payable = false;
+                continue
+            }
+
+            // perform a series of checks to determine if the condition
+            // is added by the compiler and can be ignored
+            if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
+                VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
+                (conditional.replace('!', "") == "success") ||
+                (!conditional.contains("msg.sender") ||
+                    !conditional.contains("arg") ||
+                    !conditional.contains("storage"))
+            {
+                continue
+            }
+
+            snapshot.control_statements.insert(format!("if ({}) {{ .. }}", conditional));
         } else if opcode_name == "REVERT" {
             // Safely convert U256 to usize
             let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
@@ -176,7 +211,7 @@ pub fn snapshot_trace(
                 snapshot.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
             let return_memory_operations_solidified = return_memory_operations
                 .iter()
-                .map(|x| x.operations.solidify())
+                .map(|x| x.operations.solidify().cleanup())
                 .collect::<Vec<String>>()
                 .join(", ");
 
@@ -213,13 +248,8 @@ pub fn snapshot_trace(
                     };
                 }
             }
-        } else if opcode_name == "SSTORE" {
-            let key = instruction.inputs[0];
-            let value = instruction.inputs[1];
-            let operations = instruction.input_operations[1].clone();
-
-            // add the sstore to the function's storage map
-            snapshot.storage.insert(key, StorageFrame { value: value, operations: operations });
+        } else if opcode_name == "SSTORE" || opcode_name == "SLOAD" {
+            snapshot.storage.insert(instruction.input_operations[0].solidify().cleanup());
         } else if opcode_name == "CALLDATALOAD" {
             let slot_as_usize: usize = instruction.inputs[0].try_into().unwrap_or(usize::MAX);
             let calldata_slot = (slot_as_usize.saturating_sub(4)) / 32;
@@ -275,15 +305,30 @@ pub fn snapshot_trace(
                 }
             };
         } else if ["AND", "OR"].contains(&opcode_name) {
+            // convert the bitmask to it's potential solidity types
+            let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
+
+            for (i, operation) in instruction.input_operations.iter().enumerate() {
+                if operation.opcode.name.starts_with("PUSH") {
+                    let address = encode_hex_reduced(instruction.inputs[i]);
+
+                    // check if address is all ff's OR if the address doesnt fit in an address mask
+                    if address.replacen("0x", "", 1).chars().all(|c| c == 'f') ||
+                        (address.len() > 42 || address.len() < 32)
+                    {
+                        continue
+                    }
+
+                    snapshot.addresses.insert(address);
+                }
+            }
+
             if let Some(calldata_slot_operation) =
                 instruction.input_operations.iter().find(|operation| {
                     operation.opcode.name == "CALLDATALOAD" ||
                         operation.opcode.name == "CALLDATACOPY"
                 })
             {
-                // convert the bitmask to it's potential solidity types
-                let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
-
                 if let Some((calldata_slot, arg)) =
                     snapshot.arguments.clone().iter().find(|(_, (frame, _))| {
                         frame.operation == calldata_slot_operation.inputs[0].to_string()
@@ -340,7 +385,9 @@ pub fn snapshot_trace(
             // logic
             let modifier = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![])
             {
-                true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
+                true => {
+                    format!("{{ gas: {} }}", instruction.input_operations[0].solidify().cleanup())
+                }
                 false => String::from(""),
             };
 
@@ -350,11 +397,11 @@ pub fn snapshot_trace(
 
             snapshot.external_calls.push(format!(
                 "address({}).staticcall{}({});",
-                address.solidify(),
+                address.solidify().cleanup(),
                 modifier,
                 extcalldata_memory
                     .iter()
-                    .map(|x| x.operations.solidify())
+                    .map(|x| x.operations.solidify().cleanup())
                     .collect::<Vec<String>>()
                     .join(", "),
             ));
@@ -363,7 +410,9 @@ pub fn snapshot_trace(
             // logic
             let modifier = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![])
             {
-                true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
+                true => {
+                    format!("{{ gas: {} }}", instruction.input_operations[0].solidify().cleanup())
+                }
                 false => String::from(""),
             };
 
@@ -373,11 +422,11 @@ pub fn snapshot_trace(
 
             snapshot.external_calls.push(format!(
                 "address({}).delegatecall{}({});",
-                address.solidify(),
+                address.solidify().cleanup(),
                 modifier,
                 extcalldata_memory
                     .iter()
-                    .map(|x| x.operations.solidify())
+                    .map(|x| x.operations.solidify().cleanup())
                     .collect::<Vec<String>>()
                     .join(", "),
             ));
@@ -385,11 +434,11 @@ pub fn snapshot_trace(
             // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
             // logic
             let gas = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
-                true => format!("gas: {}, ", instruction.input_operations[0].solidify()),
+                true => format!("gas: {}, ", instruction.input_operations[0].solidify().cleanup()),
                 false => String::from(""),
             };
             let value = match instruction.input_operations[2] != WrappedOpcode::new(0x5A, vec![]) {
-                true => format!("value: {}", instruction.input_operations[2].solidify()),
+                true => format!("value: {}", instruction.input_operations[2].solidify().cleanup()),
                 false => String::from(""),
             };
             let modifier = match !gas.is_empty() || !value.is_empty() {
@@ -403,11 +452,11 @@ pub fn snapshot_trace(
 
             snapshot.external_calls.push(format!(
                 "address({}).call{}({});",
-                address.solidify(),
+                address.solidify().cleanup(),
                 modifier,
                 extcalldata_memory
                     .iter()
-                    .map(|x| x.operations.solidify())
+                    .map(|x| x.operations.solidify().cleanup())
                     .collect::<Vec<String>>()
                     .join(", ")
             ));

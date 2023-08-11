@@ -1554,7 +1554,6 @@ impl VM {
 
             // INVALID & SELFDESTRUCT
             _ => {
-                self.consume_gas(self.gas_remaining);
                 self.exit(1, Vec::new());
             }
         }

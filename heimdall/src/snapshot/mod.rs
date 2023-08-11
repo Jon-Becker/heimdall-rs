@@ -32,7 +32,8 @@ use indicatif::ProgressBar;
 use crate::snapshot::{
     analyze::snapshot_trace,
     resolve::match_parameters,
-    util::{csv::generate_and_write_contract_csv, tui, GasUsed, Snapshot},
+    structures::snapshot::{GasUsed, Snapshot},
+    util::{csv::generate_and_write_contract_csv, tui},
 };
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -285,7 +286,7 @@ pub fn snapshot(args: SnapshotArgs) {
                 bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1)).unwrap(),
                 entry_point: function_entry_point,
                 arguments: HashMap::new(),
-                storage: HashMap::new(),
+                storage: HashSet::new(),
                 memory: HashMap::new(),
                 returns: None,
                 events: HashMap::new(),
@@ -297,6 +298,9 @@ pub fn snapshot(args: SnapshotArgs) {
                 strings: HashSet::new(),
                 external_calls: Vec::new(),
                 gas_used: GasUsed { min: u128::MAX, max: 0, avg: 0 },
+                addresses: HashSet::new(),
+                branch_count: *jumpdest_count,
+                control_statements: HashSet::new(),
             },
             &mut trace,
             func_analysis_trace,

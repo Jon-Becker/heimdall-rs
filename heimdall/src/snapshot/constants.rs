@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use fancy_regex::Regex;
 use lazy_static::lazy_static;
 
 use crate::snapshot::structures::state::State;
@@ -28,4 +29,7 @@ lazy_static! {
         "CTRL + ↑, CTRL + ↓                     move the cursor up or down by 10 slots".to_string(),
         "ESC                                    clear the search filter".to_string(),
     ];
+
+    // used to detect compiler size checks
+    pub static ref VARIABLE_SIZE_CHECK_REGEX: Regex = Regex::new(r"!?\(?0(x01)? < [a-zA-Z0-9_\[\]]+\.length\)?").unwrap();
 }

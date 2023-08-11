@@ -11,9 +11,8 @@ use tui::{backend::CrosstermBackend, Terminal};
 use crate::snapshot::{
     constants::STATE,
     menus::{render_ui, TUIView},
+    structures::snapshot::Snapshot,
 };
-
-use super::Snapshot;
 
 // cleanup the terminal, disable raw mode, and leave the alternate screen
 pub fn cleanup_terminal() {
@@ -116,20 +115,36 @@ pub fn handle(
                             }
 
                             // select transaction
-                            crossterm::event::KeyCode::Right => {}
+                            crossterm::event::KeyCode::Right => {
+                                state.scroll = true;
+                            }
 
                             // deselect transaction
-                            crossterm::event::KeyCode::Left => {}
+                            crossterm::event::KeyCode::Left => {
+                                state.scroll = false;
+                            }
 
                             // scroll down
                             crossterm::event::KeyCode::Down => {
-                                state.scroll_index += 1;
+                                if state.scroll {
+                                    state.scroll_index += 1;
+                                } else {
+                                    state.scroll_index = 0;
+                                    state.function_index += 1;
+                                }
                             }
 
                             // scroll up
                             crossterm::event::KeyCode::Up => {
-                                if state.scroll_index > 0 {
-                                    state.scroll_index -= 1;
+                                if state.scroll {
+                                    if state.scroll_index > 0 {
+                                        state.scroll_index -= 1;
+                                    }
+                                } else {
+                                    if state.function_index > 0 {
+                                        state.scroll_index = 0;
+                                        state.function_index -= 1;
+                                    }
                                 }
                             }
 
@@ -153,13 +168,25 @@ pub fn handle(
                         match mouse.kind {
                             // scroll down
                             crossterm::event::MouseEventKind::ScrollDown => {
-                                state.scroll_index += 1;
+                                if state.scroll {
+                                    state.scroll_index += 1;
+                                } else {
+                                    state.scroll_index = 0;
+                                    state.function_index += 1;
+                                }
                             }
 
                             // scroll up
                             crossterm::event::MouseEventKind::ScrollUp => {
-                                if state.scroll_index > 0 {
-                                    state.scroll_index -= 1;
+                                if state.scroll {
+                                    if state.scroll_index > 0 {
+                                        state.scroll_index -= 1;
+                                    }
+                                } else {
+                                    if state.function_index > 0 {
+                                        state.scroll_index = 0;
+                                        state.function_index -= 1;
+                                    }
                                 }
                             }
                             _ => {}

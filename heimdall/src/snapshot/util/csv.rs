@@ -6,7 +6,7 @@ use heimdall_common::{
     utils::strings::encode_hex_reduced,
 };
 
-use super::Snapshot;
+use crate::snapshot::structures::snapshot::Snapshot;
 
 pub fn generate_and_write_contract_csv(
     snapshots: &Vec<Snapshot>,
@@ -26,13 +26,17 @@ pub fn generate_and_write_contract_csv(
             "Pure",
             "Returns",
             "Entry Point",
+            "Branch Count",
             "Emitted Events",
             "Custom Errors",
+            "Storage Slots",
             "Strings",
+            "Hardcoded Addresses",
             "Minimum Gas Used",
             "Maximum Gas Used",
             "Average Gas Used",
             "External Calls Made",
+            "Control Statements",
         ]
         .join(","),
     );
@@ -85,12 +89,22 @@ pub fn generate_and_write_contract_csv(
             .collect::<Vec<_>>()
             .join("\n");
 
+        // build storage column
+        let storage_column = snapshot.storage.clone().into_iter().collect::<Vec<_>>().join("\n");
+
         // build string column
         let strings_column = snapshot.strings.clone().into_iter().collect::<Vec<_>>().join("\n");
+
+        // build address column
+        let address_column = snapshot.addresses.clone().into_iter().collect::<Vec<_>>().join("\n");
 
         // build external calls column
         let external_calls_column =
             snapshot.external_calls.clone().into_iter().collect::<Vec<_>>().join("\n");
+
+        // build control statements column
+        let control_statements_column =
+            snapshot.control_statements.clone().into_iter().collect::<Vec<_>>().join("\n");
 
         // push column values
         line.push(snapshot.selector.clone());
@@ -103,13 +117,17 @@ pub fn generate_and_write_contract_csv(
         line.push(snapshot.pure.to_string());
         line.push(snapshot.returns.clone().unwrap_or(String::new()));
         line.push(snapshot.entry_point.to_string());
+        line.push(snapshot.branch_count.to_string());
         line.push(format!("\"{event_column}\""));
         line.push(format!("\"{error_column}\""));
+        line.push(format!("\"{storage_column}\""));
         line.push(format!("\"{strings_column}\""));
+        line.push(format!("\"{address_column}\""));
         line.push(snapshot.gas_used.min.to_string());
         line.push(snapshot.gas_used.max.to_string());
         line.push(snapshot.gas_used.avg.to_string());
         line.push(format!("\"{external_calls_column}\""));
+        line.push(format!("\"{control_statements_column}\""));
 
         lines.push(line.join(","));
     }

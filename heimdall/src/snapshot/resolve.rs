@@ -1,4 +1,4 @@
-use super::util::Snapshot;
+use super::structures::snapshot::Snapshot;
 use heimdall_common::ether::signatures::ResolvedFunction;
 
 // match the ResolvedFunction to a list of Function parameters

@@ -38,22 +38,27 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
         .split(sub_layout[1]);
 
     // about text
-    let header = Paragraph::new(format!("heimdall-rs v{}", env!("CARGO_PKG_VERSION")))
-        .style(Style::default().fg(Color::White))
-        .block(create_block(
-            format!(
-                "Snapshot of Contract {:<space$} {} {}",
-                state.target,
-                state.compiler.0,
-                state.compiler.1,
-                space = f.size().width as usize - state.target.len() + 17 -
-                    state.compiler.0.len() -
-                    state.compiler.1.len()
-            ),
-            Borders::BOTTOM,
-        ))
-        .alignment(Alignment::Left)
-        .wrap(Wrap { trim: true });
+    let header = Paragraph::new(format!(
+        "heimdall-rs v{}{:>space$}",
+        env!("CARGO_PKG_VERSION"),
+        "type :q to exit",
+        space = f.size().width as usize - 20
+    ))
+    .style(Style::default().fg(Color::White))
+    .block(create_block(
+        format!(
+            "Snapshot of Contract {:<space$} {} {}",
+            state.target,
+            state.compiler.0,
+            state.compiler.1,
+            space = f.size().width as usize - state.target.len() + 17 -
+                state.compiler.0.len() -
+                state.compiler.1.len()
+        ),
+        Borders::BOTTOM,
+    ))
+    .alignment(Alignment::Left)
+    .wrap(Wrap { trim: true });
 
     // build rows
     let rows = build_rows(state, main_layout[1].height as usize - 4);
@@ -69,7 +74,7 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
         .widths(&[Constraint::Length(12), Constraint::Length(14), Constraint::Percentage(100)]);
 
     // build function info
-    let snapshot = state.snapshots.get(state.scroll_index).unwrap();
+    let snapshot = state.snapshots.get(state.function_index).unwrap();
 
     // build modifiers
     let modifiers = vec![
@@ -117,14 +122,15 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
         // add modifiers and arguments
         Spans::from(""), // buffer
         Spans::from(Span::styled(
-            " Modifiers       Returns        Entry Point",
+            " Modifiers       Returns        Entry Point      Branch Count",
             Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
         )),
         Spans::from(format!(
-            " {:<16}{:<15}{}",
+            " {:<16}{:<15}{:<17}{}",
             modifiers.join(" "),
             snapshot.returns.clone().unwrap_or("None".to_owned()),
-            snapshot.entry_point
+            snapshot.entry_point,
+            snapshot.branch_count
         )),
     ]);
 
@@ -213,7 +219,7 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
     }
 
     // add strings
-    if !snapshot.external_calls.is_empty() {
+    if !snapshot.strings.is_empty() {
         text.append(&mut vec![
             Spans::from(""), // buffer
             Spans::from(Span::styled(
@@ -230,12 +236,72 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
         );
     }
 
+    // add addresses
+    if !snapshot.addresses.is_empty() {
+        text.append(&mut vec![
+            Spans::from(""), // buffer
+            Spans::from(Span::styled(
+                " Hardcoded Addresses ",
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )),
+        ]);
+        text.append(
+            &mut snapshot
+                .addresses
+                .iter()
+                .map(|x| Spans::from(format!(" {}", x)))
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    // add storage
+    if !snapshot.storage.is_empty() {
+        text.append(&mut vec![
+            Spans::from(""), // buffer
+            Spans::from(Span::styled(
+                " Storage ",
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )),
+        ]);
+        text.append(
+            &mut snapshot
+                .storage
+                .iter()
+                .map(|x| Spans::from(format!(" {}", x)))
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    // add control statements
+    if !snapshot.control_statements.is_empty() {
+        text.append(&mut vec![
+            Spans::from(""), // buffer
+            Spans::from(Span::styled(
+                " Control Statements ",
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )),
+        ]);
+        text.append(
+            &mut snapshot
+                .control_statements
+                .iter()
+                .map(|x| Spans::from(format!(" {}", x)))
+                .collect::<Vec<_>>(),
+        );
+    }
+
     // about text
-    let snapshot_header = format!(" Snapshot of 0x{} ", snapshot.selector);
+    let snapshot_header = format!(
+        " {}Snapshot of 0x{}{} ",
+        if state.scroll { "> " } else { "" },
+        snapshot.selector,
+        if state.scroll { " <" } else { "" },
+    );
     let function_snapshot = Paragraph::new(text)
         .style(Style::default().fg(Color::White))
         .block(create_block(snapshot_header, Borders::ALL))
-        .alignment(Alignment::Left);
+        .alignment(Alignment::Left)
+        .scroll((state.scroll_index as u16, 0));
 
     f.render_widget(header, main_layout[0]);
     f.render_widget(table, sub_layout[0]);

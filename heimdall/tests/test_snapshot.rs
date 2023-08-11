@@ -160,7 +160,7 @@ mod integration_tests {
             let args = SnapshotArgs {
                 target: String::from(contract),
                 verbose: Verbosity::new(0, 0),
-                output: String::from("./output/tests/snapshot/integration"),
+                output: String::from(""),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,
@@ -169,6 +169,6 @@ mod integration_tests {
             heimdall::snapshot::snapshot(args);
         }
 
-        delete_path(&String::from("./output/tests/snapshot/integration"));
+        //delete_path(&String::from("./output/tests/snapshot/integration"));
     }
 }
