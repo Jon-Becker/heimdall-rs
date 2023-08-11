@@ -83,7 +83,7 @@ mod integration_tests {
     }
 
     #[test]
-    /// Thorough testing for decompilation across a large number of contracts
+    /// Thorough testing for snapshot across a large number of contracts
     /// Runs on the top 100 contracts for 2023-06-26
     ///
     /// ## Checks:
@@ -160,7 +160,7 @@ mod integration_tests {
             let args = SnapshotArgs {
                 target: String::from(contract),
                 verbose: Verbosity::new(0, 0),
-                output: String::from(""),
+                output: String::from("./output/tests/snapshot/integration"),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,
@@ -169,6 +169,6 @@ mod integration_tests {
             heimdall::snapshot::snapshot(args);
         }
 
-        //delete_path(&String::from("./output/tests/snapshot/integration"));
+        delete_path(&String::from("./output/tests/snapshot/integration"));
     }
 }

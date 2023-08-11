@@ -140,11 +140,9 @@ pub fn handle(
                                     if state.scroll_index > 0 {
                                         state.scroll_index -= 1;
                                     }
-                                } else {
-                                    if state.function_index > 0 {
-                                        state.scroll_index = 0;
-                                        state.function_index -= 1;
-                                    }
+                                } else if state.function_index > 0 {
+                                    state.scroll_index = 0;
+                                    state.function_index -= 1;
                                 }
                             }
 
@@ -182,11 +180,9 @@ pub fn handle(
                                     if state.scroll_index > 0 {
                                         state.scroll_index -= 1;
                                     }
-                                } else {
-                                    if state.function_index > 0 {
-                                        state.scroll_index = 0;
-                                        state.function_index -= 1;
-                                    }
+                                } else if state.function_index > 0 {
+                                    state.scroll_index = 0;
+                                    state.function_index -= 1;
                                 }
                             }
                             _ => {}

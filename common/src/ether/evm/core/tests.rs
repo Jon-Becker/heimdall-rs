@@ -494,7 +494,7 @@ mod test_vm {
         let mut vm = new_test_vm("0x60fe56");
         vm.execute();
 
-        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0xff").unwrap());
+        assert_eq!(U256::from(vm.instruction), U256::from_str("0xff").unwrap());
     }
 
     #[test]
@@ -502,12 +502,12 @@ mod test_vm {
         let mut vm = new_test_vm("0x600160fe57");
         vm.execute();
 
-        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0xff").unwrap());
+        assert_eq!(U256::from(vm.instruction), U256::from_str("0xff").unwrap());
 
         let mut vm = new_test_vm("0x600060fe5758");
         vm.execute();
 
-        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0x07").unwrap());
+        assert_eq!(U256::from(vm.instruction), U256::from_str("0x07").unwrap());
 
         // PC test
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0x07").unwrap());
@@ -989,7 +989,7 @@ mod test_types {
     #[test]
     fn test_array_signature() {
         let solidity_type = "test(uint256,string[],uint256)";
-        let param_type = parse_function_parameters(&solidity_type);
+        let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
             param_type,
             Some(vec![
