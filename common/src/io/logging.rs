@@ -476,8 +476,8 @@ impl Logger {
             Ok(_) => {
                 // check if default was selected
                 if selection.trim() == "" {
-                    if let Some(..) = default {
-                        return default.expect("Failed to get default option.")
+                    if let Some(default) = default {
+                        return default
                     } else {
                         self.error("invalid selection.");
                         return self.option(function, message, options, default, skip)
