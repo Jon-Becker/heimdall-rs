@@ -1,6 +1,6 @@
 mod constants;
+mod menus;
 mod structures;
-mod tui_views;
 mod util;
 
 use clap::{AppSettings, Parser};
@@ -13,8 +13,8 @@ use std::{collections::HashMap, env, str::FromStr, time::Instant};
 
 use self::{
     constants::DUMP_STATE,
+    menus::TUIView,
     structures::{dump_state::DumpState, transaction::Transaction},
-    tui_views::TUIView,
     util::csv::write_storage_to_csv,
 };
 

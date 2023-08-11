@@ -1,12 +1,12 @@
+pub mod analyzers;
 pub mod constants;
-pub mod lexers;
 pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
 
 use crate::decompile::{
-    lexers::{solidity::analyze_sol, yul::analyze_yul},
+    analyzers::{solidity::analyze_sol, yul::analyze_yul},
     resolve::*,
     util::*,
 };

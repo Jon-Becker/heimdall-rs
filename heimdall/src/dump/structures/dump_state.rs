@@ -2,7 +2,7 @@ use std::{collections::HashMap, time::Instant};
 
 use ethers::types::H256;
 
-use crate::dump::{tui_views::TUIView, DumpArgs};
+use crate::dump::{menus::TUIView, DumpArgs};
 
 use super::{storage_slot::StorageSlot, transaction::Transaction};
 

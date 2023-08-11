@@ -5,7 +5,7 @@ mod test_vm {
 
     use ethers::prelude::U256;
 
-    use crate::{ether::evm::vm::VM, utils::strings::decode_hex};
+    use crate::{ether::evm::core::vm::VM, utils::strings::decode_hex};
 
     // creates a new test VM with calldata.
     fn new_test_vm(bytecode: &str) -> VM {
@@ -494,7 +494,7 @@ mod test_vm {
         let mut vm = new_test_vm("0x60fe56");
         vm.execute();
 
-        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0xff").unwrap());
+        assert_eq!(U256::from(vm.instruction), U256::from_str("0xff").unwrap());
     }
 
     #[test]
@@ -502,12 +502,12 @@ mod test_vm {
         let mut vm = new_test_vm("0x600160fe57");
         vm.execute();
 
-        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0xff").unwrap());
+        assert_eq!(U256::from(vm.instruction), U256::from_str("0xff").unwrap());
 
         let mut vm = new_test_vm("0x600060fe5758");
         vm.execute();
 
-        assert_eq!(U256::from(vm.instruction as u128), U256::from_str("0x07").unwrap());
+        assert_eq!(U256::from(vm.instruction), U256::from_str("0x07").unwrap());
 
         // PC test
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0x07").unwrap());
@@ -544,7 +544,7 @@ mod test_vm {
 mod test_opcode {
     use ethers::types::U256;
 
-    use crate::ether::evm::opcodes::*;
+    use crate::ether::evm::core::opcodes::*;
 
     #[test]
     fn test_wrapping_opcodes() {
@@ -564,7 +564,7 @@ mod test_opcode {
 
 #[cfg(test)]
 mod test_memory {
-    use crate::{ether::evm::memory::Memory, utils::strings::decode_hex};
+    use crate::{ether::evm::core::memory::Memory, utils::strings::decode_hex};
 
     #[test]
     fn test_mstore_simple() {
@@ -675,11 +675,47 @@ mod test_memory {
             decode_hex("ff00000000000000000000000000000000000000000000000000000000000000").unwrap()
         );
     }
+
+    #[test]
+    fn test_memory_cost() {
+        let mut memory = Memory::new();
+        memory.store(
+            0,
+            32,
+            &decode_hex("11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff")
+                .unwrap(),
+        );
+        assert_eq!(memory.memory_cost(), 3);
+    }
+
+    #[test]
+    fn test_memory_cost_2() {
+        let mut memory = Memory::new();
+        memory.store(
+            32 * 32,
+            32,
+            &decode_hex("11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff")
+                .unwrap(),
+        );
+        assert_eq!(memory.memory_cost(), 101);
+    }
+
+    #[test]
+    fn test_expansion_cost() {
+        let memory = Memory::new();
+        assert_eq!(memory.expansion_cost(0, 32), 3);
+    }
+
+    #[test]
+    fn test_expansion_cost_2() {
+        let memory = Memory::new();
+        assert_eq!(memory.expansion_cost(32 * 32, 32), 101);
+    }
 }
 
 #[cfg(test)]
 mod test_storage {
-    use crate::ether::evm::storage::Storage;
+    use crate::ether::evm::core::storage::Storage;
 
     #[test]
     fn test_sstore_sload() {
@@ -738,11 +774,131 @@ mod test_storage {
             ]
         );
     }
+
+    #[test]
+    fn test_storage_access_cost_cold() {
+        let mut storage = Storage::new();
+        assert_eq!(
+            storage.access_cost([
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1
+            ]),
+            2100
+        );
+    }
+
+    #[test]
+    fn test_storage_access_cost_warm() {
+        let mut storage = Storage::new();
+        storage.load([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 1,
+        ]);
+        assert_eq!(
+            storage.access_cost([
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1
+            ]),
+            100
+        );
+    }
+
+    #[test]
+    fn test_storage_storage_cost_cold() {
+        let mut storage = Storage::new();
+        assert_eq!(
+            storage.storage_cost(
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 1
+                ],
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 1
+                ]
+            ),
+            22100
+        );
+    }
+
+    #[test]
+    fn test_storage_storage_cost_cold_zero() {
+        let mut storage = Storage::new();
+        assert_eq!(
+            storage.storage_cost(
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 1
+                ],
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0
+                ]
+            ),
+            5000
+        );
+    }
+
+    #[test]
+    fn test_storage_storage_cost_warm() {
+        let mut storage = Storage::new();
+        storage.store(
+            [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1,
+            ],
+            [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1,
+            ],
+        );
+        assert_eq!(
+            storage.storage_cost(
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 1
+                ],
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 1
+                ]
+            ),
+            20100
+        );
+    }
+
+    #[test]
+    fn test_storage_storage_cost_warm_zero() {
+        let mut storage = Storage::new();
+        storage.store(
+            [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1,
+            ],
+            [
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 1,
+            ],
+        );
+        assert_eq!(
+            storage.storage_cost(
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 1
+                ],
+                [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0
+                ]
+            ),
+            3000
+        );
+    }
 }
 
 #[cfg(test)]
 mod test_stack {
-    use crate::ether::evm::{opcodes::WrappedOpcode, stack::Stack};
+    use crate::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
     use ethers::types::U256;
 
     #[test]
@@ -814,7 +970,7 @@ mod test_stack {
 mod test_types {
     use ethers::abi::ParamType;
 
-    use crate::ether::evm::types::parse_function_parameters;
+    use crate::ether::evm::core::types::parse_function_parameters;
 
     #[test]
     fn test_simple_signature() {
@@ -833,7 +989,7 @@ mod test_types {
     #[test]
     fn test_array_signature() {
         let solidity_type = "test(uint256,string[],uint256)";
-        let param_type = parse_function_parameters(&solidity_type);
+        let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
             param_type,
             Some(vec![

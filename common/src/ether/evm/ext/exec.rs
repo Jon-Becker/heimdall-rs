@@ -16,6 +16,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct VMTrace {
     pub instruction: u128,
+    pub gas_used: u128,
     pub operations: Vec<State>,
     pub children: Vec<VMTrace>,
 }
@@ -58,18 +59,20 @@ impl VM {
         let mut vm = self.clone();
 
         // create a new VMTrace object
-        let mut vm_trace =
-            VMTrace { instruction: vm.instruction, operations: Vec::new(), children: Vec::new() };
+        let mut vm_trace = VMTrace {
+            instruction: vm.instruction,
+            gas_used: 21000,
+            operations: Vec::new(),
+            children: Vec::new(),
+        };
 
         // step through the bytecode until we find a JUMPI instruction
         while vm.bytecode.len() >= vm.instruction as usize {
             let state = vm.step();
-            vm_trace.operations.push(state.clone());
 
-            // if we encounter a JUMP, print the jumpdest source
-            // if state.last_instruction.opcode == 0x56 {
-            //
-            // }
+            // update vm_trace
+            vm_trace.operations.push(state.clone());
+            vm_trace.gas_used = vm.gas_used;
 
             // if we encounter a JUMPI, create children taking both paths and break
             if state.last_instruction.opcode == 0x57 {
@@ -106,8 +109,7 @@ impl VM {
                                     stack_diff.push(frame);
 
                                     // check similarity of stack diff values against the stack,
-                                    // using normalized
-                                    // Levenshtein distance
+                                    // using normalized Levenshtein distance
                                     for stack_frame in stack.iter() {
                                         let solidified_frame = frame.operation.solidify();
                                         let solidified_stack_frame =
@@ -164,8 +166,7 @@ impl VM {
                                 }
 
                                 // if a storage access in the jump condition is modified by the
-                                // stack diff, its likely that we
-                                // are in a loop
+                                // stack diff, its likely that we are in a loop
                                 let mut storage_accesses = STORAGE_REGEX.find_iter(&jump_condition);
                                 if stack_diff.iter().any(|frame| {
                                     storage_accesses.any(|_match| {

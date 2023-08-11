@@ -454,7 +454,7 @@ impl Logger {
         let mut selection = String::new();
         print!(
             "\n  Select an option {}: ",
-            if let Some(..) = default {
+            if default.is_some() {
                 format!("(default: {})", default.expect("Failed to get default option."))
             } else {
                 "".to_string()
@@ -463,7 +463,7 @@ impl Logger {
         let _ = std::io::Write::flush(&mut stdout());
 
         if skip {
-            if let Some(..) = default {
+            if default.is_some() {
                 println!("{}", default.expect("Failed to get default option."));
             } else {
                 println!();
@@ -476,8 +476,8 @@ impl Logger {
             Ok(_) => {
                 // check if default was selected
                 if selection.trim() == "" {
-                    if let Some(..) = default {
-                        return default.expect("Failed to get default option.")
+                    if let Some(default) = default {
+                        return default
                     } else {
                         self.error("invalid selection.");
                         return self.option(function, message, options, default, skip)
