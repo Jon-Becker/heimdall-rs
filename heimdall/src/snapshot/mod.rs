@@ -24,7 +24,7 @@ use heimdall_common::{
         selectors::{find_function_selectors, resolve_selectors},
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
     },
-    io::logging::*,
+    io::{file::short_path, logging::*},
     utils::strings::{decode_hex, encode_hex_reduced},
 };
 use indicatif::ProgressBar;
@@ -32,7 +32,7 @@ use indicatif::ProgressBar;
 use crate::snapshot::{
     analyze::snapshot_trace,
     resolve::match_parameters,
-    util::{tui, GasUsed, Snapshot},
+    util::{csv::generate_and_write_contract_csv, tui, GasUsed, Snapshot},
 };
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -302,8 +302,6 @@ pub fn snapshot(args: SnapshotArgs) {
             func_analysis_trace,
         );
 
-        println!("function {}, gas used: {:?}", selector, snapshot.gas_used);
-
         // resolve signatures
         if !args.skip_resolving {
             let resolved_functions = match resolved_selectors.get(&selector) {
@@ -521,12 +519,31 @@ pub fn snapshot(args: SnapshotArgs) {
     logger.info("symbolic execution completed.");
     logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
 
+    // build output path
+    let snapshot_csv_output_path = format!("{}/snapshot.csv", output_dir);
+    trace.add_call(
+        snapshot_call,
+        line!(),
+        "heimdall".to_string(),
+        "build_csv".to_string(),
+        vec![shortened_target.clone()],
+        short_path(&snapshot_csv_output_path),
+    );
+
+    // write the csv to disk
+    generate_and_write_contract_csv(
+        &snapshots,
+        &all_resolved_errors,
+        &all_resolved_events,
+        &snapshot_csv_output_path,
+    );
+
     // open the tui
     if !args.no_tui {
         tui::handle(
             snapshots,
-            all_resolved_errors,
-            all_resolved_events,
+            &all_resolved_errors,
+            &all_resolved_events,
             if args.target.len() > 64 { &shortened_target } else { args.target.as_str() },
             (compiler, &version),
         )

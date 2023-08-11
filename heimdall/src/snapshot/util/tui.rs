@@ -27,8 +27,8 @@ pub fn cleanup_terminal() {
 
 pub fn handle(
     snapshots: Vec<Snapshot>,
-    resolved_errors: HashMap<String, ResolvedError>,
-    resolved_events: HashMap<String, ResolvedLog>,
+    resolved_errors: &HashMap<String, ResolvedError>,
+    resolved_events: &HashMap<String, ResolvedLog>,
     target: &str,
     compiler: (&str, &str),
 ) {
@@ -42,8 +42,8 @@ pub fn handle(
     // initialize state
     let mut state = STATE.lock().unwrap();
     state.snapshots = snapshots;
-    state.resolved_errors = resolved_errors;
-    state.resolved_events = resolved_events;
+    state.resolved_errors = resolved_errors.clone();
+    state.resolved_events = resolved_events.clone();
     state.target = target.to_string();
     state.compiler = (compiler.0.to_string(), compiler.1.to_string());
     drop(state);
