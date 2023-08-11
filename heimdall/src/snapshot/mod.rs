@@ -153,7 +153,7 @@ pub fn snapshot(args: SnapshotArgs) {
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
         verbose: args.verbose.clone(),
-        output: "".to_string(),
+        output: output_dir.clone(),
         rpc_url: args.rpc_url,
         decimal_counter: false,
     });

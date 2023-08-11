@@ -108,7 +108,7 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
         )),
         Spans::from(match &snapshot.resolved_function {
             Some(function) => format!(" {}({})", function.name, arg_strings.join(", ")),
-            None => format!(" Function_{}()", snapshot.selector),
+            None => format!(" Unresolved_{}()", snapshot.selector),
         }),
     ];
 
@@ -161,7 +161,7 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
                         Some(event) => {
                             Spans::from(format!(" {}({})", event.name, event.inputs.join(",")))
                         }
-                        None => Spans::from(format!(" Event_{}()", key)),
+                        None => Spans::from(format!(" Event_{}()", key[0..8].to_owned())),
                     }
                 })
                 .collect::<Vec<_>>(),
@@ -187,7 +187,7 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
                         Some(error) => {
                             Spans::from(format!(" {}({})", error.name, error.inputs.join(",")))
                         }
-                        None => Spans::from(format!(" Error_{}()", key)),
+                        None => Spans::from(format!(" Error_{}()", key[0..8].to_owned())),
                     }
                 })
                 .collect::<Vec<_>>(),
