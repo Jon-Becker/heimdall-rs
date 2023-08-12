@@ -7,7 +7,10 @@ use tui::{
     Frame,
 };
 
-use crate::snapshot::structures::state::State;
+use crate::snapshot::{
+    constants::{ABOUT_TEXT, HELP_MENU_COMMANDS, HELP_MENU_CONTROLS},
+    structures::state::State,
+};
 
 pub fn render_tui_help<B: Backend>(f: &mut Frame<B>, _: &mut State) {
     // build main layout
@@ -17,7 +20,7 @@ pub fn render_tui_help<B: Backend>(f: &mut Frame<B>, _: &mut State) {
         .constraints(
             [
                 Constraint::Length(6),
-                Constraint::Length(2.try_into().unwrap()),
+                Constraint::Length((HELP_MENU_COMMANDS.len() + 2).try_into().unwrap()),
                 Constraint::Percentage(100),
             ]
             .as_ref(),
@@ -34,7 +37,7 @@ pub fn render_tui_help<B: Backend>(f: &mut Frame<B>, _: &mut State) {
     };
 
     // about text
-    let paragraph = Paragraph::new("")
+    let paragraph = Paragraph::new(ABOUT_TEXT.join("\n"))
         .style(Style::default().fg(Color::White))
         .block(create_block("About"))
         .alignment(Alignment::Left)
@@ -42,7 +45,7 @@ pub fn render_tui_help<B: Backend>(f: &mut Frame<B>, _: &mut State) {
     f.render_widget(paragraph, main_layout[0]);
 
     // commands paragraph
-    let paragraph = Paragraph::new("")
+    let paragraph = Paragraph::new(HELP_MENU_COMMANDS.join("\n"))
         .style(Style::default().fg(Color::White))
         .block(create_block("Commands"))
         .alignment(Alignment::Left)
@@ -50,7 +53,7 @@ pub fn render_tui_help<B: Backend>(f: &mut Frame<B>, _: &mut State) {
     f.render_widget(paragraph, main_layout[1]);
 
     // controls paragraph
-    let paragraph = Paragraph::new("")
+    let paragraph = Paragraph::new(HELP_MENU_CONTROLS.join("\n"))
         .style(Style::default().fg(Color::White))
         .block(create_block("Controls"))
         .alignment(Alignment::Left)
