@@ -168,8 +168,8 @@ pub fn snapshot_trace(
             if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
                 VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
                 (conditional.replace('!', "") == "success") ||
-                (!conditional.contains("msg.sender") ||
-                    !conditional.contains("arg") ||
+                (!conditional.contains("msg.sender") &&
+                    !conditional.contains("arg") &&
                     !conditional.contains("storage"))
             {
                 continue
