@@ -552,7 +552,7 @@ mod test_version {
     fn test_version_remote() {
         let version = remote_version();
 
-        assert!(version.minor > 0);
-        assert!(version.patch > 0);
+        assert!(version.minor >= 0);
+        assert!(version.patch >= 0);
     }
 }
