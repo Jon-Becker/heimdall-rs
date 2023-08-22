@@ -45,8 +45,22 @@ mod benchmark {
 #[cfg(test)]
 mod integration_tests {
     use clap_verbosity_flag::Verbosity;
-    use heimdall::snapshot::SnapshotArgs;
+    use heimdall::snapshot::{SnapshotArgs, SnapshotBuilder};
     use heimdall_common::io::file::delete_path;
+
+    #[test]
+    fn test_snapshot_library() {
+        SnapshotBuilder::new("0x1bf797219482a29013d804ad96d1c6f84fba4c45")
+            .output("./output/tests/snapshot/libtest")
+            .rpc("https://eth.llamarpc.com")
+            .default(true)
+            .skip_resolving(true)
+            .no_tui(true)
+            .snapshot();
+
+        // drop path
+        delete_path(&String::from("./output/tests/snapshot/libtest"));
+    }
 
     #[test]
     fn test_snapshot_weth() {
