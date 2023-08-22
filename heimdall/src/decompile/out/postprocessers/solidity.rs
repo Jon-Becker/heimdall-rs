@@ -669,7 +669,7 @@ fn inherit_infer_mem_type(line: &str) -> String {
     }
 
     // if the line does not contains an instantiation, return
-    if !line.contains(" = ") {
+    if !line.contains(" = ") || line.trim().starts_with("stor") {
         return cleaned
     }
 
