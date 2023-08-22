@@ -60,7 +60,6 @@ mod integration_tests {
 
         // drop path
         delete_path(&String::from("./output/tests/snapshot/libtest"));
-        g
     }
 
     #[test]
