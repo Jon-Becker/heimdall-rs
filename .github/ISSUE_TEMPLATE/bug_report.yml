@@ -27,6 +27,10 @@ body:
         - Disassemble Library
         - CFG Module
         - CFG Library
+        - Dump Module
+        - Dump Library
+        - Snapshot Module
+        - Snapshot Library
     validations:
       required: true
   - type: textarea
