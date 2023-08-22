@@ -555,3 +555,110 @@ pub fn snapshot(args: SnapshotArgs) {
 
     trace.display();
 }
+
+/// Builder pattern for using snapshot method as a library.
+///
+/// Default values may be overriden individually.
+/// ## Example
+/// Use with normal settings:
+/// ```no_run
+/// # use crate::heimdall::snapshot::SnapshotBuilder;
+/// const SOURCE: &'static str = "7312/* snip */04ad";
+///
+/// SnapshotBuilder::new(SOURCE)
+///     .snapshot();
+/// ```
+/// Or change settings individually:
+/// ```no_run
+/// # use crate::heimdall::snapshot::SnapshotBuilder;
+///
+/// const SOURCE: &'static str = "7312/* snip */04ad";
+/// SnapshotBuilder::new(SOURCE)
+///     .default(false)
+///     .output("my_contract_dir")
+///     .rpc("https://127.0.0.1:8545")
+///     .skip_resolving(true)
+///     .verbosity(5)
+///     .no_tui(true)
+///     .snapshot();
+/// ```
+#[allow(dead_code)]
+pub struct SnapshotBuilder {
+    args: SnapshotArgs,
+}
+
+impl SnapshotBuilder {
+    /// A new builder for the decompilation of the specified target.
+    ///
+    /// The target may be a file, bytecode, contract address, or ENS name.
+    #[allow(dead_code)]
+    pub fn new(target: &str) -> Self {
+        SnapshotBuilder {
+            args: SnapshotArgs {
+                target: target.to_string(),
+                verbose: clap_verbosity_flag::Verbosity::new(0, 0),
+                output: String::from(""),
+                rpc_url: String::from(""),
+                default: true,
+                skip_resolving: false,
+                no_tui: false,
+            },
+        }
+    }
+
+    /// Set the output verbosity level.
+    ///
+    /// - 0 Error
+    /// - 1 Warn
+    /// - 2 Info
+    /// - 3 Debug
+    /// - 4 Trace
+    #[allow(dead_code)]
+    pub fn verbosity(mut self, level: i8) -> SnapshotBuilder {
+        // Calculated by the log library as: 1 + verbose - quiet.
+        // Set quiet as 1, and the level corresponds to the appropriate Log level.
+        self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 0);
+        self
+    }
+
+    /// The output directory to write the snapshotted files to
+    #[allow(dead_code)]
+    pub fn output(mut self, directory: &str) -> SnapshotBuilder {
+        self.args.output = directory.to_string();
+        self
+    }
+
+    /// The RPC provider to use for fetching target bytecode.
+    #[allow(dead_code)]
+    pub fn rpc(mut self, url: &str) -> SnapshotBuilder {
+        self.args.rpc_url = url.to_string();
+        self
+    }
+
+    /// When prompted, always select the default value.
+    #[allow(dead_code)]
+    pub fn default(mut self, accept: bool) -> SnapshotBuilder {
+        self.args.default = accept;
+        self
+    }
+
+    /// Whether to skip resolving function selectors.
+    #[allow(dead_code)]
+    pub fn skip_resolving(mut self, skip: bool) -> SnapshotBuilder {
+        self.args.skip_resolving = skip;
+        self
+    }
+
+    /// Whether to show the TUI or not.
+    #[allow(dead_code)]
+    pub fn no_tui(mut self, no_tui: bool) -> SnapshotBuilder {
+        self.args.no_tui = no_tui;
+        self
+    }
+
+    /// Starts the decompilation.
+    #[allow(dead_code)]
+    pub fn snapshot(self) {
+        snapshot(self.args)
+    }
+}
