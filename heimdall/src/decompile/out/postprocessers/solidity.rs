@@ -16,7 +16,10 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Mutex,
+};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -24,6 +27,7 @@ lazy_static! {
     static ref VARIABLE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref MEMORY_TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref STORAGE_TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref MEMORY_TYPE_DECLARATION_SET: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 }
 
 /// Convert bitwise operations to a variable type cast
@@ -554,6 +558,13 @@ fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
 /// ```
 fn move_casts_to_declaration(line: &str) -> String {
     let cleaned = line;
+    let mut type_declaration_set = MEMORY_TYPE_DECLARATION_SET.lock().unwrap();
+
+    // if line contains "function" wipe the set
+    if cleaned.contains("function") {
+        type_declaration_set.clear();
+        return cleaned.to_owned()
+    }
 
     // if the line doesn't contain an instantiation, return
     if !cleaned.contains(" = ") {
@@ -582,7 +593,22 @@ fn move_casts_to_declaration(line: &str) -> String {
             // get the inside of the parens
             let cast_expression = instantiation[1].get(paren_start + 1..paren_end - 1).unwrap();
 
-            format!("{} {} = {};", x.as_str().replace('(', ""), instantiation[0], cast_expression)
+            // build set key
+            let set_key = format!("{}.{}", instantiation[0], x.as_str().replace('(', ""));
+
+            // if the set doesn't contain the key, add the cast to the declaration
+            if !type_declaration_set.contains(&set_key) {
+                // add to set
+                type_declaration_set.insert(set_key);
+                format!(
+                    "{} {} = {};",
+                    x.as_str().replace('(', ""),
+                    instantiation[0],
+                    cast_expression
+                )
+            } else {
+                format!("{} = {};", instantiation[0], cast_expression)
+            }
         }
         None => cleaned.to_owned(),
     }
