@@ -122,7 +122,7 @@ pub fn cfg(args: CFGArgs) {
         // We are analyzing a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {
-                let _contents = contents.replace("\n", "");
+                let _contents = contents.replace('\n', "");
                 if BYTECODE_REGEX.is_match(&_contents).unwrap() && _contents.len() % 2 == 0 {
                     _contents.replacen("0x", "", 1)
                 } else {
