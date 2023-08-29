@@ -1,5 +1,8 @@
 use colored::Colorize;
-use ethers::abi::{AbiEncode, ParamType, Token};
+use ethers::{
+    abi::{AbiEncode, ParamType, Token},
+    prelude::Abigen,
+};
 
 use crate::{
     constants::TYPE_CAST_REGEX,
@@ -12,6 +15,7 @@ use super::vm::Instruction;
 pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamType>> {
     let mut function_inputs = Vec::new();
 
+    // convert the function signature into a Function
     // get only the function input body, removing the name and input wrapping parentheses
     let string_inputs = match function_signature.split_once('(') {
         Some((_, inputs)) => replace_last(inputs, ")", ""),

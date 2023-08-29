@@ -1064,4 +1064,56 @@ mod test_types {
             ])])
         );
     }
+
+    #[test]
+    fn test_seaport_fulfill_advanced_order() {
+        let solidity_type = "fulfillAdvancedOrder(((address,address,(uint8,address,uint256,uint256,uint256)[],(uint8,address,uint256,uint256,uint256,address)[],uint8,uint256,uint256,bytes32,uint256,bytes32,uint256),uint120,uint120,bytes,bytes),(uint256,uint8,uint256,uint256,bytes32[])[],bytes32,address)";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![ParamType::Tuple(vec![
+                ParamType::Tuple(vec![
+                    ParamType::Tuple(vec![
+                        ParamType::Address,
+                        ParamType::Address,
+                        ParamType::Array(Box::new(ParamType::Tuple(vec![
+                            ParamType::Uint(8),
+                            ParamType::Address,
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Uint(256)
+                        ]))),
+                        ParamType::Array(Box::new(ParamType::Tuple(vec![
+                            ParamType::Uint(8),
+                            ParamType::Address,
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Address
+                        ]))),
+                        ParamType::Uint(8),
+                        ParamType::Uint(256),
+                        ParamType::Uint(256),
+                        ParamType::FixedBytes(32),
+                        ParamType::Uint(256),
+                        ParamType::FixedBytes(32),
+                        ParamType::Uint(256)
+                    ]),
+                    ParamType::Uint(120),
+                    ParamType::Uint(120),
+                    ParamType::Bytes,
+                    ParamType::Bytes
+                ]),
+                ParamType::Array(Box::new(ParamType::Tuple(vec![
+                    ParamType::Uint(256),
+                    ParamType::Uint(8),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Array(Box::new(ParamType::FixedBytes(32)))
+                ]))),
+                ParamType::FixedBytes(32),
+                ParamType::Address
+            ])])
+        );
+    }
 }
