@@ -114,7 +114,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
             if string_parts[0].is_empty() {
                 // the first type is empty, so we can just recursively call this function to extract
                 // the remaining types
-                match extract_types_from_string(&string_parts[1]) {
+                match extract_types_from_string(string_parts[1]) {
                     Some(mut remaining_types) => {
                         types.append(&mut remaining_types);
                     }
