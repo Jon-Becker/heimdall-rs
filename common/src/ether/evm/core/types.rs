@@ -1,146 +1,221 @@
 use colored::Colorize;
-use ethers::{
-    abi::{AbiEncode, ParamType, Token},
-    prelude::Abigen,
-};
+use ethers::abi::{AbiEncode, ParamType, Token};
 
-use crate::{
-    constants::TYPE_CAST_REGEX,
-    utils::strings::{find_balanced_encapsulator, replace_last},
-};
+use crate::{constants::TYPE_CAST_REGEX, utils::strings::find_balanced_encapsulator};
 
 use super::vm::Instruction;
 
 // decode a string into an ethereum type
 pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamType>> {
-    let mut function_inputs = Vec::new();
+    // remove the function name from the signature, only keep the parameters
+    let (start, end, valid) = find_balanced_encapsulator(function_signature, ('(', ')'));
+    if !valid {
+        return None
+    }
 
-    // convert the function signature into a Function
-    // get only the function input body, removing the name and input wrapping parentheses
-    let string_inputs = match function_signature.split_once('(') {
-        Some((_, inputs)) => replace_last(inputs, ")", ""),
-        None => replace_last(function_signature, ")", ""),
-    };
+    let function_inputs = function_signature[start + 1..end - 1].to_string();
 
-    // split into individual inputs
-    let temp_inputs: Vec<String> = string_inputs.split(',').map(|s| s.to_string()).collect();
-    let mut inputs: Vec<String> = Vec::new();
+    // get inputs from the string
+    extract_types_from_string(&function_inputs)
+}
 
-    // if the input contains complex types, rejoin them. for nested types, this function will
-    // recurse.
-    if string_inputs.contains('(') {
-        let mut tuple_depth = 0;
-        let mut complex_input: Vec<String> = Vec::new();
+// helper function for extracting types from a string
+fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
+    let mut types = Vec::new();
 
-        for input in temp_inputs {
-            if input.contains('(') {
-                tuple_depth += 1;
+    // if string is empty, return None
+    if string.is_empty() {
+        return None
+    }
+
+    // if the string contains a tuple we cant simply split on commas
+    if ['(', ')'].iter().any(|c| string.contains(*c)) {
+        // check if first type is a tuple
+        if is_first_type_tuple(string) {
+            // get balanced encapsulator
+            let (tuple_start, tuple_end, valid) = find_balanced_encapsulator(string, ('(', ')'));
+            if !valid {
+                return None
             }
 
-            if tuple_depth > 0 {
-                complex_input.push(input.to_string());
+            // extract the tuple
+            let tuple_types = string[tuple_start + 1..tuple_end - 1].to_string();
+
+            // remove the tuple from the string
+            let mut string = string[tuple_end..].to_string();
+
+            // if string is not empty, split on commas and check if tuple is an array
+            let mut is_array = false;
+            let mut array_size: Option<usize> = None;
+            if !string.is_empty() {
+                let split = string.splitn(2, ',').collect::<Vec<&str>>()[0];
+
+                is_array = split.ends_with(']');
+
+                // get array size, or none if []
+                if is_array {
+                    let (start, end, valid) = find_balanced_encapsulator(split, ('[', ']'));
+                    if !valid {
+                        return None
+                    }
+
+                    let size = split[start + 1..end - 1].to_string();
+                    array_size = match size.parse::<usize>() {
+                        Ok(size) => Some(size),
+                        Err(_) => None,
+                    };
+                }
+            }
+
+            if is_array {
+                // if the string doesnt contain a comma, this is the last type
+                if string.contains(',') {
+                    // remove the array from the string by splitting on the first comma and taking
+                    // the second half
+                    string = string.splitn(2, ',').collect::<Vec<&str>>()[1].to_string();
+                } else {
+                    // set string to empty string
+                    string = "".to_string();
+                }
+
+                if array_size.is_some() {
+                    // recursively call this function to extract the tuple types
+                    let inner_types = extract_types_from_string(&tuple_types);
+
+                    types.push(ParamType::FixedArray(
+                        Box::new(ParamType::Tuple(inner_types.unwrap())),
+                        array_size.unwrap(),
+                    ))
+                } else {
+                    // recursively call this function to extract the tuple types
+                    let inner_types = extract_types_from_string(&tuple_types);
+
+                    types.push(ParamType::Array(Box::new(ParamType::Tuple(inner_types.unwrap()))))
+                }
             } else {
-                inputs.push(input.to_string());
+                // recursively call this function to extract the tuple types
+                let inner_types = extract_types_from_string(&tuple_types);
+
+                types.push(ParamType::Tuple(inner_types.unwrap()));
             }
 
-            if input.contains(')') {
-                tuple_depth -= 1;
+            // recursively call this function to extract the remaining types
+            match extract_types_from_string(&string) {
+                Some(mut remaining_types) => {
+                    types.append(&mut remaining_types);
+                }
+                None => {}
+            }
+        } else {
+            // first type is not a tuple, so we can extract it
+            let string_parts = string.splitn(2, ',').collect::<Vec<&str>>();
 
-                if tuple_depth == 0 {
-                    inputs.push(complex_input.join(","));
-                    complex_input = Vec::new();
+            // convert the string type to a ParamType
+            if string_parts[0].is_empty() {
+                // the first type is empty, so we can just recursively call this function to extract
+                // the remaining types
+                match extract_types_from_string(&string_parts[1]) {
+                    Some(mut remaining_types) => {
+                        types.append(&mut remaining_types);
+                    }
+                    None => {}
+                }
+            } else {
+                let param_type = to_type(string_parts[0]);
+                types.push(param_type);
+
+                // remove the first type from the string
+                let string = string[string_parts[0].len() + 1..].to_string();
+
+                // recursively call this function to extract the remaining types
+                match extract_types_from_string(&string) {
+                    Some(mut remaining_types) => {
+                        types.append(&mut remaining_types);
+                    }
+                    None => {}
                 }
             }
         }
     } else {
-        inputs = temp_inputs;
-    }
+        // split on commas
+        let split = string.split(',').collect::<Vec<&str>>();
 
-    // parse each input into an ethereum type, recusing if necessary
-    for solidity_type in inputs {
-        if solidity_type == "address" {
-            function_inputs.push(ParamType::Address);
-            continue
-        }
-        if solidity_type == "bytes" {
-            function_inputs.push(ParamType::Bytes);
-            continue
-        }
-        if solidity_type == "bool" {
-            function_inputs.push(ParamType::Bool);
-            continue
-        }
-        if solidity_type == "string" {
-            function_inputs.push(ParamType::String);
-            continue
-        }
-        if solidity_type.starts_with('(') && !solidity_type.ends_with(']') {
-            let complex_inputs = match parse_function_parameters(&solidity_type) {
-                Some(inputs) => inputs,
-                None => continue,
-            };
-            function_inputs.push(ParamType::Tuple(complex_inputs));
-            continue
-        }
-        if solidity_type.ends_with("[]") {
-            let array_type =
-                match parse_function_parameters(&solidity_type[..solidity_type.len() - 2]) {
-                    Some(types_) => types_,
-                    None => continue,
-                };
-
-            if array_type.len() == 1 {
-                function_inputs.push(ParamType::Array(Box::new(array_type[0].clone())));
-            } else {
-                function_inputs.push(ParamType::Array(Box::new(ParamType::Tuple(array_type))));
+        // iterate over the split string and convert each type to a ParamType
+        for string_type in split {
+            if string_type.is_empty() {
+                continue
             }
-            continue
-        }
-        if solidity_type.ends_with(']') {
-            let size = match solidity_type.split('[').nth(1) {
-                Some(size) => match size.replace(']', "").parse::<usize>() {
-                    Ok(size) => size,
-                    Err(_) => continue,
-                },
-                None => continue,
-            };
-            let array_type = match parse_function_parameters(
-                &solidity_type[..solidity_type.len() - (2 + size.to_string().len())],
-            ) {
-                Some(types_) => types_,
-                None => continue,
-            };
 
-            if array_type.len() == 1 {
-                function_inputs.push(ParamType::FixedArray(Box::new(array_type[0].clone()), size));
-            } else {
-                function_inputs
-                    .push(ParamType::FixedArray(Box::new(ParamType::Tuple(array_type)), size));
-            }
-            continue
-        }
-        if solidity_type.starts_with("int") {
-            let size = solidity_type.replace("int", "").parse::<usize>().unwrap_or(256);
-            function_inputs.push(ParamType::Int(size));
-            continue
-        }
-        if solidity_type.starts_with("uint") {
-            let size = solidity_type.replace("uint", "").parse::<usize>().unwrap_or(256);
-
-            function_inputs.push(ParamType::Uint(size));
-            continue
-        }
-        if solidity_type.starts_with("bytes") {
-            let size = solidity_type.replace("bytes", "").parse::<usize>().unwrap_or(32);
-
-            function_inputs.push(ParamType::FixedBytes(size));
-            continue
+            let param_type = to_type(string_type);
+            types.push(param_type);
         }
     }
 
-    match function_inputs.len() {
+    match types.len() {
         0 => None,
-        _ => Some(function_inputs),
+        _ => Some(types),
+    }
+}
+
+fn is_first_type_tuple(string: &str) -> bool {
+    // split by first comma
+    let split = string.splitn(2, ',').collect::<Vec<&str>>();
+
+    // if the first element starts with a (, it is a tuple
+    split[0].starts_with('(')
+}
+
+fn to_type(string: &str) -> ParamType {
+    let is_array = string.ends_with(']');
+
+    // get size of array
+    let array_size = if is_array {
+        let (start, end, valid) = find_balanced_encapsulator(string, ('[', ']'));
+        if !valid {
+            return ParamType::Bytes
+        }
+
+        let size = string[start + 1..end - 1].to_string();
+        match size.parse::<usize>() {
+            Ok(size) => Some(size),
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
+    // if array, remove the [..] from the string
+    let string = if is_array { string.splitn(2, '[').collect::<Vec<&str>>()[0] } else { string };
+
+    let arg_type = match string {
+        "address" => ParamType::Address,
+        "bool" => ParamType::Bool,
+        "string" => ParamType::String,
+        "bytes" => ParamType::Bytes,
+        _ => {
+            if string.starts_with("uint") {
+                let size = string[4..].parse::<usize>().unwrap_or(256);
+                ParamType::Uint(size)
+            } else if string.starts_with("int") {
+                let size = string[3..].parse::<usize>().unwrap_or(256);
+                ParamType::Int(size)
+            } else if string.starts_with("bytes") {
+                let size = string[5..].parse::<usize>().unwrap();
+                ParamType::FixedBytes(size)
+            } else {
+                panic!("Invalid type: '{}'", string);
+            }
+        }
+    };
+
+    if is_array {
+        if let Some(size) = array_size {
+            ParamType::FixedArray(Box::new(arg_type), size)
+        } else {
+            ParamType::Array(Box::new(arg_type))
+        }
+    } else {
+        arg_type
     }
 }
 

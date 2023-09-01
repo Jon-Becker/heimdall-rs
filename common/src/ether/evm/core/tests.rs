@@ -1001,6 +1001,20 @@ mod test_types {
     }
 
     #[test]
+    fn test_array_fixed_signature() {
+        let solidity_type = "test(uint256,string[2],uint256)";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![
+                ParamType::Uint(256),
+                ParamType::FixedArray(Box::new(ParamType::String), 2),
+                ParamType::Uint(256)
+            ])
+        );
+    }
+
+    #[test]
     fn test_complex_signature() {
         let solidity_type =
             "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))";
@@ -1045,6 +1059,49 @@ mod test_types {
     }
 
     #[test]
+    fn test_tuple_array_signature() {
+        let solidity_type =
+            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)[])";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![ParamType::Array(Box::new(ParamType::Tuple(vec![
+                ParamType::Address,
+                ParamType::Address,
+                ParamType::Uint(24),
+                ParamType::Address,
+                ParamType::Uint(256),
+                ParamType::Uint(256),
+                ParamType::Uint(256),
+                ParamType::Uint(160)
+            ])))])
+        );
+    }
+
+    #[test]
+    fn test_tuple_fixedarray_signature() {
+        let solidity_type =
+            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)[2])";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![ParamType::FixedArray(
+                Box::new(ParamType::Tuple(vec![
+                    ParamType::Address,
+                    ParamType::Address,
+                    ParamType::Uint(24),
+                    ParamType::Address,
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(160)
+                ])),
+                2
+            )])
+        );
+    }
+
+    #[test]
     fn test_nested_tuple_signature() {
         let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))";
         let param_type = parse_function_parameters(solidity_type);
@@ -1071,7 +1128,7 @@ mod test_types {
         let param_type = parse_function_parameters(solidity_type);
         assert_eq!(
             param_type,
-            Some(vec![ParamType::Tuple(vec![
+            Some(vec![
                 ParamType::Tuple(vec![
                     ParamType::Tuple(vec![
                         ParamType::Address,
@@ -1113,7 +1170,7 @@ mod test_types {
                 ]))),
                 ParamType::FixedBytes(32),
                 ParamType::Address
-            ])])
+            ])
         );
     }
 }
