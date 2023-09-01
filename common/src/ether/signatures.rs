@@ -45,10 +45,10 @@ impl ResolveSelector for ResolvedError {
         }
 
         // get function possibilities from etherface
-        let signatures = match get_json_from_url(&format!(
-            "https://api.etherface.io/v1/signatures/hash/error/{}/1",
-            &selector
-        )) {
+        let signatures = match get_json_from_url(
+            &format!("https://api.etherface.io/v1/signatures/hash/error/{}/1", &selector),
+            10,
+        ) {
             Some(signatures) => signatures,
             None => return None,
         };
@@ -110,10 +110,10 @@ impl ResolveSelector for ResolvedLog {
         }
 
         // get function possibilities from etherface
-        let signatures = match get_json_from_url(&format!(
-            "https://api.etherface.io/v1/signatures/hash/event/{}/1",
-            &selector
-        )) {
+        let signatures = match get_json_from_url(
+            &format!("https://api.etherface.io/v1/signatures/hash/event/{}/1", &selector),
+            10,
+        ) {
             Some(signatures) => signatures,
             None => return None,
         };
@@ -175,10 +175,10 @@ impl ResolveSelector for ResolvedFunction {
         }
 
         // get function possibilities from etherface
-        let signatures = match get_json_from_url(&format!(
-            "https://api.etherface.io/v1/signatures/hash/function/{}/1",
-            &selector
-        )) {
+        let signatures = match get_json_from_url(
+            &format!("https://api.etherface.io/v1/signatures/hash/function/{}/1", &selector),
+            10,
+        ) {
             Some(signatures) => signatures,
             None => return None,
         };

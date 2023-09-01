@@ -11,15 +11,20 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 ///
 /// # Returns
 /// `Option<Value>` - the response body as JSON
-pub fn get_json_from_url(url: &str) -> Option<Value> {
-    _get_json_from_url(url, 0, 5)
+pub fn get_json_from_url(url: &str, timeout: u64) -> Option<Value> {
+    _get_json_from_url(url, 0, 5, timeout)
 }
 
-fn _get_json_from_url(url: &str, retry_count: u8, retries_remaining: u8) -> Option<Value> {
+fn _get_json_from_url(
+    url: &str,
+    retry_count: u8,
+    retries_remaining: u8,
+    timeout: u64,
+) -> Option<Value> {
     let client = match Client::builder()
         .danger_accept_invalid_certs(true)
         .user_agent(APP_USER_AGENT)
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(timeout))
         .build()
     {
         Ok(client) => client,
@@ -39,7 +44,7 @@ fn _get_json_from_url(url: &str, retry_count: u8, retries_remaining: u8) -> Opti
 
             let sleep_time = 2u64.pow(retry_count as u32) * 250;
             std::thread::sleep(std::time::Duration::from_millis(sleep_time));
-            return _get_json_from_url(url, retry_count, retries_remaining)
+            return _get_json_from_url(url, retry_count, retries_remaining, timeout)
         }
     };
     let mut body = String::new();
