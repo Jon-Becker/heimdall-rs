@@ -71,7 +71,7 @@ pub fn analyze_yul(
 
         // if the instruction is a state-setting instruction, the function is no longer a view
         if function.view &&
-            vec![
+            [
                 "SSTORE",
                 "CREATE",
                 "SELFDESTRUCT",

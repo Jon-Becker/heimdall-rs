@@ -101,7 +101,7 @@ mod tests {
         store_cache("e", "some_value", None);
         store_cache("f", "some_value", None);
 
-        assert!(vec!["a", "b", "c", "d", "e", "f"]
+        assert!(["a", "b", "c", "d", "e", "f"]
             .iter()
             .all(|key| { keys("*").contains(&key.to_string()) }));
     }
