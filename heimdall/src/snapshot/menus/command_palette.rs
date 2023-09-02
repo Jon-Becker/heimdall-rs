@@ -60,7 +60,7 @@ pub fn render_tui_command_palette<B: Backend>(f: &mut Frame<B>, state: &mut Stat
     let snapshot = state.snapshots.get(state.function_index).unwrap();
 
     // build modifiers
-    let modifiers = vec![
+    let modifiers = [
         if snapshot.payable { "payable" } else { "" },
         if snapshot.pure { "pure" } else { "" },
         if snapshot.view && !snapshot.pure { "view" } else { "" },

@@ -103,7 +103,7 @@ pub fn snapshot_trace(
 
         // if the instruction is a state-setting instruction, the function is no longer a view
         if snapshot.view &&
-            vec![
+            [
                 "SSTORE",
                 "CREATE",
                 "SELFDESTRUCT",

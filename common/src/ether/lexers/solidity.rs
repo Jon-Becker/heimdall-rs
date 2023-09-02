@@ -14,7 +14,7 @@ pub fn is_ext_call_precompile(precompile_address: U256) -> bool {
         Err(_) => usize::MAX,
     };
 
-    matches!(address, 1 | 2 | 3)
+    matches!(address, 1..=3)
 }
 
 impl WrappedOpcode {
