@@ -55,6 +55,10 @@ pub struct DecodeArgs {
     /// When prompted, always select the default value.
     #[clap(long, short)]
     pub default: bool,
+
+    /// Whether to truncate nonstandard sized calldata.
+    #[clap(long, short)]
+    pub truncate_calldata: bool,
 }
 
 #[allow(deprecated)]
@@ -90,7 +94,7 @@ pub fn decode(args: DecodeArgs) {
     }
 
     // normalize
-    let calldata = calldata.replacen("0x", "", 1);
+    let mut calldata = calldata.replacen("0x", "", 1);
 
     // check if the calldata length is a standard length
     if calldata.len() % 2 != 0 {
@@ -99,8 +103,20 @@ pub fn decode(args: DecodeArgs) {
     }
 
     // if calldata isn't a multiple of 64, it may be harder to decode.
-    if calldata[8..].len() % 64 != 0 {
+    if (calldata[8..].len() % 64 != 0) && !args.truncate_calldata {
         logger.warn("calldata is not a standard size. decoding may fail since each word is not exactly 32 bytes long.");
+        logger.warn("if decoding fails, try using the --truncate-calldata flag to truncate the calldata to a standard size.");
+    } else if args.truncate_calldata {
+        logger.warn("calldata is not a standard size. truncating the calldata to a standard size.");
+
+        // get the selector
+        let selector = calldata[0..8].to_owned();
+
+        // truncate calldata to a standard size, removing the selector
+        calldata = calldata[8..][..calldata[8..].len() - (calldata[8..].len() % 64)].to_owned();
+
+        // add the selector back
+        calldata = selector + &calldata;
     }
 
     // parse the two parts of calldata, inputs and selector
