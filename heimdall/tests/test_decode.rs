@@ -15,6 +15,7 @@ mod benchmark {
                 openai_api_key: String::from(""),
                 explain: false,
                 default: true,
+                truncate_calldata: false,
             };
             heimdall::decode::decode(args)
         }
@@ -32,6 +33,7 @@ mod benchmark {
                 openai_api_key: String::from(""),
                 explain: false,
                 default: true,
+                truncate_calldata: false,
             };
             heimdall::decode::decode(args)
         }
@@ -49,6 +51,7 @@ mod benchmark {
                 openai_api_key: String::from(""),
                 explain: false,
                 default: true,
+                truncate_calldata: false,
             };
             heimdall::decode::decode(args)
         }
@@ -66,6 +69,7 @@ mod benchmark {
                 openai_api_key: String::from(""),
                 explain: false,
                 default: true,
+                truncate_calldata: false,
             };
             heimdall::decode::decode(args)
         }
@@ -82,6 +86,7 @@ mod benchmark {
             openai_api_key: String::from(""),
             explain: false,
             default: true,
+            truncate_calldata: false,
         };
         heimdall::decode::decode(args);
         assert!(true)
@@ -96,6 +101,7 @@ mod benchmark {
             openai_api_key: String::from(""),
             explain: false,
             default: true,
+            truncate_calldata: false,
         };
         heimdall::decode::decode(args);
         assert!(true)
