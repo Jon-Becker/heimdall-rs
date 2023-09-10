@@ -80,7 +80,7 @@ pub fn decode(args: DecodeArgs) {
     if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
         // provider.
-        raw_transaction = get_transaction(&args.target, &args.rpc_url, &logger);
+        raw_transaction = get_transaction(&args.target, &args.rpc_url);
 
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
     } else {
@@ -386,12 +386,8 @@ pub fn decode(args: DecodeArgs) {
             explain_progress.set_style(logger.info_spinner());
             explain_progress.set_message("attempting to explain calldata...");
 
-            match get_explanation(
-                decoded_string.to_string(),
-                raw_transaction,
-                &args.openai_api_key,
-                &logger,
-            ) {
+            match get_explanation(decoded_string.to_string(), raw_transaction, &args.openai_api_key)
+            {
                 Some(explanation) => {
                     explain_progress.finish_and_clear();
                     logger.success(&format!("Transaction explanation: {}", explanation.trim()));

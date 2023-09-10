@@ -133,7 +133,7 @@ pub fn decompile(args: DecompilerArgs) {
 
         // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
         // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
+        contract_bytecode = get_code(&args.target, &args.rpc_url);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
@@ -225,7 +225,7 @@ pub fn decompile(args: DecompilerArgs) {
 
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
-        resolved_selectors = resolve_selectors(selectors.keys().cloned().collect(), &logger);
+        resolved_selectors = resolve_selectors(selectors.keys().cloned().collect());
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
@@ -462,7 +462,6 @@ pub fn decompile(args: DecompilerArgs) {
                     .keys()
                     .map(|error_selector| encode_hex_reduced(*error_selector).replacen("0x", "", 1))
                     .collect(),
-                &logger,
             );
             for (error_selector, _) in analyzed_function.errors.clone() {
                 let error_selector_str = encode_hex_reduced(error_selector).replacen("0x", "", 1);
@@ -528,7 +527,6 @@ pub fn decompile(args: DecompilerArgs) {
                     .keys()
                     .map(|event_selector| encode_hex_reduced(*event_selector).replacen("0x", "", 1))
                     .collect(),
-                &logger,
             );
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
                 let mut selected_event_index: u8 = 0;
@@ -605,7 +603,6 @@ pub fn decompile(args: DecompilerArgs) {
             output_dir,
             analyzed_functions,
             all_resolved_events,
-            &logger,
             &mut trace,
             decompile_call,
         );
@@ -616,7 +613,6 @@ pub fn decompile(args: DecompilerArgs) {
             analyzed_functions,
             all_resolved_errors,
             all_resolved_events,
-            &logger,
             &mut trace,
             decompile_call,
         );

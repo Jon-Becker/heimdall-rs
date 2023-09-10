@@ -110,7 +110,7 @@ pub fn cfg(args: CFGArgs) {
 
         // We are working with a contract address, so we need to fetch the bytecode from the RPC
         // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
+        contract_bytecode = get_code(&args.target, &args.rpc_url);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target.replacen("0x", "", 1);
     } else {
@@ -240,7 +240,7 @@ pub fn cfg(args: CFGArgs) {
     logger.info("symbolic execution completed.");
 
     // build the dot file
-    build_output(&contract_cfg, &args, output_dir.clone(), &logger);
+    build_output(&contract_cfg, &args, output_dir.clone());
 
     logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()));
     trace.display();

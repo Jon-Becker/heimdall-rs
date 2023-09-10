@@ -65,10 +65,14 @@ pub fn output(
     output_dir: String,
     functions: Vec<Function>,
     all_resolved_events: HashMap<String, ResolvedLog>,
-    logger: &Logger,
     trace: &mut TraceFactory,
     trace_parent: u32,
 ) {
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
+    // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar.set_style(logger.info_spinner());

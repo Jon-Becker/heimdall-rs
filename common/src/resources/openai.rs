@@ -1,8 +1,12 @@
 use crate::io::logging::Logger;
 use async_openai::{types::CreateCompletionRequestArgs, Client};
 
-pub fn complete(prompt: &str, api_key: &str, logger: &Logger) -> Option<String> {
+pub fn complete(prompt: &str, api_key: &str) -> Option<String> {
     let client = Client::new().with_api_key(api_key);
+
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
 
     // create new runtime block
     let rt = tokio::runtime::Builder::new_current_thread()

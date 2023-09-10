@@ -82,9 +82,13 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     0
 }
 
-pub fn resolve_selectors<T>(selectors: Vec<String>, logger: &Logger) -> HashMap<String, Vec<T>>
+pub fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
 where
     T: ResolveSelector + Send + Clone + 'static, {
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
     let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
