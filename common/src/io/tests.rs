@@ -138,6 +138,12 @@ mod test_logging {
 
         let (logger, _) = Logger::new("TRACE");
         logger.warn("log");
+
+        let (logger, _) = Logger::new("ALL");
+        logger.warn("log");
+
+        let (logger, _) = Logger::new("MAX");
+        logger.warn("log");
     }
 
     #[test]
@@ -158,6 +164,12 @@ mod test_logging {
         logger.error("log");
 
         let (logger, _) = Logger::new("TRACE");
+        logger.error("log");
+
+        let (logger, _) = Logger::new("ALL");
+        logger.error("log");
+
+        let (logger, _) = Logger::new("MAX");
         logger.error("log");
     }
 
@@ -180,6 +192,12 @@ mod test_logging {
 
         let (logger, _) = Logger::new("TRACE");
         logger.info("log");
+
+        let (logger, _) = Logger::new("ALL");
+        logger.info("log");
+
+        let (logger, _) = Logger::new("MAX");
+        logger.info("log");
     }
 
     #[test]
@@ -201,5 +219,65 @@ mod test_logging {
 
         let (logger, _) = Logger::new("TRACE");
         logger.success("log");
+
+        let (logger, _) = Logger::new("ALL");
+        logger.success("log");
+
+        let (logger, _) = Logger::new("MAX");
+        logger.success("log");
+    }
+
+    #[test]
+    fn test_debug() {
+        let (logger, _) = Logger::new("SILENT");
+        logger.debug("log");
+
+        let (logger, _) = Logger::new("ERROR");
+        logger.debug("log");
+
+        let (logger, _) = Logger::new("WARN");
+        logger.debug("log");
+
+        let (logger, _) = Logger::new("INFO");
+        logger.debug("log");
+
+        let (logger, _) = Logger::new("DEBUG");
+        logger.debug("log");
+
+        let (logger, _) = Logger::new("TRACE");
+        logger.debug("log");
+
+        let (logger, _) = Logger::new("ALL");
+        logger.debug("log");
+
+        let (logger, _) = Logger::new("MAX");
+        logger.debug("log");
+    }
+
+    #[test]
+    fn test_max() {
+        let (logger, _) = Logger::new("SILENT");
+        logger.debug_max("log");
+
+        let (logger, _) = Logger::new("ERROR");
+        logger.debug_max("log");
+
+        let (logger, _) = Logger::new("WARN");
+        logger.debug_max("log");
+
+        let (logger, _) = Logger::new("INFO");
+        logger.debug_max("log");
+
+        let (logger, _) = Logger::new("DEBUG");
+        logger.debug_max("log");
+
+        let (logger, _) = Logger::new("TRACE");
+        logger.debug_max("log");
+
+        let (logger, _) = Logger::new("ALL");
+        logger.debug_max("log");
+
+        let (logger, _) = Logger::new("MAX");
+        logger.debug_max("log");
     }
 }

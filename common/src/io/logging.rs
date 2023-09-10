@@ -354,6 +354,8 @@ impl Logger {
             "INFO" => (Logger { level: 2 }, TraceFactory::new(2)),
             "DEBUG" => (Logger { level: 3 }, TraceFactory::new(3)),
             "TRACE" => (Logger { level: 4 }, TraceFactory::new(4)),
+            "ALL" => (Logger { level: 5 }, TraceFactory::new(5)),
+            "MAX" => (Logger { level: 6 }, TraceFactory::new(6)),
             _ => (Logger { level: 1 }, TraceFactory::new(1)),
         }
     }
@@ -391,6 +393,12 @@ impl Logger {
     pub fn trace(&self, message: &str) {
         if self.level >= 4 {
             println!("{}: {}", "trace".bright_blue().bold(), message);
+        }
+    }
+
+    pub fn debug_max(&self, message: &str) {
+        if self.level >= 6 {
+            println!("{}: {}", "max".bright_white().bold(), message);
         }
     }
 
