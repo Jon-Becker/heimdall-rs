@@ -104,14 +104,16 @@ fn main() {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            // set logger environment variable
-            std::env::set_var(
-                "RUST_LOG",
-                match cmd.verbose.log_level() {
-                    Some(level) => level.as_str(),
-                    None => "SILENT",
-                },
-            );
+            // set logger environment variable if not already set
+            if std::env::var("RUST_LOG").is_err() {
+                std::env::set_var(
+                    "RUST_LOG",
+                    match cmd.verbose.log_level() {
+                        Some(level) => level.as_str(),
+                        None => "SILENT",
+                    },
+                );
+            }
 
             disassemble(cmd);
         }
@@ -122,14 +124,16 @@ fn main() {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            // set logger environment variable
-            std::env::set_var(
-                "RUST_LOG",
-                match cmd.verbose.log_level() {
-                    Some(level) => level.as_str(),
-                    None => "SILENT",
-                },
-            );
+            // set logger environment variable if not already set
+            if std::env::var("RUST_LOG").is_err() {
+                std::env::set_var(
+                    "RUST_LOG",
+                    match cmd.verbose.log_level() {
+                        Some(level) => level.as_str(),
+                        None => "SILENT",
+                    },
+                );
+            }
 
             decompile(cmd);
         }
@@ -145,14 +149,16 @@ fn main() {
                 cmd.openai_api_key = configuration.openai_api_key;
             }
 
-            // set logger environment variable
-            std::env::set_var(
-                "RUST_LOG",
-                match cmd.verbose.log_level() {
-                    Some(level) => level.as_str(),
-                    None => "SILENT",
-                },
-            );
+            // set logger environment variable if not already set
+            if std::env::var("RUST_LOG").is_err() {
+                std::env::set_var(
+                    "RUST_LOG",
+                    match cmd.verbose.log_level() {
+                        Some(level) => level.as_str(),
+                        None => "SILENT",
+                    },
+                );
+            }
 
             decode(cmd);
         }
@@ -163,14 +169,16 @@ fn main() {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            // set logger environment variable
-            std::env::set_var(
-                "RUST_LOG",
-                match cmd.verbose.log_level() {
-                    Some(level) => level.as_str(),
-                    None => "SILENT",
-                },
-            );
+            // set logger environment variable if not already set
+            if std::env::var("RUST_LOG").is_err() {
+                std::env::set_var(
+                    "RUST_LOG",
+                    match cmd.verbose.log_level() {
+                        Some(level) => level.as_str(),
+                        None => "SILENT",
+                    },
+                );
+            }
 
             cfg(cmd);
         }
@@ -186,14 +194,16 @@ fn main() {
                 cmd.transpose_api_key = configuration.transpose_api_key;
             }
 
-            // set logger environment variable
-            std::env::set_var(
-                "RUST_LOG",
-                match cmd.verbose.log_level() {
-                    Some(level) => level.as_str(),
-                    None => "SILENT",
-                },
-            );
+            // set logger environment variable if not already set
+            if std::env::var("RUST_LOG").is_err() {
+                std::env::set_var(
+                    "RUST_LOG",
+                    match cmd.verbose.log_level() {
+                        Some(level) => level.as_str(),
+                        None => "SILENT",
+                    },
+                );
+            }
 
             dump(cmd);
         }
@@ -204,14 +214,16 @@ fn main() {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            // set logger environment variable
-            std::env::set_var(
-                "RUST_LOG",
-                match cmd.verbose.log_level() {
-                    Some(level) => level.as_str(),
-                    None => "SILENT",
-                },
-            );
+            // set logger environment variable if not already set
+            if std::env::var("RUST_LOG").is_err() {
+                std::env::set_var(
+                    "RUST_LOG",
+                    match cmd.verbose.log_level() {
+                        Some(level) => level.as_str(),
+                        None => "SILENT",
+                    },
+                );
+            }
 
             snapshot(cmd);
         }

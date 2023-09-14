@@ -16,6 +16,9 @@ pub fn get_code(contract_address: &str, rpc_url: &str) -> String {
     let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
     let (logger, _) = Logger::new(&level);
 
+    logger
+        .debug_max(&format!("fetching bytecode from node for contract: '{}' .", &contract_address));
+
     rt.block_on(async {
 
         // check the cache for a matching address
@@ -70,6 +73,11 @@ pub fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Transaction {
     // get a new logger
     let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
     let (logger, _) = Logger::new(&level);
+
+    logger.debug_max(&format!(
+        "fetching calldata from node for transaction: '{}' .",
+        &transaction_hash
+    ));
 
     // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
     rt.block_on(async {

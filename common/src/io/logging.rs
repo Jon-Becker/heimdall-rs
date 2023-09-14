@@ -398,7 +398,7 @@ impl Logger {
 
     pub fn debug_max(&self, message: &str) {
         if self.level >= 6 {
-            println!("{}: {}", "max".bright_white().bold(), message);
+            println!("{}: {}", "debug".bright_white().bold(), message);
         }
     }
 

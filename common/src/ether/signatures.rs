@@ -1,7 +1,10 @@
 use ethers::abi::Token;
 use heimdall_cache::{read_cache, store_cache};
 
-use crate::utils::{http::get_json_from_url, strings::replace_last};
+use crate::{
+    io::logging::Logger,
+    utils::{http::get_json_from_url, strings::replace_last},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -34,13 +37,22 @@ pub trait ResolveSelector {
 
 impl ResolveSelector for ResolvedError {
     fn resolve(selector: &str) -> Option<Vec<Self>> {
+        // get a new logger
+        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+        let (logger, _) = Logger::new(&level);
+
+        logger.debug_max(&format!("resolving error selector {}", &selector));
+
         // get cached results
         if let Some(cached_results) =
             read_cache::<Vec<ResolvedError>>(&format!("selector.{selector}"))
         {
             match cached_results.len() {
                 0 => return None,
-                _ => return Some(cached_results),
+                _ => {
+                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
+                    return Some(cached_results)
+                }
             }
         }
 
@@ -61,6 +73,12 @@ impl ResolveSelector for ResolvedError {
             },
             None => return None,
         };
+
+        logger.debug_max(&format!(
+            "found {} possible functions for selector: {}",
+            &results.len(),
+            &selector
+        ));
 
         let mut signature_list: Vec<ResolvedError> = Vec::new();
 
@@ -99,13 +117,22 @@ impl ResolveSelector for ResolvedError {
 
 impl ResolveSelector for ResolvedLog {
     fn resolve(selector: &str) -> Option<Vec<Self>> {
+        // get a new logger
+        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+        let (logger, _) = Logger::new(&level);
+
+        logger.debug_max(&format!("resolving event selector {}", &selector));
+
         // get cached results
         if let Some(cached_results) =
             read_cache::<Vec<ResolvedLog>>(&format!("selector.{selector}"))
         {
             match cached_results.len() {
                 0 => return None,
-                _ => return Some(cached_results),
+                _ => {
+                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
+                    return Some(cached_results)
+                }
             }
         }
 
@@ -126,6 +153,12 @@ impl ResolveSelector for ResolvedLog {
             },
             None => return None,
         };
+
+        logger.debug_max(&format!(
+            "found {} possible functions for selector: {}",
+            &results.len(),
+            &selector
+        ));
 
         let mut signature_list: Vec<ResolvedLog> = Vec::new();
 
@@ -164,13 +197,22 @@ impl ResolveSelector for ResolvedLog {
 
 impl ResolveSelector for ResolvedFunction {
     fn resolve(selector: &str) -> Option<Vec<Self>> {
+        // get a new logger
+        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+        let (logger, _) = Logger::new(&level);
+
+        logger.debug_max(&format!("resolving event selector {}", &selector));
+
         // get cached results
         if let Some(cached_results) =
             read_cache::<Vec<ResolvedFunction>>(&format!("selector.{selector}"))
         {
             match cached_results.len() {
                 0 => return None,
-                _ => return Some(cached_results),
+                _ => {
+                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
+                    return Some(cached_results)
+                }
             }
         }
 
@@ -191,6 +233,12 @@ impl ResolveSelector for ResolvedFunction {
             },
             None => return None,
         };
+
+        logger.debug_max(&format!(
+            "found {} possible functions for selector: {}",
+            &results.len(),
+            &selector
+        ));
 
         let mut signature_list: Vec<ResolvedFunction> = Vec::new();
 

@@ -14,6 +14,11 @@ use super::{evm::core::vm::VM, signatures::ResolveSelector};
 // find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
     let mut function_selectors = HashMap::new();
+    let mut handled_selectors = HashSet::new();
+
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
 
     // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
     // they are function selectors
@@ -27,12 +32,30 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
             if &instruction == "PUSH4" {
                 let function_selector = instruction_args[2].clone();
 
+                // check if this function selector has already been handled
+                if handled_selectors.contains(&function_selector) {
+                    continue
+                }
+
+                logger.debug_max(&format!(
+                    "optimistically assuming instruction {} {} {} is a function selector",
+                    instruction_args[0], instruction_args[1], instruction_args[2]
+                ));
+
+                // add the function selector to the handled selectors
+                handled_selectors.insert(function_selector.clone());
+
                 // get the function's entry point
                 let function_entry_point =
                     match resolve_entry_point(&evm.clone(), &function_selector) {
                         0 => continue,
                         x => x,
                     };
+
+                logger.debug_max(&format!(
+                    "found function selector {} at entry point {}",
+                    function_selector, function_entry_point
+                ));
 
                 function_selectors.insert(function_selector, function_entry_point);
             }
