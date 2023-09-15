@@ -1,24 +1,20 @@
 mod util;
 
 use self::util::{
-    stack_contains_too_many_of_the_same_item, stack_diff, stack_item_source_depth_too_deep,
+    jump_condition_appears_recursive, jump_condition_contains_mutated_memory_access,
+    jump_condition_contains_mutated_storage_access, stack_contains_too_many_of_the_same_item,
+    stack_diff, stack_item_source_depth_too_deep,
 };
 use crate::{
-    constants::{MEMORY_REGEX, STORAGE_REGEX},
     ether::evm::core::{
-        stack::{self, Stack, StackFrame},
+        stack::{Stack, StackFrame},
         vm::{State, VM},
     },
     io::logging::Logger,
     utils::strings::decode_hex,
 };
 use ethers::types::U256;
-use lazy_static::lazy_static;
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Mutex,
-};
-use strsim::normalized_damerau_levenshtein as similarity;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Debug)]
 pub struct VMTrace {
@@ -132,68 +128,14 @@ impl VM {
                         // for every stack that we have encountered for this jump, perform some
                         // heuristic checks to determine if this might be a loop
                         if historical_stacks.iter().any(|stack| {
+                            // get a solidity repr of the jump condition
+                            let jump_condition =
+                                state.last_instruction.input_operations[1].solidify();
+
                             // calculate the difference of the current stack and the historical
                             // stack
                             let stack_diff = stack_diff(&vm.stack, &Stack { stack: stack.clone() });
-                            if !stack_diff.is_empty() {
-                                // check if all stack diff values are in the jump condition
-                                let jump_condition =
-                                    state.last_instruction.input_operations[1].solidify();
-
-                                // if the stack diff is within the jump condition, its likely that
-                                // we are in a loop
-                                if stack_diff
-                                    .iter()
-                                    .map(|frame| frame.operation.solidify())
-                                    .any(|solidified| jump_condition.contains(&solidified))
-                                {
-                                    return true
-                                }
-
-                                // if we repeat conditionals, its likely that we are in a loop
-                                if stack_diff.iter().any(|frame| {
-                                    let solidified = frame.operation.solidify();
-                                    jump_condition.contains(&solidified) &&
-                                        jump_condition.matches(&solidified).count() > 1
-                                }) {
-                                    return true
-                                }
-
-                                // if a memory access in the jump condition is modified by the stack
-                                // diff, its likely that we are in a loop
-                                let mut memory_accesses = MEMORY_REGEX.find_iter(&jump_condition);
-                                if stack_diff.iter().any(|frame| {
-                                    memory_accesses.any(|_match| {
-                                        if _match.is_err() {
-                                            return false
-                                        }
-                                        let memory_access = _match.unwrap();
-                                        let slice = &jump_condition
-                                            [memory_access.start()..memory_access.end()];
-                                        frame.operation.solidify().contains(slice)
-                                    })
-                                }) {
-                                    return true
-                                }
-
-                                // if a storage access in the jump condition is modified by the
-                                // stack diff, its likely that we are in a loop
-                                let mut storage_accesses = STORAGE_REGEX.find_iter(&jump_condition);
-                                if stack_diff.iter().any(|frame| {
-                                    storage_accesses.any(|_match| {
-                                        if _match.is_err() {
-                                            return false
-                                        }
-                                        let storage_access = _match.unwrap();
-                                        let slice = &jump_condition
-                                            [storage_access.start()..storage_access.end()];
-                                        frame.operation.solidify().contains(slice)
-                                    })
-                                }) {
-                                    return true
-                                }
-                                return false
-                            } else {
+                            if stack_diff.is_empty() {
                                 // the stack_diff is empty (the stacks are the same), so we've
                                 // already handled this path
                                 logger.debug_max(&format!(
@@ -201,9 +143,39 @@ impl VM {
                                 ));
                                 return true
                             }
+
+                            // check if the jump condition appears to be recursive
+                            if jump_condition_appears_recursive(&stack_diff, &jump_condition) {
+                                return true
+                            }
+
+                            // check for mutated memory accesses in the jump condition
+                            if jump_condition_contains_mutated_memory_access(
+                                &stack_diff,
+                                &jump_condition,
+                            ) {
+                                return true
+                            }
+
+                            // check for mutated memory accesses in the jump condition
+                            if jump_condition_contains_mutated_storage_access(
+                                &stack_diff,
+                                &jump_condition,
+                            ) {
+                                return true
+                            }
+
+                            return false
                         }) {
+                            logger.debug_max(&format!("jump terminated.",));
                             return vm_trace
                         } else {
+                            logger.debug_max(&format!(
+                                "adding historical stack {} to jump frame {:?}",
+                                &format!("{:#016x?}", vm.stack.hash()),
+                                jump_frame
+                            ));
+
                             // this key exists, but the stack is different, so the jump is new
                             let historical_stacks: &mut Vec<VecDeque<StackFrame>> =
                                 &mut historical_stacks.clone();
@@ -213,6 +185,7 @@ impl VM {
                     }
                     None => {
                         // this key doesnt exist, so the jump is new
+                        logger.debug_max(&format!("added new jump frame: {:?}", jump_frame));
                         handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
                     }
                 }
