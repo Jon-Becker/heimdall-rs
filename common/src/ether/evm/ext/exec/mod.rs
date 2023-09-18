@@ -135,9 +135,9 @@ impl VM {
 
                             // check if any historical stack is the same as the current stack
                             if hist_stack == &vm.stack {
-                                logger.debug_max(&format!(
+                                logger.debug_max(
                                     "jump matches loop-detection heuristic: 'jump_path_already_handled'"
-                                ));
+                                );
                                 return true
                             }
 
@@ -146,9 +146,9 @@ impl VM {
                             if stack_diff.is_empty() {
                                 // the stack_diff is empty (the stacks are the same), so we've
                                 // already handled this path
-                                logger.debug_max(&format!(
+                                logger.debug_max(
                                     "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
-                                ));
+                                );
                                 return true
                             }
 
@@ -191,7 +191,7 @@ impl VM {
 
                         if jump_condition_historical_diffs_approximately_equal(
                             &vm.stack,
-                            &historical_stacks,
+                            historical_stacks,
                         ) {
                             logger.debug_max("jump terminated.");
                             logger.debug_max(&format!(

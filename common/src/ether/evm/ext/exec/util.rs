@@ -1,3 +1,5 @@
+use ethers::types::U256;
+
 use crate::{
     constants::{MEMORY_REGEX, STORAGE_REGEX},
     ether::evm::core::stack::{Stack, StackFrame},
@@ -60,10 +62,7 @@ pub fn stack_item_source_depth_too_deep(stack: &Stack) -> bool {
 
 /// Compare the stack diff to the given jump condition and determine if the jump condition appears
 /// to be the condition of a loop.
-pub fn jump_condition_appears_recursive(
-    stack_diff: &Vec<StackFrame>,
-    jump_condition: &str,
-) -> bool {
+pub fn jump_condition_appears_recursive(stack_diff: &[StackFrame], jump_condition: &str) -> bool {
     // check if the jump condition appears in the stack diff more than once, this is likely a loop
     if stack_diff
         .iter()
@@ -84,7 +83,7 @@ pub fn jump_condition_appears_recursive(
 
 /// Check if the jump condition contains a memory access that is modified within the stack diff.
 pub fn jump_condition_contains_mutated_memory_access(
-    stack_diff: &Vec<StackFrame>,
+    stack_diff: &[StackFrame],
     jump_condition: &str,
 ) -> bool {
     let mut memory_accesses = MEMORY_REGEX.find_iter(jump_condition);
@@ -111,7 +110,7 @@ pub fn jump_condition_contains_mutated_memory_access(
 
 /// Check if the jump condition contains a storage access that is modified within the stack diff.
 pub fn jump_condition_contains_mutated_storage_access(
-    stack_diff: &Vec<StackFrame>,
+    stack_diff: &[StackFrame],
     jump_condition: &str,
 ) -> bool {
     let mut storage_accesses = STORAGE_REGEX.find_iter(jump_condition);
@@ -139,12 +138,23 @@ pub fn jump_condition_contains_mutated_storage_access(
 /// check if all stack diffs for all historical stacks are exactly length 1, and the same
 pub fn jump_condition_historical_diffs_approximately_equal(
     stack: &Stack,
-    historical_stacks: &Vec<Stack>,
+    historical_stacks: &[Stack],
 ) -> bool {
+    // break if historical_stacks.len() < 4
+    // this is an arbitrary number, i picked it randomly :D
+    if historical_stacks.len() < 4 {
+        return false
+    }
+
     // get the stack diffs for all historical stacks
     let mut stack_diffs = Vec::new();
     for historical_stack in historical_stacks {
-        stack_diffs.push(stack_diff(historical_stack, stack));
+        stack_diffs.push(
+            stack_diff(stack, historical_stack)
+                .iter()
+                .map(|frame| frame.value)
+                .collect::<Vec<U256>>(),
+        );
     }
 
     // check if all stack diffs are exactly length 1

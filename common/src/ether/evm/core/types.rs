@@ -78,13 +78,13 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
                     string = "".to_string();
                 }
 
-                if array_size.is_some() {
+                if let Some(array_size) = array_size {
                     // recursively call this function to extract the tuple types
                     let inner_types = extract_types_from_string(&tuple_types);
 
                     types.push(ParamType::FixedArray(
                         Box::new(ParamType::Tuple(inner_types.unwrap())),
-                        array_size.unwrap(),
+                        array_size,
                     ))
                 } else {
                     // recursively call this function to extract the tuple types
@@ -100,11 +100,8 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
             }
 
             // recursively call this function to extract the remaining types
-            match extract_types_from_string(&string) {
-                Some(mut remaining_types) => {
-                    types.append(&mut remaining_types);
-                }
-                None => {}
+            if let Some(mut remaining_types) = extract_types_from_string(&string) {
+                types.append(&mut remaining_types);
             }
         } else {
             // first type is not a tuple, so we can extract it
@@ -114,11 +111,8 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
             if string_parts[0].is_empty() {
                 // the first type is empty, so we can just recursively call this function to extract
                 // the remaining types
-                match extract_types_from_string(string_parts[1]) {
-                    Some(mut remaining_types) => {
-                        types.append(&mut remaining_types);
-                    }
-                    None => {}
+                if let Some(mut remaining_types) = extract_types_from_string(string_parts[1]) {
+                    types.append(&mut remaining_types);
                 }
             } else {
                 let param_type = to_type(string_parts[0]);
@@ -128,11 +122,8 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
                 let string = string[string_parts[0].len() + 1..].to_string();
 
                 // recursively call this function to extract the remaining types
-                match extract_types_from_string(&string) {
-                    Some(mut remaining_types) => {
-                        types.append(&mut remaining_types);
-                    }
-                    None => {}
+                if let Some(mut remaining_types) = extract_types_from_string(&string) {
+                    types.append(&mut remaining_types);
                 }
             }
         }
@@ -193,14 +184,14 @@ fn to_type(string: &str) -> ParamType {
         "string" => ParamType::String,
         "bytes" => ParamType::Bytes,
         _ => {
-            if string.starts_with("uint") {
-                let size = string[4..].parse::<usize>().unwrap_or(256);
+            if let Some(stripped) = string.strip_prefix("uint") {
+                let size = stripped.parse::<usize>().unwrap_or(256);
                 ParamType::Uint(size)
-            } else if string.starts_with("int") {
-                let size = string[3..].parse::<usize>().unwrap_or(256);
+            } else if let Some(stripped) = string.strip_prefix("int") {
+                let size = stripped.parse::<usize>().unwrap_or(256);
                 ParamType::Int(size)
-            } else if string.starts_with("bytes") {
-                let size = string[5..].parse::<usize>().unwrap();
+            } else if let Some(stripped) = string.strip_prefix("bytes") {
+                let size = stripped.parse::<usize>().unwrap();
                 ParamType::FixedBytes(size)
             } else {
                 panic!("Invalid type: '{}'", string);

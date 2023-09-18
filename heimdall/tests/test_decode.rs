@@ -89,7 +89,6 @@ mod benchmark {
             truncate_calldata: false,
         };
         heimdall::decode::decode(args);
-        assert!(true)
     }
 
     #[test]
@@ -104,6 +103,5 @@ mod benchmark {
             truncate_calldata: false,
         };
         heimdall::decode::decode(args);
-        assert!(true)
     }
 }
