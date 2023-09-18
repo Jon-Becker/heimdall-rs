@@ -80,10 +80,10 @@ pub fn decompile(args: DecompilerArgs) {
     use std::time::Instant;
     let now = Instant::now();
 
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, mut trace) = Logger::new(&level);
+
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
@@ -124,6 +124,8 @@ pub fn decompile(args: DecompilerArgs) {
         output_dir = args.output.clone();
     }
 
+    // parse the various formats that are accepted as targets
+    // i.e, file, bytecode, contract address
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target).unwrap() {
         // push the address to the output directory
@@ -133,14 +135,17 @@ pub fn decompile(args: DecompilerArgs) {
 
         // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
         // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
+        contract_bytecode = get_code(&args.target, &args.rpc_url);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
+        logger.debug_max("using provided bytecode for decompilation");
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
         // push the address to the output directory
         if output_dir != args.output {
             output_dir.push_str("/local");
         }
+
+        logger.debug_max("using provided file for decompilation.");
 
         // We are decompiling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
@@ -225,7 +230,7 @@ pub fn decompile(args: DecompilerArgs) {
 
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
-        resolved_selectors = resolve_selectors(selectors.keys().cloned().collect(), &logger);
+        resolved_selectors = resolve_selectors(selectors.keys().cloned().collect());
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
@@ -294,6 +299,10 @@ pub fn decompile(args: DecompilerArgs) {
         // analyze execution tree
         let mut analyzed_function;
         if args.include_yul {
+            logger.debug_max(&format!(
+                "analyzing symbolic execution trace '0x{}' with yul analyzer",
+                selector
+            ));
             analyzed_function = analyze_yul(
                 map,
                 Function {
@@ -318,6 +327,10 @@ pub fn decompile(args: DecompilerArgs) {
                 &mut Vec::new(),
             );
         } else {
+            logger.debug_max(&format!(
+                "analyzing symbolic execution trace '0x{}' with sol analyzer",
+                selector
+            ));
             analyzed_function = analyze_sol(
                 map,
                 Function {
@@ -462,7 +475,6 @@ pub fn decompile(args: DecompilerArgs) {
                     .keys()
                     .map(|error_selector| encode_hex_reduced(*error_selector).replacen("0x", "", 1))
                     .collect(),
-                &logger,
             );
             for (error_selector, _) in analyzed_function.errors.clone() {
                 let error_selector_str = encode_hex_reduced(error_selector).replacen("0x", "", 1);
@@ -528,7 +540,6 @@ pub fn decompile(args: DecompilerArgs) {
                     .keys()
                     .map(|event_selector| encode_hex_reduced(*event_selector).replacen("0x", "", 1))
                     .collect(),
-                &logger,
             );
             for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
                 let mut selected_event_index: u8 = 0;
@@ -605,7 +616,6 @@ pub fn decompile(args: DecompilerArgs) {
             output_dir,
             analyzed_functions,
             all_resolved_events,
-            &logger,
             &mut trace,
             decompile_call,
         );
@@ -616,7 +626,6 @@ pub fn decompile(args: DecompilerArgs) {
             analyzed_functions,
             all_resolved_errors,
             all_resolved_events,
-            &logger,
             &mut trace,
             decompile_call,
         );

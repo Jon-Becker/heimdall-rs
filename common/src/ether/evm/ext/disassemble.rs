@@ -68,7 +68,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
 
         // We are disassembling a contract address, so we need to fetch the bytecode from the RPC
         // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url, &logger);
+        contract_bytecode = get_code(&args.target, &args.rpc_url);
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         contract_bytecode = args.target;
     } else {

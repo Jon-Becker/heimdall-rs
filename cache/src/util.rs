@@ -1,4 +1,5 @@
 use std::{
+    fmt::Write as FmtWrite,
     fs::File,
     io::{Read, Write},
     num::ParseIntError,
@@ -12,7 +13,10 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 
 // encode a hex into a string
 pub fn encode_hex(s: Vec<u8>) -> String {
-    s.iter().map(|b| format!("{b:02x}")).collect()
+    s.iter().fold(String::new(), |mut acc, b| {
+        write!(acc, "{b:02x}", b = b).unwrap();
+        acc
+    })
 }
 
 pub fn prettify_bytes(bytes: u64) -> String {

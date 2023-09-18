@@ -24,11 +24,17 @@ struct TransposeResponse {
     results: Vec<Value>,
 }
 
-fn _call_transpose(query: &str, api_key: &str, logger: &Logger) -> Option<TransposeResponse> {
+fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
+    // build the headers
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", "application/json".parse().unwrap());
     headers.insert("X-API-KEY", api_key.parse().unwrap());
 
+    // clone the query
     let query = query.to_owned();
 
     // make the request
@@ -79,8 +85,11 @@ pub fn get_transaction_list(
     address: &str,
     api_key: &str,
     bounds: (&u128, &u128),
-    logger: &Logger,
 ) -> Vec<(u128, String)> {
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
     transaction_list_progress.enable_steady_tick(Duration::from_millis(100));
@@ -99,7 +108,7 @@ pub fn get_transaction_list(
         bounds.1
     );
 
-    let response = match _call_transpose(&query, api_key, logger) {
+    let response = match _call_transpose(&query, api_key) {
         Some(response) => response,
         None => {
             logger.error("failed to get transaction list from Transpose");
@@ -150,12 +159,11 @@ pub fn get_transaction_list(
     transactions
 }
 
-pub fn get_contract_creation(
-    chain: &str,
-    address: &str,
-    api_key: &str,
-    logger: &Logger,
-) -> Option<(u128, String)> {
+pub fn get_contract_creation(chain: &str, address: &str, api_key: &str) -> Option<(u128, String)> {
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
     transaction_list_progress.enable_steady_tick(Duration::from_millis(100));
@@ -168,7 +176,7 @@ pub fn get_contract_creation(
         "{{\"sql\":\"SELECT block_number, transaction_hash FROM {chain}.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM {chain}.accounts WHERE address = '{address}' ) AND contract_address = '{address}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
     );
 
-    let response = match _call_transpose(&query, api_key, logger) {
+    let response = match _call_transpose(&query, api_key) {
         Some(response) => response,
         None => {
             logger.error("failed to get creation tx from Transpose");

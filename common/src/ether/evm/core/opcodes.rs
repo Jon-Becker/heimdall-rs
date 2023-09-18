@@ -175,6 +175,21 @@ pub struct WrappedOpcode {
     pub inputs: Vec<WrappedInput>,
 }
 
+impl WrappedOpcode {
+    pub fn depth(&self) -> u32 {
+        self.inputs.iter().map(|x| x.depth()).max().unwrap_or(0) + 1
+    }
+}
+
+impl WrappedInput {
+    pub fn depth(&self) -> u32 {
+        match self {
+            WrappedInput::Raw(_) => 0,
+            WrappedInput::Opcode(opcode) => opcode.depth(),
+        }
+    }
+}
+
 // implements pretty printing for WrappedOpcodes
 impl Display for WrappedOpcode {
     fn fmt(&self, f: &mut Formatter) -> Result {

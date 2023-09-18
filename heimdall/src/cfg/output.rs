@@ -6,12 +6,12 @@ use petgraph::{dot::Dot, graph::Graph};
 
 use super::CFGArgs;
 
-pub fn build_output(
-    contract_cfg: &Graph<String, String>,
-    args: &CFGArgs,
-    output_dir: String,
-    logger: &Logger,
-) {
+pub fn build_output(contract_cfg: &Graph<String, String>, args: &CFGArgs, output_dir: String) {
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
+    // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar.set_style(logger.info_spinner());

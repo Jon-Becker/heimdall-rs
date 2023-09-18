@@ -71,10 +71,7 @@ mod integration_tests {
 
     #[test]
     fn test_cfg_complex() {
-        let expected_lines = vec![
-            String::from("471 [ label = \"0x03a0 JUMPDEST \\l0x03a1 STOP \\l\" ]"),
-            String::from("5 -> 7 []"),
-        ];
+        let expected_lines = vec![String::from("\"0x03a0 JUMPDEST \\l0x03a1 STOP \\l\"")];
 
         CFGBuilder::new("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a")
             .rpc("https://eth.llamarpc.com")

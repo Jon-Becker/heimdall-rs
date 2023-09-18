@@ -1,4 +1,4 @@
-use std::num::ParseIntError;
+use std::{fmt::Write, num::ParseIntError};
 
 use ethers::{
     abi::AbiEncode,
@@ -65,7 +65,10 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 /// assert_eq!(encoded, String::from("00010203"));
 /// ```
 pub fn encode_hex(s: Vec<u8>) -> String {
-    s.iter().map(|b| format!("{b:02x}")).collect()
+    s.iter().fold(String::new(), |mut acc, b| {
+        write!(acc, "{b:02x}", b = b).unwrap();
+        acc
+    })
 }
 
 /// Encodes a U256 into a hex string, removing leading zeros

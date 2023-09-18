@@ -1,4 +1,8 @@
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    fmt::Display,
+    hash::{Hash, Hasher},
+};
 
 use ethers::prelude::U256;
 
@@ -91,5 +95,21 @@ impl Stack {
     // Check if the stack is empty.
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()
+    }
+
+    pub fn hash(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.stack.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+impl Display for Stack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut stack = String::new();
+        for frame in self.stack.iter() {
+            stack.push_str(&format!("{}, ", frame.value));
+        }
+        write!(f, "[{:#02x?}]", stack)
     }
 }

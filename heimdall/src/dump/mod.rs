@@ -96,7 +96,7 @@ pub fn dump(args: DumpArgs) {
 
     // get the contract creation tx
     let contract_creation_tx =
-        match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key, &logger) {
+        match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key) {
             Some(tx) => tx,
             None => {
                 logger.error(
@@ -134,7 +134,6 @@ pub fn dump(args: DumpArgs) {
         &args.target,
         &args.transpose_api_key,
         (&args.from_block, &args.to_block),
-        &logger,
     );
 
     // convert to vec of Transaction

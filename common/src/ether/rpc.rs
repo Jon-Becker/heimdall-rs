@@ -8,9 +8,16 @@ use ethers::{
 };
 use heimdall_cache::{read_cache, store_cache};
 
-pub fn get_code(contract_address: &str, rpc_url: &str, logger: &Logger) -> String {
+pub fn get_code(contract_address: &str, rpc_url: &str) -> String {
     // create new runtime block
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
+    logger
+        .debug_max(&format!("fetching bytecode from node for contract: '{}' .", &contract_address));
 
     rt.block_on(async {
 
@@ -60,8 +67,17 @@ pub fn get_code(contract_address: &str, rpc_url: &str, logger: &Logger) -> Strin
     })
 }
 
-pub fn get_transaction(transaction_hash: &str, rpc_url: &str, logger: &Logger) -> Transaction {
+pub fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Transaction {
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
+    logger.debug_max(&format!(
+        "fetching calldata from node for transaction: '{}' .",
+        &transaction_hash
+    ));
 
     // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
     rt.block_on(async {
