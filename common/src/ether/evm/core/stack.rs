@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    fmt::Display,
     hash::{Hash, Hasher},
 };
 
@@ -100,5 +101,15 @@ impl Stack {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         self.stack.hash(&mut hasher);
         hasher.finish()
+    }
+}
+
+impl Display for Stack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut stack = String::new();
+        for frame in self.stack.iter() {
+            stack.push_str(&format!("{}, ", frame.value));
+        }
+        write!(f, "[{:#02x?}]", stack)
     }
 }

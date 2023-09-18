@@ -2,19 +2,20 @@ mod util;
 
 use self::util::{
     jump_condition_appears_recursive, jump_condition_contains_mutated_memory_access,
-    jump_condition_contains_mutated_storage_access, stack_contains_too_many_of_the_same_item,
+    jump_condition_contains_mutated_storage_access,
+    jump_condition_historical_diffs_approximately_equal, stack_contains_too_many_of_the_same_item,
     stack_diff, stack_item_source_depth_too_deep,
 };
 use crate::{
     ether::evm::core::{
-        stack::{Stack, StackFrame},
+        stack::Stack,
         vm::{State, VM},
     },
     io::logging::Logger,
     utils::strings::decode_hex,
 };
 use ethers::types::U256;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct VMTrace {
@@ -69,7 +70,7 @@ impl VM {
     fn recursive_map(
         &mut self,
         branch_count: &mut u32,
-        handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<VecDeque<StackFrame>>>,
+        handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<Stack>>,
         logger: &Logger,
     ) -> VMTrace {
         let mut vm = self.clone();
@@ -123,18 +124,25 @@ impl VM {
                 }
 
                 // break out of loops
-                match handled_jumps.get(&jump_frame) {
+                match handled_jumps.get_mut(&jump_frame) {
                     Some(historical_stacks) => {
                         // for every stack that we have encountered for this jump, perform some
                         // heuristic checks to determine if this might be a loop
-                        if historical_stacks.iter().any(|stack| {
+                        if historical_stacks.iter().any(|hist_stack| {
                             // get a solidity repr of the jump condition
                             let jump_condition =
                                 state.last_instruction.input_operations[1].solidify();
 
-                            // calculate the difference of the current stack and the historical
-                            // stack
-                            let stack_diff = stack_diff(&vm.stack, &Stack { stack: stack.clone() });
+                            // check if any historical stack is the same as the current stack
+                            if hist_stack == &vm.stack {
+                                logger.debug_max(&format!(
+                                    "jump matches loop-detection heuristic: 'jump_path_already_handled'"
+                                ));
+                                return true
+                            }
+
+                            // calculate the difference of the current stack and the historical stack
+                            let stack_diff = stack_diff(&vm.stack, hist_stack);
                             if stack_diff.is_empty() {
                                 // the stack_diff is empty (the stacks are the same), so we've
                                 // already handled this path
@@ -143,6 +151,8 @@ impl VM {
                                 ));
                                 return true
                             }
+
+                            logger.debug_max(&format!("stack diff: [{}]", stack_diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", ")));
 
                             // check if the jump condition appears to be recursive
                             if jump_condition_appears_recursive(&stack_diff, &jump_condition) {
@@ -165,11 +175,9 @@ impl VM {
                                 return true
                             }
 
-                            return false
+                            false
                         }) {
-                            logger.debug_max(&format!("jump terminated.",));
-                            return vm_trace
-                        } else {
+                            logger.debug_max("jump terminated.");
                             logger.debug_max(&format!(
                                 "adding historical stack {} to jump frame {:?}",
                                 &format!("{:#016x?}", vm.stack.hash()),
@@ -177,16 +185,45 @@ impl VM {
                             ));
 
                             // this key exists, but the stack is different, so the jump is new
-                            let historical_stacks: &mut Vec<VecDeque<StackFrame>> =
-                                &mut historical_stacks.clone();
-                            historical_stacks.push(vm.stack.stack.clone());
-                            handled_jumps.insert(jump_frame, historical_stacks.to_vec());
+                            historical_stacks.push(vm.stack.clone());
+                            return vm_trace
+                        }
+
+                        if jump_condition_historical_diffs_approximately_equal(
+                            &vm.stack,
+                            &historical_stacks,
+                        ) {
+                            logger.debug_max("jump terminated.");
+                            logger.debug_max(&format!(
+                                "adding historical stack {} to jump frame {:?}",
+                                &format!("{:#016x?}", vm.stack.hash()),
+                                jump_frame
+                            ));
+
+                            // this key exists, but the stack is different, so the jump is new
+                            historical_stacks.push(vm.stack.clone());
+                            return vm_trace
+                        } else {
+                            logger.debug_max(&format!(
+                                "adding historical stack {} to jump frame {:?}",
+                                &format!("{:#016x?}", vm.stack.hash()),
+                                jump_frame
+                            ));
+                            logger.debug_max(&format!(
+                                " - jump condition: {}\n        - stack: {}\n        - historical stacks: {}",
+                                state.last_instruction.input_operations[1].solidify(),
+                                vm.stack,
+                                historical_stacks.iter().map(|stack| format!("{}", stack)).collect::<Vec<String>>().join("\n            - ")
+                            ));
+
+                            // this key exists, but the stack is different, so the jump is new
+                            historical_stacks.push(vm.stack.clone());
                         }
                     }
                     None => {
                         // this key doesnt exist, so the jump is new
                         logger.debug_max(&format!("added new jump frame: {:?}", jump_frame));
-                        handled_jumps.insert(jump_frame, vec![vm.stack.stack.clone()]);
+                        handled_jumps.insert(jump_frame, vec![vm.stack.clone()]);
                     }
                 }
 
