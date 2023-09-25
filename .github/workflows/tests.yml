@@ -12,11 +12,9 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Compile
-      working-directory: ./heimdall
       run: cargo build --verbose
 
     - name: Run Tests
-      working-directory: ./heimdall
       run: |
         cargo test --package heimdall -- test_ --nocapture
         cargo test --package heimdall-config -- test_ --nocapture
