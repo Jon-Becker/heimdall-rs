@@ -22,6 +22,7 @@ jobs:
 
     - name: Run Tests
       run: |
-        cargo test --package heimdall -- test_ --nocapture
+        cargo test --package heimdall-cli -- test_ --nocapture
+        cargo test --package heimdall-core -- test_ --nocapture
         cargo test --package heimdall-config -- test_ --nocapture
         cargo test --package heimdall-common -- test_ --nocapture
