@@ -3,7 +3,7 @@ description = "Heimdall is an advanced Ethereum smart contract toolkit for foren
 edition = "2021"
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
-name = "heimdall"
+name = "heimdall-core"
 readme = "README.md"
 version = "0.5.4"
 
@@ -13,7 +13,6 @@ clap = {version = "3.1.18", features = ["derive"]}
 clap-verbosity-flag = "1.0.0"
 colored = "2"
 crossterm = "0.26.1"
-dot = "0.1.4"
 ethers = "2.0.4"
 fancy-regex = "0.11.0"
 heimdall-cache = {path = "./../cache"}

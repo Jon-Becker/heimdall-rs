@@ -3,7 +3,7 @@ mod benchmark {
     use clap_verbosity_flag::Verbosity;
     use heimdall_common::testing::benchmarks::benchmark;
 
-    use heimdall::decode::DecodeArgs;
+    use heimdall_core::decode::DecodeArgs;
 
     #[test]
     fn benchmark_decode_transfer() {
@@ -17,7 +17,7 @@ mod benchmark {
                 default: true,
                 truncate_calldata: false,
             };
-            heimdall::decode::decode(args)
+            heimdall_core::decode::decode(args)
         }
 
         benchmark("benchmark_decode_transfer", 100, bench)
@@ -35,7 +35,7 @@ mod benchmark {
                 default: true,
                 truncate_calldata: false,
             };
-            heimdall::decode::decode(args)
+            heimdall_core::decode::decode(args)
         }
 
         benchmark("benchmark_decode_uniswap_simple", 100, bench)
@@ -53,7 +53,7 @@ mod benchmark {
                 default: true,
                 truncate_calldata: false,
             };
-            heimdall::decode::decode(args)
+            heimdall_core::decode::decode(args)
         }
 
         benchmark("benchmark_decode_seaport_simple", 100, bench)
@@ -71,7 +71,7 @@ mod benchmark {
                 default: true,
                 truncate_calldata: false,
             };
-            heimdall::decode::decode(args)
+            heimdall_core::decode::decode(args)
         }
 
         benchmark("benchmark_decode_seaport_complex", 100, bench)
@@ -88,7 +88,7 @@ mod benchmark {
             default: true,
             truncate_calldata: false,
         };
-        heimdall::decode::decode(args);
+        heimdall_core::decode::decode(args);
     }
 
     #[test]
@@ -102,6 +102,6 @@ mod benchmark {
             default: true,
             truncate_calldata: false,
         };
-        heimdall::decode::decode(args);
+        heimdall_core::decode::decode(args);
     }
 }

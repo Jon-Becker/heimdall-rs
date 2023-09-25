@@ -3,7 +3,7 @@ mod benchmark {
     use clap_verbosity_flag::Verbosity;
     use heimdall_common::testing::benchmarks::benchmark;
 
-    use heimdall::cfg::CFGArgs;
+    use heimdall_core::cfg::CFGArgs;
 
     #[test]
     fn benchmark_generate_cfg_simple() {
@@ -17,7 +17,7 @@ mod benchmark {
                 color_edges: false,
                 format: String::from(""),
             };
-            heimdall::cfg::cfg(args)
+            heimdall_core::cfg::cfg(args)
         }
 
         benchmark("benchmark_generate_cfg_simple", 100, bench)
@@ -35,7 +35,7 @@ mod benchmark {
                 color_edges: false,
                 format: String::from(""),
             };
-            heimdall::cfg::cfg(args)
+            heimdall_core::cfg::cfg(args)
         }
 
         benchmark("benchmark_generate_cfg_complex", 100, bench)
@@ -46,7 +46,7 @@ mod benchmark {
 mod integration_tests {
     use heimdall_common::io::file::{delete_path, read_file};
 
-    use heimdall::cfg::CFGBuilder;
+    use heimdall_core::cfg::CFGBuilder;
 
     #[test]
     fn test_cfg_simple() {

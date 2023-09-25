@@ -3,7 +3,7 @@ mod benchmark {
     use clap_verbosity_flag::Verbosity;
     use heimdall_common::testing::benchmarks::benchmark;
 
-    use heimdall::decompile::DecompilerArgs;
+    use heimdall_core::decompile::DecompilerArgs;
 
     #[test]
     fn benchmark_decompile_complex() {
@@ -18,7 +18,7 @@ mod benchmark {
                 include_solidity: true,
                 include_yul: false,
             };
-            heimdall::decompile::decompile(args)
+            heimdall_core::decompile::decompile(args)
         }
 
         benchmark("benchmark_decompile_complex", 100, bench)
@@ -37,7 +37,7 @@ mod benchmark {
                 include_solidity: true,
                 include_yul: false,
             };
-            heimdall::decompile::decompile(args)
+            heimdall_core::decompile::decompile(args)
         }
 
         benchmark("benchmark_decompile_simple", 100, bench)
@@ -56,7 +56,7 @@ mod benchmark {
                 include_solidity: false,
                 include_yul: false,
             };
-            heimdall::decompile::decompile(args)
+            heimdall_core::decompile::decompile(args)
         }
 
         benchmark("benchmark_build_abi_simple", 100, bench)
@@ -75,7 +75,7 @@ mod benchmark {
                 include_solidity: false,
                 include_yul: false,
             };
-            heimdall::decompile::decompile(args)
+            heimdall_core::decompile::decompile(args)
         }
 
         benchmark("benchmark_build_abi_complex", 100, bench)
@@ -84,8 +84,8 @@ mod benchmark {
 
 #[cfg(test)]
 mod integration_tests {
-    use heimdall::decompile::DecompileBuilder;
     use heimdall_common::io::file::{delete_path, read_file};
+    use heimdall_core::decompile::DecompileBuilder;
 
     #[test]
     fn test_decompile_precompile() {

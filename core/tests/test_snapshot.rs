@@ -3,7 +3,7 @@ mod benchmark {
     use clap_verbosity_flag::Verbosity;
     use heimdall_common::testing::benchmarks::benchmark;
 
-    use heimdall::snapshot::SnapshotArgs;
+    use heimdall_core::snapshot::SnapshotArgs;
 
     #[test]
     fn benchmark_snapshot_complex() {
@@ -17,7 +17,7 @@ mod benchmark {
                 skip_resolving: true,
                 no_tui: true,
             };
-            heimdall::snapshot::snapshot(args)
+            heimdall_core::snapshot::snapshot(args)
         }
 
         benchmark("benchmark_snapshot_complex", 100, bench)
@@ -35,7 +35,7 @@ mod benchmark {
                 skip_resolving: true,
                 no_tui: true,
             };
-            heimdall::snapshot::snapshot(args)
+            heimdall_core::snapshot::snapshot(args)
         }
 
         benchmark("benchmark_snapshot_simple", 100, bench)
@@ -45,8 +45,8 @@ mod benchmark {
 #[cfg(test)]
 mod integration_tests {
     use clap_verbosity_flag::Verbosity;
-    use heimdall::snapshot::{SnapshotArgs, SnapshotBuilder};
     use heimdall_common::io::file::delete_path;
+    use heimdall_core::snapshot::{SnapshotArgs, SnapshotBuilder};
 
     #[test]
     fn test_snapshot_library() {
@@ -73,7 +73,7 @@ mod integration_tests {
             skip_resolving: true,
             no_tui: true,
         };
-        heimdall::snapshot::snapshot(args);
+        heimdall_core::snapshot::snapshot(args);
 
         // drop path
         delete_path(&String::from("./output/tests/snapshot/test1"));
@@ -90,7 +90,7 @@ mod integration_tests {
             skip_resolving: true,
             no_tui: true,
         };
-        heimdall::snapshot::snapshot(args);
+        heimdall_core::snapshot::snapshot(args);
 
         // drop path
         delete_path(&String::from("./output/tests/snapshot/test2"));
@@ -180,7 +180,7 @@ mod integration_tests {
                 skip_resolving: true,
                 no_tui: true,
             };
-            heimdall::snapshot::snapshot(args);
+            heimdall_core::snapshot::snapshot(args);
         }
 
         delete_path(&String::from("./output/tests/snapshot/integration"));

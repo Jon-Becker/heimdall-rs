@@ -1,4 +1,4 @@
-use heimdall::decompile::DecompileBuilder;
+use heimdall_core::decompile::DecompileBuilder;
 
 fn main() {
     // Decompile the bytecode and save the results.

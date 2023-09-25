@@ -404,7 +404,7 @@ pub fn decode(args: DecodeArgs) {
 /// Decode calldata into a Vec of potential ResolvedFunctions
 /// ## Example
 /// ```no_run
-/// # use crate::heimdall::decode::decode_calldata;
+/// # use crate::heimdall_core::decode::decode_calldata;
 /// const CALLDATA: &'static str = "0xd57e/* snip */2867"
 ///
 /// let potential_matches = decode_calldata(CALLDATA.to_string());

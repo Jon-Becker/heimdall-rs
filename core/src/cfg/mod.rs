@@ -252,7 +252,7 @@ pub fn cfg(args: CFGArgs) {
 /// ## Example
 /// Use with normal settings:
 /// ```no_run
-/// # use crate::heimdall::cfg::CFGBuilder;
+/// # use crate::heimdall_core::cfg::CFGBuilder;
 /// const SOURCE: &'static str = "7312/* snip */04ad";
 ///
 /// CFGBuilder::new(SOURCE)
@@ -260,7 +260,7 @@ pub fn cfg(args: CFGArgs) {
 /// ```
 /// Or change settings individually:
 /// ```no_run
-/// # use crate::heimdall::cfg::CFGBuilder;
+/// # use crate::heimdall_core::cfg::CFGBuilder;
 ///
 /// const SOURCE: &'static str = "7312/* snip */04ad";
 /// CFGBuilder::new(SOURCE)

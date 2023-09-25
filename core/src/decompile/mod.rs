@@ -641,7 +641,7 @@ pub fn decompile(args: DecompilerArgs) {
 /// ## Example
 /// Use with normal settings:
 /// ```no_run
-/// # use crate::heimdall::decompile::DecompileBuilder;
+/// # use crate::heimdall_core::decompile::DecompileBuilder;
 /// const SOURCE: &'static str = "7312/* snip */04ad";
 ///
 /// DecompileBuilder::new(SOURCE)
@@ -649,7 +649,7 @@ pub fn decompile(args: DecompilerArgs) {
 /// ```
 /// Or change settings individually:
 /// ```no_run
-/// # use crate::heimdall::decompile::DecompileBuilder;
+/// # use crate::heimdall_core::decompile::DecompileBuilder;
 ///
 /// const SOURCE: &'static str = "7312/* snip */04ad";
 /// DecompileBuilder::new(SOURCE)

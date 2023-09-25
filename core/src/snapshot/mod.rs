@@ -561,7 +561,7 @@ pub fn snapshot(args: SnapshotArgs) {
 /// ## Example
 /// Use with normal settings:
 /// ```no_run
-/// # use crate::heimdall::snapshot::SnapshotBuilder;
+/// # use crate::heimdall_core::snapshot::SnapshotBuilder;
 /// const SOURCE: &'static str = "7312/* snip */04ad";
 ///
 /// SnapshotBuilder::new(SOURCE)
@@ -569,7 +569,7 @@ pub fn snapshot(args: SnapshotArgs) {
 /// ```
 /// Or change settings individually:
 /// ```no_run
-/// # use crate::heimdall::snapshot::SnapshotBuilder;
+/// # use crate::heimdall_core::snapshot::SnapshotBuilder;
 ///
 /// const SOURCE: &'static str = "7312/* snip */04ad";
 /// SnapshotBuilder::new(SOURCE)

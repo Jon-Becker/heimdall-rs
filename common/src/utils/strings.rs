@@ -19,7 +19,7 @@ use crate::constants::REDUCE_HEX_REGEX;
 /// ## Example
 /// ```no_run
 /// use ethers::prelude::{I256, U256};
-/// use heimdall::utils::strings::unsign_int;
+/// use heimdall_core::utils::strings::unsign_int;
 ///
 /// let signed = I256::from(-1);
 /// let unsigned = unsign_int(signed);
@@ -40,7 +40,7 @@ pub fn sign_uint(unsigned: U256) -> I256 {
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::decode_hex;
+/// use heimdall_core::utils::strings::decode_hex;
 ///
 /// let decoded = decode_hex("00010203");
 /// assert_eq!(decoded, Ok(vec![0, 1, 2, 3]));
@@ -59,7 +59,7 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::encode_hex;
+/// use heimdall_core::utils::strings::encode_hex;
 ///
 /// let encoded = encode_hex(vec![0, 1, 2, 3]);
 /// assert_eq!(encoded, String::from("00010203"));
@@ -82,7 +82,7 @@ pub fn encode_hex(s: Vec<u8>) -> String {
 /// ## Example
 /// ```no_run
 /// use ethers::prelude::U256;
-/// use heimdall::utils::strings::encode_hex_reduced;
+/// use heimdall_core::utils::strings::encode_hex_reduced;
 ///
 /// let encoded = encode_hex_reduced(U256::from(0));
 /// assert_eq!(encoded, String::from("0"));
@@ -108,7 +108,7 @@ pub fn encode_hex_reduced(s: U256) -> String {
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::hex_to_ascii;
+/// use heimdall_core::utils::strings::hex_to_ascii;
 ///
 /// let ascii = hex_to_ascii("0x68656c6c6f20776f726c64");
 /// assert_eq!(ascii, String::from("hello world"));
@@ -139,7 +139,7 @@ pub fn hex_to_ascii(s: &str) -> String {
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::replace_last;
+/// use heimdall_core::utils::strings::replace_last;
 ///
 /// let replaced = replace_last(String::from("arg0 + arg1"), "arg1", "arg2");
 /// assert_eq!(replaced, String::from("arg0 + arg2"));
@@ -164,7 +164,7 @@ pub fn replace_last(s: &str, old: &str, new: &str) -> String {
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::find_balanced_encapsulator;
+/// use heimdall_core::utils::strings::find_balanced_encapsulator;
 ///
 /// let (start, end, is_balanced) = find_balanced_encapsulator(String::from("arg0 + arg1"), ('(', ')'));
 /// assert_eq!(start, 0);
@@ -205,7 +205,7 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::find_balanced_encapsulator_backwards;
+/// use heimdall_core::utils::strings::find_balanced_encapsulator_backwards;
 ///
 /// let (start, end, is_balanced) = find_balanced_encapsulator_backwards(String::from("arg0 + arg1"), ('(', ')'));
 /// assert_eq!(start, 0);
@@ -244,7 +244,7 @@ pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (us
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::base26_encode;
+/// use heimdall_core::utils::strings::base26_encode;
 ///
 /// let encoded = base26_encode(0);
 /// assert_eq!(encoded, String::from("a"));
@@ -278,7 +278,7 @@ pub fn base26_encode(n: usize) -> String {
 /// ## Example
 /// ```no_run
 /// use fancy_regex::Regex;
-/// use heimdall::utils::strings::split_string_by_regex;
+/// use heimdall_core::utils::strings::split_string_by_regex;
 ///
 /// let pattern = Regex::new(r"\s+").unwrap();
 /// let substrings = split_string_by_regex("arg0 + arg1", pattern);
@@ -319,7 +319,7 @@ pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::extract_condition;
+/// use heimdall_core::utils::strings::extract_condition;
 ///
 /// let condition = extract_condition("require(arg0 > 0)", "require");
 /// assert_eq!(condition, Some(String::from("arg0 > 0")));
@@ -327,7 +327,7 @@ pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
 ///
 /// ## Example 2
 /// ```no_run
-/// use heimdall::utils::strings::extract_condition;
+/// use heimdall_core::utils::strings::extract_condition;
 ///
 /// let condition = extract_condition("if (arg0 > 0) {", "if");
 /// assert_eq!(condition, Some(String::from("arg0 > 0")));
@@ -367,7 +367,7 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::tokenize;
+/// use heimdall_core::utils::strings::tokenize;
 ///
 /// let tokens = tokenize("arg0 + arg1");
 /// assert_eq!(tokens, vec!["arg0", "+", "arg1"]);
@@ -458,7 +458,7 @@ pub enum TokenType {
 ///
 /// ## Example
 /// ```no_run
-/// use heimdall::utils::strings::classify_token;
+/// use heimdall_core::utils::strings::classify_token;
 ///
 /// let (classification, precedence) = classify_token("0x01");
 /// assert_eq!(classification, TokenType::Constant);

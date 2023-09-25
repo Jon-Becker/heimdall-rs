@@ -1,4 +1,4 @@
-use heimdall::decode::decode_calldata;
+use heimdall_core::decode::decode_calldata;
 
 fn main() {
     // Decode the calldata and save the results.
