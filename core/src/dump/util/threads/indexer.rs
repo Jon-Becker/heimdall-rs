@@ -8,7 +8,7 @@ use crate::dump::{
     constants::DUMP_STATE, structures::storage_slot::StorageSlot, util::get_storage_diff,
 };
 
-pub fn handle(addr_hash: H160) {
+pub async fn handle(addr_hash: H160) {
     let state = DUMP_STATE.lock().unwrap();
     let transactions = state.transactions.clone();
     let args = state.args.clone();
@@ -33,8 +33,12 @@ pub fn handle(addr_hash: H160) {
     }
 
     task_pool(transactions, num_indexing_threads, move |tx| {
+        // get new blocking runtime
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
         // get the storage diff for this transaction
-        let state_diff = get_storage_diff(&tx, &args);
+        let state_diff = rt.block_on(get_storage_diff(&tx, &args));
+
         // unlock state
         let mut state = DUMP_STATE.lock().unwrap();
 

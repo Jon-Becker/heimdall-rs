@@ -1,7 +1,7 @@
 use ethers::types::Transaction;
 use heimdall_cache::util::encode_hex;
 
-pub fn get_explanation(
+pub async fn get_explanation(
     decoded: String,
     transaction: Transaction,
     openai_api_key: &str,
@@ -23,5 +23,5 @@ pub fn get_explanation(
         transaction.value,
         decoded
     );
-    heimdall_common::resources::openai::complete(&prompt, openai_api_key)
+    heimdall_common::resources::openai::complete(&prompt, openai_api_key).await
 }

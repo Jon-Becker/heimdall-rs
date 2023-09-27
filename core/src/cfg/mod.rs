@@ -4,7 +4,7 @@ use heimdall_common::ether::{
     compiler::detect_compiler, rpc::get_code, selectors::find_function_selectors,
 };
 use indicatif::ProgressBar;
-use std::{env, fs, time::Duration};
+use std::{fs, time::Duration};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
@@ -17,7 +17,7 @@ use heimdall_common::{
 };
 use petgraph::Graph;
 
-use crate::cfg::{graph::build_cfg, output::build_output};
+use crate::cfg::graph::build_cfg;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -34,10 +34,6 @@ pub struct CFGArgs {
     /// Set the output verbosity level, 1 - 5.
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
-
-    /// The output directory to write the output to
-    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
-    pub output: String,
 
     /// The RPC provider to use for fetching target bytecode.
     #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
@@ -58,7 +54,7 @@ pub struct CFGArgs {
     pub color_edges: bool,
 }
 
-pub fn cfg(args: CFGArgs) {
+pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -85,39 +81,17 @@ pub fn cfg(args: CFGArgs) {
         "()".to_string(),
     );
 
-    // parse the output directory
-    let mut output_dir: String;
-    if args.output.is_empty() {
-        output_dir = match env::current_dir() {
-            Ok(dir) => dir.into_os_string().into_string().unwrap(),
-            Err(_) => {
-                logger.error("failed to get current directory.");
-                std::process::exit(1);
-            }
-        };
-        output_dir.push_str("/output");
-    } else {
-        output_dir = args.output.clone();
-    }
-
     // fetch bytecode
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-        // push the address to the output directory
-        if output_dir != args.output {
-            output_dir.push_str(&format!("/{}", &args.target));
-        }
 
-        // We are working with a contract address, so we need to fetch the bytecode from the RPC
-        // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url);
+        // We are working with a contract address, so we need to fetch the bytecode from the RPC provider
+        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
+        logger.debug_max("using provided bytecode for cfg generation");
         contract_bytecode = args.target.replacen("0x", "", 1);
     } else {
-        // push the address to the output directory
-        if output_dir != args.output {
-            output_dir.push_str("/local");
-        }
+        logger.debug_max("using provided file for decompilation.");
 
         // We are analyzing a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
@@ -142,10 +116,9 @@ pub fn cfg(args: CFGArgs) {
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
         verbose: args.verbose.clone(),
-        output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
-    });
+    }).await?;
 
     // add the call to the trace
     trace.add_call(
@@ -234,121 +207,13 @@ pub fn cfg(args: CFGArgs) {
         &format!("traced and executed {jumpdest_count} possible paths."),
     );
 
+    logger.debug_max("building control flow graph from symbolic execution trace");
     build_cfg(map, &mut contract_cfg, None, false);
 
     progress.finish_and_clear();
     logger.info("symbolic execution completed.");
-
-    // build the dot file
-    build_output(&contract_cfg, &args, output_dir.clone());
-
     logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()));
     trace.display();
-}
 
-/// Builder pattern for using cfg genertion as a library.
-///
-/// Default values may be overriden individually.
-/// ## Example
-/// Use with normal settings:
-/// ```no_run
-/// # use crate::heimdall_core::cfg::CFGBuilder;
-/// const SOURCE: &'static str = "7312/* snip */04ad";
-///
-/// CFGBuilder::new(SOURCE)
-///     .generate();
-/// ```
-/// Or change settings individually:
-/// ```no_run
-/// # use crate::heimdall_core::cfg::CFGBuilder;
-///
-/// const SOURCE: &'static str = "7312/* snip */04ad";
-/// CFGBuilder::new(SOURCE)
-///     .default(false)
-///     .output("my_contract_dir")
-///     .rpc("https://127.0.0.1:8545")
-///     .format("svg")
-///     .verbosity(4)
-///     .color_edges(true)
-///     .generate();
-/// ```
-#[allow(dead_code)]
-pub struct CFGBuilder {
-    args: CFGArgs,
-}
-
-impl CFGBuilder {
-    /// A new builder for the control flow graph generation of the specified target.
-    ///
-    /// The target may be a file, bytecode, contract address, or ENS name.
-    #[allow(dead_code)]
-    pub fn new(target: &str) -> Self {
-        CFGBuilder {
-            args: CFGArgs {
-                target: target.to_string(),
-                verbose: clap_verbosity_flag::Verbosity::new(0, 0),
-                output: String::from(""),
-                rpc_url: String::from(""),
-                format: String::from(""),
-                color_edges: false,
-                default: true,
-            },
-        }
-    }
-
-    /// Set the output verbosity level.
-    ///
-    /// - 0 Error
-    /// - 1 Warn
-    /// - 2 Info
-    /// - 3 Debug
-    /// - 4 Trace
-    #[allow(dead_code)]
-    pub fn verbosity(mut self, level: i8) -> CFGBuilder {
-        // Calculated by the log library as: 1 + verbose - quiet.
-        // Set quiet as 1, and the level corresponds to the appropriate Log level.
-        self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 0);
-        self
-    }
-
-    /// The output directory to write the decompiled files to
-    #[allow(dead_code)]
-    pub fn output(mut self, directory: &str) -> CFGBuilder {
-        self.args.output = directory.to_string();
-        self
-    }
-
-    /// The RPC provider to use for fetching target bytecode.
-    #[allow(dead_code)]
-    pub fn rpc(mut self, url: &str) -> CFGBuilder {
-        self.args.rpc_url = url.to_string();
-        self
-    }
-
-    /// When prompted, always select the default value.
-    #[allow(dead_code)]
-    pub fn default(mut self, accept: bool) -> CFGBuilder {
-        self.args.default = accept;
-        self
-    }
-
-    /// The format to additionally generate to. (e.g. svg, png, pdf)
-    #[allow(dead_code)]
-    pub fn format(mut self, format: String) -> CFGBuilder {
-        self.args.format = format;
-        self
-    }
-
-    /// Whether to color the edges of the graph based on the JUMPI condition.
-    #[allow(dead_code)]
-    pub fn color_edges(mut self, color_edges: bool) -> CFGBuilder {
-        self.args.color_edges = color_edges;
-        self
-    }
-
-    /// Starts the decompilation.
-    #[allow(dead_code)]
-    pub fn generate(self) {
-        cfg(self.args)
-    }
+    Ok(contract_cfg)
 }

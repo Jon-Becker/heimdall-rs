@@ -1,9 +1,9 @@
-use std::{env, fs};
+use std::fs;
 
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{evm::core::opcodes::opcode, rpc::get_code},
-    io::{file::*, logging::*},
+    io::logging::*,
     utils::strings::{decode_hex, encode_hex},
 };
 use clap::{AppSettings, Parser};
@@ -22,10 +22,6 @@ pub struct DisassemblerArgs {
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
 
-    /// The output directory to write the disassembled bytecode to
-    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
-    pub output: String,
-
     /// The RPC provider to use for fetching target bytecode.
     #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
@@ -35,7 +31,7 @@ pub struct DisassemblerArgs {
     pub decimal_counter: bool,
 }
 
-pub fn disassemble(args: DisassemblerArgs) -> String {
+pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -44,44 +40,19 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
         None => "SILENT",
     });
 
-    // parse the output directory
-    let mut output_dir: String;
-    if args.output.is_empty() {
-        output_dir = match env::current_dir() {
-            Ok(dir) => dir.into_os_string().into_string().unwrap(),
-            Err(_) => {
-                logger.error("failed to get current directory.");
-                std::process::exit(1);
-            }
-        };
-        output_dir.push_str("/output");
-    } else {
-        output_dir = args.output.clone();
-    }
-
     let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-        // push the address to the output directory
-        if output_dir != args.output {
-            output_dir.push_str(&format!("/{}", &args.target));
-        }
-
+    if ADDRESS_REGEX.is_match(&args.target)? {
         // We are disassembling a contract address, so we need to fetch the bytecode from the RPC
         // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url);
-    } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
+        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
+    } else if BYTECODE_REGEX.is_match(&args.target)? {
         contract_bytecode = args.target;
     } else {
-        // push the address to the output directory
-        if output_dir != args.output {
-            output_dir.push_str("/local");
-        }
-
         // We are disassembling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {
                 let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents).unwrap() && _contents.len() % 2 == 0 {
+                if BYTECODE_REGEX.is_match(&_contents)? && _contents.len() % 2 == 0 {
                     _contents
                 } else {
                     logger
@@ -100,14 +71,14 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
     let mut output: String = String::new();
 
     // Iterate over the bytecode, disassembling each instruction.
-    let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1)).unwrap();
+    let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1))?;
 
     while program_counter < byte_array.len() {
         let operation = opcode(byte_array[program_counter]);
         let mut pushed_bytes: String = String::new();
 
         if operation.name.contains("PUSH") {
-            let byte_count_to_push: u8 = operation.name.replace("PUSH", "").parse().unwrap();
+            let byte_count_to_push: u8 = operation.name.strip_prefix("PUSH").unwrap().parse()?;
 
             pushed_bytes = match byte_array
                 .get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize)
@@ -135,14 +106,7 @@ pub fn disassemble(args: DisassemblerArgs) -> String {
     }
 
     logger.info(&format!("disassembled {program_counter} bytes successfully."));
-
-    // write the output to a file
-    write_file(&format!("{output_dir}/bytecode.evm"), &contract_bytecode);
-    let file_path = write_file(&format!("{output_dir}/disassembled.asm"), &output);
-    logger.success(&format!("wrote disassembled bytecode to '{file_path}' ."));
-
-    // log the time it took to disassemble the bytecode
     logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
 
-    output
+    Ok(output)
 }

@@ -68,7 +68,7 @@ pub struct DumpArgs {
     pub chain: String,
 }
 
-pub fn dump(args: DumpArgs) {
+pub async fn dump(args: DumpArgs) -> Result<(), Box<dyn std::error::Error>> {
     let (logger, _) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",

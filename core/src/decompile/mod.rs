@@ -8,7 +8,7 @@ pub mod util;
 use crate::decompile::{
     analyzers::{solidity::analyze_sol, yul::analyze_yul},
     resolve::*,
-    util::*,
+    util::*, out::abi::build_abi,
 };
 
 use heimdall_common::{
@@ -20,7 +20,7 @@ use heimdall_common::{
     utils::strings::encode_hex_reduced,
 };
 use indicatif::ProgressBar;
-use std::{collections::HashMap, env, fs, time::Duration};
+use std::{collections::HashMap, fs, time::Duration};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
@@ -34,6 +34,8 @@ use heimdall_common::{
     },
     io::logging::*,
 };
+
+use self::out::abi::ABIStructure;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -50,10 +52,6 @@ pub struct DecompilerArgs {
     /// Set the output verbosity level, 1 - 5.
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
-
-    /// The output directory to write the decompiled files to
-    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
-    pub output: String,
 
     /// The RPC provider to use for fetching target bytecode.
     #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
@@ -76,7 +74,13 @@ pub struct DecompilerArgs {
     pub include_yul: bool,
 }
 
-pub fn decompile(args: DecompilerArgs) {
+#[derive(Debug, Clone)]
+pub struct DecompileResult {
+    pub source: Option<String>,
+    pub abi: Option<Vec<ABIStructure>>,
+}
+
+pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -109,49 +113,24 @@ pub fn decompile(args: DecompilerArgs) {
         "()".to_string(),
     );
 
-    // parse the output directory
-    let mut output_dir: String;
-    if args.output.is_empty() {
-        output_dir = match env::current_dir() {
-            Ok(dir) => dir.into_os_string().into_string().unwrap(),
-            Err(_) => {
-                logger.error("failed to get current directory.");
-                std::process::exit(1);
-            }
-        };
-        output_dir.push_str("/output");
-    } else {
-        output_dir = args.output.clone();
-    }
-
     // parse the various formats that are accepted as targets
     // i.e, file, bytecode, contract address
     let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-        // push the address to the output directory
-        if output_dir != args.output {
-            output_dir.push_str(&format!("/{}", &args.target));
-        }
+    if ADDRESS_REGEX.is_match(&args.target)? {
 
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
-        // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url);
-    } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
+        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider
+        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
+    } else if BYTECODE_REGEX.is_match(&args.target)? {
         logger.debug_max("using provided bytecode for decompilation");
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
-        // push the address to the output directory
-        if output_dir != args.output {
-            output_dir.push_str("/local");
-        }
-
         logger.debug_max("using provided file for decompilation.");
 
         // We are decompiling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {
                 let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents).unwrap() && _contents.len() % 2 == 0 {
+                if BYTECODE_REGEX.is_match(&_contents)? && _contents.len() % 2 == 0 {
                     _contents.replacen("0x", "", 1)
                 } else {
                     logger
@@ -170,10 +149,9 @@ pub fn decompile(args: DecompilerArgs) {
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
         verbose: args.verbose.clone(),
-        output: output_dir.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
-    });
+    }).await?;
     trace.add_call(
         decompile_call,
         line!(),
@@ -222,7 +200,7 @@ pub fn decompile(args: DecompilerArgs) {
         line!(),
         "contract".to_string(),
         shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into().unwrap(),
+        (contract_bytecode.len() / 2usize).try_into()?,
     );
 
     // find and resolve all selectors in the bytecode
@@ -272,7 +250,7 @@ pub fn decompile(args: DecompilerArgs) {
 
         trace.add_info(
             func_analysis_trace,
-            function_entry_point.try_into().unwrap(),
+            function_entry_point.try_into()?,
             &format!("discovered entry point: {function_entry_point}"),
         );
 
@@ -282,7 +260,7 @@ pub fn decompile(args: DecompilerArgs) {
 
         trace.add_debug(
             func_analysis_trace,
-            function_entry_point.try_into().unwrap(),
+            function_entry_point.try_into()?,
             &format!(
                 "execution tree {}",
                 match jumpdest_count {
@@ -609,143 +587,20 @@ pub fn decompile(args: DecompilerArgs) {
     logger.info("symbolic execution completed.");
     logger.info("building decompilation output.");
 
-    // create the decompiled source output
-    if args.include_yul {
-        out::yul::output(
-            &args,
-            output_dir,
-            analyzed_functions,
-            all_resolved_events,
-            &mut trace,
-            decompile_call,
-        );
-    } else {
-        out::solidity::output(
-            &args,
-            output_dir,
-            analyzed_functions,
-            all_resolved_errors,
-            all_resolved_events,
-            &mut trace,
-            decompile_call,
-        );
-    }
-
+    let abi = build_abi(&args, analyzed_functions, all_resolved_events, &mut trace, decompile_call)?;
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
-}
 
-/// Builder pattern for using decompile method as a library.
-///
-/// Default values may be overriden individually.
-/// ## Example
-/// Use with normal settings:
-/// ```no_run
-/// # use crate::heimdall_core::decompile::DecompileBuilder;
-/// const SOURCE: &'static str = "7312/* snip */04ad";
-///
-/// DecompileBuilder::new(SOURCE)
-///     .decompile();
-/// ```
-/// Or change settings individually:
-/// ```no_run
-/// # use crate::heimdall_core::decompile::DecompileBuilder;
-///
-/// const SOURCE: &'static str = "7312/* snip */04ad";
-/// DecompileBuilder::new(SOURCE)
-///     .default(false)
-///     .include_sol(false)
-///     .output("my_contract_dir")
-///     .rpc("https://127.0.0.1:8545")
-///     .skip_resolving(true)
-///     .verbosity(5)
-///     .decompile();
-/// ```
-#[allow(dead_code)]
-pub struct DecompileBuilder {
-    args: DecompilerArgs,
-}
-
-impl DecompileBuilder {
-    /// A new builder for the decompilation of the specified target.
-    ///
-    /// The target may be a file, bytecode, contract address, or ENS name.
-    #[allow(dead_code)]
-    pub fn new(target: &str) -> Self {
-        DecompileBuilder {
-            args: DecompilerArgs {
-                target: target.to_string(),
-                verbose: clap_verbosity_flag::Verbosity::new(0, 0),
-                output: String::from(""),
-                rpc_url: String::from(""),
-                default: true,
-                skip_resolving: false,
-                include_solidity: true,
-                include_yul: false,
+    Ok(
+        DecompileResult {
+            source: if args.include_solidity {
+                None
+            } else if args.include_yul {
+                None
+            } else {
+                None
             },
+            abi: Some(abi),
         }
-    }
-
-    /// Set the output verbosity level.
-    ///
-    /// - 0 Error
-    /// - 1 Warn
-    /// - 2 Info
-    /// - 3 Debug
-    /// - 4 Trace
-    #[allow(dead_code)]
-    pub fn verbosity(mut self, level: i8) -> DecompileBuilder {
-        // Calculated by the log library as: 1 + verbose - quiet.
-        // Set quiet as 1, and the level corresponds to the appropriate Log level.
-        self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 0);
-        self
-    }
-
-    /// The output directory to write the decompiled files to
-    #[allow(dead_code)]
-    pub fn output(mut self, directory: &str) -> DecompileBuilder {
-        self.args.output = directory.to_string();
-        self
-    }
-
-    /// The RPC provider to use for fetching target bytecode.
-    #[allow(dead_code)]
-    pub fn rpc(mut self, url: &str) -> DecompileBuilder {
-        self.args.rpc_url = url.to_string();
-        self
-    }
-
-    /// When prompted, always select the default value.
-    #[allow(dead_code)]
-    pub fn default(mut self, accept: bool) -> DecompileBuilder {
-        self.args.default = accept;
-        self
-    }
-
-    /// Whether to skip resolving function selectors.
-    #[allow(dead_code)]
-    pub fn skip_resolving(mut self, skip: bool) -> DecompileBuilder {
-        self.args.skip_resolving = skip;
-        self
-    }
-
-    /// Whether to include solidity source code in the output (in beta).
-    #[allow(dead_code)]
-    pub fn include_sol(mut self, include: bool) -> DecompileBuilder {
-        self.args.include_solidity = include;
-        self
-    }
-
-    /// Whether to include yul source code in the output (in beta).
-    #[allow(dead_code)]
-    pub fn include_yul(mut self, include: bool) -> DecompileBuilder {
-        self.args.include_yul = include;
-        self
-    }
-
-    /// Starts the decompilation.
-    #[allow(dead_code)]
-    pub fn decompile(self) {
-        decompile(self.args)
-    }
+    )
 }

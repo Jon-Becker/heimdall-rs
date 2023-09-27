@@ -5,3 +5,4 @@ mod tests;
 pub mod threading;
 pub mod time;
 pub mod version;
+pub mod sync;

@@ -62,7 +62,7 @@ pub struct DecodeArgs {
 }
 
 #[allow(deprecated)]
-pub fn decode(args: DecodeArgs) {
+pub async fn decode(args: DecodeArgs) {
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",
@@ -80,7 +80,7 @@ pub fn decode(args: DecodeArgs) {
     if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
         // provider.
-        raw_transaction = get_transaction(&args.target, &args.rpc_url);
+        raw_transaction = get_transaction(&args.target, &args.rpc_url).await.unwrap();
 
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
     } else {
@@ -386,7 +386,7 @@ pub fn decode(args: DecodeArgs) {
             explain_progress.set_style(logger.info_spinner());
             explain_progress.set_message("attempting to explain calldata...");
 
-            match get_explanation(decoded_string.to_string(), raw_transaction, &args.openai_api_key)
+            match get_explanation(decoded_string.to_string(), raw_transaction, &args.openai_api_key).await
             {
                 Some(explanation) => {
                     explain_progress.finish_and_clear();

@@ -67,12 +67,13 @@ pub enum Subcommands {
     Snapshot(SnapshotArgs),
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Arguments::parse();
 
     // handle catching panics with
     panic::set_hook(Box::new(|panic_info| {
-        // cleanup the terminal
+        // cleanup the terminal (break out of alternate screen, disable mouse capture, and show the cursor)
         let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend).unwrap();
@@ -241,4 +242,6 @@ fn main() {
         logger
             .info(&format!("you can update now by running: `bifrost --version {remote_version}`"));
     }
+
+    Ok(())
 }
