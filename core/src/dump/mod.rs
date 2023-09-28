@@ -15,7 +15,7 @@ use self::{
     constants::DUMP_STATE,
     menus::TUIView,
     structures::{dump_state::DumpState, transaction::Transaction},
-    util::csv::write_storage_to_csv,
+    util::csv::{DumpRow, build_csv},
 };
 
 #[derive(Debug, Clone, Parser)]
@@ -68,7 +68,7 @@ pub struct DumpArgs {
     pub chain: String,
 }
 
-pub async fn dump(args: DumpArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Error>> {
     let (logger, _) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",
@@ -197,11 +197,12 @@ pub async fn dump(args: DumpArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
-    write_storage_to_csv(&_output_dir, "storage_dump.csv", &state);
+    let csv = build_csv(&state);
     logger.success(&format!("Wrote storage dump to '{_output_dir}/storage_dump.csv'."));
     logger.info(&format!(
         "Dumped {} storage values from '{}' .",
         state.storage.len(),
         &_args.target
     ));
+    Ok(csv)
 }
