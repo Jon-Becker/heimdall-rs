@@ -103,8 +103,19 @@ main() {
         ensure chmod +x heimdall
     else
 
-        # build the binaries
-        RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./cli --bins --locked --force --root $BIFROST_PATH
+        # get current package version
+        VERSION=$(grep -m1 "version" Cargo.toml | sed -E 's/.*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+
+        # remove periods from version and cast as int
+        VERSION=$(echo $VERSION | sed -E 's/\.//g')
+
+        # if VERSION > 0.6.0 (60), use the new build system
+        if [ $VERSION -ge 60 ]; then
+            RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./cli --bins --locked --force --root $BIFROST_PATH
+        else
+            echo "bifrost: installing with old build system."
+            RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./heimdall --locked --force --root $BIFROST_PATH
+        fi
     fi
 
     echo "bifrost: installation complete."
