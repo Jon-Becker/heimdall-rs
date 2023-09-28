@@ -1,128 +1,166 @@
 #[cfg(test)]
 mod benchmark {
     use clap_verbosity_flag::Verbosity;
-    use heimdall_common::testing::benchmarks::benchmark;
+    use heimdall_common::testing::benchmarks::async_bench;
 
     use heimdall_core::decompile::DecompilerArgs;
 
-    #[test]
-    fn benchmark_decompile_complex() {
-        fn bench() {
+    #[tokio::test]
+    async fn benchmark_decompile_solidity_simple() {
+        async fn bench() {
             let args = DecompilerArgs {
-                target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
+                target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
                 verbose: Verbosity::new(0, 0),
-                output: String::from(""),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,
                 include_solidity: true,
                 include_yul: false,
             };
-            heimdall_core::decompile::decompile(args)
+            let _ = heimdall_core::decompile::decompile(args).await;
         }
 
-        benchmark("benchmark_decompile_complex", 100, bench)
+        async_bench("benchmark_decompile_solidity_simple", 100, bench).await;
     }
 
-    #[test]
-    fn benchmark_decompile_simple() {
-        fn bench() {
+    #[tokio::test]
+    async fn benchmark_decompile_solidity_complex() {
+        async fn bench() {
             let args = DecompilerArgs {
-                target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
+                target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
                 verbose: Verbosity::new(0, 0),
-                output: String::from(""),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,
                 include_solidity: true,
                 include_yul: false,
             };
-            heimdall_core::decompile::decompile(args)
+            let _ = heimdall_core::decompile::decompile(args).await;
         }
 
-        benchmark("benchmark_decompile_simple", 100, bench)
+        async_bench("benchmark_decompile_solidity_complex", 100, bench).await;
     }
 
-    #[test]
-    fn benchmark_build_abi_simple() {
-        fn bench() {
+    #[tokio::test]
+    async fn benchmark_decompile_yul_simple() {
+        async fn bench() {
             let args = DecompilerArgs {
                 target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
                 verbose: Verbosity::new(0, 0),
-                output: String::from(""),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,
                 include_solidity: false,
-                include_yul: false,
+                include_yul: true,
             };
-            heimdall_core::decompile::decompile(args)
+            let _ = heimdall_core::decompile::decompile(args).await;
         }
 
-        benchmark("benchmark_build_abi_simple", 100, bench)
+        async_bench("benchmark_decompile_yul_simple", 100, bench).await;
     }
 
-    #[test]
-    fn benchmark_build_abi_complex() {
-        fn bench() {
+    #[tokio::test]
+    async fn benchmark_decompile_yul_complex() {
+        async fn bench() {
             let args = DecompilerArgs {
                 target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
                 verbose: Verbosity::new(0, 0),
-                output: String::from(""),
+                rpc_url: String::from("https://eth.llamarpc.com"),
+                default: true,
+                skip_resolving: true,
+                include_solidity: false,
+                include_yul: true,
+            };
+            let _ = heimdall_core::decompile::decompile(args).await;
+        }
+
+        async_bench("benchmark_decompile_yul_complex", 100, bench).await;
+    }
+
+    #[tokio::test]
+    async fn benchmark_build_abi_simple() {
+        async fn bench() {
+            let args = DecompilerArgs {
+                target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
+                verbose: Verbosity::new(0, 0),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,
                 include_solidity: false,
                 include_yul: false,
             };
-            heimdall_core::decompile::decompile(args)
+            let _ = heimdall_core::decompile::decompile(args).await;
         }
 
-        benchmark("benchmark_build_abi_complex", 100, bench)
+        async_bench("benchmark_build_abi_simple", 100, bench).await;
+    }
+
+    #[tokio::test]
+    async fn benchmark_build_abi_complex() {
+        async fn bench() {
+            let args = DecompilerArgs {
+                target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
+                verbose: Verbosity::new(0, 0),
+                rpc_url: String::from("https://eth.llamarpc.com"),
+                default: true,
+                skip_resolving: true,
+                include_solidity: false,
+                include_yul: false,
+            };
+            let _ = heimdall_core::decompile::decompile(args).await;
+            return
+        }
+
+        async_bench("benchmark_build_abi_complex", 100, bench).await;
     }
 }
 
 #[cfg(test)]
 mod integration_tests {
-    use heimdall_common::io::file::{delete_path, read_file};
-    use heimdall_core::decompile::DecompileBuilder;
+    use clap_verbosity_flag::Verbosity;
+    use heimdall_common::io::file::delete_path;
+    use heimdall_core::decompile::DecompilerArgs;
 
-    #[test]
-    fn test_decompile_precompile() {
-        DecompileBuilder::new("0x1bf797219482a29013d804ad96d1c6f84fba4c45")
-            .output("./output/tests/decompile/test1")
-            .rpc("https://eth.llamarpc.com")
-            .include_sol(true)
-            .default(true)
-            .skip_resolving(true)
-            .decompile();
+    #[tokio::test]
+    async fn test_decompile_precompile() {
+        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+            target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
+            verbose: Verbosity::new(0, 0),
+            rpc_url: String::from("https://eth.llamarpc.com"),
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+        })
+        .await
+        .unwrap();
 
-        // throws if not found. asserts success
-        let output = read_file(&String::from("./output/tests/decompile/test1/decompiled.sol"));
+        println!("{result:?}");
 
         // assert that the output is correct
         for line in &["function Unresolved_19045a25(bytes memory arg0, bytes memory arg1) public payable returns (address) {",
             " = ecrecover("] {
             println!("{line}");
-            assert!(output.contains(line));
+            assert!(result.source.clone().unwrap().contains(line));
         }
 
         // drop path
         delete_path(&String::from("./output/tests/decompile/test1"));
     }
 
-    #[test]
-    fn test_decompile_weth() {
-        DecompileBuilder::new("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2")
-            .output("./output/tests/decompile/test2")
-            .rpc("https://eth.llamarpc.com")
-            .include_sol(true)
-            .default(true)
-            .skip_resolving(true)
-            .decompile();
-
-        // throws if not found. asserts success
-        let output = read_file(&String::from("./output/tests/decompile/test2/decompiled.sol"));
+    #[tokio::test]
+    async fn test_decompile_weth() {
+        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+            target: String::from("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
+            verbose: Verbosity::new(0, 0),
+            rpc_url: String::from("https://eth.llamarpc.com"),
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+        })
+        .await
+        .unwrap();
 
         // assert that the output is correct
         for line in &["function Unresolved_06fdde03() public view returns (bytes memory) {",
@@ -137,39 +175,40 @@ mod integration_tests {
             "function Unresolved_d0e30db0() public payable {",
             "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"] {
             println!("{line}");
-            assert!(output.contains(line));
+            assert!(result.source.clone().unwrap().contains(line));
         }
 
         // drop path
         delete_path(&String::from("./output/tests/decompile/test2"));
     }
 
-    #[test]
-    fn test_decompile_ctf() {
-        DecompileBuilder::new("0x9f00c43700bc0000Ff91bE00841F8e04c0495000")
-            .output("./output/tests/decompile/test3")
-            .rpc("https://eth.llamarpc.com")
-            .include_sol(true)
-            .default(true)
-            .skip_resolving(true)
-            .decompile();
-
-        // throws if not found. asserts success
-        let output = read_file(&String::from("./output/tests/decompile/test3/decompiled.sol"));
+    #[tokio::test]
+    async fn test_decompile_ctf() {
+        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+            target: String::from("0x9f00c43700bc0000Ff91bE00841F8e04c0495000"),
+            verbose: Verbosity::new(0, 0),
+            rpc_url: String::from("https://eth.llamarpc.com"),
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+        })
+        .await
+        .unwrap();
 
         // assert that the output is correct
         for line in &["function Unresolved_2fa61cd8(address arg0) public view payable returns (uint16) {",
             "function Unresolved_41161b10(bytes memory arg0, address arg1) public payable returns (bool) {",
             "function Unresolved_06fdde03() public pure payable returns (bytes memory) {"] {
             println!("{line}");
-            assert!(output.contains(line));
+            assert!(result.source.clone().unwrap().contains(line));
         }
 
         // drop path
         delete_path(&String::from("./output/tests/decompile/test3"));
     }
 
-    #[test]
+    #[tokio::test]
     /// Thorough testing for decompilation across a large number of contracts
     /// Runs on the top 100 contracts for 2023-06-26
     ///
@@ -187,7 +226,7 @@ mod integration_tests {
     ///  - The ABI matches the solidity outline
     ///  - There is no unreachable code (TODO)
     ///  - There are no empty branches (TODO)
-    fn test_decompile_thorough() {
+    async fn test_decompile_thorough() {
         let contracts = [
             "0xdAC17F958D2ee523a2206206994597C13D831ec7",
             "0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD",
@@ -249,19 +288,21 @@ mod integration_tests {
 
         for contract in contracts {
             println!("Testing contract: {contract}");
-            DecompileBuilder::new(contract)
-                .output("./output/tests/decompile/integration")
-                .rpc("https://eth.llamarpc.com")
-                .include_sol(true)
-                .default(true)
-                .skip_resolving(true)
-                .decompile();
+            let result = heimdall_core::decompile::decompile(DecompilerArgs {
+                target: contract.to_string(),
+                verbose: Verbosity::new(0, 0),
+                rpc_url: String::from("https://eth.llamarpc.com"),
+                default: true,
+                skip_resolving: true,
+                include_solidity: true,
+                include_yul: false,
+            })
+            .await
+            .unwrap();
 
             // assert that the number of opening and closing brackets, parentheses, and curly braces
             // are equal
-            let output = heimdall_common::io::file::read_file(&String::from(
-                "./output/tests/decompile/integration/decompiled.sol",
-            ));
+            let output = result.source.unwrap();
             let open_brackets = output.matches('{').count();
             let close_brackets = output.matches('}').count();
             assert_eq!(open_brackets, close_brackets);

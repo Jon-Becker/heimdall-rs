@@ -7,7 +7,7 @@ pub mod util;
 
 use crate::decompile::{
     analyzers::{solidity::analyze_sol, yul::analyze_yul},
-    out::abi::build_abi,
+    out::{abi::build_abi, solidity::build_solidity_output, yul::build_yul_output},
     resolve::*,
     util::*,
 };
@@ -591,15 +591,29 @@ pub async fn decompile(
     logger.info("symbolic execution completed.");
     logger.info("building decompilation output.");
 
-    let abi = build_abi(&args, analyzed_functions, &mut trace, decompile_call)?;
+    let abi = build_abi(&args, analyzed_functions.clone(), &mut trace, decompile_call)?;
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
 
     Ok(DecompileResult {
         source: if args.include_solidity {
-            None
+            Some(build_solidity_output(
+                &args,
+                &abi,
+                analyzed_functions,
+                all_resolved_errors,
+                all_resolved_events,
+                &mut trace,
+                decompile_call,
+            )?)
         } else if args.include_yul {
-            None
+            Some(build_yul_output(
+                &args,
+                analyzed_functions,
+                all_resolved_events,
+                &mut trace,
+                decompile_call,
+            )?)
         } else {
             None
         },
