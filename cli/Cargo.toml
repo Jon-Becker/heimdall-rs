@@ -1,0 +1,27 @@
+[package]
+name = "heimdall-cli"
+version = "0.6.0"
+edition = "2021"
+license = "MIT"
+readme = "README.md"
+description = "CLI for the heimdall-rs toolkit"
+keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
+
+[dependencies]
+backtrace = "0.3"
+clap = {version = "3.1.18", features = ["derive"]}
+clap-verbosity-flag = "1.0.0"
+colored = "2"
+crossterm = "0.26.1"
+heimdall-cache = {path = "./../cache"}
+heimdall-core = {path = "./../core"}
+heimdall-common = {path = "./../common"}
+heimdall-config = {path = "./../config"}
+tokio = {version = "1", features = ["full"]}
+tui = "0.19"
+serde = {version = "1.0", features = ["derive"]}
+serde_json = "1.0"
+
+[[bin]]
+name = "heimdall"
+path = "src/main.rs"

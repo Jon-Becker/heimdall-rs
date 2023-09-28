@@ -16,14 +16,13 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Build Binaries
-      working-directory: ./heimdall
       run:  |
         cargo clean
-        cargo build
+        cargo build --verbose
 
     - name: Run Tests
-      working-directory: ./heimdall
       run: |
-        cargo test --package heimdall -- test_ --nocapture
+        cargo test --package heimdall-cli -- test_ --nocapture
+        cargo test --package heimdall-core -- test_ --nocapture
         cargo test --package heimdall-config -- test_ --nocapture
         cargo test --package heimdall-common -- test_ --nocapture

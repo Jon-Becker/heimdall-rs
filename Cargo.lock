@@ -838,12 +838,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dot"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a74b6c4d4a1cff5f454164363c16b72fa12463ca6b31f4b5f2035a65fa3d5906"
-
-[[package]]
 name = "dunce"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1620,44 +1614,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
-name = "heimdall"
-version = "0.5.3"
+name = "heimdall-cache"
+version = "0.6.0"
+dependencies = [
+ "bincode",
+ "clap",
+ "serde",
+]
+
+[[package]]
+name = "heimdall-cli"
+version = "0.6.0"
 dependencies = [
  "backtrace",
  "clap",
  "clap-verbosity-flag",
  "colored",
  "crossterm 0.26.1",
- "dot",
- "ethers",
- "fancy-regex",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
- "indicatif",
- "lazy_static",
- "petgraph",
+ "heimdall-core",
  "serde",
  "serde_json",
- "strsim",
  "tokio",
  "tui",
 ]
 
 [[package]]
-name = "heimdall-cache"
-version = "0.5.3"
-dependencies = [
- "bincode",
- "clap",
- "clap-verbosity-flag",
- "serde",
- "toml",
-]
-
-[[package]]
 name = "heimdall-common"
-version = "0.5.3"
+version = "0.6.0"
 dependencies = [
  "async-openai",
  "clap",
@@ -1679,13 +1665,37 @@ dependencies = [
 
 [[package]]
 name = "heimdall-config"
-version = "0.5.3"
+version = "0.6.0"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
  "heimdall-common",
  "serde",
  "toml",
+]
+
+[[package]]
+name = "heimdall-core"
+version = "0.6.0"
+dependencies = [
+ "backtrace",
+ "clap",
+ "clap-verbosity-flag",
+ "colored",
+ "crossterm 0.26.1",
+ "ethers",
+ "fancy-regex",
+ "heimdall-cache",
+ "heimdall-common",
+ "heimdall-config",
+ "indicatif",
+ "lazy_static",
+ "petgraph",
+ "serde",
+ "serde_json",
+ "strsim",
+ "tokio",
+ "tui",
 ]
 
 [[package]]

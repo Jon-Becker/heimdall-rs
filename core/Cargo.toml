@@ -1,26 +1,28 @@
 [package]
-description = "Commonly used resources for heimdall modules."
+description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
 edition = "2021"
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
-name = "heimdall-common"
+name = "heimdall-core"
 readme = "README.md"
 version = "0.6.0"
 
 [dependencies]
-async-openai = "0.10.0"
+backtrace = "0.3"
 clap = {version = "3.1.18", features = ["derive"]}
 clap-verbosity-flag = "1.0.0"
 colored = "2"
-crossbeam-channel = "0.5.7"
+crossterm = "0.26.1"
 ethers = "2.0.4"
 fancy-regex = "0.11.0"
 heimdall-cache = {path = "./../cache"}
+heimdall-common = {path = "./../common"}
+heimdall-config = {path = "./../config"}
 indicatif = "0.17.0"
 lazy_static = "1.4.0"
-rand = "0.8.5"
-reqwest = {version = "0.11.11", features = ["blocking"]}
+petgraph = "0.6.2"
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
-tokio = {version = "1", features = ["full"]}
 strsim = "0.10.0"
+tokio = {version = "1", features = ["full"]}
+tui = "0.19"
