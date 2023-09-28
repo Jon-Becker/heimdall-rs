@@ -18,7 +18,7 @@ mod benchmarks {
             }).await.unwrap();
         }
 
-        let _ = async_bench("benchmark_disassemble_simple", 100, bench);
+        async_bench("benchmark_disassemble_simple", 100, bench).await;
     }
 }
 

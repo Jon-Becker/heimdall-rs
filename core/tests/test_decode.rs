@@ -20,7 +20,7 @@ mod benchmark {
             let _ = heimdall_core::decode::decode(args).await;
         }
 
-        let _ = async_bench("benchmark_decode_transfer", 100, bench);
+        async_bench("benchmark_decode_transfer", 100, bench).await;
     }
 
     #[tokio::test]
@@ -38,7 +38,7 @@ mod benchmark {
             let _ = heimdall_core::decode::decode(args).await;
         }
 
-        let _ = async_bench("benchmark_decode_uniswap_simple", 100, bench);
+        async_bench("benchmark_decode_uniswap_simple", 100, bench).await;
     }
 
     #[tokio::test]
@@ -56,7 +56,7 @@ mod benchmark {
             let _ = heimdall_core::decode::decode(args).await;
         }
 
-        let _ = async_bench("benchmark_decode_seaport_simple", 100, bench);
+        async_bench("benchmark_decode_seaport_simple", 100, bench).await;
     }
 
     #[tokio::test]
@@ -74,7 +74,7 @@ mod benchmark {
             let _ = heimdall_core::decode::decode(args).await;
         }
 
-        let _ = async_bench("benchmark_decode_seaport_complex", 100, bench);
+        async_bench("benchmark_decode_seaport_complex", 100, bench).await;
     }
 
     #[tokio::test]
