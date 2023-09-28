@@ -85,7 +85,7 @@ mod integration_tests {
         let output = format!("{}", Dot::with_config(&result, &[]));
 
         for line in &[String::from("\"0x03a0 JUMPDEST \\l0x03a1 STOP \\l\"")] {
-            assert!(output.contains(&*line))
+            assert!(output.contains(line))
         }
     }
 }

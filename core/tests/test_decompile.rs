@@ -108,7 +108,6 @@ mod benchmark {
                 include_yul: false,
             };
             let _ = heimdall_core::decompile::decompile(args).await;
-            return
         }
 
         async_bench("benchmark_build_abi_complex", 100, bench).await;
