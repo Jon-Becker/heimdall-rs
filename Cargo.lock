@@ -1635,6 +1635,8 @@ dependencies = [
  "heimdall-common",
  "heimdall-config",
  "heimdall-core",
+ "serde",
+ "serde_json",
  "tokio",
  "tui",
 ]

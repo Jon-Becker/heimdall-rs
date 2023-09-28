@@ -68,7 +68,13 @@ pub struct SnapshotArgs {
     pub no_tui: bool,
 }
 
-pub async fn snapshot(args: SnapshotArgs) -> Result<Vec<Snapshot>, Box<dyn std::error::Error>> {
+pub struct SnapshotResult {
+    pub snapshots: Vec<Snapshot>,
+    pub resolved_errors: HashMap<String, ResolvedError>,
+    pub resolved_events: HashMap<String, ResolvedLog>,
+}
+
+pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -512,5 +518,9 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<Vec<Snapshot>, Box<dyn std::
     }
 
     trace.display();
-    Ok(snapshots)
+    Ok(SnapshotResult {
+        snapshots,
+        resolved_errors: all_resolved_errors,
+        resolved_events: all_resolved_events,
+    })
 }

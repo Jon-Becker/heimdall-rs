@@ -199,7 +199,6 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
     let csv = build_csv(&state);
-    logger.success(&format!("Wrote storage dump to '{_output_dir}/storage_dump.csv'."));
     logger.info(&format!(
         "Dumped {} storage values from '{}' .",
         state.storage.len(),
