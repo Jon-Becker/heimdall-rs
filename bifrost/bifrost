@@ -104,7 +104,7 @@ main() {
     else
 
         # build the binaries
-        RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./heimdall --bins --locked --force --root $BIFROST_PATH
+        RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./cli --bins --locked --force --root $BIFROST_PATH
     fi
 
     echo "bifrost: installation complete."
