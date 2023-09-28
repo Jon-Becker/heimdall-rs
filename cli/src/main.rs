@@ -332,7 +332,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
         }
         Subcommands::Config(cmd) => {
-            _ = config(cmd);
+            config(cmd);
         }
 
         Subcommands::Cache(cmd) => {
