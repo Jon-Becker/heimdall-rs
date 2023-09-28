@@ -80,6 +80,9 @@ mod benchmark {
 
 #[cfg(test)]
 mod tests {
+    use clap_verbosity_flag::Verbosity;
+    use heimdall_core::decode::DecodeArgs;
+
     #[tokio::test]
     async fn test_decode_transfer() {
         let args = DecodeArgs {
