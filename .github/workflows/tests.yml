@@ -11,9 +11,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Compile
-      run: cargo build --verbose
-
     - name: Run Tests
       run: |
         cargo test --release -- test_ --nocapture
