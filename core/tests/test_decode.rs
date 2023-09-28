@@ -76,7 +76,10 @@ mod benchmark {
 
         async_bench("benchmark_decode_seaport_complex", 100, bench).await;
     }
+}
 
+#[cfg(test)]
+mod tests {
     #[tokio::test]
     async fn test_decode_transfer() {
         let args = DecodeArgs {
