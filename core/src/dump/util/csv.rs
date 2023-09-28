@@ -2,7 +2,10 @@ use ethers::{
     abi::{decode, ParamType},
     types::U256,
 };
-use heimdall_common::{utils::strings::{encode_hex, hex_to_ascii}, io::file::write_lines_to_file};
+use heimdall_common::{
+    io::file::write_lines_to_file,
+    utils::strings::{encode_hex, hex_to_ascii},
+};
 
 use crate::dump::{constants::DECODE_AS_TYPES, structures::dump_state::DumpState};
 

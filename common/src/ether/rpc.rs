@@ -12,7 +12,6 @@ pub async fn get_code(
     contract_address: &str,
     rpc_url: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-
     // get a new logger
     let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
     let (logger, _) = Logger::new(&level);
@@ -23,7 +22,7 @@ pub async fn get_code(
     // check the cache for a matching address
     if let Some(bytecode) = read_cache(&format!("contract.{}", &contract_address)) {
         logger.debug(&format!("found cached bytecode for '{}' .", &contract_address));
-        return Ok(bytecode);
+        return Ok(bytecode)
     }
 
     // make sure the RPC provider isn't empty
@@ -73,7 +72,6 @@ pub async fn get_transaction(
     transaction_hash: &str,
     rpc_url: &str,
 ) -> Result<Transaction, Box<dyn std::error::Error>> {
-
     // get a new logger
     let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
     let (logger, _) = Logger::new(&level);

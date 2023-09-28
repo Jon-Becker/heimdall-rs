@@ -386,7 +386,8 @@ pub async fn decode(args: DecodeArgs) {
             explain_progress.set_style(logger.info_spinner());
             explain_progress.set_message("attempting to explain calldata...");
 
-            match get_explanation(decoded_string.to_string(), raw_transaction, &args.openai_api_key).await
+            match get_explanation(decoded_string.to_string(), raw_transaction, &args.openai_api_key)
+                .await
             {
                 Some(explanation) => {
                     explain_progress.finish_and_clear();

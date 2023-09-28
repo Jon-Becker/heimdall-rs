@@ -7,8 +7,9 @@ pub mod util;
 
 use crate::decompile::{
     analyzers::{solidity::analyze_sol, yul::analyze_yul},
+    out::abi::build_abi,
     resolve::*,
-    util::*, out::abi::build_abi,
+    util::*,
 };
 
 use heimdall_common::{
@@ -80,7 +81,9 @@ pub struct DecompileResult {
     pub abi: Option<Vec<ABIStructure>>,
 }
 
-pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Box<dyn std::error::Error>> {
+pub async fn decompile(
+    args: DecompilerArgs,
+) -> Result<DecompileResult, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -117,8 +120,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Box<dyn 
     // i.e, file, bytecode, contract address
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target)? {
-
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC provider
+        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
+        // provider
         contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
     } else if BYTECODE_REGEX.is_match(&args.target)? {
         logger.debug_max("using provided bytecode for decompilation");
@@ -151,7 +154,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Box<dyn 
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
-    }).await?;
+    })
+    .await?;
     trace.add_call(
         decompile_call,
         line!(),
@@ -587,20 +591,18 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Box<dyn 
     logger.info("symbolic execution completed.");
     logger.info("building decompilation output.");
 
-    let abi = build_abi(&args, analyzed_functions, all_resolved_events, &mut trace, decompile_call)?;
+    let abi = build_abi(&args, analyzed_functions, &mut trace, decompile_call)?;
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
 
-    Ok(
-        DecompileResult {
-            source: if args.include_solidity {
-                None
-            } else if args.include_yul {
-                None
-            } else {
-                None
-            },
-            abi: Some(abi),
-        }
-    )
+    Ok(DecompileResult {
+        source: if args.include_solidity {
+            None
+        } else if args.include_yul {
+            None
+        } else {
+            None
+        },
+        abi: Some(abi),
+    })
 }

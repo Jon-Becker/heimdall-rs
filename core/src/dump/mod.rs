@@ -15,7 +15,7 @@ use self::{
     constants::DUMP_STATE,
     menus::TUIView,
     structures::{dump_state::DumpState, transaction::Transaction},
-    util::csv::{DumpRow, build_csv},
+    util::csv::{build_csv, DumpRow},
 };
 
 #[derive(Debug, Clone, Parser)]
@@ -170,7 +170,8 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
 
     // index transactions in a new thread
     let dump_thread = std::thread::spawn(move || {
-        util::threads::indexer::handle(addr_hash);
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(util::threads::indexer::handle(addr_hash))
     });
 
     // if no-tui flag is set, wait for the indexing thread to finish

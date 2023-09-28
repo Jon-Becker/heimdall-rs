@@ -7,7 +7,7 @@ pub mod util;
 
 use std::{
     collections::{HashMap, HashSet},
-    env, fs,
+    fs,
     time::Duration,
 };
 
@@ -24,7 +24,7 @@ use heimdall_common::{
         selectors::{find_function_selectors, resolve_selectors},
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
     },
-    io::{file::short_path, logging::*},
+    io::logging::*,
     utils::strings::{decode_hex, encode_hex_reduced},
 };
 use indicatif::ProgressBar;
@@ -33,7 +33,7 @@ use crate::snapshot::{
     analyze::snapshot_trace,
     resolve::match_parameters,
     structures::snapshot::{GasUsed, Snapshot},
-    util::{csv::generate_and_write_contract_csv, tui},
+    util::tui,
 };
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -50,10 +50,6 @@ pub struct SnapshotArgs {
     /// Set the output verbosity level, 1 - 5.
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
-
-    /// The output directory to write the output files to
-    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
-    pub output: String,
 
     /// The RPC provider to use for fetching target bytecode.
     #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
@@ -72,7 +68,7 @@ pub struct SnapshotArgs {
     pub no_tui: bool,
 }
 
-pub fn snapshot(args: SnapshotArgs) {
+pub async fn snapshot(args: SnapshotArgs) -> Result<Vec<Snapshot>, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -99,44 +95,22 @@ pub fn snapshot(args: SnapshotArgs) {
         "()".to_string(),
     );
 
-    // parse the output directory
-    let mut output_dir: String;
-    if args.output.is_empty() {
-        output_dir = match env::current_dir() {
-            Ok(dir) => dir.into_os_string().into_string().unwrap(),
-            Err(_) => {
-                logger.error("failed to get current directory.");
-                std::process::exit(1);
-            }
-        };
-        output_dir.push_str("/output");
-    } else {
-        output_dir = args.output.clone();
-    }
-
     let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-        // push the address to the output directory
-        if output_dir != args.output {
-            output_dir.push_str(&format!("/{}", &args.target));
-        }
-
+    if ADDRESS_REGEX.is_match(&args.target)? {
         // We are snapshotting a contract address, so we need to fetch the bytecode from the RPC
         // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url);
-    } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
+        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
+    } else if BYTECODE_REGEX.is_match(&args.target)? {
+        logger.debug_max("using provided bytecode for snapshotting.");
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
-        // push the address to the output directory
-        if output_dir != args.output {
-            output_dir.push_str("/local");
-        }
+        logger.debug_max("using provided file for snapshotting.");
 
         // We are snapshotting a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
             Ok(contents) => {
                 let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents).unwrap() && _contents.len() % 2 == 0 {
+                if BYTECODE_REGEX.is_match(&_contents)? && _contents.len() % 2 == 0 {
                     _contents.replacen("0x", "", 1)
                 } else {
                     logger
@@ -155,10 +129,10 @@ pub fn snapshot(args: SnapshotArgs) {
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: contract_bytecode.clone(),
         verbose: args.verbose.clone(),
-        output: output_dir.clone(),
         rpc_url: args.rpc_url,
         decimal_counter: false,
-    });
+    })
+    .await?;
     trace.add_call(
         snapshot_call,
         line!(),
@@ -207,7 +181,7 @@ pub fn snapshot(args: SnapshotArgs) {
         line!(),
         "contract".to_string(),
         shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into().unwrap(),
+        (contract_bytecode.len() / 2usize).try_into()?,
     );
 
     // find and resolve all selectors in the bytecode
@@ -258,7 +232,7 @@ pub fn snapshot(args: SnapshotArgs) {
 
         trace.add_info(
             func_analysis_trace,
-            function_entry_point.try_into().unwrap(),
+            function_entry_point.try_into()?,
             &format!("discovered entry point: {function_entry_point}"),
         );
 
@@ -268,7 +242,7 @@ pub fn snapshot(args: SnapshotArgs) {
 
         trace.add_debug(
             func_analysis_trace,
-            function_entry_point.try_into().unwrap(),
+            function_entry_point.try_into()?,
             &format!(
                 "execution tree {}",
                 match jumpdest_count {
@@ -280,11 +254,15 @@ pub fn snapshot(args: SnapshotArgs) {
             ),
         );
 
+        logger.debug_max(&format!(
+            "building snapshot for selector {} from symbolic execution trace",
+            selector
+        ));
         let mut snapshot = snapshot_trace(
             map,
             Snapshot {
                 selector: selector.clone(),
-                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1)).unwrap(),
+                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1))?,
                 entry_point: function_entry_point,
                 arguments: HashMap::new(),
                 storage: HashSet::new(),
@@ -522,29 +500,10 @@ pub fn snapshot(args: SnapshotArgs) {
     logger.info("symbolic execution completed.");
     logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
 
-    // build output path
-    let snapshot_csv_output_path = format!("{}/snapshot.csv", output_dir);
-    trace.add_call(
-        snapshot_call,
-        line!(),
-        "heimdall".to_string(),
-        "build_csv".to_string(),
-        vec![shortened_target.clone()],
-        short_path(&snapshot_csv_output_path),
-    );
-
-    // write the csv to disk
-    generate_and_write_contract_csv(
-        &snapshots,
-        &all_resolved_errors,
-        &all_resolved_events,
-        &snapshot_csv_output_path,
-    );
-
     // open the tui
     if !args.no_tui {
         tui::handle(
-            snapshots,
+            snapshots.clone(),
             &all_resolved_errors,
             &all_resolved_events,
             if args.target.len() > 64 { &shortened_target } else { args.target.as_str() },
@@ -553,111 +512,5 @@ pub fn snapshot(args: SnapshotArgs) {
     }
 
     trace.display();
-}
-
-/// Builder pattern for using snapshot method as a library.
-///
-/// Default values may be overriden individually.
-/// ## Example
-/// Use with normal settings:
-/// ```no_run
-/// # use crate::heimdall_core::snapshot::SnapshotBuilder;
-/// const SOURCE: &'static str = "7312/* snip */04ad";
-///
-/// SnapshotBuilder::new(SOURCE)
-///     .snapshot();
-/// ```
-/// Or change settings individually:
-/// ```no_run
-/// # use crate::heimdall_core::snapshot::SnapshotBuilder;
-///
-/// const SOURCE: &'static str = "7312/* snip */04ad";
-/// SnapshotBuilder::new(SOURCE)
-///     .default(false)
-///     .output("my_contract_dir")
-///     .rpc("https://127.0.0.1:8545")
-///     .skip_resolving(true)
-///     .verbosity(5)
-///     .no_tui(true)
-///     .snapshot();
-/// ```
-#[allow(dead_code)]
-pub struct SnapshotBuilder {
-    args: SnapshotArgs,
-}
-
-impl SnapshotBuilder {
-    /// A new builder for the decompilation of the specified target.
-    ///
-    /// The target may be a file, bytecode, contract address, or ENS name.
-    #[allow(dead_code)]
-    pub fn new(target: &str) -> Self {
-        SnapshotBuilder {
-            args: SnapshotArgs {
-                target: target.to_string(),
-                verbose: clap_verbosity_flag::Verbosity::new(0, 0),
-                output: String::from(""),
-                rpc_url: String::from(""),
-                default: true,
-                skip_resolving: false,
-                no_tui: false,
-            },
-        }
-    }
-
-    /// Set the output verbosity level.
-    ///
-    /// - 0 Error
-    /// - 1 Warn
-    /// - 2 Info
-    /// - 3 Debug
-    /// - 4 Trace
-    #[allow(dead_code)]
-    pub fn verbosity(mut self, level: i8) -> SnapshotBuilder {
-        // Calculated by the log library as: 1 + verbose - quiet.
-        // Set quiet as 1, and the level corresponds to the appropriate Log level.
-        self.args.verbose = clap_verbosity_flag::Verbosity::new(level, 0);
-        self
-    }
-
-    /// The output directory to write the snapshotted files to
-    #[allow(dead_code)]
-    pub fn output(mut self, directory: &str) -> SnapshotBuilder {
-        self.args.output = directory.to_string();
-        self
-    }
-
-    /// The RPC provider to use for fetching target bytecode.
-    #[allow(dead_code)]
-    pub fn rpc(mut self, url: &str) -> SnapshotBuilder {
-        self.args.rpc_url = url.to_string();
-        self
-    }
-
-    /// When prompted, always select the default value.
-    #[allow(dead_code)]
-    pub fn default(mut self, accept: bool) -> SnapshotBuilder {
-        self.args.default = accept;
-        self
-    }
-
-    /// Whether to skip resolving function selectors.
-    #[allow(dead_code)]
-    pub fn skip_resolving(mut self, skip: bool) -> SnapshotBuilder {
-        self.args.skip_resolving = skip;
-        self
-    }
-
-    /// Whether to show the TUI or not.
-    #[allow(dead_code)]
-    pub fn no_tui(mut self, no_tui: bool) -> SnapshotBuilder {
-        self.args.no_tui = no_tui;
-        self
-    }
-
-    /// Starts the decompilation.
-    #[allow(dead_code)]
-    pub fn snapshot(self) {
-        snapshot(self.args)
-    }
+    Ok(snapshots)
 }

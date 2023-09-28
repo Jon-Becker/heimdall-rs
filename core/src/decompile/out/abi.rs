@@ -1,15 +1,14 @@
-
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use ethers::abi::AbiEncode;
-use heimdall_common::{
-    ether::signatures::ResolvedLog,
-    io::{logging::{Logger, TraceFactory}, file::short_path},
+use heimdall_common::io::{
+    file::short_path,
+    logging::{Logger, TraceFactory},
 };
 use indicatif::ProgressBar;
 use serde::{Deserialize, Serialize};
 
-use crate::decompile::{DecompilerArgs, util::Function};
+use crate::decompile::{util::Function, DecompilerArgs};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ABIToken {
@@ -55,11 +54,9 @@ pub enum ABIStructure {
     Event(EventABI),
 }
 
-
 pub fn build_abi(
     args: &DecompilerArgs,
     functions: Vec<Function>,
-    all_resolved_events: HashMap<String, ResolvedLog>,
     trace: &mut TraceFactory,
     trace_parent: u32,
 ) -> Result<Vec<ABIStructure>, Box<dyn std::error::Error>> {

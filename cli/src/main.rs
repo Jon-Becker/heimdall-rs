@@ -73,7 +73,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // handle catching panics with
     panic::set_hook(Box::new(|panic_info| {
-        // cleanup the terminal (break out of alternate screen, disable mouse capture, and show the cursor)
+        // cleanup the terminal (break out of alternate screen, disable mouse capture, and show the
+        // cursor)
         let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend).unwrap();

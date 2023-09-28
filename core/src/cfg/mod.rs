@@ -84,14 +84,14 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     // fetch bytecode
     let contract_bytecode: String;
     if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-
-        // We are working with a contract address, so we need to fetch the bytecode from the RPC provider
+        // We are working with a contract address, so we need to fetch the bytecode from the RPC
+        // provider
         contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
         logger.debug_max("using provided bytecode for cfg generation");
         contract_bytecode = args.target.replacen("0x", "", 1);
     } else {
-        logger.debug_max("using provided file for decompilation.");
+        logger.debug_max("using provided file for cfg generation.");
 
         // We are analyzing a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
@@ -118,7 +118,8 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
-    }).await?;
+    })
+    .await?;
 
     // add the call to the trace
     trace.add_call(

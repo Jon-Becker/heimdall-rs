@@ -16,7 +16,8 @@ use super::{
         util::Function,
         DecompilerArgs,
     },
-    postprocessers::solidity::postprocess, abi::ABIStructure,
+    abi::ABIStructure,
+    postprocessers::solidity::postprocess,
 };
 
 pub fn build_solidity_output(
@@ -28,7 +29,6 @@ pub fn build_solidity_output(
     trace: &mut TraceFactory,
     trace_parent: u32,
 ) -> Result<String, Box<dyn std::error::Error>> {
-
     // get a new logger
     let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
     let (logger, _) = Logger::new(&level);
@@ -57,7 +57,7 @@ pub fn build_solidity_output(
         line!(),
         "heimdall".to_string(),
         "build_solidity_output".to_string(),
-        vec![shortened_target],
+        vec![shortened_target.clone()],
         short_path(&shortened_target),
     );
 
@@ -254,5 +254,6 @@ pub fn build_solidity_output(
     decompiled_output.push(String::from("}"));
 
     progress_bar.finish_and_clear();
-    Ok(postprocess(decompiled_output, all_resolved_errors, all_resolved_events, &progress_bar).join("\n"))
+    Ok(postprocess(decompiled_output, all_resolved_errors, all_resolved_events, &progress_bar)
+        .join("\n"))
 }

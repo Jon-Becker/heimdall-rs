@@ -39,7 +39,8 @@ pub async fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<State
 
     // check the cache for a matching address
     if let Some(state_diff) = read_cache(&format!("diff.{}", &tx.hash)) {
-        return state_diff;
+        logger.debug_max(&format!("found cached state diff for transaction '{}' .", &tx.hash));
+        return state_diff
     }
 
     // make sure the RPC provider isn't empty
@@ -70,27 +71,28 @@ pub async fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<State
     };
 
     // fetch the state diff for the transaction
-    let state_diff = match provider
-        .trace_replay_transaction(transaction_hash, vec![TraceType::StateDiff])
-        .await
-    {
-        Ok(traces) => traces.state_diff,
-        Err(e) => {
-            cleanup_terminal();
-            logger.error(&format!(
+    let state_diff =
+        match provider.trace_replay_transaction(transaction_hash, vec![TraceType::StateDiff]).await
+        {
+            Ok(traces) => traces.state_diff,
+            Err(e) => {
+                cleanup_terminal();
+                logger.error(&format!(
                 "failed to replay and trace transaction '{}' . does your RPC provider support it?",
                 &tx.hash
             ));
-            logger.error(&format!("error: '{e}' ."));
-            std::process::exit(1)
-        }
-    };
+                logger.error(&format!("error: '{e}' ."));
+                std::process::exit(1)
+            }
+        };
 
     // write the state diff to the cache
     let expiry =
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
-            + 60 * 60 * 24 * 7;
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() +
+            60 * 60 * 24 * 7;
     store_cache(&format!("diff.{}", &tx.hash), &state_diff, Some(expiry));
+
+    logger.debug_max(&format!("fetched state diff for transaction '{}' .", &tx.hash));
 
     state_diff
 }
