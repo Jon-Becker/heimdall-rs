@@ -1623,6 +1623,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "heimdall-cache"
+version = "0.6.0"
+source = "git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main#b7a753341438ca3c4fa1b89a9052715fefab54d9"
+dependencies = [
+ "bincode",
+ "clap",
+ "serde",
+]
+
+[[package]]
 name = "heimdall-cli"
 version = "0.6.0"
 dependencies = [
@@ -1631,10 +1641,10 @@ dependencies = [
  "clap-verbosity-flag",
  "colored",
  "crossterm 0.26.1",
- "heimdall-cache",
- "heimdall-common",
- "heimdall-config",
- "heimdall-core",
+ "heimdall-cache 0.6.0",
+ "heimdall-common 0.6.0",
+ "heimdall-config 0.6.0",
+ "heimdall-core 0.6.0",
  "serde",
  "serde_json",
  "tokio",
@@ -1652,7 +1662,30 @@ dependencies = [
  "crossbeam-channel",
  "ethers",
  "fancy-regex",
- "heimdall-cache",
+ "heimdall-cache 0.6.0",
+ "indicatif",
+ "lazy_static",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "strsim",
+ "tokio",
+]
+
+[[package]]
+name = "heimdall-common"
+version = "0.6.0"
+source = "git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main#b7a753341438ca3c4fa1b89a9052715fefab54d9"
+dependencies = [
+ "async-openai",
+ "clap",
+ "clap-verbosity-flag",
+ "colored",
+ "crossbeam-channel",
+ "ethers",
+ "fancy-regex",
+ "heimdall-cache 0.6.0 (git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main)",
  "indicatif",
  "lazy_static",
  "rand",
@@ -1669,7 +1702,19 @@ version = "0.6.0"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
- "heimdall-common",
+ "heimdall-common 0.6.0",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "heimdall-config"
+version = "0.6.0"
+source = "git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main#b7a753341438ca3c4fa1b89a9052715fefab54d9"
+dependencies = [
+ "clap",
+ "clap-verbosity-flag",
+ "heimdall-common 0.6.0 (git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main)",
  "serde",
  "toml",
 ]
@@ -1685,9 +1730,9 @@ dependencies = [
  "crossterm 0.26.1",
  "ethers",
  "fancy-regex",
- "heimdall-cache",
- "heimdall-common",
- "heimdall-config",
+ "heimdall-cache 0.6.0",
+ "heimdall-common 0.6.0",
+ "heimdall-config 0.6.0",
  "indicatif",
  "lazy_static",
  "petgraph",
@@ -1696,6 +1741,40 @@ dependencies = [
  "strsim",
  "tokio",
  "tui",
+]
+
+[[package]]
+name = "heimdall-core"
+version = "0.6.0"
+source = "git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main#b7a753341438ca3c4fa1b89a9052715fefab54d9"
+dependencies = [
+ "backtrace",
+ "clap",
+ "clap-verbosity-flag",
+ "colored",
+ "crossterm 0.26.1",
+ "ethers",
+ "fancy-regex",
+ "heimdall-cache 0.6.0 (git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main)",
+ "heimdall-common 0.6.0 (git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main)",
+ "heimdall-config 0.6.0 (git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main)",
+ "indicatif",
+ "lazy_static",
+ "petgraph",
+ "serde",
+ "serde_json",
+ "strsim",
+ "tokio",
+ "tui",
+]
+
+[[package]]
+name = "heimdall-rs-decompile-example"
+version = "0.1.0"
+dependencies = [
+ "clap-verbosity-flag",
+ "heimdall-core 0.6.0 (git+https://github.com/Jon-Becker/heimdall-rs.git?branch=main)",
+ "tokio",
 ]
 
 [[package]]
