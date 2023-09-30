@@ -66,7 +66,7 @@ impl DecodeArgsBuilder {
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),
-            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 0)),
+            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             openai_api_key: Some(String::new()),
             explain: Some(false),
@@ -404,8 +404,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Box<dyn s
             decoded_string.push_str(&format!("\n{}", decoded_inputs_as_message.clone().join("\n")));
         }
 
-        // force the trace to display
-        trace.level = 4;
+        // display trace (pretty print decoded calldata)
         trace.display();
 
         if args.explain && !matches.is_empty() {

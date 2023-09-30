@@ -4,10 +4,5 @@ members = [
     "config",
     "core",
     "cli",
-    "examples/cfg",
-    "examples/dump",
-    "examples/decode",
-    "examples/snapshot",
-    "examples/decompile"
 ]
-version = "0.6.0"
+version = "0.6.1"

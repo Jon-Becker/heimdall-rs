@@ -187,6 +187,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.openai_api_key = configuration.openai_api_key;
             }
 
+            // set cmd.verbose to 6
+            cmd.verbose = clap_verbosity_flag::Verbosity::new(5, 0);
+
             let _ = decode(cmd).await;
         }
 
