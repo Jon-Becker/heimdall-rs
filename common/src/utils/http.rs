@@ -33,7 +33,7 @@ async fn _get_json_from_url(
 
     let res = match client.get(url).send().await {
         Ok(res) => res,
-        Err(err) => {
+        Err(_) => {
             if retries_remaining == 0 {
                 return Ok(None)
             }
