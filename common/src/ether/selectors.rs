@@ -138,8 +138,8 @@ where
         let resolve_progress = resolve_progress.clone();
 
         // create a new thread for each selector
-        threads.push(thread::spawn(move || {
-            if let Some(function) = T::resolve(&selector) {
+        threads.push(thread::spawn(move || async move {
+            if let Some(function) = T::resolve(&selector).await {
                 let mut _resolved_functions =
                     function_clone.lock().expect("Could not obtain lock on function_clone.");
                 let mut _resolve_progress =

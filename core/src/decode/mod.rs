@@ -3,6 +3,7 @@ mod util;
 use std::time::Duration;
 
 use clap::{AppSettings, Parser};
+use derive_builder::Builder;
 use ethers::{
     abi::{decode as decode_abi, AbiEncode, Function, Param, ParamType, StateMutability},
     types::Transaction,
@@ -24,7 +25,7 @@ use strsim::normalized_damerau_levenshtein as similarity;
 
 use crate::decode::util::get_explanation;
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Builder)]
 #[clap(
     about = "Decode calldata into readable types",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
@@ -61,12 +62,40 @@ pub struct DecodeArgs {
     pub truncate_calldata: bool,
 }
 
+impl DecodeArgsBuilder {
+    pub fn new() -> Self {
+        Self {
+            target: Some(String::new()),
+            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 0)),
+            rpc_url: Some(String::new()),
+            openai_api_key: Some(String::new()),
+            explain: Some(false),
+            default: Some(true),
+            truncate_calldata: Some(false),
+        }
+    }
+}
+
 #[allow(deprecated)]
-pub async fn decode(args: DecodeArgs) {
+pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Box<dyn std::error::Error>> {
+    // set logger environment variable if not already set
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var(
+            "RUST_LOG",
+            match args.verbose.log_level() {
+                Some(level) => level.as_str(),
+                None => "SILENT",
+            },
+        );
+    }
+
+    // get a new logger
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",
     });
+
+    // init variables
     let mut raw_transaction: Transaction = Transaction::default();
     let calldata;
 
@@ -130,7 +159,7 @@ pub async fn decode(args: DecodeArgs) {
     };
 
     // get the function signature possibilities
-    let potential_matches = match ResolvedFunction::resolve(&function_selector) {
+    let potential_matches = match ResolvedFunction::resolve(&function_selector).await {
         Some(signatures) => signatures,
         None => Vec::new(),
     };
@@ -400,121 +429,6 @@ pub async fn decode(args: DecodeArgs) {
             };
         }
     }
-}
 
-/// Decode calldata into a Vec of potential ResolvedFunctions
-/// ## Example
-/// ```no_run
-/// # use crate::heimdall_core::decode::decode_calldata;
-/// const CALLDATA: &'static str = "0xd57e/* snip */2867"
-///
-/// let potential_matches = decode_calldata(CALLDATA.to_string());
-#[allow(deprecated)]
-#[allow(dead_code)]
-pub fn decode_calldata(calldata: &str) -> Option<Vec<ResolvedFunction>> {
-    let (logger, _) = Logger::new("ERROR");
-
-    // parse the two parts of calldata, inputs and selector
-    let function_selector =
-        calldata.replacen("0x", "", 1).get(0..8).unwrap_or("0x00000000").to_string();
-    let byte_args = match decode_hex(&calldata[8..]) {
-        Ok(byte_args) => byte_args,
-        Err(_) => {
-            logger.error("failed to parse bytearray from calldata.");
-            std::process::exit(1)
-        }
-    };
-
-    // get the function signature possibilities
-    let potential_matches = match ResolvedFunction::resolve(&function_selector) {
-        Some(signatures) => signatures,
-        None => Vec::new(),
-    };
-    let mut matches: Vec<ResolvedFunction> = Vec::new();
-    for potential_match in &potential_matches {
-        // convert the string inputs into a vector of decoded types
-        let mut inputs: Vec<ParamType> = Vec::new();
-
-        if let Some(type_) = parse_function_parameters(&potential_match.signature) {
-            for input in type_ {
-                inputs.push(input);
-            }
-        }
-
-        match decode_abi(&inputs, &byte_args) {
-            Ok(result) => {
-                // convert tokens to params
-                let mut params: Vec<Param> = Vec::new();
-                for (i, input) in inputs.iter().enumerate() {
-                    params.push(Param {
-                        name: format!("arg{i}"),
-                        kind: input.to_owned(),
-                        internal_type: None,
-                    });
-                }
-                // build the decoded function to verify it's a match
-                let decoded_function_call = Function {
-                    name: potential_match.name.to_string(),
-                    inputs: params,
-                    outputs: Vec::new(),
-                    constant: None,
-                    state_mutability: StateMutability::NonPayable,
-                }
-                .encode_input(&result);
-                match decoded_function_call {
-                    Ok(decoded_function_call) => {
-                        // decode the function call in trimmed bytes, removing 0s, because contracts
-                        // can use nonstandard sized words and padding is
-                        // hard
-                        let cleaned_bytes = decoded_function_call.encode_hex().replace('0', "");
-                        let decoded_function_call = match cleaned_bytes
-                            .split_once(&function_selector.replace('0', ""))
-                        {
-                            Some(decoded_function_call) => decoded_function_call.1,
-                            None => {
-                                logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
-                                continue
-                            }
-                        };
-
-                        // if the decoded function call matches (95%) the function signature, add it
-                        // to the list of matches
-                        if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs() >=
-                            0.90
-                        {
-                            let mut found_match = potential_match.clone();
-                            found_match.decoded_inputs = Some(result);
-                            matches.push(found_match);
-                        } else {
-                            logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
-                        }
-                    }
-                    Err(_) => {
-                        logger.debug(
-                            &format!(
-                                "potential match '{}' ignored. type checking failed",
-                                &potential_match.signature
-                            )
-                            .to_string(),
-                        );
-                    }
-                }
-            }
-            Err(_) => {
-                logger.debug(
-                    &format!(
-                        "potential match '{}' ignored. decoding types failed",
-                        &potential_match.signature
-                    )
-                    .to_string(),
-                );
-            }
-        }
-    }
-
-    if matches.is_empty() {
-        return None
-    }
-
-    Some(matches)
+    Ok(matches)
 }

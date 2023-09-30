@@ -1,3 +1,13 @@
 [workspace]
-members = ["common", "config", "core", "cli", "examples/decompile"]
+members = [
+    "common",
+    "config",
+    "core",
+    "cli",
+    "examples/cfg",
+    "examples/dump",
+    "examples/decode",
+    "examples/snapshot",
+    "examples/decompile"
+]
 version = "0.6.0"

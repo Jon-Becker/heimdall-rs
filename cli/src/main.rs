@@ -109,17 +109,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            // set logger environment variable if not already set
-            if std::env::var("RUST_LOG").is_err() {
-                std::env::set_var(
-                    "RUST_LOG",
-                    match cmd.verbose.log_level() {
-                        Some(level) => level.as_str(),
-                        None => "SILENT",
-                    },
-                );
-            }
-
             let assembly = disassemble(cmd.clone()).await?;
 
             // write to file
@@ -135,17 +124,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
-            }
-
-            // set logger environment variable if not already set
-            if std::env::var("RUST_LOG").is_err() {
-                std::env::set_var(
-                    "RUST_LOG",
-                    match cmd.verbose.log_level() {
-                        Some(level) => level.as_str(),
-                        None => "SILENT",
-                    },
-                );
             }
 
             let result = decompile(cmd.clone()).await?;
@@ -209,35 +187,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.openai_api_key = configuration.openai_api_key;
             }
 
-            // set logger environment variable if not already set
-            if std::env::var("RUST_LOG").is_err() {
-                std::env::set_var(
-                    "RUST_LOG",
-                    match cmd.verbose.log_level() {
-                        Some(level) => level.as_str(),
-                        None => "SILENT",
-                    },
-                );
-            }
-
-            decode(cmd).await;
+            let _ = decode(cmd).await;
         }
 
         Subcommands::CFG(mut cmd) => {
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
-            }
-
-            // set logger environment variable if not already set
-            if std::env::var("RUST_LOG").is_err() {
-                std::env::set_var(
-                    "RUST_LOG",
-                    match cmd.verbose.log_level() {
-                        Some(level) => level.as_str(),
-                        None => "SILENT",
-                    },
-                );
             }
 
             let cfg = cfg(cmd.clone()).await?;
@@ -261,17 +217,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // if the user has not specified a transpose api key, use the default
             if cmd.transpose_api_key.as_str() == "" {
                 cmd.transpose_api_key = configuration.transpose_api_key;
-            }
-
-            // set logger environment variable if not already set
-            if std::env::var("RUST_LOG").is_err() {
-                std::env::set_var(
-                    "RUST_LOG",
-                    match cmd.verbose.log_level() {
-                        Some(level) => level.as_str(),
-                        None => "SILENT",
-                    },
-                );
             }
 
             let result = dump(cmd.clone()).await?;
@@ -305,17 +250,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            // set logger environment variable if not already set
-            if std::env::var("RUST_LOG").is_err() {
-                std::env::set_var(
-                    "RUST_LOG",
-                    match cmd.verbose.log_level() {
-                        Some(level) => level.as_str(),
-                        None => "SILENT",
-                    },
-                );
-            }
-
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
                 output_path.push_str(&format!("/{}/snapshot.csv", &cmd.target));
@@ -341,7 +275,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // check if the version is up to date
-    let remote_version = remote_version();
+    let remote_version = remote_version().await;
     let current_version = current_version();
 
     if remote_version.gt(&current_version) {

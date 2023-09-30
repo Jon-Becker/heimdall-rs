@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use ethers::abi::Token;
 use heimdall_cache::{read_cache, store_cache};
 
@@ -29,14 +30,16 @@ pub struct ResolvedLog {
     pub inputs: Vec<String>,
 }
 
+#[async_trait]
 pub trait ResolveSelector {
-    fn resolve(selector: &str) -> Option<Vec<Self>>
+    async fn resolve(selector: &str) -> Option<Vec<Self>>
     where
         Self: Sized;
 }
 
+#[async_trait]
 impl ResolveSelector for ResolvedError {
-    fn resolve(selector: &str) -> Option<Vec<Self>> {
+    async fn resolve(selector: &str) -> Option<Vec<Self>> {
         // get a new logger
         let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
         let (logger, _) = Logger::new(&level);
@@ -60,7 +63,10 @@ impl ResolveSelector for ResolvedError {
         let signatures = match get_json_from_url(
             &format!("https://api.etherface.io/v1/signatures/hash/error/{}/1", &selector),
             10,
-        ) {
+        )
+        .await
+        .unwrap()
+        {
             Some(signatures) => signatures,
             None => return None,
         };
@@ -115,8 +121,9 @@ impl ResolveSelector for ResolvedError {
     }
 }
 
+#[async_trait]
 impl ResolveSelector for ResolvedLog {
-    fn resolve(selector: &str) -> Option<Vec<Self>> {
+    async fn resolve(selector: &str) -> Option<Vec<Self>> {
         // get a new logger
         let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
         let (logger, _) = Logger::new(&level);
@@ -140,7 +147,10 @@ impl ResolveSelector for ResolvedLog {
         let signatures = match get_json_from_url(
             &format!("https://api.etherface.io/v1/signatures/hash/event/{}/1", &selector),
             10,
-        ) {
+        )
+        .await
+        .unwrap()
+        {
             Some(signatures) => signatures,
             None => return None,
         };
@@ -195,8 +205,9 @@ impl ResolveSelector for ResolvedLog {
     }
 }
 
+#[async_trait]
 impl ResolveSelector for ResolvedFunction {
-    fn resolve(selector: &str) -> Option<Vec<Self>> {
+    async fn resolve(selector: &str) -> Option<Vec<Self>> {
         // get a new logger
         let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
         let (logger, _) = Logger::new(&level);
@@ -220,7 +231,10 @@ impl ResolveSelector for ResolvedFunction {
         let signatures = match get_json_from_url(
             &format!("https://api.etherface.io/v1/signatures/hash/function/{}/1", &selector),
             10,
-        ) {
+        )
+        .await
+        .unwrap()
+        {
             Some(signatures) => signatures,
             None => return None,
         };

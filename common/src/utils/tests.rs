@@ -548,9 +548,9 @@ mod test_version {
         assert_eq!(version.to_string(), env!("CARGO_PKG_VERSION"));
     }
 
-    #[test]
-    fn test_version_remote() {
-        let version = remote_version();
+    #[tokio::test]
+    async fn test_version_remote() {
+        let version = remote_version().await;
 
         assert!(version.minor >= 0);
         assert!(version.patch >= 0);

@@ -1,5 +1,6 @@
 pub mod graph;
 pub mod output;
+use derive_builder::Builder;
 use heimdall_common::ether::{
     compiler::detect_compiler, rpc::get_code, selectors::find_function_selectors,
 };
@@ -19,7 +20,7 @@ use petgraph::Graph;
 
 use crate::cfg::graph::build_cfg;
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Builder)]
 #[clap(
     about = "Generate a visual control flow graph for EVM bytecode",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
@@ -54,9 +55,33 @@ pub struct CFGArgs {
     pub color_edges: bool,
 }
 
+impl CFGArgsBuilder {
+    pub fn new() -> Self {
+        Self {
+            target: Some(String::new()),
+            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
+            rpc_url: Some(String::new()),
+            default: Some(true),
+            format: Some(String::new()),
+            color_edges: Some(false),
+        }
+    }
+}
+
 pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
+
+    // set logger environment variable if not already set
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var(
+            "RUST_LOG",
+            match args.verbose.log_level() {
+                Some(level) => level.as_str(),
+                None => "SILENT",
+            },
+        );
+    }
 
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),

@@ -12,6 +12,7 @@ use crate::decompile::{
     util::*,
 };
 
+use derive_builder::Builder;
 use heimdall_common::{
     ether::{
         compiler::detect_compiler,
@@ -38,7 +39,7 @@ use heimdall_common::{
 
 use self::out::abi::ABIStructure;
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Builder)]
 #[clap(
     about = "Decompile EVM bytecode to Solidity",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
@@ -75,6 +76,20 @@ pub struct DecompilerArgs {
     pub include_yul: bool,
 }
 
+impl DecompilerArgsBuilder {
+    pub fn new() -> Self {
+        Self {
+            target: Some(String::new()),
+            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
+            rpc_url: Some(String::new()),
+            default: Some(true),
+            skip_resolving: Some(false),
+            include_solidity: Some(false),
+            include_yul: Some(false),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DecompileResult {
     pub source: Option<String>,
@@ -87,9 +102,22 @@ pub async fn decompile(
     use std::time::Instant;
     let now = Instant::now();
 
+    // set logger environment variable if not already set
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var(
+            "RUST_LOG",
+            match args.verbose.log_level() {
+                Some(level) => level.as_str(),
+                None => "SILENT",
+            },
+        );
+    }
+
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, mut trace) = Logger::new(&level);
+    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
+        Some(level) => level.as_str(),
+        None => "SILENT",
+    });
 
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();

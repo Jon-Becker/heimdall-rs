@@ -4,6 +4,7 @@ mod structures;
 mod util;
 
 use clap::{AppSettings, Parser};
+use derive_builder::Builder;
 use ethers::types::H160;
 use heimdall_common::{
     io::logging::*,
@@ -18,7 +19,7 @@ use self::{
     util::csv::{build_csv, DumpRow},
 };
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Builder)]
 #[clap(
     about = "Dump the value of all storage slots accessed by a contract",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
@@ -68,7 +69,35 @@ pub struct DumpArgs {
     pub chain: String,
 }
 
+impl DumpArgsBuilder {
+    pub fn new() -> Self {
+        Self {
+            target: Some(String::new()),
+            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
+            output: Some(String::new()),
+            rpc_url: Some(String::new()),
+            transpose_api_key: Some(String::new()),
+            threads: Some(8),
+            from_block: Some(0),
+            to_block: Some(9999999999),
+            no_tui: Some(true),
+            chain: Some(String::from("ethereum")),
+        }
+    }
+}
+
 pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Error>> {
+    // set logger environment variable if not already set
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var(
+            "RUST_LOG",
+            match args.verbose.log_level() {
+                Some(level) => level.as_str(),
+                None => "SILENT",
+            },
+        );
+    }
+
     let (logger, _) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",
@@ -96,7 +125,7 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
 
     // get the contract creation tx
     let contract_creation_tx =
-        match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key) {
+        match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key).await {
             Some(tx) => tx,
             None => {
                 logger.error(
@@ -134,7 +163,8 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
         &args.target,
         &args.transpose_api_key,
         (&args.from_block, &args.to_block),
-    );
+    )
+    .await;
 
     // convert to vec of Transaction
     for transaction in transaction_list {
