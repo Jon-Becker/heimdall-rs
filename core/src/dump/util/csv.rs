@@ -9,6 +9,7 @@ use heimdall_common::{
 
 use crate::dump::{constants::DECODE_AS_TYPES, structures::dump_state::DumpState};
 
+#[derive(Debug, Clone)]
 pub struct DumpRow {
     pub last_modified: String,
     pub alias: String,

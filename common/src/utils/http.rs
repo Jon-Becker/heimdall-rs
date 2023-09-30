@@ -1,59 +1,55 @@
-use reqwest::blocking::Client;
+use async_recursion::async_recursion;
+use reqwest::Client;
 use serde_json::Value;
-use std::io::Read;
+use std::time::Duration;
+use tokio::time::sleep as async_sleep;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
-/// make a GET request to the target URL and return the response body as JSON
+/// Make a GET request to the target URL and return the response body as JSON
 ///
 /// # Arguments
 /// `url` - the URL to make the GET request to
+/// `timeout` - timeout duration in seconds
 ///
 /// # Returns
-/// `Option<Value>` - the response body as JSON
-pub fn get_json_from_url(url: &str, timeout: u64) -> Option<Value> {
-    _get_json_from_url(url, 0, 5, timeout)
+/// `Result<Option<Value>, reqwest::Error>` - the response body as JSON
+pub async fn get_json_from_url(url: &str, timeout: u64) -> Result<Option<Value>, reqwest::Error> {
+    _get_json_from_url(url, 0, 5, timeout).await
 }
 
-fn _get_json_from_url(
+#[async_recursion]
+async fn _get_json_from_url(
     url: &str,
     retry_count: u8,
     retries_remaining: u8,
     timeout: u64,
-) -> Option<Value> {
-    let client = match Client::builder()
+) -> Result<Option<Value>, reqwest::Error> {
+    let client = Client::builder()
         .danger_accept_invalid_certs(true)
         .user_agent(APP_USER_AGENT)
-        .timeout(std::time::Duration::from_secs(timeout))
-        .build()
-    {
-        Ok(client) => client,
-        Err(_) => Client::default(),
-    };
+        .timeout(Duration::from_secs(timeout))
+        .build()?;
 
-    let mut res = match client.get(url).send() {
+    let res = match client.get(url).send().await {
         Ok(res) => res,
         Err(_) => {
             if retries_remaining == 0 {
-                return None
+                return Ok(None)
             }
 
             // exponential backoff
             let retry_count = retry_count + 1;
             let retries_remaining = retries_remaining - 1;
-
             let sleep_time = 2u64.pow(retry_count as u32) * 250;
-            std::thread::sleep(std::time::Duration::from_millis(sleep_time));
-            return _get_json_from_url(url, retry_count, retries_remaining, timeout)
+            async_sleep(Duration::from_millis(sleep_time)).await;
+            return _get_json_from_url(url, retry_count, retries_remaining, timeout).await
         }
     };
-    let mut body = String::new();
+    let body = res.text().await?;
 
-    match res.read_to_string(&mut body) {
-        Ok(_) => Some(match serde_json::from_str(&body) {
-            Ok(json) => json,
-            Err(_) => return None,
-        }),
-        Err(_) => None,
+    match serde_json::from_str(&body) {
+        Ok(json) => Ok(Some(json)),
+        Err(_) => Ok(None),
     }
 }

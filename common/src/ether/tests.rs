@@ -610,31 +610,32 @@ mod test_signatures {
         score_signature, ResolveSelector, ResolvedError, ResolvedFunction, ResolvedLog,
     };
 
-    #[test]
-    fn resolve_function_signature_should_return_none_when_cached_results_not_found() {
+    #[tokio::test]
+    async fn resolve_function_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_nocache");
-        let result = ResolvedFunction::resolve(&signature);
+        let result = ResolvedFunction::resolve(&signature).await;
 
         assert_eq!(result, None,)
     }
 
-    #[test]
-    fn resolve_function_signature_should_return_none_when_json_url_returns_empty_signatures() {
+    #[tokio::test]
+    async fn resolve_function_signature_should_return_none_when_json_url_returns_empty_signatures()
+    {
         delete_cache(&format!("selector.{}", "test_signature"));
         let signature = String::from("test_signature");
-        let result = ResolvedFunction::resolve(&signature);
+        let result = ResolvedFunction::resolve(&signature).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn resolve_error_signature_should_return_none_when_cached_results_not_found() {
+    #[tokio::test]
+    async fn resolve_error_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature);
+        let result = ResolvedError::resolve(&signature).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn resolve_error_signature_should_return_cached_results_when_found() {
+    #[tokio::test]
+    async fn resolve_error_signature_should_return_cached_results_when_found() {
         let signature = String::from("test_signature");
         let mut cached_results = Vec::new();
         cached_results.push(ResolvedError {
@@ -644,33 +645,33 @@ mod test_signatures {
         });
         store_cache(&format!("selector.{}", &signature), cached_results.clone(), None);
 
-        let result = ResolvedError::resolve(&signature);
+        let result = ResolvedError::resolve(&signature).await;
         assert_eq!(result, Some(cached_results));
     }
 
-    #[test]
-    fn resolve_error_signature_should_return_none_when_json_url_returns_none() {
+    #[tokio::test]
+    async fn resolve_error_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature);
+        let result = ResolvedError::resolve(&signature).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn resolve_error_signature_should_return_none_when_json_url_returns_empty_signatures() {
+    #[tokio::test]
+    async fn resolve_error_signature_should_return_none_when_json_url_returns_empty_signatures() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature);
+        let result = ResolvedError::resolve(&signature).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn resolve_event_signature_should_return_none_when_cached_results_not_found() {
+    #[tokio::test]
+    async fn resolve_event_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature);
+        let result = ResolvedLog::resolve(&signature).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn resolve_event_signature_should_return_cached_results_when_found() {
+    #[tokio::test]
+    async fn resolve_event_signature_should_return_cached_results_when_found() {
         let signature = String::from("test_signature");
         let mut cached_results = Vec::new();
         cached_results.push(ResolvedLog {
@@ -680,21 +681,21 @@ mod test_signatures {
         });
         store_cache(&format!("selector.{}", &signature), cached_results.clone(), None);
 
-        let result = ResolvedLog::resolve(&signature);
+        let result = ResolvedLog::resolve(&signature).await;
         assert_eq!(result, Some(cached_results));
     }
 
-    #[test]
-    fn resolve_event_signature_should_return_none_when_json_url_returns_none() {
+    #[tokio::test]
+    async fn resolve_event_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature);
+        let result = ResolvedLog::resolve(&signature).await;
         assert_eq!(result, None);
     }
 
-    #[test]
-    fn resolve_event_signature_should_return_none_when_json_url_returns_empty_signatures() {
+    #[tokio::test]
+    async fn resolve_event_signature_should_return_none_when_json_url_returns_empty_signatures() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature);
+        let result = ResolvedLog::resolve(&signature).await;
         assert_eq!(result, None);
     }
 

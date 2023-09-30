@@ -1,11 +1,7 @@
-use std::{
-    io::Read,
-    time::{Duration, Instant},
-};
-
 use indicatif::ProgressBar;
 use reqwest::header::HeaderMap;
 use serde_json::Value;
+use std::time::{Duration, Instant};
 
 use crate::io::logging::Logger;
 use serde::{Deserialize, Serialize};
@@ -24,7 +20,7 @@ struct TransposeResponse {
     results: Vec<Value>,
 }
 
-fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
+async fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
     // get a new logger
     let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
     let (logger, _) = Logger::new(&level);
@@ -38,17 +34,18 @@ fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
     let query = query.to_owned();
 
     // make the request
-    let client = reqwest::blocking::Client::builder()
+    let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(999999999))
         .build()
         .unwrap();
 
-    let mut response = match client
+    let response = match client
         .post("https://api.transpose.io/sql")
         .body(query.clone())
         .headers(headers)
         .send()
+        .await
     {
         Ok(res) => res,
         Err(e) => {
@@ -59,9 +56,8 @@ fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
     };
 
     // parse body
-    let mut body = String::new();
-    match response.read_to_string(&mut body) {
-        Ok(_) => Some(match serde_json::from_str(&body) {
+    match response.text().await {
+        Ok(body) => Some(match serde_json::from_str(&body) {
             Ok(json) => json,
             Err(e) => {
                 logger.error("Transpose request unsucessful.");
@@ -74,13 +70,12 @@ fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
         Err(e) => {
             logger.error("failed to parse Transpose response body.");
             logger.error(&format!("error: {e}"));
-            logger.debug(&format!("response body: {body:?}"));
             std::process::exit(1)
         }
     }
 }
 
-pub fn get_transaction_list(
+pub async fn get_transaction_list(
     chain: &str,
     address: &str,
     api_key: &str,
@@ -108,7 +103,7 @@ pub fn get_transaction_list(
         bounds.1
     );
 
-    let response = match _call_transpose(&query, api_key) {
+    let response = match _call_transpose(&query, api_key).await {
         Some(response) => response,
         None => {
             logger.error("failed to get transaction list from Transpose");
@@ -159,7 +154,11 @@ pub fn get_transaction_list(
     transactions
 }
 
-pub fn get_contract_creation(chain: &str, address: &str, api_key: &str) -> Option<(u128, String)> {
+pub async fn get_contract_creation(
+    chain: &str,
+    address: &str,
+    api_key: &str,
+) -> Option<(u128, String)> {
     // get a new logger
     let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
     let (logger, _) = Logger::new(&level);
@@ -176,7 +175,7 @@ pub fn get_contract_creation(chain: &str, address: &str, api_key: &str) -> Optio
         "{{\"sql\":\"SELECT block_number, transaction_hash FROM {chain}.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM {chain}.accounts WHERE address = '{address}' ) AND contract_address = '{address}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
     );
 
-    let response = match _call_transpose(&query, api_key) {
+    let response = match _call_transpose(&query, api_key).await {
         Some(response) => response,
         None => {
             logger.error("failed to get creation tx from Transpose");

@@ -12,6 +12,7 @@ use std::{
 };
 
 use clap::{AppSettings, Parser};
+use derive_builder::Builder;
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{
@@ -35,7 +36,7 @@ use crate::snapshot::{
     structures::snapshot::{GasUsed, Snapshot},
     util::tui,
 };
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Builder)]
 #[clap(
     about = "Infer function information from bytecode, including access control, gas consumption, storage accesses, event emissions, and more",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
@@ -68,6 +69,20 @@ pub struct SnapshotArgs {
     pub no_tui: bool,
 }
 
+impl SnapshotArgsBuilder {
+    pub fn new() -> Self {
+        SnapshotArgsBuilder {
+            target: Some(String::new()),
+            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
+            rpc_url: Some(String::new()),
+            default: Some(true),
+            skip_resolving: Some(false),
+            no_tui: Some(true),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SnapshotResult {
     pub snapshots: Vec<Snapshot>,
     pub resolved_errors: HashMap<String, ResolvedError>,
@@ -77,6 +92,17 @@ pub struct SnapshotResult {
 pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
+
+    // set logger environment variable if not already set
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var(
+            "RUST_LOG",
+            match args.verbose.log_level() {
+                Some(level) => level.as_str(),
+                None => "SILENT",
+            },
+        );
+    }
 
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
