@@ -23,8 +23,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
     logger.debug_max(&format!("checking chain id for rpc url: '{}'", &rpc_url));
 
     // check the cache for a matching rpc url
-    let cache_key =
-        format!("chain_id.{}", &rpc_url.replace('/', "").replace('.', "-").replace(':', "-"));
+    let cache_key = format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-"));
     if let Some(chain_id) = read_cache(&cache_key) {
         logger.debug(&format!("found cached chain id for rpc url: {:?}", &rpc_url));
         return Ok(chain_id)
