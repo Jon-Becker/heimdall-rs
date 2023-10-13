@@ -37,8 +37,11 @@ pub async fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<State
         None => "SILENT",
     });
 
+    // get chain_id
+    let chain_id = heimdall_common::ether::rpc::chain_id(&args.rpc_url).await.unwrap();
+
     // check the cache for a matching address
-    if let Some(state_diff) = read_cache(&format!("diff.{}", &tx.hash)) {
+    if let Some(state_diff) = read_cache(&format!("diff.{}.{}", &chain_id, &tx.hash)) {
         logger.debug_max(&format!("found cached state diff for transaction '{}' .", &tx.hash));
         return state_diff
     }
@@ -90,7 +93,7 @@ pub async fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<State
     let expiry =
         std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() +
             60 * 60 * 24 * 7;
-    store_cache(&format!("diff.{}", &tx.hash), &state_diff, Some(expiry));
+    store_cache(&format!("diff.{}.{}", &chain_id, &tx.hash), &state_diff, Some(expiry));
 
     logger.debug_max(&format!("fetched state diff for transaction '{}' .", &tx.hash));
 
