@@ -8,6 +8,67 @@ use ethers::{
 };
 use heimdall_cache::{read_cache, store_cache};
 
+/// Get the chainId of the provided RPC URL
+///
+/// # Arguments
+/// - `rpc_url`: &str
+///
+/// # Returns
+/// `Result<u64, Box<dyn std::error::Error>>`
+pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> {
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
+    logger.debug_max(&format!("checking chain id for rpc url: '{}'", &rpc_url));
+
+    // check the cache for a matching rpc url
+    let cache_key = format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-"));
+    if let Some(chain_id) = read_cache(&cache_key) {
+        logger.debug(&format!("found cached chain id for rpc url: {:?}", &rpc_url));
+        return Ok(chain_id)
+    }
+
+    // make sure the RPC provider isn't empty
+    if rpc_url.is_empty() {
+        logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
+        std::process::exit(1);
+    }
+
+    // create new provider
+    let provider = match Provider::<Http>::try_from(rpc_url) {
+        Ok(provider) => provider,
+        Err(_) => {
+            logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+            std::process::exit(1)
+        }
+    };
+
+    // fetch the chain id from the node
+    let chain_id = match provider.get_chainid().await {
+        Ok(chain_id) => chain_id,
+        Err(_) => {
+            logger.error(&format!("failed to fetch chain id from '{}' .", &rpc_url));
+            std::process::exit(1)
+        }
+    };
+
+    // cache the results
+    store_cache(&cache_key, chain_id.as_u64(), None);
+
+    logger.debug_max(&format!("chain_id is '{}'", &chain_id));
+
+    Ok(chain_id.as_u64())
+}
+
+/// Get the bytecode of the provided contract address
+///
+/// # Arguments
+/// - `contract_address`: &str
+/// - `rpc_url`: &str
+///
+/// # Returns
+/// `Result<String, Box<dyn std::error::Error>>`
 pub async fn get_code(
     contract_address: &str,
     rpc_url: &str,
@@ -16,18 +77,21 @@ pub async fn get_code(
     let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
     let (logger, _) = Logger::new(&level);
 
+    // get chain_id
+    let _chain_id = chain_id(rpc_url).await?;
+
     logger
         .debug_max(&format!("fetching bytecode from node for contract: '{}' .", &contract_address));
 
     // check the cache for a matching address
-    if let Some(bytecode) = read_cache(&format!("contract.{}", &contract_address)) {
+    if let Some(bytecode) = read_cache(&format!("contract.{}.{}", &_chain_id, &contract_address)) {
         logger.debug(&format!("found cached bytecode for '{}' .", &contract_address));
         return Ok(bytecode)
     }
 
     // make sure the RPC provider isn't empty
     if rpc_url.is_empty() {
-        logger.error("disassembling an on-chain contract requires an RPC provider. Use `heimdall disassemble --help` for more information.");
+        logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
         std::process::exit(1);
     }
 
@@ -60,7 +124,7 @@ pub async fn get_code(
 
     // cache the results
     store_cache(
-        &format!("contract.{}", &contract_address),
+        &format!("contract.{}.{}", &_chain_id, &contract_address),
         bytecode_as_bytes.to_string().replacen("0x", "", 1),
         None,
     );
@@ -68,6 +132,14 @@ pub async fn get_code(
     Ok(bytecode_as_bytes.to_string())
 }
 
+/// Get the raw transaction data of the provided transaction hash
+///
+/// # Arguments
+/// - `transaction_hash`: &str
+/// - `rpc_url`: &str
+///
+/// # Returns
+/// `Result<Transaction, Box<dyn std::error::Error>>`
 pub async fn get_transaction(
     transaction_hash: &str,
     rpc_url: &str,
@@ -81,11 +153,9 @@ pub async fn get_transaction(
         &transaction_hash
     ));
 
-    // We are decoding a transaction hash, so we need to fetch the calldata from the RPC provider.
-
     // make sure the RPC provider isn't empty
     if rpc_url.is_empty() {
-        logger.error("decoding an on-chain transaction requires an RPC provider. Use `heimdall decode --help` for more information.");
+        logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
         std::process::exit(1);
     }
 
