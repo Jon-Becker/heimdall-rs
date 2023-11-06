@@ -1,14 +1,15 @@
 use std::fs;
 
-use crate::{
+use clap::{AppSettings, Parser};
+use derive_builder::Builder;
+use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{evm::core::opcodes::opcode, rpc::get_code},
-    io::logging::*,
+    io::logging::Logger,
     utils::strings::{decode_hex, encode_hex},
 };
-use clap::{AppSettings, Parser};
 
-#[derive(Debug, Clone, Parser)]
+#[derive(Debug, Clone, Parser, Builder)]
 #[clap(about = "Disassemble EVM bytecode to Assembly",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
        global_setting = AppSettings::DeriveDisplayOrder,
@@ -31,10 +32,33 @@ pub struct DisassemblerArgs {
     pub decimal_counter: bool,
 }
 
+impl DisassemblerArgsBuilder {
+    pub fn new() -> Self {
+        Self {
+            target: Some(String::new()),
+            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
+            rpc_url: Some(String::new()),
+            decimal_counter: Some(false),
+        }
+    }
+}
+
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
 
+    // set logger environment variable if not already set
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var(
+            "RUST_LOG",
+            match args.verbose.log_level() {
+                Some(level) => level.as_str(),
+                None => "SILENT",
+            },
+        );
+    }
+
+    // get a new logger
     let (logger, _) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",

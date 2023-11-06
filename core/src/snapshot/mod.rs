@@ -17,10 +17,7 @@ use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{
         compiler::detect_compiler,
-        evm::{
-            core::vm::VM,
-            ext::disassemble::{disassemble, DisassemblerArgs},
-        },
+        evm::core::vm::VM,
         rpc::get_code,
         selectors::{find_function_selectors, resolve_selectors},
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
@@ -30,11 +27,14 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 
-use crate::snapshot::{
-    analyze::snapshot_trace,
-    resolve::match_parameters,
-    structures::snapshot::{GasUsed, Snapshot},
-    util::tui,
+use crate::{
+    disassemble::{disassemble, DisassemblerArgs},
+    snapshot::{
+        analyze::snapshot_trace,
+        resolve::match_parameters,
+        structures::snapshot::{GasUsed, Snapshot},
+        util::tui,
+    },
 };
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(

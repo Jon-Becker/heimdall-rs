@@ -12,7 +12,6 @@ use crossterm::{
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{
     constants::ADDRESS_REGEX,
-    ether::evm::ext::disassemble::*,
     io::{
         file::{write_file, write_lines_to_file},
         logging::Logger,
@@ -24,6 +23,7 @@ use heimdall_core::{
     cfg::{cfg, output::write_cfg_to_file, CFGArgs},
     decode::{decode, DecodeArgs},
     decompile::{decompile, out::abi::ABIStructure, DecompilerArgs},
+    disassemble::{disassemble, DisassemblerArgs},
     dump::{dump, DumpArgs},
     snapshot::{snapshot, util::csv::generate_and_write_contract_csv, SnapshotArgs},
 };

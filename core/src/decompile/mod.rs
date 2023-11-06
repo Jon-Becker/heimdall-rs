@@ -5,11 +5,14 @@ pub mod precompile;
 pub mod resolve;
 pub mod util;
 
-use crate::decompile::{
-    analyzers::{solidity::analyze_sol, yul::analyze_yul},
-    out::{abi::build_abi, solidity::build_solidity_output, yul::build_yul_output},
-    resolve::*,
-    util::*,
+use crate::{
+    decompile::{
+        analyzers::{solidity::analyze_sol, yul::analyze_yul},
+        out::{abi::build_abi, solidity::build_solidity_output, yul::build_yul_output},
+        resolve::*,
+        util::*,
+    },
+    disassemble::{disassemble, DisassemblerArgs},
 };
 
 use derive_builder::Builder;
@@ -27,13 +30,7 @@ use std::{collections::HashMap, fs, time::Duration};
 use clap::{AppSettings, Parser};
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::{
-        evm::{
-            core::vm::VM,
-            ext::disassemble::{disassemble, DisassemblerArgs},
-        },
-        signatures::*,
-    },
+    ether::{evm::core::vm::VM, signatures::*},
     io::logging::*,
 };
 

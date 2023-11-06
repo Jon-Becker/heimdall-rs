@@ -10,15 +10,15 @@ use std::{fs, time::Duration};
 use clap::{AppSettings, Parser};
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::evm::{
-        core::vm::VM,
-        ext::disassemble::{disassemble, DisassemblerArgs},
-    },
+    ether::evm::core::vm::VM,
     io::logging::*,
 };
 use petgraph::Graph;
 
-use crate::cfg::graph::build_cfg;
+use crate::{
+    cfg::graph::build_cfg,
+    disassemble::{disassemble, DisassemblerArgs},
+};
 
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(
