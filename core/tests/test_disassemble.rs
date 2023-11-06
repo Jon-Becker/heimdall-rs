@@ -2,10 +2,8 @@
 mod benchmarks {
     use clap_verbosity_flag::Verbosity;
 
-    use heimdall_common::{
-        ether::evm::ext::disassemble::{disassemble, DisassemblerArgs},
-        testing::benchmarks::async_bench,
-    };
+    use heimdall_common::testing::benchmarks::async_bench;
+    use heimdall_core::disassemble::{disassemble, DisassemblerArgs};
 
     #[tokio::test]
     async fn benchmark_disassemble_simple() {
@@ -28,7 +26,7 @@ mod integration_tests {
 
     use clap_verbosity_flag::Verbosity;
 
-    use heimdall_common::ether::evm::ext::disassemble::{disassemble, DisassemblerArgs};
+    use heimdall_core::disassemble::{disassemble, DisassemblerArgs};
 
     #[tokio::test]
     async fn test_disassemble_nominal() {

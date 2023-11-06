@@ -5,7 +5,7 @@ keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
 name = "heimdall-core"
 readme = "README.md"
-version = "0.6.3"
+version = "0.6.4"
 
 [dependencies]
 backtrace = "0.3"

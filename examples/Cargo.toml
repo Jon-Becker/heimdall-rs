@@ -4,6 +4,7 @@ members = [
     "dump",
     "decode",
     "snapshot",
-    "decompile"
+    "decompile",
+    "disassemble",
 ]
-version = "0.6.3"
+version = "0.6.4"

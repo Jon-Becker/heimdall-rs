@@ -1,5 +1,5 @@
 [package]
-name = "heimdall-rs-decode-example"
+name = "heimdall-rs-disassemble-example"
 version = "0.6.4"
 edition = "2021"
 description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
