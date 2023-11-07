@@ -1,11 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
-    thread,
     time::Duration,
 };
 
 use indicatif::ProgressBar;
+use tokio::task;
 
 use crate::{io::logging::Logger, utils::strings::decode_hex};
 
@@ -105,7 +105,7 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     0
 }
 
-pub fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
+pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
 where
     T: ResolveSelector + Send + Clone + 'static, {
     // get a new logger
@@ -138,7 +138,7 @@ where
         let resolve_progress = resolve_progress.clone();
 
         // create a new thread for each selector
-        threads.push(thread::spawn(move || async move {
+        threads.push(task::spawn(async move {
             if let Some(function) = T::resolve(&selector).await {
                 let mut _resolved_functions =
                     function_clone.lock().expect("Could not obtain lock on function_clone.");
@@ -153,7 +153,10 @@ where
 
     // wait for all threads to finish
     for thread in threads {
-        if thread.join().is_ok() {}
+        if let Err(e) = thread.await {
+            // Handle error
+            eprintln!("Task failed: {:?}", e);
+        }
     }
 
     resolve_progress.lock().unwrap().finish_and_clear();

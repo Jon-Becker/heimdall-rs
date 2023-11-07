@@ -4,6 +4,8 @@ use serde_json::Value;
 use std::time::Duration;
 use tokio::time::sleep as async_sleep;
 
+use crate::io::logging::Logger;
+
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 /// Make a GET request to the target URL and return the response body as JSON
@@ -25,6 +27,12 @@ async fn _get_json_from_url(
     retries_remaining: u8,
     timeout: u64,
 ) -> Result<Option<Value>, reqwest::Error> {
+    // get a new logger
+    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
+    let (logger, _) = Logger::new(&level);
+
+    logger.debug_max(&format!("GET {}", &url));
+
     let client = Client::builder()
         .danger_accept_invalid_certs(true)
         .user_agent(APP_USER_AGENT)
@@ -32,8 +40,12 @@ async fn _get_json_from_url(
         .build()?;
 
     let res = match client.get(url).send().await {
-        Ok(res) => res,
-        Err(_) => {
+        Ok(res) => {
+            logger.debug_max(&format!("GET {}: {:?}", &url, &res));
+            res
+        }
+        Err(e) => {
+            logger.debug_max(&format!("GET {}: {:?}", &url, &e));
             if retries_remaining == 0 {
                 return Ok(None)
             }
