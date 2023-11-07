@@ -21,7 +21,7 @@ repos:
       pass_filenames: false
     - id: clippy
       name: clippy
-      entry: sh scripts/clippy
+      entry: sh scripts/clippy --fix
       language: system
       types: [rust]
       pass_filenames: false
