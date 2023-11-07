@@ -222,7 +222,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
         resolved_selectors =
-            resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect());
+            resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await;
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
@@ -399,7 +399,8 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
                     .keys()
                     .map(|error_selector| encode_hex_reduced(*error_selector).replacen("0x", "", 1))
                     .collect(),
-            );
+            )
+            .await;
             for (error_selector, _) in snapshot.errors.clone() {
                 let error_selector_str = encode_hex_reduced(error_selector).replacen("0x", "", 1);
                 let mut selected_error_index: u8 = 0;
@@ -464,7 +465,8 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
                     .keys()
                     .map(|event_selector| encode_hex_reduced(*event_selector).replacen("0x", "", 1))
                     .collect(),
-            );
+            )
+            .await;
             for (event_selector, (_, raw_event)) in snapshot.events.clone() {
                 let mut selected_event_index: u8 = 0;
                 let event_selector_str = encode_hex_reduced(event_selector).replacen("0x", "", 1);
