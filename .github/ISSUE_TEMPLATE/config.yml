@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+    - name: Telegram
+      url: https://t.me/heimdallsupport
+      about: This issue tracker is only for bugs, feature requests, and questions about Heimdall.

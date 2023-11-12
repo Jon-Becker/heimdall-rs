@@ -1,0 +1,52 @@
+name: Bug report
+description: File a bug report
+labels: ["T-bug"]
+assignees:
+    - jon-becker
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Please ensure that the bug has not already been filed in the issue tracker.
+
+              Thanks for taking the time to report this bug!
+    - type: dropdown
+      attributes:
+          label: Component
+          description: What component is the bug in?
+          multiple: true
+          options:
+              - Bifrost
+              - Heimdall (Core)
+              - Heimdall (CLI)
+              - Other (please specify)
+      validations:
+          required: true
+    - type: checkboxes
+      attributes:
+          label: Have you ensured that you are up to date?
+          options:
+              - label: Bifrost
+              - label: Heimdall
+    - type: input
+      attributes:
+          label: What version of Heimdall are you on?
+          placeholder: "Run heimdall --version and paste the output here"
+      validations:
+          required: true
+    - type: dropdown
+      attributes:
+          label: Operating System
+          description: What operating system are you on?
+          options:
+              - Windows
+              - macOS (Intel)
+              - macOS (Apple Silicon)
+              - Linux (ARM)
+              - Linux
+    - type: textarea
+      attributes:
+          label: Describe the bug
+          description: Please include as much detail as possible, including steps to reproduce the bug.
+      validations:
+          required: true
