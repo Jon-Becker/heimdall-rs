@@ -25,10 +25,11 @@ jobs:
 
         steps:
             - uses: actions/checkout@v3
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: taiki-e/install-action@nextest
             - name: Run Tests
               run: |
-                  cargo run --release -- cache import --input testdata/test_cache.bin
-                  cargo test --release -- test_ --nocapture
+                  cargo nextest r --no-fail-fast
 
     doctest:
         runs-on: ubuntu-latest
