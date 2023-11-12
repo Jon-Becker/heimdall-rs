@@ -51,6 +51,22 @@ pub struct Cache<T> {
 }
 
 /// Clear the cache, removing all objects
+///
+/// ```
+/// use heimdall_cache::{clear_cache, store_cache, keys};
+///
+/// /// add a value to the cache
+/// store_cache("key", "value", None);
+///
+/// /// assert that the cache contains the key
+/// assert!(keys("*").contains(&"key".to_string()));
+///
+/// /// clear the cache
+/// clear_cache();
+///
+/// /// assert that the cache no longer contains the key
+/// assert!(!keys("*").contains(&"key".to_string()));
+/// ```
 #[allow(deprecated)]
 pub fn clear_cache() {
     let home = home_dir().unwrap();
@@ -64,6 +80,19 @@ pub fn clear_cache() {
 }
 
 /// Check if a cached object exists
+///
+/// ```
+/// use heimdall_cache::{store_cache, exists};
+///
+/// /// add a value to the cache
+/// store_cache("key", "value", None);
+///
+/// /// assert that the cache contains the key
+/// assert!(exists("key"));
+///
+/// /// assert that the cache does not contain a non-existent key
+/// assert!(!exists("non_existent_key"));
+/// ```
 #[allow(deprecated)]
 pub fn exists(key: &str) -> bool {
     let home = home_dir().unwrap();
@@ -74,6 +103,22 @@ pub fn exists(key: &str) -> bool {
 }
 
 /// List all cached objects
+///
+/// ```
+/// use heimdall_cache::{store_cache, keys};
+///
+/// /// add a value to the cache
+/// store_cache("key", "value", None);
+///
+/// /// assert that the cache contains the key
+/// assert!(keys("*").contains(&"key".to_string()));
+///
+/// /// assert that the cache does not contain a non-existent key
+/// assert!(!keys("*").contains(&"non_existent_key".to_string()));
+///
+/// /// assert that the cache contains the key
+/// assert!(keys("k*").contains(&"key".to_string()));
+/// ```
 #[allow(deprecated)]
 pub fn keys(pattern: &str) -> Vec<String> {
     let home = home_dir().unwrap();
@@ -99,6 +144,21 @@ pub fn keys(pattern: &str) -> Vec<String> {
 }
 
 /// Delete a cached object
+/// ```
+/// use heimdall_cache::{store_cache, delete_cache, keys};
+///
+/// /// add a value to the cache
+/// store_cache("key", "value", None);
+///
+/// /// assert that the cache contains the key
+/// assert!(keys("*").contains(&"key".to_string()));
+///
+/// /// delete the cached object
+/// delete_cache("key");
+///
+/// /// assert that the cache does not contain the key
+/// assert!(!keys("*").contains(&"key".to_string()));
+/// ```
 #[allow(deprecated)]
 pub fn delete_cache(key: &str) {
     let home = home_dir().unwrap();
@@ -111,6 +171,16 @@ pub fn delete_cache(key: &str) {
 }
 
 /// Read a cached object
+///
+/// ```
+/// use heimdall_cache::{store_cache, read_cache};
+///
+/// /// add a value to the cache
+/// store_cache("key", "value", None);
+///
+/// /// read the cached object
+/// assert_eq!(read_cache::<String>("key").unwrap(), "value");
+/// ```
 #[allow(deprecated)]
 pub fn read_cache<T>(key: &str) -> Option<T>
 where
@@ -152,6 +222,16 @@ where
 
 /// Store a value in the cache, with an optional expiry time \
 /// If no expiry time is specified, the object will expire in 90 days
+///
+/// ```
+/// use heimdall_cache::{store_cache, read_cache};
+///
+/// /// add a value to the cache with no expiry time (90 days)
+/// store_cache("key", "value", None);
+///
+/// /// add a value to the cache with an expiry time of 1 day
+/// store_cache("key2", "value", Some(60 * 60 * 24));
+/// ```
 #[allow(deprecated)]
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>)
 where
