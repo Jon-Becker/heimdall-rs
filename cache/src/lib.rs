@@ -7,6 +7,7 @@ use util::*;
 
 pub mod util;
 
+/// Clap argument parser for the cache subcommand
 #[derive(Debug, Clone, Parser)]
 #[clap(
     about = "Manage heimdall-rs' cached objects",
@@ -23,7 +24,7 @@ pub struct CacheArgs {
 #[derive(Debug, Clone, Parser)]
 pub struct NoArguments {}
 
-/// Clap subcommand parser for the cache subcommand
+/// Clap subcommand parser for cache subcommands
 #[derive(Debug, Clone, Parser)]
 #[clap(
     about = "Manage heimdall-rs' cached objects",
@@ -41,12 +42,15 @@ pub enum Subcommands {
     Size(NoArguments),
 }
 
+/// A simple cache object that stores a value and an expiry time \
+/// The expiry time is a unix timestamp
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Cache<T> {
     pub value: T,
     pub expiry: u64,
 }
 
+/// Clear the cache, removing all objects
 #[allow(deprecated)]
 pub fn clear_cache() {
     let home = home_dir().unwrap();
@@ -59,6 +63,7 @@ pub fn clear_cache() {
     }
 }
 
+/// Check if a cached object exists
 #[allow(deprecated)]
 pub fn exists(key: &str) -> bool {
     let home = home_dir().unwrap();
@@ -68,6 +73,7 @@ pub fn exists(key: &str) -> bool {
     cache_file.exists()
 }
 
+/// List all cached objects
 #[allow(deprecated)]
 pub fn keys(pattern: &str) -> Vec<String> {
     let home = home_dir().unwrap();
@@ -92,6 +98,7 @@ pub fn keys(pattern: &str) -> Vec<String> {
     keys
 }
 
+/// Delete a cached object
 #[allow(deprecated)]
 pub fn delete_cache(key: &str) {
     let home = home_dir().unwrap();
@@ -103,42 +110,7 @@ pub fn delete_cache(key: &str) {
     }
 }
 
-#[allow(deprecated)]
-pub fn check_expiry<T>() -> bool
-where
-    T: DeserializeOwned, {
-    let home = home_dir().unwrap();
-    let cache_dir = home.join(".bifrost").join("cache");
-
-    for entry in cache_dir.read_dir().unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        let binary_string = match read_file(path.to_str().unwrap()) {
-            Some(s) => s,
-            None => return false,
-        };
-
-        let binary_vec = decode_hex(&binary_string);
-        if binary_vec.is_err() {
-            return false
-        }
-
-        let cache: Result<Cache<T>, _> = bincode::deserialize(&binary_vec.unwrap());
-        if cache.is_err() {
-            delete_path(path.to_str().unwrap());
-        };
-
-        let cache = cache.unwrap();
-        if cache.expiry <
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
-        {
-            // delete file
-            delete_path(path.to_str().unwrap());
-        }
-    }
-    true
-}
-
+/// Read a cached object
 #[allow(deprecated)]
 pub fn read_cache<T>(key: &str) -> Option<T>
 where
@@ -158,13 +130,28 @@ where
         return None
     }
 
-    let cache: Cache<T> = match bincode::deserialize(&binary_vec.unwrap()) {
-        Ok(c) => c,
+    let cache: Cache<T> = match bincode::deserialize::<Cache<T>>(&binary_vec.unwrap()) {
+        Ok(c) => {
+            // check if the cache has expired, if so, delete it and return None
+            if c.expiry <
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+            {
+                delete_cache(key);
+                return None
+            }
+
+            c
+        }
         Err(_) => return None,
     };
     Some(*Box::new(cache.value))
 }
 
+/// Store a value in the cache, with an optional expiry time \
+/// If no expiry time is specified, the object will expire in 90 days
 #[allow(deprecated)]
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>)
 where
@@ -185,6 +172,7 @@ where
     write_file(cache_file.to_str().unwrap(), &binary_string);
 }
 
+/// Cache subcommand handler
 #[allow(deprecated)]
 pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
     match args.sub {
