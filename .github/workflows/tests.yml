@@ -27,7 +27,7 @@ jobs:
             - uses: actions/checkout@v3
             - name: Run Tests
               run: |
-                  cargo run --release -- cache import --i testdata/test_cache.bin
+                  cargo run --release -- cache import --input testdata/test_cache.bin
                   cargo test --release -- test_ --nocapture
 
     doctest:
