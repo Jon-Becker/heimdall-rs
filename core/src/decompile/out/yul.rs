@@ -20,8 +20,7 @@ pub fn build_yul_output(
     trace_parent: u32,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();

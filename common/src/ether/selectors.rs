@@ -17,8 +17,7 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
     let mut handled_selectors = HashSet::new();
 
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
     // they are function selectors
@@ -109,8 +108,7 @@ pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec
 where
     T: ResolveSelector + Send + Clone + 'static, {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
         Arc::new(Mutex::new(HashMap::new()));

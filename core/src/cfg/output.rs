@@ -8,8 +8,7 @@ use super::CFGArgs;
 
 pub fn write_cfg_to_file(contract_cfg: &Graph<String, String>, args: &CFGArgs, output_dir: String) {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();

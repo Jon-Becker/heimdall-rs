@@ -42,8 +42,7 @@ impl VM {
         }
 
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger.debug_max(&format!("beginning symbolic execution for selector 0x{}", selector));
 
@@ -57,8 +56,7 @@ impl VM {
         let mut vm = self.clone();
 
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger.debug_max("beginning contract-wide symbolic execution");
 
