@@ -28,8 +28,7 @@ async fn _get_json_from_url(
     timeout: u64,
 ) -> Result<Option<Value>, reqwest::Error> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     logger.debug_max(&format!("GET {}", &url));
 

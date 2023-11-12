@@ -31,8 +31,7 @@ pub fn stack_contains_too_many_of_the_same_item(stack: &Stack) -> bool {
             16
     }) {
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger.debug_max(
             "jump matches loop-detection heuristic: 'stack_contains_too_many_of_the_same_item'",
@@ -49,8 +48,7 @@ pub fn stack_contains_too_many_of_the_same_item(stack: &Stack) -> bool {
 pub fn stack_item_source_depth_too_deep(stack: &Stack) -> bool {
     if stack.stack.iter().any(|frame| frame.operation.depth() > 16) {
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger
             .debug_max("jump matches loop-detection heuristic: 'stack_item_source_depth_too_deep'");
@@ -70,8 +68,7 @@ pub fn jump_condition_appears_recursive(stack_diff: &[StackFrame], jump_conditio
         .any(|solidified| jump_condition.contains(&solidified))
     {
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger
             .debug_max("jump matches loop-detection heuristic: 'jump_condition_appears_recursive'");
@@ -98,8 +95,7 @@ pub fn jump_condition_contains_mutated_memory_access(
         })
     }) {
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger.debug_max("jump matches loop-detection heuristic: 'jump_condition_contains_mutated_memory_access'");
         return true
@@ -125,8 +121,7 @@ pub fn jump_condition_contains_mutated_storage_access(
         })
     }) {
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger.debug_max("jump matches loop-detection heuristic: 'jump_condition_contains_mutated_storage_access'");
         return true
@@ -168,8 +163,7 @@ pub fn jump_condition_historical_diffs_approximately_equal(
     }
 
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
     logger.debug_max("jump matches loop-detection heuristic: 'jump_condition_historical_diffs_approximately_equal'");
 
     true

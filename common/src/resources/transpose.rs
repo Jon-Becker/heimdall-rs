@@ -22,8 +22,7 @@ struct TransposeResponse {
 
 async fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     // build the headers
     let mut headers = HeaderMap::new();
@@ -82,8 +81,7 @@ pub async fn get_transaction_list(
     bounds: (&u128, &u128),
 ) -> Vec<(u128, String)> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
@@ -160,8 +158,7 @@ pub async fn get_contract_creation(
     api_key: &str,
 ) -> Option<(u128, String)> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();

@@ -5,8 +5,7 @@ pub async fn complete(prompt: &str, api_key: &str) -> Option<String> {
     let client = Client::new().with_api_key(api_key);
 
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
     let request = match CreateCompletionRequestArgs::default()
         .model("text-davinci-003")
         .prompt(prompt)

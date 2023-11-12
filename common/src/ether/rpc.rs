@@ -17,8 +17,7 @@ use heimdall_cache::{read_cache, store_cache};
 /// `Result<u64, Box<dyn std::error::Error>>`
 pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     logger.debug_max(&format!("checking chain id for rpc url: '{}'", &rpc_url));
 
@@ -74,8 +73,7 @@ pub async fn get_code(
     rpc_url: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     // get chain_id
     let _chain_id = chain_id(rpc_url).await?;
@@ -145,8 +143,7 @@ pub async fn get_transaction(
     rpc_url: &str,
 ) -> Result<Transaction, Box<dyn std::error::Error>> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     logger.debug_max(&format!(
         "fetching calldata from node for transaction: '{}' .",

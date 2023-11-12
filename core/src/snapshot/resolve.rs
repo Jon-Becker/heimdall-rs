@@ -8,8 +8,7 @@ pub fn match_parameters(
     function: &Snapshot,
 ) -> Vec<ResolvedFunction> {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     let mut matched_functions: Vec<ResolvedFunction> = Vec::new();
     for mut resolved_function in resolved_functions {

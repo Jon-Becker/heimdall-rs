@@ -4,8 +4,7 @@ use crate::io::logging::Logger;
 // for example: (solc, 0.8.10) or (vyper, 0.2.16)
 pub fn detect_compiler(bytecode: &str) -> (&'static str, String) {
     // get a new logger
-    let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-    let (logger, _) = Logger::new(&level);
+    let logger = Logger::default();
 
     let mut compiler = "unknown";
     let mut version = "unknown".to_string();

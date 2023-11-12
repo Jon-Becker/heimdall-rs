@@ -3,18 +3,26 @@ use std::io::{stdin, stdout};
 
 use colored::*;
 
+use crate::utils::time::pretty_timestamp;
+
 use super::super::utils::strings::replace_last;
 
+/// A logger which can be used to log messages to the console
+/// in a standardized format.
+#[derive(Clone)]
 pub struct Logger {
     pub level: i8,
 }
 
+/// The trace factory is used to build a trace of the program's execution.
+/// Has several helper functions to add different types of traces.
 #[derive(Clone, Debug)]
 pub struct TraceFactory {
     pub level: i8,
     pub traces: Vec<Trace>,
 }
 
+/// The trace category is used to determine how the trace is formatted.
 #[derive(Clone, Debug)]
 pub enum TraceCategory {
     Log,
@@ -25,6 +33,7 @@ pub enum TraceCategory {
     Empty,
 }
 
+/// Individual trace, which is added to the trace factory.
 #[derive(Clone, Debug)]
 pub struct Trace {
     pub category: TraceCategory,
@@ -35,12 +44,12 @@ pub struct Trace {
 }
 
 impl TraceFactory {
-    // creates a new empty trace factory
+    /// creates a new empty trace factory
     pub fn new(level: i8) -> TraceFactory {
         TraceFactory { level: level, traces: Vec::new() }
     }
 
-    // adds a new trace to the factory
+    /// adds a new trace to the factory
     pub fn add(
         &mut self,
         category: &str,
@@ -68,7 +77,7 @@ impl TraceFactory {
         trace_index
     }
 
-    // pretty print the trace
+    /// display the trace to the console if the verbosity is high enough
     pub fn display(&self) {
         if self.level >= 3 {
             println!("{}:", "trace".bright_blue().bold());
@@ -84,7 +93,7 @@ impl TraceFactory {
         }
     }
 
-    // recursive function which prints traces
+    /// recursive function used to print traces to the console correctly
     pub fn print_trace(&self, prefix: &str, index: usize) {
         let trace: &Trace = match self.traces.get(index) {
             Some(trace) => trace,
@@ -227,7 +236,7 @@ impl TraceFactory {
     //                                TRACE HELPERS                               //
     ////////////////////////////////////////////////////////////////////////////////
 
-    // adds a function call trace
+    /// adds a function call trace
     pub fn add_call(
         &mut self,
         parent_index: u32,
@@ -246,7 +255,7 @@ impl TraceFactory {
         self.add("call", parent_index, instruction, vec![title, returns])
     }
 
-    // adds a contract creation trace
+    /// adds a contract creation trace
     pub fn add_creation(
         &mut self,
         parent_index: u32,
@@ -259,7 +268,7 @@ impl TraceFactory {
         self.add("create", parent_index, instruction, vec![contract, format!("{size} bytes")])
     }
 
-    // adds a known log trace
+    /// adds a known log trace
     pub fn add_emission(
         &mut self,
         parent_index: u32,
@@ -271,7 +280,7 @@ impl TraceFactory {
         self.add("log", parent_index, instruction, vec![log])
     }
 
-    // adds an unknown or raw log trace
+    /// adds an unknown or raw log trace
     pub fn add_raw_emission(
         &mut self,
         parent_index: u32,
@@ -283,31 +292,31 @@ impl TraceFactory {
         self.add("log_unknown", parent_index, instruction, topics)
     }
 
-    // add info to the trace
+    /// add info message to the trace
     pub fn add_info(&mut self, parent_index: u32, instruction: u32, message: &str) -> u32 {
         let message = format!("{} {}", "info:".bright_cyan().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
 
-    // add debug to the trace
+    /// add debug message to the trace
     pub fn add_debug(&mut self, parent_index: u32, instruction: u32, message: &str) -> u32 {
         let message = format!("{} {}", "debug:".bright_magenta().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
 
-    // add error to the trace
+    /// add error message to the trace
     pub fn add_error(&mut self, parent_index: u32, instruction: u32, message: &str) -> u32 {
         let message = format!("{} {}", "error:".bright_red().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
 
-    // add warn to the trace
+    /// add warn message to the trace
     pub fn add_warn(&mut self, parent_index: u32, instruction: u32, message: &str) -> u32 {
         let message = format!("{} {}", "warn:".bright_yellow().bold(), message);
         self.add("message", parent_index, instruction, vec![message])
     }
 
-    // add a vector of strings to the trace
+    /// add a vector of messages to the trace
     pub fn add_message(
         &mut self,
         parent_index: u32,
@@ -317,14 +326,14 @@ impl TraceFactory {
         self.add("message", parent_index, instruction, message)
     }
 
-    // add a line break
+    /// add a line break to the trace
     pub fn br(&mut self, parent_index: u32) -> u32 {
         self.add("empty", parent_index, 0, vec!["".to_string()])
     }
 }
 
 impl Trace {
-    // create a new trace
+    /// create a new raw trace with the given parameters
     pub fn new(category: &str, parent_index: u32, instruction: u32, message: Vec<String>) -> Trace {
         Trace {
             category: match category {
@@ -344,10 +353,32 @@ impl Trace {
     }
 }
 
+impl Default for Logger {
+    fn default() -> Self {
+        // get the environment variable RUST_LOG and parse it
+        let level = match std::env::var("RUST_LOG") {
+            Ok(level) => match level.to_lowercase().as_str() {
+                "silent" => -1,
+                "error" => 0,
+                "warn" => 1,
+                "info" => 2,
+                "debug" => 3,
+                "trace" => 4,
+                "all" => 5,
+                "max" => 6,
+                _ => 1,
+            },
+            Err(_) => 2,
+        };
+
+        Logger { level }
+    }
+}
+
 impl Logger {
-    // create a new logger
+    /// create a new logger with the given verbosity
     pub fn new(verbosity: &str) -> (Logger, TraceFactory) {
-        match verbosity {
+        match verbosity.to_uppercase().as_str() {
             "SILENT" => (Logger { level: -1 }, TraceFactory::new(-1)),
             "ERROR" => (Logger { level: 0 }, TraceFactory::new(0)),
             "WARN" => (Logger { level: 1 }, TraceFactory::new(1)),
@@ -360,51 +391,98 @@ impl Logger {
         }
     }
 
+    /// log an error message
     pub fn error(&self, message: &str) {
-        println!("{}: {}", "error".bright_red().bold(), message);
+        if self.level >= 0 {
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "error".bright_red().bold(),
+                message
+            );
+        }
     }
 
+    /// log a fatal error, typically an unhanded exception which causes the program to exit
     pub fn fatal(&self, message: &str) {
-        println!("{}: {}", "fatal".bright_white().on_bright_red().bold(), message);
+        println!(
+            "{}  {}: {}",
+            pretty_timestamp().dimmed(),
+            "fatal".bright_white().on_bright_red().bold(),
+            message
+        );
     }
 
+    /// log a success message
     pub fn success(&self, message: &str) {
         if self.level >= 0 {
-            println!("{}: {}", "success".bright_green().bold(), message);
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "success".bright_green().bold(),
+                message
+            );
         }
     }
 
+    /// log an info message
     pub fn info(&self, message: &str) {
         if self.level >= 1 {
-            println!("{}: {}", "info".bright_cyan().bold(), message);
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "info".bright_cyan().bold(),
+                message
+            );
         }
     }
 
+    /// log a warning message
     pub fn warn(&self, message: &str) {
-        println!("{}: {}", "warn".bright_yellow().bold(), message);
+        println!("{}  {}: {}", pretty_timestamp().dimmed(), "warn".bright_yellow().bold(), message);
     }
 
+    /// log a debug message
     pub fn debug(&self, message: &str) {
         if self.level >= 2 {
-            println!("{}: {}", "debug".bright_magenta().bold(), message);
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "debug".bright_magenta().bold(),
+                message
+            );
         }
     }
 
+    /// log a trace message
     pub fn trace(&self, message: &str) {
         if self.level >= 4 {
-            println!("{}: {}", "trace".bright_blue().bold(), message);
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "trace".bright_blue().bold(),
+                message
+            );
         }
     }
 
+    /// log a max message
     pub fn debug_max(&self, message: &str) {
         if self.level >= 6 {
-            println!("{}: {}", "debug".bright_white().bold(), message);
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "debug".bright_white().bold(),
+                message
+            );
         }
     }
 
+    /// get a formatted spinner for the given function
     pub fn info_spinner(&self) -> ProgressStyle {
         ProgressStyle::with_template(&format!(
-            "{}: {}",
+            "{}  {}: {}",
+            pretty_timestamp().dimmed(),
             "info".bright_cyan().bold(),
             "{spinner} {msg}"
         ))
@@ -412,9 +490,11 @@ impl Logger {
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
     }
 
+    /// get a formatted spinner for the given function
     pub fn debug_spinner(&self) -> ProgressStyle {
         ProgressStyle::with_template(&format!(
-            "{}: {}",
+            "{}  {}: {}",
+            pretty_timestamp().dimmed(),
             "debug".bright_magenta().bold(),
             "{spinner} {msg}"
         ))
@@ -422,6 +502,7 @@ impl Logger {
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
     }
 
+    /// prompt the user to select an option from the given list, or return the default
     pub fn option(
         &self,
         function: &str,
@@ -447,7 +528,7 @@ impl Logger {
         // print the option tree
         for (i, option) in options.iter().enumerate() {
             println!(
-                "  {} {}: {}",
+                "                                      {} {}: {}",
                 if i == options.len() - 1 {
                     "└─".bold().bright_white()
                 } else {
@@ -461,7 +542,7 @@ impl Logger {
         // flush output print prompt
         let mut selection = String::new();
         print!(
-            "\n  Select an option {}: ",
+            "\n                                      Select an option {}: ",
             if default.is_some() {
                 format!("(default: {})", default.expect("Failed to get default option."))
             } else {

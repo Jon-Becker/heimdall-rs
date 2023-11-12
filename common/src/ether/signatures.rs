@@ -41,8 +41,7 @@ pub trait ResolveSelector {
 impl ResolveSelector for ResolvedError {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger.debug_max(&format!("resolving error selector {}", &selector));
 
@@ -125,8 +124,7 @@ impl ResolveSelector for ResolvedError {
 impl ResolveSelector for ResolvedLog {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger.debug_max(&format!("resolving event selector {}", &selector));
 
@@ -209,8 +207,7 @@ impl ResolveSelector for ResolvedLog {
 impl ResolveSelector for ResolvedFunction {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
         // get a new logger
-        let level = std::env::var("RUST_LOG").unwrap_or_else(|_| "INFO".into());
-        let (logger, _) = Logger::new(&level);
+        let logger = Logger::default();
 
         logger.debug_max(&format!("resolving event selector {}", &selector));
 
