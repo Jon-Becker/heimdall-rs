@@ -1,16 +1,76 @@
-name: Unit Tests (On Push)
+name: test
 
-on: [push]
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
 
 env:
-  CARGO_TERM_COLOR: always
+    CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
+    test:
+        name: test ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                include:
+                    - os: ubuntu-latest
+                    - os: macos-latest
 
-    - name: Run Tests
-      run: |
-        cargo test --release -- test_ --nocapture
+        steps:
+            - uses: actions/checkout@v3
+            - name: Run Tests
+              run: |
+                  cargo test --release -- test_ --nocapture
+
+    doctest:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: Swatinem/rust-cache@v2
+              with:
+                  cache-on-failure: true
+            - run: cargo test --workspace --doc
+
+    clippy:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v3
+            - uses: dtolnay/rust-toolchain@nightly
+              with:
+                  components: clippy
+            - uses: giraffate/clippy-action@v1
+              with:
+                  reporter: "github-pr-review"
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+                  clippy_flags: "-- --allow clippy::new_without_default --allow clippy::redundant_field_names --allow clippy::too_many_arguments --allow clippy::format_in_format_args --allow clippy::should_implement_trait"
+                  filter_mode: nofilter
+
+    rustfmt:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dtolnay/rust-toolchain@nightly
+              with:
+                  components: rustfmt
+            - run: cargo fmt --check --all
+
+    check:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v3
+            - uses: dtolnay/rust-toolchain@nightly
+              with:
+                  components: rustc
+            - run: cargo check --workspace --all-targets --all-features
