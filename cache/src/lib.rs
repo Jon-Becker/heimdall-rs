@@ -5,7 +5,6 @@ use std::env::home_dir;
 
 use util::*;
 
-pub mod tests;
 pub mod util;
 
 #[derive(Debug, Clone, Parser)]
@@ -20,6 +19,11 @@ pub struct CacheArgs {
     pub sub: Subcommands,
 }
 
+/// A simple clap subcommand with no arguments
+#[derive(Debug, Clone, Parser)]
+pub struct NoArguments {}
+
+/// Clap subcommand parser for the cache subcommand
 #[derive(Debug, Clone, Parser)]
 #[clap(
     about = "Manage heimdall-rs' cached objects",
@@ -36,9 +40,6 @@ pub enum Subcommands {
     #[clap(name = "size", about = "Prints the size of the cache in ~/.bifrost/cache")]
     Size(NoArguments),
 }
-
-#[derive(Debug, Clone, Parser)]
-pub struct NoArguments {}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Cache<T> {
@@ -217,4 +218,102 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[allow(deprecated)]
+#[cfg(test)]
+mod tests {
+    use crate::{delete_cache, exists, keys, read_cache, store_cache};
+    use serde::{Deserialize, Serialize};
+    use std::env::home_dir;
+
+    #[test]
+    fn test_store_cache() {
+        store_cache("key", "value".to_string(), None);
+
+        // assert cached file exists
+        let home = home_dir().unwrap();
+        let cache_dir = home.join(".bifrost").join("cache");
+        let cache_file = cache_dir.join("key.bin");
+        assert!(cache_file.exists());
+    }
+
+    #[test]
+    fn test_get_cache() {
+        store_cache("key3", "value".to_string(), None);
+        let value = read_cache("key3");
+        let value: String = value.unwrap();
+
+        // assert stored value matches
+        assert_eq!(value, "value");
+    }
+
+    #[test]
+    fn test_store_struct() {
+        #[derive(Serialize, Deserialize, Debug)]
+        struct TestStruct {
+            name: String,
+            age: u8,
+        }
+
+        let test_struct = TestStruct { name: "test".to_string(), age: 1 };
+
+        store_cache("struct", test_struct, None);
+
+        // assert cached file exists
+        let home = home_dir().unwrap();
+        let cache_dir = home.join(".bifrost").join("cache");
+        let cache_file = cache_dir.join("struct.bin");
+        assert!(cache_file.exists());
+    }
+
+    #[test]
+    fn test_get_struct() {
+        #[derive(Serialize, Deserialize, Debug)]
+        struct TestStruct {
+            name: String,
+            age: u8,
+        }
+
+        let test_struct = TestStruct { name: "test".to_string(), age: 1 };
+
+        store_cache("struct2", test_struct, None);
+        let value = read_cache("struct2");
+        let value: TestStruct = value.unwrap();
+
+        // assert stored value matches
+        assert_eq!(value.name, "test");
+        assert_eq!(value.age, 1);
+    }
+
+    #[test]
+    fn test_keys() {
+        store_cache("some_key", "some_value", None);
+        store_cache("some_other_key", "some_value", None);
+        store_cache("not_a_key", "some_value", None);
+
+        assert_eq!(keys("some_"), vec!["some_key", "some_other_key"]);
+    }
+
+    #[test]
+    fn test_keys_wildcard() {
+        store_cache("a", "some_value", None);
+        store_cache("b", "some_value", None);
+        store_cache("c", "some_value", None);
+        store_cache("d", "some_value", None);
+        store_cache("e", "some_value", None);
+        store_cache("f", "some_value", None);
+
+        assert!(["a", "b", "c", "d", "e", "f"]
+            .iter()
+            .all(|key| { keys("*").contains(&key.to_string()) }));
+    }
+
+    #[test]
+    fn test_exists() {
+        assert!(!exists("does_not_exist"));
+        store_cache("does_not_exist", "some_value", None);
+        assert!(exists("does_not_exist"));
+        delete_cache("does_not_exist");
+    }
 }

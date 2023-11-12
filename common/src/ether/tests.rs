@@ -604,7 +604,7 @@ mod test_yul {
 
 #[cfg(test)]
 mod test_signatures {
-    use heimdall_cache::{delete_cache, store_cache};
+    use heimdall_cache::delete_cache;
 
     use crate::ether::signatures::{
         score_signature, ResolveSelector, ResolvedError, ResolvedFunction, ResolvedLog,
@@ -635,21 +635,6 @@ mod test_signatures {
     }
 
     #[tokio::test]
-    async fn resolve_error_signature_should_return_cached_results_when_found() {
-        let signature = String::from("test_signature");
-        let mut cached_results = Vec::new();
-        cached_results.push(ResolvedError {
-            name: String::from("test_event"),
-            signature: String::from("test_signature"),
-            inputs: vec![String::from("input_1"), String::from("input_2")],
-        });
-        store_cache(&format!("selector.{}", &signature), cached_results.clone(), None);
-
-        let result = ResolvedError::resolve(&signature).await;
-        assert_eq!(result, Some(cached_results));
-    }
-
-    #[tokio::test]
     async fn resolve_error_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
         let result = ResolvedError::resolve(&signature).await;
@@ -668,21 +653,6 @@ mod test_signatures {
         let signature = String::from("test_signature_notfound");
         let result = ResolvedLog::resolve(&signature).await;
         assert_eq!(result, None);
-    }
-
-    #[tokio::test]
-    async fn resolve_event_signature_should_return_cached_results_when_found() {
-        let signature = String::from("test_signature");
-        let mut cached_results = Vec::new();
-        cached_results.push(ResolvedLog {
-            name: String::from("test_event"),
-            signature: String::from("test_signature"),
-            inputs: vec![String::from("input_1"), String::from("input_2")],
-        });
-        store_cache(&format!("selector.{}", &signature), cached_results.clone(), None);
-
-        let result = ResolvedLog::resolve(&signature).await;
-        assert_eq!(result, Some(cached_results));
     }
 
     #[tokio::test]

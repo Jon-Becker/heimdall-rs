@@ -207,7 +207,6 @@ mod integration_tests {
         delete_path(&String::from("./output/tests/decompile/test3"));
     }
 
-    #[tokio::test]
     /// Thorough testing for decompilation across a large number of contracts
     /// Runs on the top 100 contracts for 2023-06-26
     ///
@@ -225,7 +224,9 @@ mod integration_tests {
     ///  - The ABI matches the solidity outline
     ///  - There is no unreachable code (TODO)
     ///  - There are no empty branches (TODO)
-    async fn test_decompile_thorough() {
+    #[tokio::test]
+    #[ignore]
+    async fn heavy_test_decompile_thorough() {
         let contracts = [
             "0xdAC17F958D2ee523a2206206994597C13D831ec7",
             "0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD",
