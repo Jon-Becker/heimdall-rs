@@ -32,5 +32,5 @@ if [ "$1" = "--cov" ]; then
         exit 1
     fi
 else
-    cargo nextest r --no-fail-fast
+    cargo nextest r --no-fail-fast --release
 fi

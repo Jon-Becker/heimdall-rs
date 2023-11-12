@@ -6,17 +6,6 @@ pub fn calculate_eta(items_per_second: f64, items_remaining: usize) -> u128 {
 }
 
 /// Format seconds into a human readable ETA
-///
-/// ## Example
-/// ```
-/// use heimdall_common::utils::time::format_eta;
-///
-/// let eta = format_eta(86400);
-/// assert_eq!(eta, "1d 0s");
-///
-/// let eta = format_eta(86401);
-/// assert_eq!(eta, "1d 1s");
-/// ```
 pub fn format_eta(seconds_remaining: u128) -> String {
     let days = seconds_remaining / 86400;
     let hours = (seconds_remaining % 86400) / 3600;

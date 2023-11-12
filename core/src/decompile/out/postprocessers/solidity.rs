@@ -31,23 +31,6 @@ lazy_static! {
 }
 
 /// Convert bitwise operations to a variable type cast
-///
-/// # Arguments
-/// line: String - the line to convert
-///
-/// # Returns
-/// String - the converted line
-///
-/// # Example
-/// ```no_run
-/// let line = "(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) & (arg0);".to_string();
-/// let converted = convert_bitmask_to_casting(line);
-/// assert_eq!(converted, "uint256(arg0);");
-///
-/// let line = "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);".to_string();
-/// let converted = convert_bitmask_to_casting(line);
-/// assert_eq!(converted, "uint256(arg0);");
-/// ```
 fn convert_bitmask_to_casting(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -154,19 +137,6 @@ fn convert_bitmask_to_casting(line: &str) -> String {
 }
 
 /// Removes unnecessary casts
-///
-/// # Arguments
-/// line: String - the line to simplify
-///
-/// # Returns
-/// String - the simplified line
-///
-/// # Example
-/// ```no_run
-/// let line = "uint256(uint256(arg0))".to_string();
-/// let simplified = simplify_casts(line);
-/// assert_eq!(simplified, "uint256(arg0)");
-/// ```
 fn simplify_casts(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -197,27 +167,6 @@ fn simplify_casts(line: &str) -> String {
 }
 
 /// Simplifies expressions by removing unnecessary parentheses
-///
-/// # Arguments
-/// line: String - the line to simplify
-///
-/// # Returns
-/// String - the simplified line
-///
-/// # Example
-/// ```no_run
-/// let line = "((a + b))".to_string();
-/// let simplified = simplify_parentheses(line);
-/// assert_eq!(simplified, "a + b");
-///
-/// let line = "((a + b) * (c + d))".to_string();
-/// let simplified = simplify_parentheses(line);
-/// assert_eq!(simplified, "(a + b) * (c + d)");
-///
-/// let line = "if ((((a + b) * (c + d))) > ((arg0 * 10000)) {".to_string();
-/// let simplified = simplify_parentheses(line);
-/// assert_eq!(simplified, "if ((a + b) * (c + d)) > arg0 * 10000 {");
-/// ```
 fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     // helper function to determine if parentheses are necessary
     fn are_parentheses_unnecessary(expression: &str) -> bool {
@@ -329,23 +278,6 @@ fn simplify_parentheses(line: &str, paren_index: usize) -> String {
 }
 
 /// Converts memory and storage accesses to variables
-///
-/// # Arguments
-/// line: String - the line to convert
-///
-/// # Returns
-/// String - the converted line
-///
-/// # Example
-/// ```no_run
-/// let line = "memory[0x40] = 0x60;".to_string();
-/// let converted = convert_access_to_variable(line);
-/// assert_eq!(converted, "var_a = 0x60;");
-///
-/// let line = "storage[0x0] = 0x0;".to_string();
-/// let converted = convert_access_to_variable(line);
-/// assert_eq!(converted, "stor_a = 0x0;");
-/// ```
 fn convert_access_to_variable(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -479,32 +411,6 @@ fn convert_access_to_variable(line: &str) -> String {
 }
 
 /// Checks if the current line contains an unnecessary assignment
-///
-/// # Arguments
-/// line: String - the line to check
-/// lines: &Vec<&str> - the lines of the contract. only includes lines after the current line
-///
-/// # Returns
-/// bool - whether or not the line contains an unnecessary assignment
-///
-/// # Example
-/// ```no_run
-/// let line = "var_a = arg0;".to_string();
-/// let lines = vec![
-///     "var_b = var_a;",
-///     "var_c = var_b;",
-/// ].iter().map(|x| x.to_string()).collect();
-///
-/// let contains_unnecessary = contains_unnecessary_assignment(line, &lines);
-/// assert_eq!(contains_unnecessary, false);
-///
-/// let line = "var_a = arg0;".to_string();
-/// let lines = vec![
-///     "var_b = arg1;",
-///     "var_c = var_b;",
-/// ].iter().map(|x| x.to_string()).collect();
-/// assert_eq!(contains_unnecessary_assignment(line, &lines), true);
-/// ```
 fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
     // skip lines that don't contain an assignment, or contain a return or external calls
     if !line.contains(" = ") || line.contains("bool success") || line.contains("return") {
@@ -543,19 +449,6 @@ fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
 }
 
 /// Moves casts to the declaration
-///
-/// # Arguments
-/// line: String - the line to convert
-///
-/// # Returns
-/// String - the converted line
-///
-/// # Example
-/// ```no_run
-/// let line = "var_a = uint256(arg0);".to_string();
-/// let converted = move_casts_to_declaration(line);
-/// assert_eq!(converted, "uint256 var_a = arg0;");
-/// ```
 fn move_casts_to_declaration(line: &str) -> String {
     let cleaned = line;
     let mut type_declaration_set = MEMORY_TYPE_DECLARATION_SET.lock().unwrap();
@@ -615,19 +508,6 @@ fn move_casts_to_declaration(line: &str) -> String {
 }
 
 /// Replaces an expression with a variable, if the expression matches an existing variable
-///
-/// # Arguments
-/// line: String - the line to convert
-///
-/// # Returns
-/// String - the converted line
-///
-/// # Example
-/// ```no_run
-/// let line = "var_a = arg0 + arg1;".to_string();
-/// let converted = replace_expression_with_var(line);
-/// assert_eq!(converted, "var_a = var_b + var_c;");
-/// ```
 fn replace_expression_with_var(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -876,22 +756,6 @@ fn inherit_infer_storage_type(line: &str) {
 }
 
 /// Replaces resolved errors and events
-///
-/// # Arguments
-/// line: String - the line to convert
-///
-/// # Returns
-/// String - the converted line
-///
-/// # Example
-/// ```no_run
-/// let line = "revert CustomError_00000000(arg0);".to_string();
-/// let converted = replace_resolved(line);
-/// assert_eq!(converted, "CustomError_00000000(arg0);");
-///
-/// let line = "revert CustomError_00000001(arg0);".to_string();
-/// let converted = replace_resolved(line);
-/// assert_eq!(converted, "UrMom(arg0);");
 fn replace_resolved(
     line: &str,
     all_resolved_errors: HashMap<String, ResolvedError>,
@@ -923,19 +787,6 @@ fn replace_resolved(
 }
 
 /// Simplifies arithmatic by removing unnecessary operations
-///
-/// # Arguments
-/// line: String - the line to convert
-///
-/// # Returns
-/// String - the converted line
-///
-/// # Example
-/// ```no_run
-/// let line = "var_a = 1 * 2;".to_string();
-/// let converted = simplify_arithmatic(line);
-/// assert_eq!(converted, "var_a = 2;");
-/// ```
 fn simplify_arithmatic(line: &str) -> String {
     let cleaned = DIV_BY_ONE_REGEX.replace_all(line, "");
     let cleaned = MUL_BY_ONE_REGEX.replace_all(&cleaned, "");

@@ -22,23 +22,6 @@ lazy_static! {
 }
 
 /// Convert bitwise operations to a variable type cast
-///
-/// # Arguments
-/// line: String - the line to convert
-///
-/// # Returns
-/// String - the converted line
-///
-/// # Example
-/// ```no_run
-/// let line = "(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) & (arg0);".to_string();
-/// let converted = convert_bitmask_to_casting(line);
-/// assert_eq!(converted, "uint256(arg0);");
-///
-/// let line = "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);".to_string();
-/// let converted = convert_bitmask_to_casting(line);
-/// assert_eq!(converted, "uint256(arg0);");
-/// ```
 fn convert_bitmask_to_casting(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -145,19 +128,6 @@ fn convert_bitmask_to_casting(line: &str) -> String {
 }
 
 /// Removes unnecessary casts
-///
-/// # Arguments
-/// line: String - the line to simplify
-///
-/// # Returns
-/// String - the simplified line
-///
-/// # Example
-/// ```no_run
-/// let line = "uint256(uint256(arg0))".to_string();
-/// let simplified = simplify_casts(line);
-/// assert_eq!(simplified, "uint256(arg0)");
-/// ```
 fn simplify_casts(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -188,19 +158,6 @@ fn simplify_casts(line: &str) -> String {
 }
 
 /// Simplifies arithmatic by removing unnecessary operations
-///
-/// # Arguments
-/// line: String - the line to convert
-///
-/// # Returns
-/// String - the converted line
-///
-/// # Example
-/// ```no_run
-/// let line = "var_a = 1 * 2;".to_string();
-/// let converted = simplify_arithmatic(line);
-/// assert_eq!(converted, "var_a = 2;");
-/// ```
 fn simplify_arithmatic(line: &str) -> String {
     let cleaned = DIV_BY_ONE_REGEX.replace_all(line, "");
     let cleaned = MUL_BY_ONE_REGEX.replace_all(&cleaned, "");
