@@ -59,7 +59,7 @@ mod integration_tests {
         .await
         .unwrap();
 
-        let output = format!("{}", Dot::with_config(&result, &[]));
+        let output: String = format!("{}", Dot::with_config(&result, &[]));
 
         for line in &[
             String::from("0 [ label = \"0x01 PUSH20 0x1bf797219482a29013d804ad96d1c6f84fba4c45\\l0x16 ADDRESS \\l0x17 EQ \\l0x18 PUSH1 0x80\\l0x1a PUSH1 0x40\\l0x1c MSTORE \\l0x1d PUSH1 0x04\\l0x1f CALLDATASIZE \\l0x20 LT \\l0x21 PUSH2 0x58\\l0x24 JUMPI \\l\" ]"),

@@ -64,6 +64,7 @@ pub fn build_cfg(
         }
         None => {
             // this node does not exist, so we need to add it to the map and the graph
+            println!("adding node: {}", chunk_index);
             let node_index = contract_cfg.add_node(cfg_node);
 
             if let Some(parent_node) = parent_node {

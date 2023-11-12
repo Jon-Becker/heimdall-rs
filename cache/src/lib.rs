@@ -2,10 +2,10 @@ use clap::{AppSettings, Parser};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
+use std::{collections::HashMap, num::ParseIntError};
 
 use util::*;
 
-pub mod tests;
 pub mod util;
 
 #[derive(Debug, Clone, Parser)]
@@ -20,6 +20,11 @@ pub struct CacheArgs {
     pub sub: Subcommands,
 }
 
+/// A simple clap subcommand with no arguments
+#[derive(Debug, Clone, Parser)]
+pub struct NoArguments {}
+
+/// Clap subcommand parser for the cache subcommand
 #[derive(Debug, Clone, Parser)]
 #[clap(
     about = "Manage heimdall-rs' cached objects",
@@ -35,10 +40,39 @@ pub enum Subcommands {
 
     #[clap(name = "size", about = "Prints the size of the cache in ~/.bifrost/cache")]
     Size(NoArguments),
+
+    #[clap(name = "export", about = "Exports all cached objects in ~/.bifrost/cache to a file")]
+    Export(ExportArgs),
+
+    #[clap(name = "import", about = "Imports cached objects from a file into ~/.bifrost/cache")]
+    Import(ImportArgs),
 }
 
+/// Clap argument parser for the export subcommand
 #[derive(Debug, Clone, Parser)]
-pub struct NoArguments {}
+#[clap(
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall cache export"
+)]
+pub struct ExportArgs {
+    /// The path to export the cache to
+    #[clap(short, long, default_value = "./cache-export.bin")]
+    pub output: String,
+}
+
+/// Clap argument parser for the import subcommand
+#[derive(Debug, Clone, Parser)]
+#[clap(
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    global_setting = AppSettings::DeriveDisplayOrder,
+    override_usage = "heimdall cache import"
+)]
+pub struct ImportArgs {
+    /// The path to the binary file to import the cache from
+    #[clap(short, long, default_value = "./cache-export.bin")]
+    pub input: String,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Cache<T> {
@@ -165,6 +199,20 @@ where
 }
 
 #[allow(deprecated)]
+pub fn read_cache_raw(key: &str) -> Result<Vec<u8>, ParseIntError> {
+    let home = home_dir().unwrap();
+    let cache_dir = home.join(".bifrost").join("cache");
+    let cache_file = cache_dir.join(format!("{key}.bin"));
+
+    let binary_string = match read_file(cache_file.to_str().unwrap()) {
+        Some(s) => s,
+        None => return Ok(vec![]),
+    };
+
+    decode_hex(&binary_string)
+}
+
+#[allow(deprecated)]
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>)
 where
     T: Serialize, {
@@ -214,7 +262,183 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
             println!("Cached objects: {}", keys("*").len());
             println!("Cache size: {}", prettify_bytes(size));
         }
+        Subcommands::Export(args) => {
+            println!("Beginning cache export");
+
+            // get all keys as a hashmap of cache keys to bincode values
+            let k_v_bin_map: HashMap<String, Vec<u8>> = keys("*")
+                .iter()
+                .map(|key| {
+                    let value = read_cache_raw(key).unwrap();
+                    (key.to_string(), value)
+                })
+                .collect();
+
+            // serialize the hashmap
+            println!("Serializing {} cached objects", k_v_bin_map.len());
+            let encoded: Vec<u8> = bincode::serialize(&k_v_bin_map).unwrap();
+            let binary_string = encode_hex(encoded);
+            write_file(&args.output, &binary_string);
+
+            println!("Cache exported to {}", args.output);
+        }
+        Subcommands::Import(args) => {
+            let home = home_dir().unwrap();
+            let cache_dir = home.join(".bifrost").join("cache");
+
+            println!("Beginning cache import");
+
+            // read the file
+            let binary_string = match read_file(&args.input) {
+                Some(s) => s,
+                None => {
+                    println!("Failed to read file {}", args.input);
+                    return Ok(())
+                }
+            };
+            let binary_obj = decode_hex(&binary_string)?;
+            let k_v_bin_map: HashMap<String, Vec<u8>> = bincode::deserialize(&binary_obj)?;
+            println!("Deserialized {} cached objects", k_v_bin_map.len());
+
+            // write each key-value pair to the cache
+            k_v_bin_map.iter().for_each(|(key, value)| {
+                let binary_string = encode_hex(value.to_vec());
+                write_file(cache_dir.join(format!("{key}.bin")).to_str().unwrap(), &binary_string);
+            });
+
+            println!("Cache imported from {}", args.input);
+        }
     }
 
     Ok(())
+}
+
+#[allow(deprecated)]
+#[cfg(test)]
+mod tests {
+    use crate::{
+        check_expiry, delete_cache, exists, keys, read_cache, read_cache_raw, store_cache,
+        util::encode_hex,
+    };
+    use serde::{Deserialize, Serialize};
+    use std::env::home_dir;
+
+    #[test]
+    fn test_store_cache() {
+        store_cache("key", "value".to_string(), None);
+
+        // assert cached file exists
+        let home = home_dir().unwrap();
+        let cache_dir = home.join(".bifrost").join("cache");
+        let cache_file = cache_dir.join("key.bin");
+        assert!(cache_file.exists());
+    }
+
+    #[test]
+    fn test_get_cache() {
+        store_cache("key3", "value".to_string(), None);
+        let value = read_cache("key3");
+        let value: String = value.unwrap();
+
+        // assert stored value matches
+        assert_eq!(value, "value");
+    }
+
+    #[test]
+    fn test_store_struct() {
+        #[derive(Serialize, Deserialize, Debug)]
+        struct TestStruct {
+            name: String,
+            age: u8,
+        }
+
+        let test_struct = TestStruct { name: "test".to_string(), age: 1 };
+
+        store_cache("struct", test_struct, None);
+
+        // assert cached file exists
+        let home = home_dir().unwrap();
+        let cache_dir = home.join(".bifrost").join("cache");
+        let cache_file = cache_dir.join("struct.bin");
+        assert!(cache_file.exists());
+    }
+
+    #[test]
+    fn test_get_struct() {
+        #[derive(Serialize, Deserialize, Debug)]
+        struct TestStruct {
+            name: String,
+            age: u8,
+        }
+
+        let test_struct = TestStruct { name: "test".to_string(), age: 1 };
+
+        store_cache("struct2", test_struct, None);
+        let value = read_cache("struct2");
+        let value: TestStruct = value.unwrap();
+
+        // assert stored value matches
+        assert_eq!(value.name, "test");
+        assert_eq!(value.age, 1);
+    }
+
+    #[test]
+    fn test_read_cache_raw() {
+        store_cache("read_cache_raw_1", "value".to_string(), None);
+        let value = read_cache_raw("read_cache_raw_1").unwrap();
+        let stringified = encode_hex(value);
+
+        // assert stored value matches
+        assert!(stringified.contains("76616c7565"));
+    }
+
+    #[test]
+    fn test_expiry() {
+        store_cache("dead", "value".to_string(), Some(0));
+
+        // assert cached file exists
+        let home = home_dir().unwrap();
+        let cache_dir = home.join(".bifrost").join("cache");
+        let cache_file = cache_dir.join("dead.bin");
+        assert!(cache_file.exists());
+
+        // wait for expiry
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        // check expiry
+        check_expiry::<String>();
+
+        assert!(!cache_file.exists());
+    }
+
+    #[test]
+    fn test_keys() {
+        store_cache("some_key", "some_value", None);
+        store_cache("some_other_key", "some_value", None);
+        store_cache("not_a_key", "some_value", None);
+
+        assert_eq!(keys("some_"), vec!["some_key", "some_other_key"]);
+    }
+
+    #[test]
+    fn test_keys_wildcard() {
+        store_cache("a", "some_value", None);
+        store_cache("b", "some_value", None);
+        store_cache("c", "some_value", None);
+        store_cache("d", "some_value", None);
+        store_cache("e", "some_value", None);
+        store_cache("f", "some_value", None);
+
+        assert!(["a", "b", "c", "d", "e", "f"]
+            .iter()
+            .all(|key| { keys("*").contains(&key.to_string()) }));
+    }
+
+    #[test]
+    fn test_exists() {
+        assert!(!exists("does_not_exist"));
+        store_cache("does_not_exist", "some_value", None);
+        assert!(exists("does_not_exist"));
+        delete_cache("does_not_exist");
+    }
 }
