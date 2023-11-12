@@ -2,7 +2,6 @@ use clap::{AppSettings, Parser};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
-use std::{collections::HashMap, num::ParseIntError};
 
 use util::*;
 
@@ -40,38 +39,6 @@ pub enum Subcommands {
 
     #[clap(name = "size", about = "Prints the size of the cache in ~/.bifrost/cache")]
     Size(NoArguments),
-
-    #[clap(name = "export", about = "Exports all cached objects in ~/.bifrost/cache to a file")]
-    Export(ExportArgs),
-
-    #[clap(name = "import", about = "Imports cached objects from a file into ~/.bifrost/cache")]
-    Import(ImportArgs),
-}
-
-/// Clap argument parser for the export subcommand
-#[derive(Debug, Clone, Parser)]
-#[clap(
-    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-    global_setting = AppSettings::DeriveDisplayOrder,
-    override_usage = "heimdall cache export"
-)]
-pub struct ExportArgs {
-    /// The path to export the cache to
-    #[clap(short, long, default_value = "./cache-export.bin")]
-    pub output: String,
-}
-
-/// Clap argument parser for the import subcommand
-#[derive(Debug, Clone, Parser)]
-#[clap(
-    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-    global_setting = AppSettings::DeriveDisplayOrder,
-    override_usage = "heimdall cache import"
-)]
-pub struct ImportArgs {
-    /// The path to the binary file to import the cache from
-    #[clap(short, long, default_value = "./cache-export.bin")]
-    pub input: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -199,20 +166,6 @@ where
 }
 
 #[allow(deprecated)]
-pub fn read_cache_raw(key: &str) -> Result<Vec<u8>, ParseIntError> {
-    let home = home_dir().unwrap();
-    let cache_dir = home.join(".bifrost").join("cache");
-    let cache_file = cache_dir.join(format!("{key}.bin"));
-
-    let binary_string = match read_file(cache_file.to_str().unwrap()) {
-        Some(s) => s,
-        None => return Ok(vec![]),
-    };
-
-    decode_hex(&binary_string)
-}
-
-#[allow(deprecated)]
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>)
 where
     T: Serialize, {
@@ -262,52 +215,6 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
             println!("Cached objects: {}", keys("*").len());
             println!("Cache size: {}", prettify_bytes(size));
         }
-        Subcommands::Export(args) => {
-            println!("Beginning cache export");
-
-            // get all keys as a hashmap of cache keys to bincode values
-            let k_v_bin_map: HashMap<String, Vec<u8>> = keys("*")
-                .iter()
-                .map(|key| {
-                    let value = read_cache_raw(key).unwrap();
-                    (key.to_string(), value)
-                })
-                .collect();
-
-            // serialize the hashmap
-            println!("Serializing {} cached objects", k_v_bin_map.len());
-            let encoded: Vec<u8> = bincode::serialize(&k_v_bin_map).unwrap();
-            let binary_string = encode_hex(encoded);
-            write_file(&args.output, &binary_string);
-
-            println!("Cache exported to {}", args.output);
-        }
-        Subcommands::Import(args) => {
-            let home = home_dir().unwrap();
-            let cache_dir = home.join(".bifrost").join("cache");
-
-            println!("Beginning cache import");
-
-            // read the file
-            let binary_string = match read_file(&args.input) {
-                Some(s) => s,
-                None => {
-                    println!("Failed to read file {}", args.input);
-                    return Ok(())
-                }
-            };
-            let binary_obj = decode_hex(&binary_string)?;
-            let k_v_bin_map: HashMap<String, Vec<u8>> = bincode::deserialize(&binary_obj)?;
-            println!("Deserialized {} cached objects", k_v_bin_map.len());
-
-            // write each key-value pair to the cache
-            k_v_bin_map.iter().for_each(|(key, value)| {
-                let binary_string = encode_hex(value.to_vec());
-                write_file(cache_dir.join(format!("{key}.bin")).to_str().unwrap(), &binary_string);
-            });
-
-            println!("Cache imported from {}", args.input);
-        }
     }
 
     Ok(())
@@ -316,10 +223,7 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
 #[allow(deprecated)]
 #[cfg(test)]
 mod tests {
-    use crate::{
-        check_expiry, delete_cache, exists, keys, read_cache, read_cache_raw, store_cache,
-        util::encode_hex,
-    };
+    use crate::{delete_cache, exists, keys, read_cache, store_cache};
     use serde::{Deserialize, Serialize};
     use std::env::home_dir;
 
@@ -380,35 +284,6 @@ mod tests {
         // assert stored value matches
         assert_eq!(value.name, "test");
         assert_eq!(value.age, 1);
-    }
-
-    #[test]
-    fn test_read_cache_raw() {
-        store_cache("read_cache_raw_1", "value".to_string(), None);
-        let value = read_cache_raw("read_cache_raw_1").unwrap();
-        let stringified = encode_hex(value);
-
-        // assert stored value matches
-        assert!(stringified.contains("76616c7565"));
-    }
-
-    #[test]
-    fn test_expiry() {
-        store_cache("dead", "value".to_string(), Some(0));
-
-        // assert cached file exists
-        let home = home_dir().unwrap();
-        let cache_dir = home.join(".bifrost").join("cache");
-        let cache_file = cache_dir.join("dead.bin");
-        assert!(cache_file.exists());
-
-        // wait for expiry
-        std::thread::sleep(std::time::Duration::from_secs(2));
-
-        // check expiry
-        check_expiry::<String>();
-
-        assert!(!cache_file.exists());
     }
 
     #[test]
