@@ -108,16 +108,16 @@ pub fn exists(key: &str) -> bool {
 /// use heimdall_cache::{store_cache, keys};
 ///
 /// /// add a value to the cache
-/// store_cache("key", "value", None);
+/// store_cache("some_listable_key", "value", None);
 ///
 /// /// assert that the cache contains the key
-/// assert!(keys("*").contains(&"key".to_string()));
+/// assert!(keys("*").contains(&"some_listable_key".to_string()));
 ///
 /// /// assert that the cache does not contain a non-existent key
 /// assert!(!keys("*").contains(&"non_existent_key".to_string()));
 ///
 /// /// assert that the cache contains the key
-/// assert!(keys("k*").contains(&"key".to_string()));
+/// assert!(keys("some_*").contains(&"some_listable_key".to_string()));
 /// ```
 #[allow(deprecated)]
 pub fn keys(pattern: &str) -> Vec<String> {
