@@ -22,8 +22,10 @@ use heimdall_common::{
         selectors::{find_function_selectors, resolve_selectors},
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
     },
-    io::logging::*,
-    utils::strings::{decode_hex, encode_hex_reduced},
+    utils::{
+        io::logging::*,
+        strings::{decode_hex, encode_hex_reduced},
+    },
 };
 use indicatif::ProgressBar;
 

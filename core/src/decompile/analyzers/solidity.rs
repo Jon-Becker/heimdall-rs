@@ -10,8 +10,10 @@ use heimdall_common::{
         },
         ext::exec::VMTrace,
     },
-    io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced},
+    utils::{
+        io::logging::TraceFactory,
+        strings::{decode_hex, encode_hex_reduced},
+    },
 };
 
 use super::super::{constants::AND_BITMASK_REGEX, precompile::decode_precompile};

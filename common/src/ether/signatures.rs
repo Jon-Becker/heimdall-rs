@@ -2,10 +2,7 @@ use async_trait::async_trait;
 use ethers::abi::Token;
 use heimdall_cache::{read_cache, store_cache};
 
-use crate::{
-    io::logging::Logger,
-    utils::{http::get_json_from_url, strings::replace_last},
-};
+use crate::utils::{http::get_json_from_url, io::logging::Logger, strings::replace_last};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -1,4 +1,4 @@
-use heimdall_common::{ether::signatures::ResolvedFunction, io::logging::Logger};
+use heimdall_common::{ether::signatures::ResolvedFunction, utils::io::logging::Logger};
 
 use super::structures::snapshot::Snapshot;
 

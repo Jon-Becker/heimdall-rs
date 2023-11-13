@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use crate::decompile::{constants::DECOMPILED_SOURCE_HEADER_YUL, util::Function, DecompilerArgs};
 use heimdall_common::{
     ether::signatures::ResolvedLog,
-    io::{
+    utils::io::{
         file::short_path,
         logging::{Logger, TraceFactory},
     },

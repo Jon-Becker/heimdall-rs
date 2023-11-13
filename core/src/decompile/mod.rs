@@ -31,7 +31,7 @@ use clap::{AppSettings, Parser};
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{evm::core::vm::VM, signatures::*},
-    io::logging::*,
+    utils::io::logging::*,
 };
 
 use self::out::abi::ABIStructure;

@@ -7,8 +7,8 @@ use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use ethers::types::H160;
 use heimdall_common::{
-    io::logging::*,
     resources::transpose::{get_contract_creation, get_transaction_list},
+    utils::io::logging::*,
 };
 use std::{collections::HashMap, env, str::FromStr, time::Instant};
 

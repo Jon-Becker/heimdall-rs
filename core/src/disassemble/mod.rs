@@ -5,8 +5,10 @@ use derive_builder::Builder;
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{evm::core::opcodes::opcode, rpc::get_code},
-    io::logging::Logger,
-    utils::strings::{decode_hex, encode_hex},
+    utils::{
+        io::logging::Logger,
+        strings::{decode_hex, encode_hex},
+    },
 };
 
 #[derive(Debug, Clone, Parser, Builder)]

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod benchmark {
     use clap_verbosity_flag::Verbosity;
-    use heimdall_common::testing::benchmarks::async_bench;
+    use heimdall_common::utils::testing::benchmarks::async_bench;
 
     use heimdall_core::decompile::DecompilerArgs;
 
@@ -117,7 +117,7 @@ mod benchmark {
 #[cfg(test)]
 mod integration_tests {
     use clap_verbosity_flag::Verbosity;
-    use heimdall_common::io::file::delete_path;
+    use heimdall_common::utils::io::file::delete_path;
     use heimdall_core::decompile::DecompilerArgs;
 
     #[tokio::test]

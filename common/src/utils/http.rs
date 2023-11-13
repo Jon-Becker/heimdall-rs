@@ -1,10 +1,9 @@
+use crate::utils::io::logging::Logger;
 use async_recursion::async_recursion;
 use reqwest::Client;
 use serde_json::Value;
 use std::time::Duration;
 use tokio::time::sleep as async_sleep;
-
-use crate::io::logging::Logger;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 

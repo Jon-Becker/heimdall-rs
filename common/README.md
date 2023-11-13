@@ -12,8 +12,8 @@ src
 │   │   └── ext             # evm extensions
 │   │       └── exec
 │   └── lexers              # lexers for parsing the evm
-├── io                      # io utilities
 ├── resources               # resources used by the library
-├── testing                 # testing utilities
 └── utils
+    ├── io                  # io utilities
+    └── testing             # testing utilities
 ```

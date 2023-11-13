@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::io::logging::Logger;
+use crate::utils::io::logging::Logger;
 use ethers::{
     core::types::Address,
     providers::{Http, Middleware, Provider},

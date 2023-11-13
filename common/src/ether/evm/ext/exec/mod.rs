@@ -11,8 +11,7 @@ use crate::{
         stack::Stack,
         vm::{State, VM},
     },
-    io::logging::Logger,
-    utils::strings::decode_hex,
+    utils::{io::logging::Logger, strings::decode_hex},
 };
 use ethers::types::U256;
 use std::collections::HashMap;

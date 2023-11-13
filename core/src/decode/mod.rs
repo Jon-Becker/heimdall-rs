@@ -16,8 +16,7 @@ use heimdall_common::{
         rpc::get_transaction,
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
-    io::logging::Logger,
-    utils::strings::decode_hex,
+    utils::{io::logging::Logger, strings::decode_hex},
 };
 
 use indicatif::ProgressBar;

@@ -14,7 +14,7 @@ use ethers::{
     types::{StateDiff, TraceType, H256},
 };
 use heimdall_cache::{read_cache, store_cache};
-use heimdall_common::io::logging::Logger;
+use heimdall_common::utils::io::logging::Logger;
 use tui::{backend::CrosstermBackend, Terminal};
 
 use super::{structures::transaction::Transaction, DumpArgs};

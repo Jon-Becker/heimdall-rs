@@ -5,7 +5,7 @@ use colored::*;
 
 use crate::utils::time::pretty_timestamp;
 
-use super::super::utils::strings::replace_last;
+use super::super::strings::replace_last;
 
 /// A logger which can be used to log messages to the console
 /// in a standardized format.

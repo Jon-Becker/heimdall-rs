@@ -1,6 +1,6 @@
 use std::{process::Command, time::Duration};
 
-use heimdall_common::io::{file::write_file, logging::Logger};
+use heimdall_common::utils::io::{file::write_file, logging::Logger};
 use indicatif::ProgressBar;
 use petgraph::{dot::Dot, graph::Graph};
 

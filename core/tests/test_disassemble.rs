@@ -2,7 +2,7 @@
 mod benchmarks {
     use clap_verbosity_flag::Verbosity;
 
-    use heimdall_common::testing::benchmarks::async_bench;
+    use heimdall_common::utils::testing::benchmarks::async_bench;
     use heimdall_core::disassemble::{disassemble, DisassemblerArgs};
 
     #[tokio::test]

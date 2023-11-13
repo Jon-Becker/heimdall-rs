@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    io::file::write_lines_to_file,
-    utils::strings::encode_hex_reduced,
+    utils::{io::file::write_lines_to_file, strings::encode_hex_reduced},
 };
 
 use crate::snapshot::structures::snapshot::Snapshot;

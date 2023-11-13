@@ -2,7 +2,7 @@
 mod tests {
     use std::thread;
 
-    use crate::testing::benchmarks::benchmark;
+    use crate::utils::testing::benchmarks::benchmark;
 
     #[test]
     fn test_benchmark() {

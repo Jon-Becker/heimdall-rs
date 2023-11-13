@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ethers::types::{Diff, H160};
-use heimdall_common::{io::logging::Logger, utils::threading::task_pool};
+use heimdall_common::utils::{io::logging::Logger, threading::task_pool};
 use indicatif::ProgressBar;
 
 use crate::dump::{

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ethers::abi::AbiEncode;
-use heimdall_common::io::{
+use heimdall_common::utils::io::{
     file::short_path,
     logging::{Logger, TraceFactory},
 };

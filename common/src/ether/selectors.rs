@@ -7,7 +7,7 @@ use std::{
 use indicatif::ProgressBar;
 use tokio::task;
 
-use crate::{io::logging::Logger, utils::strings::decode_hex};
+use crate::utils::{io::logging::Logger, strings::decode_hex};
 
 use super::{evm::core::vm::VM, signatures::ResolveSelector};
 

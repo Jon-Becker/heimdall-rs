@@ -19,8 +19,7 @@ use heimdall_common::{
         },
         lexers::cleanup::Cleanup,
     },
-    io::logging::TraceFactory,
-    utils::strings::encode_hex_reduced,
+    utils::{io::logging::TraceFactory, strings::encode_hex_reduced},
 };
 
 /// Generates a snapshot of a VMTrace's underlying function

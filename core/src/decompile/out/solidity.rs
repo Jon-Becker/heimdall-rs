@@ -2,11 +2,13 @@ use std::{collections::HashMap, time::Duration};
 
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    io::{
-        file::short_path,
-        logging::{Logger, TraceFactory},
+    utils::{
+        io::{
+            file::short_path,
+            logging::{Logger, TraceFactory},
+        },
+        strings::find_balanced_encapsulator,
     },
-    utils::strings::find_balanced_encapsulator,
 };
 use indicatif::ProgressBar;
 

@@ -1,4 +1,4 @@
-use crate::io::logging::Logger;
+use crate::utils::io::logging::Logger;
 use async_openai::{types::CreateCompletionRequestArgs, Client};
 
 pub async fn complete(prompt: &str, api_key: &str) -> Option<String> {

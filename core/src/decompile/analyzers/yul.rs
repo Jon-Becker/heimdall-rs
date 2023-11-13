@@ -1,8 +1,10 @@
 use ethers::abi::{decode, AbiEncode, ParamType};
 use heimdall_common::{
     ether::evm::{core::types::convert_bitmask, ext::exec::VMTrace},
-    io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced},
+    utils::{
+        io::logging::TraceFactory,
+        strings::{decode_hex, encode_hex_reduced},
+    },
 };
 
 use super::super::util::*;

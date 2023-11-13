@@ -1,4 +1,4 @@
-use crate::io::logging::Logger;
+use crate::utils::io::logging::Logger;
 
 // returns the compiler version used to compile the contract.
 // for example: (solc, 0.8.10) or (vyper, 0.2.16)

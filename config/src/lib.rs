@@ -1,5 +1,5 @@
 use clap::{AppSettings, Parser};
-use heimdall_common::io::{
+use heimdall_common::utils::io::{
     file::{delete_path, read_file, write_file},
     logging::*,
 };
