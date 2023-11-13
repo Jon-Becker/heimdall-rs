@@ -140,7 +140,7 @@ impl VM {
         self.instruction += 1;
 
         // add the opcode to the trace
-        let opcode_details = crate::ether::evm::core::opcodes::opcode(opcode);
+        let opcode_details = Opcode::new(opcode);
         let input_frames = self.stack.peek_n(opcode_details.inputs as usize);
         let input_operations =
             input_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
