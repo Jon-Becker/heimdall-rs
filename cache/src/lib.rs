@@ -246,7 +246,7 @@ where
             60 * 60 * 24 * 90,
     );
 
-    let cache = Cache { value: value, expiry: expiry };
+    let cache = Cache { value, expiry };
     let encoded: Vec<u8> = bincode::serialize(&cache).unwrap();
     let binary_string = encode_hex(encoded);
     write_file(cache_file.to_str().unwrap(), &binary_string);

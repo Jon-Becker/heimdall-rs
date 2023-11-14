@@ -384,7 +384,7 @@ impl WrappedOpcode {
 
     // creates a new WrappedOpcode from a set of raw inputs
     pub fn new(opcode_int: u8, inputs: Vec<WrappedInput>) -> WrappedOpcode {
-        WrappedOpcode { opcode: Opcode::new(opcode_int), inputs: inputs }
+        WrappedOpcode { opcode: Opcode::new(opcode_int), inputs }
     }
 }
 

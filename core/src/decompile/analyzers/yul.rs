@@ -205,7 +205,7 @@ pub fn analyze_yul(
             let operations = instruction.input_operations[1].clone();
 
             // add the sstore to the function's storage map
-            function.storage.insert(key, StorageFrame { value: value, operations: operations });
+            function.storage.insert(key, StorageFrame { value, operations });
             function.logic.push(format!(
                 "sstore({}, {})",
                 instruction.input_operations[0].yulify(),
@@ -217,7 +217,7 @@ pub fn analyze_yul(
             let operation = instruction.input_operations[1].clone();
 
             // add the mstore to the function's memory map
-            function.memory.insert(key, StorageFrame { value: value, operations: operation });
+            function.memory.insert(key, StorageFrame { value, operations: operation });
             function.logic.push(format!(
                 "{}({}, {})",
                 opcode_name.to_lowercase(),

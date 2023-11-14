@@ -46,7 +46,7 @@ pub struct Trace {
 impl TraceFactory {
     /// creates a new empty trace factory
     pub fn new(level: i8) -> TraceFactory {
-        TraceFactory { level: level, traces: Vec::new() }
+        TraceFactory { level, traces: Vec::new() }
     }
 
     /// adds a new trace to the factory

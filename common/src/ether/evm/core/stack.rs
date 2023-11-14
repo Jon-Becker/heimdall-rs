@@ -255,7 +255,7 @@ impl Stack {
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
     ///
     /// // stack is now [0x00]
-    /// assert_eq!(stack.hash(), 0x...);
+    /// assert_eq!(stack.hash(), 0x00);
     /// ```
     pub fn hash(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();

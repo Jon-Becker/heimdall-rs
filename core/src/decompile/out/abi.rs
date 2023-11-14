@@ -172,7 +172,7 @@ pub fn build_abi(
             inputs: function_inputs,
             outputs: function_outputs,
             state_mutability: state_mutability.to_string(),
-            constant: constant,
+            constant,
         }));
 
         // build the function's custom errors
@@ -204,7 +204,7 @@ pub fn build_abi(
                     abi.push(ABIStructure::Error(ErrorABI {
                         type_: "error".to_string(),
                         name: resolved_error.name.clone(),
-                        inputs: inputs,
+                        inputs,
                     }));
                 }
                 None => {
@@ -263,7 +263,7 @@ pub fn build_abi(
                     abi.push(ABIStructure::Event(EventABI {
                         type_: "event".to_string(),
                         name: resolved_event.name.clone(),
-                        inputs: inputs,
+                        inputs,
                     }));
                 }
                 None => {

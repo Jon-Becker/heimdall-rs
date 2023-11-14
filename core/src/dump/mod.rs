@@ -179,7 +179,7 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
     let mut state = DUMP_STATE.lock().unwrap();
     *state = DumpState {
         args: args.clone(),
-        transactions: transactions,
+        transactions,
         scroll_index: 0,
         selection_size: 1,
         storage: HashMap::new(),

@@ -386,7 +386,7 @@ pub fn analyze_sol(
             let operations = instruction.input_operations[1].clone();
 
             // add the sstore to the function's storage map
-            function.storage.insert(key, StorageFrame { value: value, operations: operations });
+            function.storage.insert(key, StorageFrame { value, operations });
             function.logic.push(format!(
                 "storage[{}] = {};",
                 instruction.input_operations[0].solidify(),
@@ -398,7 +398,7 @@ pub fn analyze_sol(
             let operation = instruction.input_operations[1].clone();
 
             // add the mstore to the function's memory map
-            function.memory.insert(key, StorageFrame { value: value, operations: operation });
+            function.memory.insert(key, StorageFrame { value, operations: operation });
             function.logic.push(format!(
                 "memory[{}] = {};",
                 encode_hex_reduced(key),
