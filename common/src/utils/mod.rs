@@ -4,7 +4,6 @@ pub mod io;
 pub mod strings;
 pub mod sync;
 pub mod testing;
-mod tests;
 pub mod threading;
 pub mod time;
 pub mod version;

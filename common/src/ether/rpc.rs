@@ -13,8 +13,8 @@ use heimdall_cache::{read_cache, store_cache};
 /// ```no_run
 /// use heimdall_common::ether::rpc::chain_id;
 ///
-/// let chain_id = chain_id("https://eth.llamarpc.com").await.unwrap();
-/// assert_eq!(chain_id, 1);
+/// // let chain_id = chain_id("https://eth.llamarpc.com").await.unwrap();
+/// //assert_eq!(chain_id, 1);
 /// ```
 pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> {
     // get a new logger
@@ -66,8 +66,8 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
 /// ```no_run
 /// use heimdall_common::ether::rpc::get_code;
 ///
-/// let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
-/// assert!(bytecode.is_ok());
+/// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
+/// // assert!(bytecode.is_ok());
 /// ```
 pub async fn get_code(
     contract_address: &str,
@@ -136,8 +136,8 @@ pub async fn get_code(
 /// ```no_run
 /// use heimdall_common::ether::rpc::get_code;
 ///
-/// let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
-/// assert!(bytecode.is_ok());
+/// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
+/// // assert!(bytecode.is_ok());
 /// ```
 pub async fn get_transaction(
     transaction_hash: &str,

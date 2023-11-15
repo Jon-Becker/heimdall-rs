@@ -20,6 +20,7 @@ struct TransposeResponse {
     results: Vec<Value>,
 }
 
+/// executes a transpose SQL query and returns the response
 async fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
     // get a new logger
     let logger = Logger::default();
@@ -74,6 +75,19 @@ async fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse
     }
 }
 
+/// Get all interactions with the given address. Includes transactions to, from, as well as internal
+/// transactions to and from the address.
+///
+/// ```
+/// use heimdall_common::resources::transpose::get_transaction_list;
+///
+/// let chain = "ethereum";
+/// let address = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+/// let api_key = "YOUR_API_KEY";
+/// let bounds = (0, 1); // block number bounds
+///
+/// // let transactions = get_transaction_list(chain, address, api_key, bounds).await;
+/// ```
 pub async fn get_transaction_list(
     chain: &str,
     address: &str,
@@ -152,6 +166,17 @@ pub async fn get_transaction_list(
     transactions
 }
 
+/// Get the contrct creation block and transaction hash for the given address.
+///
+/// ```
+/// use heimdall_common::resources::transpose::get_contract_creation;
+///
+/// let chain = "ethereum";
+/// let address = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+/// let api_key = "YOUR_API_KEY";
+///
+/// // let contract_creation = get_contract_creation(chain, address, api_key).await;
+/// ```
 pub async fn get_contract_creation(
     chain: &str,
     address: &str,

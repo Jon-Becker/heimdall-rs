@@ -1,6 +1,14 @@
 use crate::utils::io::logging::Logger;
 use async_openai::{types::CreateCompletionRequestArgs, Client};
 
+/// Complete the given prompt using the OpenAI API.
+///
+/// ```
+/// use heimdall_common::resources::openai::complete;
+///
+/// let prompt = "what is love?";
+/// let api_key = "your-api-key";
+/// // complete(prompt, api_key).await;
 pub async fn complete(prompt: &str, api_key: &str) -> Option<String> {
     let client = Client::new().with_api_key(api_key);
 

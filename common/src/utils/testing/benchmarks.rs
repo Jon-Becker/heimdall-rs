@@ -1,6 +1,8 @@
 use std::{io, io::Write, thread, time::Instant};
 
 #[allow(dead_code)]
+/// asyncronous version of the benchmark function. will execute the function to_bench
+/// `runs` times, and print the mean and standard deviation of the run times.
 pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
     let mut time = 0usize;
     let mut times = Vec::with_capacity(runs);
@@ -46,6 +48,8 @@ pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
 }
 
 #[allow(dead_code)]
+/// asyncronous version of the benchmark function. will execute the function to_bench
+/// `runs` times, and print the mean and standard deviation of the run times.
 pub async fn async_bench<F, Fut>(benchmark_name: &str, runs: usize, to_bench: F)
 where
     F: Fn() -> Fut,
@@ -94,6 +98,7 @@ where
 }
 
 #[allow(dead_code)]
+/// helper function to format nanoseconds into a human readable format
 fn format_nanos(nanos: usize) -> String {
     let mut nanos = nanos;
     let mut micros = 0;
@@ -154,4 +159,23 @@ fn format_nanos(nanos: usize) -> String {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use std::thread;
+
+    use crate::utils::testing::benchmarks::benchmark;
+
+    #[test]
+    fn test_benchmark() {
+        // Test case: Single run
+        let benchmark_name = "Test Benchmark";
+        let runs = 10;
+        let to_bench = || {
+            // Code to benchmark
+            thread::sleep(std::time::Duration::from_millis(200));
+        };
+        benchmark(benchmark_name, runs, to_bench);
+    }
 }
