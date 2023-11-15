@@ -5,7 +5,17 @@ use crate::{constants::TYPE_CAST_REGEX, utils::strings::find_balanced_encapsulat
 
 use super::vm::Instruction;
 
-// decode a string into an ethereum type
+/// Parse function parameters [`ParamType`]s from a function signature.
+///
+/// ```
+/// use heimdall_common::ether::evm::core::types::parse_function_parameters;
+/// use ethers::abi::ParamType;
+///
+/// let function_signature = "foo(uint256,uint256)";
+/// let function_parameters = parse_function_parameters(function_signature).unwrap();
+///
+/// assert_eq!(function_parameters, vec![ParamType::Uint(256), ParamType::Uint(256)]);
+/// ```
 pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamType>> {
     // remove the function name from the signature, only keep the parameters
     let (start, end, valid) = find_balanced_encapsulator(function_signature, ('(', ')'));
@@ -19,7 +29,8 @@ pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamTy
     extract_types_from_string(&function_inputs)
 }
 
-// helper function for extracting types from a string
+/// Helper function for extracting types from a string. Used by [`parse_function_parameters`],
+/// typically after entering a nested tuple or similar.
 fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
     let mut types = Vec::new();
 
@@ -148,6 +159,8 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
     }
 }
 
+/// A helper function used by [`extract_types_from_string`] to check if the first type in a string
+/// is a tuple.
 fn is_first_type_tuple(string: &str) -> bool {
     // split by first comma
     let split = string.splitn(2, ',').collect::<Vec<&str>>();
@@ -156,6 +169,8 @@ fn is_first_type_tuple(string: &str) -> bool {
     split[0].starts_with('(')
 }
 
+/// A helper function used by [`extract_types_from_string`] that converts a string type to a
+/// ParamType. For example, "address" will be converted to [`ParamType::Address`].
 fn to_type(string: &str) -> ParamType {
     let is_array = string.ends_with(']');
 
@@ -210,7 +225,7 @@ fn to_type(string: &str) -> ParamType {
     }
 }
 
-// returns a vec of beautified types for a given vec of tokens
+/// A helper function used by the decode module to pretty format decoded tokens.
 pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
     let mut output = Vec::new();
     let prefix = prefix.to_string();
@@ -269,7 +284,9 @@ pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
     output
 }
 
-// converts a bit mask into it's potential types
+/// Convert a bitwise masking operation to a tuple containing: \
+/// 1. The size of the type being masked \
+/// 2. Potential types that the type being masked could be.
 pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
     let mask = instruction.output_operations[0].clone();
 
@@ -296,6 +313,17 @@ pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
     byte_size_to_type(type_byte_size)
 }
 
+/// Given a byte size, return a tuple containing: \
+/// 1. The byte size \
+/// 2. Potential types that the byte size could be.
+///
+/// ```
+/// use heimdall_common::ether::evm::utils::byte_size_to_type;
+///
+/// let (byte_size, potential_types) = byte_size_to_type(1);
+/// assert_eq!(byte_size, 1);
+/// assert_eq!(potential_types, vec!["bool".to_string(), "uint8".to_string(), "bytes1".to_string(), "int8".to_string()]);
+/// ```
 pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
     let mut potential_types = Vec::new();
 
@@ -314,6 +342,7 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
     (byte_size, potential_types)
 }
 
+/// Given a string (typically a line of decompiled source code), extract a type cast if one exists.
 pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
     // find the start of the cast
     match TYPE_CAST_REGEX.find(line).expect("Failed to find type cast.") {
@@ -327,5 +356,214 @@ pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
             (end + a, end + b, Some(cast_type))
         }
         None => (0, 0, None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ethers::abi::ParamType;
+
+    use crate::ether::evm::core::types::parse_function_parameters;
+
+    #[test]
+    fn test_simple_signature() {
+        let solidity_type = "test(uint256)".to_string();
+        let param_type = parse_function_parameters(&solidity_type);
+        assert_eq!(param_type, Some(vec![ParamType::Uint(256)]));
+    }
+
+    #[test]
+    fn test_multiple_signature() {
+        let solidity_type = "test(uint256,string)".to_string();
+        let param_type = parse_function_parameters(&solidity_type);
+        assert_eq!(param_type, Some(vec![ParamType::Uint(256), ParamType::String]));
+    }
+
+    #[test]
+    fn test_array_signature() {
+        let solidity_type = "test(uint256,string[],uint256)";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![
+                ParamType::Uint(256),
+                ParamType::Array(Box::new(ParamType::String)),
+                ParamType::Uint(256)
+            ])
+        );
+    }
+
+    #[test]
+    fn test_array_fixed_signature() {
+        let solidity_type = "test(uint256,string[2],uint256)";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![
+                ParamType::Uint(256),
+                ParamType::FixedArray(Box::new(ParamType::String), 2),
+                ParamType::Uint(256)
+            ])
+        );
+    }
+
+    #[test]
+    fn test_complex_signature() {
+        let solidity_type =
+            "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![
+                ParamType::Uint(256),
+                ParamType::String,
+                ParamType::Tuple(vec![
+                    ParamType::Address,
+                    ParamType::Address,
+                    ParamType::Uint(24),
+                    ParamType::Address,
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(160)
+                ])
+            ])
+        );
+    }
+
+    #[test]
+    fn test_tuple_signature() {
+        let solidity_type =
+            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![ParamType::Tuple(vec![
+                ParamType::Address,
+                ParamType::Address,
+                ParamType::Uint(24),
+                ParamType::Address,
+                ParamType::Uint(256),
+                ParamType::Uint(256),
+                ParamType::Uint(256),
+                ParamType::Uint(160)
+            ])])
+        );
+    }
+
+    #[test]
+    fn test_tuple_array_signature() {
+        let solidity_type =
+            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)[])";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![ParamType::Array(Box::new(ParamType::Tuple(vec![
+                ParamType::Address,
+                ParamType::Address,
+                ParamType::Uint(24),
+                ParamType::Address,
+                ParamType::Uint(256),
+                ParamType::Uint(256),
+                ParamType::Uint(256),
+                ParamType::Uint(160)
+            ])))])
+        );
+    }
+
+    #[test]
+    fn test_tuple_fixedarray_signature() {
+        let solidity_type =
+            "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)[2])";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![ParamType::FixedArray(
+                Box::new(ParamType::Tuple(vec![
+                    ParamType::Address,
+                    ParamType::Address,
+                    ParamType::Uint(24),
+                    ParamType::Address,
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(160)
+                ])),
+                2
+            )])
+        );
+    }
+
+    #[test]
+    fn test_nested_tuple_signature() {
+        let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![ParamType::Tuple(vec![
+                ParamType::Address,
+                ParamType::Address,
+                ParamType::Uint(24),
+                ParamType::Address,
+                ParamType::Uint(256),
+                ParamType::Array(Box::new(ParamType::Tuple(vec![
+                    ParamType::Uint(256),
+                    ParamType::Uint(256)
+                ]))),
+                ParamType::Uint(160)
+            ])])
+        );
+    }
+
+    #[test]
+    fn test_seaport_fulfill_advanced_order() {
+        let solidity_type = "fulfillAdvancedOrder(((address,address,(uint8,address,uint256,uint256,uint256)[],(uint8,address,uint256,uint256,uint256,address)[],uint8,uint256,uint256,bytes32,uint256,bytes32,uint256),uint120,uint120,bytes,bytes),(uint256,uint8,uint256,uint256,bytes32[])[],bytes32,address)";
+        let param_type = parse_function_parameters(solidity_type);
+        assert_eq!(
+            param_type,
+            Some(vec![
+                ParamType::Tuple(vec![
+                    ParamType::Tuple(vec![
+                        ParamType::Address,
+                        ParamType::Address,
+                        ParamType::Array(Box::new(ParamType::Tuple(vec![
+                            ParamType::Uint(8),
+                            ParamType::Address,
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Uint(256)
+                        ]))),
+                        ParamType::Array(Box::new(ParamType::Tuple(vec![
+                            ParamType::Uint(8),
+                            ParamType::Address,
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Uint(256),
+                            ParamType::Address
+                        ]))),
+                        ParamType::Uint(8),
+                        ParamType::Uint(256),
+                        ParamType::Uint(256),
+                        ParamType::FixedBytes(32),
+                        ParamType::Uint(256),
+                        ParamType::FixedBytes(32),
+                        ParamType::Uint(256)
+                    ]),
+                    ParamType::Uint(120),
+                    ParamType::Uint(120),
+                    ParamType::Bytes,
+                    ParamType::Bytes
+                ]),
+                ParamType::Array(Box::new(ParamType::Tuple(vec![
+                    ParamType::Uint(256),
+                    ParamType::Uint(8),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Array(Box::new(ParamType::FixedBytes(32)))
+                ]))),
+                ParamType::FixedBytes(32),
+                ParamType::Address
+            ])
+        );
     }
 }

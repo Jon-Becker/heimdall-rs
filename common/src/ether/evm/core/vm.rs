@@ -203,8 +203,8 @@ impl VM {
     ///     1000000000000000000,
     /// );
     ///
-    /// vm._step(); // 0x00 EXIT
-    /// assert_eq!(vm.exitcode, 10);
+    /// // vm._step(); // 0x00 EXIT
+    /// // assert_eq!(vm.exitcode, 10);
     /// ```
     fn _step(&mut self) -> Instruction {
         // sanity check
@@ -1648,7 +1648,26 @@ impl VM {
         }
     }
 
-    // Executes the next instruction in the VM and returns a snapshot its the state
+    /// Executes the next instruction in the VM and returns a snapshot of the VM state after
+    /// executing the instruction
+    ///
+    /// ```
+    /// use heimdall_common::ether::evm::core::vm::VM;
+    ///
+    /// let bytecode = "0x00";
+    /// let mut vm = VM::new(
+    ///     bytecode.to_string(),
+    ///     "0x".to_string(),
+    ///     "0x0000000000000000000000000000000000000000".to_string(),
+    ///     "0x0000000000000000000000000000000000000001".to_string(),
+    ///     "0x0000000000000000000000000000000000000002".to_string(),
+    ///     0,
+    ///     1000000000000000000,
+    /// );
+    ///
+    /// vm.step(); // 0x00 EXIT
+    /// assert_eq!(vm.exitcode, 10);
+    /// ```
     pub fn step(&mut self) -> State {
         let instruction = self._step();
 
@@ -1663,7 +1682,25 @@ impl VM {
         }
     }
 
-    // View the next n instructions without executing them
+    /// View the next n instructions without executing them
+    ///
+    /// ```
+    /// use heimdall_common::ether::evm::core::vm::VM;
+    ///
+    /// let bytecode = "0x00";
+    /// let mut vm = VM::new(
+    ///     bytecode.to_string(),
+    ///     "0x".to_string(),
+    ///     "0x0000000000000000000000000000000000000000".to_string(),
+    ///     "0x0000000000000000000000000000000000000001".to_string(),
+    ///     "0x0000000000000000000000000000000000000002".to_string(),
+    ///     0,
+    ///     1000000000000000000,
+    /// );
+    ///
+    /// vm.peek(1); // 0x00 EXIT (not executed)
+    /// assert_eq!(vm.exitcode, 255);
+    /// ```
     pub fn peek(&mut self, n: usize) -> Vec<State> {
         let mut states = Vec::new();
         let mut vm_clone = self.clone();
@@ -1681,7 +1718,28 @@ impl VM {
         states
     }
 
-    // Resets the VM state for a new execution
+    /// Resets the VM state for a new execution
+    ///
+    /// ```
+    /// use heimdall_common::ether::evm::core::vm::VM;
+    ///
+    /// let bytecode = "0x00";
+    /// let mut vm = VM::new(
+    ///     bytecode.to_string(),
+    ///     "0x".to_string(),
+    ///     "0x0000000000000000000000000000000000000000".to_string(),
+    ///     "0x0000000000000000000000000000000000000001".to_string(),
+    ///     "0x0000000000000000000000000000000000000002".to_string(),
+    ///     0,
+    ///     1000000000000000000,
+    /// );
+    ///
+    /// vm.step(); // 0x00 EXIT (not executed)
+    /// assert_eq!(vm.exitcode, 10);
+    ///
+    /// vm.reset();
+    /// assert_eq!(vm.exitcode, 255);
+    /// ```
     pub fn reset(&mut self) {
         self.stack = Stack::new();
         self.memory = Memory::new();
@@ -1694,7 +1752,25 @@ impl VM {
         self.timestamp = Instant::now();
     }
 
-    // Executes the code until finished
+    /// Executes the code until finished
+    ///
+    /// ```
+    /// use heimdall_common::ether::evm::core::vm::VM;
+    ///
+    /// let bytecode = "0x00";
+    /// let mut vm = VM::new(
+    ///     bytecode.to_string(),
+    ///     "0x".to_string(),
+    ///     "0x0000000000000000000000000000000000000000".to_string(),
+    ///     "0x0000000000000000000000000000000000000001".to_string(),
+    ///     "0x0000000000000000000000000000000000000002".to_string(),
+    ///     0,
+    ///     1000000000000000000,
+    /// );
+    ///
+    /// vm.execute(); // 0x00 EXIT (not executed)
+    /// assert_eq!(vm.exitcode, 10);
+    /// ```
     pub fn execute(&mut self) -> ExecutionResult {
         while self.bytecode.len() >= self.instruction as usize {
             self.step();
@@ -1715,7 +1791,25 @@ impl VM {
         }
     }
 
-    // Executes provided calldata until finished
+    /// Executes provided calldata until finished
+    ///
+    /// ```
+    /// use heimdall_common::ether::evm::core::vm::VM;
+    ///
+    /// let bytecode = "0x00";
+    /// let mut vm = VM::new(
+    ///     bytecode.to_string(),
+    ///     "0x".to_string(),
+    ///     "0x0000000000000000000000000000000000000000".to_string(),
+    ///     "0x0000000000000000000000000000000000000001".to_string(),
+    ///     "0x0000000000000000000000000000000000000002".to_string(),
+    ///     0,
+    ///     1000000000000000000,
+    /// );
+    ///
+    /// vm.call("0x", 0);
+    /// assert_eq!(vm.exitcode, 10);
+    /// ```
     pub fn call(&mut self, calldata: &str, value: u128) -> ExecutionResult {
         // reset the VM temp state
         self.reset();
@@ -1727,7 +1821,7 @@ impl VM {
 }
 
 #[cfg(test)]
-mod test_vm {
+mod tests {
 
     use std::str::FromStr;
 

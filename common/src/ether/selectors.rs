@@ -11,7 +11,7 @@ use crate::utils::{io::logging::Logger, strings::decode_hex};
 
 use super::{evm::core::vm::VM, signatures::ResolveSelector};
 
-// find all function selectors in the given EVM assembly.
+/// find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
     let mut function_selectors = HashMap::new();
     let mut handled_selectors = HashSet::new();
@@ -63,7 +63,7 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
     function_selectors
 }
 
-// resolve a selector's function entry point from the EVM bytecode
+/// resolve a selector's function entry point from the EVM bytecode
 pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     let mut vm = evm.clone();
     let mut handled_jumps = HashSet::new();
@@ -104,6 +104,7 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     0
 }
 
+/// Resolve a list of selectors to their function signatures.
 pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
 where
     T: ResolveSelector + Send + Clone + 'static, {

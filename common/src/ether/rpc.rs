@@ -10,11 +10,12 @@ use heimdall_cache::{read_cache, store_cache};
 
 /// Get the chainId of the provided RPC URL
 ///
-/// # Arguments
-/// - `rpc_url`: &str
+/// ```no_run
+/// use heimdall_common::ether::rpc::chain_id;
 ///
-/// # Returns
-/// `Result<u64, Box<dyn std::error::Error>>`
+/// let chain_id = chain_id("https://eth.llamarpc.com").await.unwrap();
+/// assert_eq!(chain_id, 1);
+/// ```
 pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> {
     // get a new logger
     let logger = Logger::default();
@@ -62,12 +63,12 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
 
 /// Get the bytecode of the provided contract address
 ///
-/// # Arguments
-/// - `contract_address`: &str
-/// - `rpc_url`: &str
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_code;
 ///
-/// # Returns
-/// `Result<String, Box<dyn std::error::Error>>`
+/// let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
+/// assert!(bytecode.is_ok());
+/// ```
 pub async fn get_code(
     contract_address: &str,
     rpc_url: &str,
@@ -132,12 +133,12 @@ pub async fn get_code(
 
 /// Get the raw transaction data of the provided transaction hash
 ///
-/// # Arguments
-/// - `transaction_hash`: &str
-/// - `rpc_url`: &str
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_code;
 ///
-/// # Returns
-/// `Result<Transaction, Box<dyn std::error::Error>>`
+/// let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
+/// assert!(bytecode.is_ok());
+/// ```
 pub async fn get_transaction(
     transaction_hash: &str,
     rpc_url: &str,
