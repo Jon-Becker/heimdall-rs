@@ -29,6 +29,7 @@ use crate::decompile::{
 /// - `function` - The function to be updated with the analysis results
 /// - `trace` - The TraceFactory to be updated with the analysis results
 /// - `trace_parent` - The parent of the current VMTrace
+/// - `conditional_map` - A map of the conditionals in the current trace
 /// - `branch` - Branch metadata for the current trace. In the format of (branch_depth,
 ///   branch_index)
 ///     - @jon-becker: This will be used later to determin if a condition is a require

@@ -6,6 +6,9 @@ use crate::dump::{menus::TUIView, DumpArgs};
 
 use super::{storage_slot::StorageSlot, transaction::Transaction};
 
+/// The state of the Dump process, which will be updated as the process continues.
+/// This struct is also used to store the state of the TUI, and is often passed to the TUI renderer
+/// as a mutable reference.
 #[derive(Debug, Clone)]
 pub struct DumpState {
     pub args: DumpArgs,

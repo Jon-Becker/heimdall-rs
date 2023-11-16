@@ -8,6 +8,8 @@ use crate::dump::{
     constants::DUMP_STATE, structures::storage_slot::StorageSlot, util::get_storage_diff,
 };
 
+/// The main function for indexing storage slots. Will fetch the storage diff for each transaction
+/// in a threaded task pool, updating the state accordingly.
 pub async fn handle(addr_hash: H160) {
     let state = DUMP_STATE.lock().unwrap();
     let transactions = state.transactions.clone();

@@ -22,6 +22,9 @@ use super::{
     postprocessers::solidity::postprocess,
 };
 
+/// Build the decompiled Solidity source code from the given functions. Will piece together
+/// decompiled [`Function`]s, [`ResolvedError`]s, [`ResolvedLog`]s, and [`ABIStructure`]s into a
+/// Solidity contract.
 pub fn build_solidity_output(
     args: &DecompilerArgs,
     abi: &Vec<ABIStructure>,

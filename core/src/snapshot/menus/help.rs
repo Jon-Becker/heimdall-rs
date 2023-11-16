@@ -12,6 +12,7 @@ use crate::snapshot::{
     structures::state::State,
 };
 
+/// Render the TUI help menu
 pub fn render_tui_help<B: Backend>(f: &mut Frame<B>, _: &mut State) {
     // build main layout
     let main_layout = Layout::default()

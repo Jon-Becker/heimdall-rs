@@ -10,6 +10,7 @@ use tui::{
 
 use crate::snapshot::{structures::state::State, util::table::build_rows};
 
+/// Render the TUI command palette
 pub fn render_tui_command_palette<B: Backend>(f: &mut Frame<B>, state: &mut State) {
     // creates a new block with the given title
     // https://github.com/fdehau/tui-rs/blob/master/examples/paragraph.rs

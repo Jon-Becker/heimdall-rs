@@ -68,6 +68,8 @@ impl CFGArgsBuilder {
     }
 }
 
+/// The main entry point for the CFG module. Will generate a control flow graph of the target
+/// bytecode, after performing symbolic execution and discovering all possible execution paths.
 pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();

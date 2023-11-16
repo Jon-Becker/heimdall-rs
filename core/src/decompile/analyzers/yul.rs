@@ -8,8 +8,18 @@ use heimdall_common::{
 };
 
 use super::super::util::*;
-
-// converts a VMTrace to a Funciton through lexical and syntactic analysis
+/// Converts a VMTrace to a Function through lexical and syntactic analysis
+///
+/// ## Parameters
+/// - `vm_trace` - The VMTrace to be analyzed
+/// - `function` - The function to be updated with the analysis results
+/// - `trace` - The TraceFactory to be updated with the analysis results
+/// - `trace_parent` - The parent of the current VMTrace
+/// - `conditional_map` - The map of conditionals that have been jumped
+///
+///
+/// ## Returns
+/// - `function` - The function updated with the analysis results
 pub fn analyze_yul(
     vm_trace: &VMTrace,
     function: Function,

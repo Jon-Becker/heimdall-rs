@@ -75,6 +75,8 @@ impl DecodeArgsBuilder {
     }
 }
 
+/// The entrypoint for the decode module. This will attempt to decode the arguments of the target
+/// calldata, without the ABI of the target contract.
 #[allow(deprecated)]
 pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Box<dyn std::error::Error>> {
     // set logger environment variable if not already set

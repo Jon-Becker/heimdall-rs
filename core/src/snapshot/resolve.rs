@@ -2,7 +2,9 @@ use heimdall_common::{ether::signatures::ResolvedFunction, utils::io::logging::L
 
 use super::structures::snapshot::Snapshot;
 
-// match the ResolvedFunction to a list of Function parameters
+/// Given a list of potential [`ResolvedFunction`]s and a [`Snapshot`], return a list of
+/// [`ResolvedFunction`]s (that is, resolved signatures that were found on a 4byte directory) that
+/// match the parameters found during symbolic execution for said [`Snapshot`].
 pub fn match_parameters(
     resolved_functions: Vec<ResolvedFunction>,
     function: &Snapshot,

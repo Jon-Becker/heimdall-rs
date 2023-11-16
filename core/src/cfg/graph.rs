@@ -11,7 +11,8 @@ lazy_static! {
     static ref CONNECTING_EDGES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 }
 
-// converts a VMTrace to a CFG graph
+/// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
+/// control-flow graph found by the symbolic execution engine.
 pub fn build_cfg(
     vm_trace: &VMTrace,
     contract_cfg: &mut Graph<String, String>,
@@ -64,7 +65,6 @@ pub fn build_cfg(
         }
         None => {
             // this node does not exist, so we need to add it to the map and the graph
-            println!("adding node: {}", chunk_index);
             let node_index = contract_cfg.add_node(cfg_node);
 
             if let Some(parent_node) = parent_node {

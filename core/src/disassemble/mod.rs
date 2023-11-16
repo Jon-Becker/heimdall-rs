@@ -45,6 +45,7 @@ impl DisassemblerArgsBuilder {
     }
 }
 
+/// Disassemble the given target's bytecode to assembly.
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();

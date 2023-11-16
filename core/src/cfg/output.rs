@@ -6,6 +6,7 @@ use petgraph::{dot::Dot, graph::Graph};
 
 use super::CFGArgs;
 
+/// Write the generated CFG to a file in the `dot` graphviz format.
 pub fn write_cfg_to_file(contract_cfg: &Graph<String, String>, args: &CFGArgs, output_dir: String) {
     // get a new logger
     let logger = Logger::default();

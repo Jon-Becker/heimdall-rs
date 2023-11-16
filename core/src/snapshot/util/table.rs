@@ -5,6 +5,8 @@ use tui::{
 
 use crate::snapshot::structures::state::State;
 
+/// A helper function used in many TUI views for rendering list rows, as well as handling scrolling
+/// and selection.
 pub fn build_rows(state: &mut State, max_row_height: usize) -> Vec<Row<'static>> {
     // ensure scroll index is within bounds
     if state.function_index >= state.snapshots.len() && state.function_index != 0 {

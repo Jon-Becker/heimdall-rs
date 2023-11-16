@@ -91,6 +91,9 @@ pub struct SnapshotResult {
     pub resolved_events: HashMap<String, ResolvedLog>,
 }
 
+/// The main snapshot function, which will be called from the main thread. This module is
+/// responsible for generating a high-level overview of the target contract, including function
+/// signatures, access control, gas consumption, storage accesses, event emissions, and more.
 pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();

@@ -7,6 +7,7 @@ use heimdall_common::{
 
 use crate::snapshot::structures::snapshot::Snapshot;
 
+/// Write the snapshot data to a CSV file
 pub fn generate_and_write_contract_csv(
     snapshots: &Vec<Snapshot>,
     resolved_errors: &HashMap<String, ResolvedError>,

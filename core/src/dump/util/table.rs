@@ -10,6 +10,8 @@ use tui::{
 
 use crate::dump::{constants::DECODE_AS_TYPES, structures::dump_state::DumpState};
 
+/// A helper function used in many TUI views for rendering list rows, as well as handling scrolling
+/// and selection.
 pub fn build_rows(state: &mut DumpState, max_row_height: usize) -> Vec<Row<'static>> {
     // ensure scroll index is within bounds
     if state.scroll_index >= state.storage.len() && state.scroll_index != 0 {

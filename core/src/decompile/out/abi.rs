@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::decompile::{util::Function, DecompilerArgs};
 
+/// A single named ABI token.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ABIToken {
     pub name: String,
@@ -19,6 +20,7 @@ pub struct ABIToken {
     pub type_: String,
 }
 
+/// ABI structure for a single contract function.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct FunctionABI {
     #[serde(rename = "type")]
@@ -31,6 +33,7 @@ pub struct FunctionABI {
     pub constant: bool,
 }
 
+/// ABI structure for a single contract's custom error.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct ErrorABI {
     #[serde(rename = "type")]
@@ -39,6 +42,7 @@ pub struct ErrorABI {
     pub inputs: Vec<ABIToken>,
 }
 
+/// ABI structure for a single contract event.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct EventABI {
     #[serde(rename = "type")]
@@ -47,6 +51,7 @@ pub struct EventABI {
     pub inputs: Vec<ABIToken>,
 }
 
+/// An [`ABIStructure`] may be a function, error, or event
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum ABIStructure {
     Function(FunctionABI),
@@ -54,6 +59,16 @@ pub enum ABIStructure {
     Event(EventABI),
 }
 
+/// Build the ABI for a decompiled contract.
+///
+/// # Arguments
+/// - `args`: The [`DecompilerArgs`] used to decompile the contract.
+/// - `functions`: The [`Function`]s found in the contract.
+/// - `trace`: debug trace of the decompilation process.
+/// - `trace_parent`: the parent of the current trace.
+///
+/// # Returns
+/// A [`Vec`] of [`ABIStructure`]s representing the contract's ABI.
 pub fn build_abi(
     args: &DecompilerArgs,
     functions: Vec<Function>,

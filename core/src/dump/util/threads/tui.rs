@@ -14,6 +14,7 @@ use crate::dump::{
     DumpArgs,
 };
 
+/// The main function for the TUI. Will render the TUI and handle user input.
 pub fn handle(args: &DumpArgs, output_dir: &str) {
     // if no TUI is requested, just run the dump
     if args.no_tui {

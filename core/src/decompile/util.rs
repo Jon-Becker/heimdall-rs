@@ -6,6 +6,9 @@ use heimdall_common::ether::{
     signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
 };
 
+/// The [`Function`] struct represents a decompiled function found in the contract's bytecode.
+/// Throughout the decompilation process, we will build up this function's structure, and eventually
+/// write it to a file.
 #[derive(Clone, Debug)]
 pub struct Function {
     // the function's 4byte selector
@@ -60,6 +63,7 @@ pub struct Function {
     pub payable: bool,
 }
 
+///
 #[derive(Clone, Debug)]
 pub struct StorageFrame {
     pub value: U256,
