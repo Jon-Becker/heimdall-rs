@@ -167,7 +167,7 @@ impl Opcode {
             0xfd => Opcode { code, name: "REVERT", mingas: 0, inputs: 2, outputs: 0 },
             0xfe => Opcode { code, name: "INVALID", mingas: 0, inputs: 0, outputs: 0 },
             0xff => Opcode { code, name: "SELFDESTRUCT", mingas: 5000, inputs: 1, outputs: 0 },
-            _ => panic!("Invalid opcode: {}", code),
+            _ => Opcode { code, name: "unknown", mingas: 0, inputs: 0, outputs: 0 },
         }
     }
 }
@@ -256,9 +256,8 @@ mod tests {
 
     #[test]
     fn test_get_unknown_opcode() {
-        let unknown_opcode = Opcode::new(0x00);
-        assert_eq!(unknown_opcode.code, 0x00);
-        assert_eq!(unknown_opcode.name, "INVALID");
+        let unknown_opcode = Opcode::new(0xee);
+        assert_eq!(unknown_opcode.name, "unknown");
     }
 
     #[test]
