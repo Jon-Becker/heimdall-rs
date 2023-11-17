@@ -1,5 +1,5 @@
 use clap::{AppSettings, Parser};
-use heimdall_common::io::{
+use heimdall_common::utils::io::{
     file::{delete_path, read_file, write_file},
     logging::*,
 };
@@ -31,6 +31,8 @@ pub struct ConfigArgs {
     value: String,
 }
 
+/// The [`Configuration`] struct represents the configuration of the CLI. All heimdall core modules
+/// will attempt to read from this configuration when possible.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Configuration {
     pub rpc_url: String,
@@ -41,6 +43,7 @@ pub struct Configuration {
 }
 
 #[allow(deprecated)]
+/// Writes the given configuration to the disc at `$HOME/.bifrost/config.toml`.
 pub fn write_config(contents: &str) {
     match home_dir() {
         Some(mut home) => {
@@ -60,6 +63,7 @@ pub fn write_config(contents: &str) {
 }
 
 #[allow(deprecated)]
+/// Deletes the configuration file at `$HOME/.bifrost/config.toml`.
 pub fn delete_config() {
     match home_dir() {
         Some(mut home) => {
@@ -79,6 +83,7 @@ pub fn delete_config() {
 }
 
 #[allow(deprecated)]
+/// Reads the configuration file at `$HOME/.bifrost/config.toml`.
 pub fn read_config() -> String {
     match home_dir() {
         Some(mut home) => {
@@ -104,6 +109,8 @@ pub fn read_config() -> String {
     }
 }
 
+/// Returns the [`Configuration`] struct after parsing the configuration file at
+/// `$HOME/.bifrost/config.toml`.
 pub fn get_config() -> Configuration {
     let contents = read_config();
 
@@ -121,6 +128,7 @@ pub fn get_config() -> Configuration {
     config
 }
 
+/// update a single key/value pair in the configuration file
 pub fn update_config(key: &str, value: &str) {
     let mut contents = get_config();
 
@@ -153,6 +161,7 @@ pub fn update_config(key: &str, value: &str) {
     write_config(&serialized_config);
 }
 
+/// The `config` command is used to display and edit the current configuration.
 pub fn config(args: ConfigArgs) {
     let (logger, _) = Logger::new("");
     if !args.key.is_empty() {

@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use crate::decompile::{constants::DECOMPILED_SOURCE_HEADER_YUL, util::Function, DecompilerArgs};
 use heimdall_common::{
     ether::signatures::ResolvedLog,
-    io::{
+    utils::io::{
         file::short_path,
         logging::{Logger, TraceFactory},
     },
@@ -12,6 +12,8 @@ use indicatif::ProgressBar;
 
 use super::postprocessers::yul::postprocess;
 
+/// Build the decompiled Yul source code from the given functions. Will piece together decompiled
+/// [`Function`]s and [`ResolvedLog`]s into a Yul contract.
 pub fn build_yul_output(
     args: &DecompilerArgs,
     functions: Vec<Function>,

@@ -7,8 +7,8 @@ use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use ethers::types::H160;
 use heimdall_common::{
-    io::logging::*,
     resources::transpose::{get_contract_creation, get_transaction_list},
+    utils::io::logging::*,
 };
 use std::{collections::HashMap, env, str::FromStr, time::Instant};
 
@@ -86,6 +86,8 @@ impl DumpArgsBuilder {
     }
 }
 
+/// entry point for the dump module. Will fetch all storage slots accessed by the target contract,
+/// and dump them to a CSV file or the TUI.
 pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Error>> {
     // set logger environment variable if not already set
     if std::env::var("RUST_LOG").is_err() {
@@ -179,7 +181,7 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
     let mut state = DUMP_STATE.lock().unwrap();
     *state = DumpState {
         args: args.clone(),
-        transactions: transactions,
+        transactions,
         scroll_index: 0,
         selection_size: 1,
         storage: HashMap::new(),

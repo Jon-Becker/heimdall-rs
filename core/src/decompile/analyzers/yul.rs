@@ -1,13 +1,25 @@
 use ethers::abi::{decode, AbiEncode, ParamType};
 use heimdall_common::{
     ether::evm::{core::types::convert_bitmask, ext::exec::VMTrace},
-    io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced},
+    utils::{
+        io::logging::TraceFactory,
+        strings::{decode_hex, encode_hex_reduced},
+    },
 };
 
 use super::super::util::*;
-
-// converts a VMTrace to a Funciton through lexical and syntactic analysis
+/// Converts a VMTrace to a Function through lexical and syntactic analysis
+///
+/// ## Parameters
+/// - `vm_trace` - The VMTrace to be analyzed
+/// - `function` - The function to be updated with the analysis results
+/// - `trace` - The TraceFactory to be updated with the analysis results
+/// - `trace_parent` - The parent of the current VMTrace
+/// - `conditional_map` - The map of conditionals that have been jumped
+///
+///
+/// ## Returns
+/// - `function` - The function updated with the analysis results
 pub fn analyze_yul(
     vm_trace: &VMTrace,
     function: Function,
@@ -203,7 +215,7 @@ pub fn analyze_yul(
             let operations = instruction.input_operations[1].clone();
 
             // add the sstore to the function's storage map
-            function.storage.insert(key, StorageFrame { value: value, operations: operations });
+            function.storage.insert(key, StorageFrame { value, operations });
             function.logic.push(format!(
                 "sstore({}, {})",
                 instruction.input_operations[0].yulify(),
@@ -215,7 +227,7 @@ pub fn analyze_yul(
             let operation = instruction.input_operations[1].clone();
 
             // add the mstore to the function's memory map
-            function.memory.insert(key, StorageFrame { value: value, operations: operation });
+            function.memory.insert(key, StorageFrame { value, operations: operation });
             function.logic.push(format!(
                 "{}({}, {})",
                 opcode_name.to_lowercase(),

@@ -1,6 +1,17 @@
 use crossbeam_channel::unbounded;
 use std::{sync::Arc, thread};
 
+/// A simple thread pool implementation that takes a vector of items, splits them into chunks, and
+/// processes each chunk in a separate thread. The results are collected and returned.
+///
+/// ```
+/// use heimdall_common::utils::threading::task_pool;
+///
+/// let items = vec![1, 2, 3, 4, 5];
+/// let num_threads = 2;
+/// let results = task_pool(items, num_threads, |item| item * 2);
+/// assert_eq!(results, vec![2, 4, 6, 8, 10]);
+/// ```
 pub fn task_pool<
     T: Clone + Send + Sync + 'static,
     R: Send + 'static,
@@ -50,4 +61,52 @@ pub fn task_pool<
     }
 
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::threading::*;
+
+    #[test]
+    fn test_task_pool_with_single_thread() {
+        // Test case with a single thread
+        let items = vec![1, 2, 3, 4, 5];
+        let num_threads = 1;
+        let expected_results = vec![2, 4, 6, 8, 10];
+
+        // Define a simple function to double the input
+        let f = |x: i32| x * 2;
+
+        let mut results = task_pool(items, num_threads, f);
+        results.sort();
+        assert_eq!(results, expected_results);
+    }
+
+    #[test]
+    fn test_task_pool_with_multiple_threads() {
+        // Test case with multiple threads
+        let items = vec![1, 2, 3, 4, 5];
+        let num_threads = 3;
+        let expected_results = vec![2, 4, 6, 8, 10];
+
+        // Define a simple function to double the input
+        let f = |x: i32| x * 2;
+
+        let mut results = task_pool(items, num_threads, f);
+        results.sort();
+        assert_eq!(results, expected_results);
+    }
+
+    #[test]
+    fn test_task_pool_with_empty_items() {
+        // Test case with empty items vector
+        let items: Vec<i32> = Vec::new();
+        let num_threads = 2;
+
+        // Define a simple function to double the input
+        let f = |x: i32| x * 2;
+
+        let results = task_pool(items, num_threads, f);
+        assert!(results.is_empty());
+    }
 }

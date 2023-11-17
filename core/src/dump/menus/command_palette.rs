@@ -8,6 +8,7 @@ use tui::{
 
 use crate::dump::{structures::dump_state::DumpState, util::table::build_rows};
 
+/// Render the TUI command palette
 pub fn render_tui_command_palette<B: Backend>(f: &mut Frame<B>, state: &mut DumpState) {
     // build main layout
     let main_layout = Layout::default()

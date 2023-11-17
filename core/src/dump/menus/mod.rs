@@ -15,6 +15,7 @@ pub enum TUIView {
     Help,
 }
 
+/// Render the TUI
 #[allow(unreachable_patterns)]
 pub fn render_ui<B: Backend>(f: &mut Frame<B>, state: &mut DumpState) {
     match state.view {

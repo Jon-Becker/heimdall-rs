@@ -10,8 +10,10 @@ use heimdall_common::{
         },
         ext::exec::VMTrace,
     },
-    io::logging::TraceFactory,
-    utils::strings::{decode_hex, encode_hex_reduced},
+    utils::{
+        io::logging::TraceFactory,
+        strings::{decode_hex, encode_hex_reduced},
+    },
 };
 
 use super::super::{constants::AND_BITMASK_REGEX, precompile::decode_precompile};
@@ -27,6 +29,7 @@ use crate::decompile::{
 /// - `function` - The function to be updated with the analysis results
 /// - `trace` - The TraceFactory to be updated with the analysis results
 /// - `trace_parent` - The parent of the current VMTrace
+/// - `conditional_map` - A map of the conditionals in the current trace
 /// - `branch` - Branch metadata for the current trace. In the format of (branch_depth,
 ///   branch_index)
 ///     - @jon-becker: This will be used later to determin if a condition is a require
@@ -384,7 +387,7 @@ pub fn analyze_sol(
             let operations = instruction.input_operations[1].clone();
 
             // add the sstore to the function's storage map
-            function.storage.insert(key, StorageFrame { value: value, operations: operations });
+            function.storage.insert(key, StorageFrame { value, operations });
             function.logic.push(format!(
                 "storage[{}] = {};",
                 instruction.input_operations[0].solidify(),
@@ -396,7 +399,7 @@ pub fn analyze_sol(
             let operation = instruction.input_operations[1].clone();
 
             // add the mstore to the function's memory map
-            function.memory.insert(key, StorageFrame { value: value, operations: operation });
+            function.memory.insert(key, StorageFrame { value, operations: operation });
             function.logic.push(format!(
                 "memory[{}] = {};",
                 encode_hex_reduced(key),

@@ -16,6 +16,7 @@ pub enum TUIView {
 }
 
 #[allow(unreachable_patterns)]
+/// Render the TUI view based on the current state
 pub fn render_ui<B: Backend>(f: &mut Frame<B>, state: &mut State) {
     match state.view {
         TUIView::Main => main::render_tui_view_main(f, state),

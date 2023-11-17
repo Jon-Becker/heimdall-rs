@@ -4,6 +4,9 @@ use heimdall_common::ether::signatures::{ResolvedError, ResolvedLog};
 
 use crate::snapshot::{menus::TUIView, structures::snapshot::Snapshot};
 
+/// The state of the snapshot process, which will be updated as the process continues.
+/// This struct is also used to store the state of the TUI, and is often passed to the TUI renderer
+/// as a mutable reference.
 #[derive(Debug, Clone)]
 pub struct State {
     pub function_index: usize,

@@ -9,41 +9,18 @@ use fancy_regex::Regex;
 use crate::constants::REDUCE_HEX_REGEX;
 
 /// Converts a signed integer into an unsigned integer
-///
-/// ## Arguments
-/// signed: I256 - the signed integer to convert
-///
-/// ## Returns
-/// U256 - the unsigned integer
-///
-/// ## Example
-/// ```no_run
-/// use ethers::prelude::{I256, U256};
-/// use heimdall_core::utils::strings::unsign_int;
-///
-/// let signed = I256::from(-1);
-/// let unsigned = unsign_int(signed);
-///
-/// assert_eq!(unsigned, U256::from(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff));
-/// ```
 pub fn sign_uint(unsigned: U256) -> I256 {
     I256::from_raw(unsigned)
 }
 
 /// Decodes a hex string into a vector of bytes
 ///
-/// ## Arguments
-/// s: &str - the hex string to decode
+/// ```
+/// use heimdall_common::utils::strings::decode_hex;
 ///
-/// ## Returns
-/// Result<Vec<u8>, ParseIntError> - the decoded vector of bytes
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::decode_hex;
-///
-/// let decoded = decode_hex("00010203");
-/// assert_eq!(decoded, Ok(vec![0, 1, 2, 3]));
+/// let hex = "48656c6c6f20576f726c64"; // "Hello World" in hex
+/// let result = decode_hex(hex);
+/// assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]));
 /// ```
 pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16)).collect()
@@ -51,18 +28,12 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 
 /// Encodes a vector of bytes into a hex string
 ///
-/// ## Arguments
-/// s: Vec<u8> - the vector of bytes to encode
+/// ```
+/// use heimdall_common::utils::strings::encode_hex;
 ///
-/// ## Returns
-/// String - the encoded hex string
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::encode_hex;
-///
-/// let encoded = encode_hex(vec![0, 1, 2, 3]);
-/// assert_eq!(encoded, String::from("00010203"));
+/// let bytes = vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100];
+/// let result = encode_hex(bytes);
+/// assert_eq!(result, "48656c6c6f20576f726c64");
 /// ```
 pub fn encode_hex(s: Vec<u8>) -> String {
     s.iter().fold(String::new(), |mut acc, b| {
@@ -73,22 +44,13 @@ pub fn encode_hex(s: Vec<u8>) -> String {
 
 /// Encodes a U256 into a hex string, removing leading zeros
 ///
-/// ## Arguments
-/// s: U256 - the U256 to encode
+/// ```
+/// use ethers::types::U256;
+/// use heimdall_common::utils::strings::encode_hex_reduced;
 ///
-/// ## Returns
-/// String - the encoded hex string
-///
-/// ## Example
-/// ```no_run
-/// use ethers::prelude::U256;
-/// use heimdall_core::utils::strings::encode_hex_reduced;
-///
-/// let encoded = encode_hex_reduced(U256::from(0));
-/// assert_eq!(encoded, String::from("0"));
-///
-/// let encoded = encode_hex_reduced(U256::from(1));
-/// assert_eq!(encoded, String::from("0x01"));
+/// let u256 = U256::max_value();
+/// let result = encode_hex_reduced(u256);
+/// assert_eq!(result, "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 /// ```
 pub fn encode_hex_reduced(s: U256) -> String {
     if s > U256::from(0) {
@@ -100,18 +62,12 @@ pub fn encode_hex_reduced(s: U256) -> String {
 
 /// Converts a hex string to an ASCII string
 ///
-/// ## Arguments
-/// s: &str - the hex string to convert
+/// ```
+/// use heimdall_common::utils::strings::hex_to_ascii;
 ///
-/// ## Returns
-/// String - the ASCII string
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::hex_to_ascii;
-///
-/// let ascii = hex_to_ascii("0x68656c6c6f20776f726c64");
-/// assert_eq!(ascii, String::from("hello world"));
+/// let hex = "48656c6c6f20576f726c64"; // "Hello World" in hex
+/// let result = hex_to_ascii(hex);
+/// assert_eq!(result, "Hello World");
 /// ```
 pub fn hex_to_ascii(s: &str) -> String {
     let mut result = String::new();
@@ -129,23 +85,14 @@ pub fn hex_to_ascii(s: &str) -> String {
 
 /// Replaces the last occurrence of a substring in a string
 ///
-/// ## Arguments
-/// s: String - the string to search
-/// old: &str - the substring to replace
-/// new: &str - the substring to replace with
+/// ```
+/// use heimdall_common::utils::strings::replace_last;
 ///
-/// ## Returns
-/// String - the resulting string
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::replace_last;
-///
-/// let replaced = replace_last(String::from("arg0 + arg1"), "arg1", "arg2");
-/// assert_eq!(replaced, String::from("arg0 + arg2"));
-///
-/// let replaced = replace_last(String::from("arg0 + arg1 + arg1"), "arg1", "arg2");
-/// assert_eq!(replaced, String::from("arg0 + arg1 + arg2"));
+/// let s = "Hello, world!";
+/// let old = "o";
+/// let new = "0";
+/// let result = replace_last(s, old, new);
+/// assert_eq!(result, String::from("Hello, w0rld!"));
 /// ```
 pub fn replace_last(s: &str, old: &str, new: &str) -> String {
     let new = new.chars().rev().collect::<String>();
@@ -154,22 +101,12 @@ pub fn replace_last(s: &str, old: &str, new: &str) -> String {
 
 /// Finds balanced encapsulator in a string
 ///
-/// ## Arguments
-/// s: String - the string to search
-/// encap: (char, char) - the encapsulator to search for
+/// ```
+/// use heimdall_common::utils::strings::find_balanced_encapsulator;
 ///
-/// ## Returns
-/// (usize, usize, bool) - the start and end indices of the balanced encapsulator, and whether or
-/// not it was found
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::find_balanced_encapsulator;
-///
-/// let (start, end, is_balanced) = find_balanced_encapsulator(String::from("arg0 + arg1"), ('(', ')'));
-/// assert_eq!(start, 0);
-/// assert_eq!(end, 9);
-/// assert_eq!(is_balanced, true);
+/// let s = "Hello (World)";
+/// let result = find_balanced_encapsulator(s, ('(', ')'));
+/// assert_eq!(result, (6, 13, true));
 /// ```
 pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize, bool) {
     let mut open = 0;
@@ -195,22 +132,12 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize
 
 /// Finds balanced parentheses in a string, starting from the end
 ///
-/// ## Arguments
-/// s: String - the string to search
-/// encap: (char, char) - the encapsulator to search for
+/// ```
+/// use heimdall_common::utils::strings::find_balanced_encapsulator_backwards;
 ///
-/// ## Returns
-/// (usize, usize, bool) - the start and end indices of the balanced parentheses, and whether or not
-/// they were found
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::find_balanced_encapsulator_backwards;
-///
-/// let (start, end, is_balanced) = find_balanced_encapsulator_backwards(String::from("arg0 + arg1"), ('(', ')'));
-/// assert_eq!(start, 0);
-/// assert_eq!(end, 9);
-/// assert_eq!(is_balanced, true);
+/// let s = "Hello (World)";
+/// let result = find_balanced_encapsulator_backwards(s, ('(', ')'));
+/// assert_eq!(result, (6, 13, true));
 /// ```
 pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (usize, usize, bool) {
     let mut open = 0;
@@ -236,24 +163,12 @@ pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (us
 
 /// Encodes a number into a base26 string
 ///
-/// ## Arguments
-/// n: usize - the number to encode
+/// ```
+/// use heimdall_common::utils::strings::base26_encode;
 ///
-/// ## Returns
-/// String - the encoded string
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::base26_encode;
-///
-/// let encoded = base26_encode(0);
-/// assert_eq!(encoded, String::from("a"));
-///
-/// let encoded = base26_encode(25);
-/// assert_eq!(encoded, String::from("z"));
-///
-/// let encoded = base26_encode(26);
-/// assert_eq!(encoded, String::from("aa"));
+/// let n = 123456789;
+/// let result = base26_encode(n);
+/// assert_eq!(result, "jjddja");
 /// ```
 pub fn base26_encode(n: usize) -> String {
     let mut s = String::new();
@@ -267,23 +182,6 @@ pub fn base26_encode(n: usize) -> String {
 }
 
 /// Splits a string by a regular expression
-///
-/// ## Arguments
-/// input: &str - the string to split
-/// pattern: Regex - the regular expression to split by
-///
-/// ## Returns
-/// Vec<String> - the vector of substrings
-///
-/// ## Example
-/// ```no_run
-/// use fancy_regex::Regex;
-/// use heimdall_core::utils::strings::split_string_by_regex;
-///
-/// let pattern = Regex::new(r"\s+").unwrap();
-/// let substrings = split_string_by_regex("arg0 + arg1", pattern);
-/// assert_eq!(substrings, vec!["arg0", "+", "arg1"]);
-/// ```
 pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
     // Find all matches of the pattern in the input string
     let matches = pattern.find_iter(input);
@@ -310,27 +208,12 @@ pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
 
 /// Extracts the condition from a require() or if() statement
 ///
-/// ## Arguments
-/// s: &str - the string to extract the condition from
-/// keyword: &str - the keyword to search for, either "require" or "if"
-///
-/// ## Returns
-/// Option<String> - the extracted condition, if found
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::extract_condition;
-///
-/// let condition = extract_condition("require(arg0 > 0)", "require");
-/// assert_eq!(condition, Some(String::from("arg0 > 0")));
 /// ```
+/// use heimdall_common::utils::strings::extract_condition;
 ///
-/// ## Example 2
-/// ```no_run
-/// use heimdall_core::utils::strings::extract_condition;
-///
-/// let condition = extract_condition("if (arg0 > 0) {", "if");
-/// assert_eq!(condition, Some(String::from("arg0 > 0")));
+/// let s = "require(a == b)";
+/// let result = extract_condition(s, "require");
+/// assert_eq!(result, Some("a == b".to_string()));
 /// ```
 pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
     // find the keyword
@@ -359,24 +242,12 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
 
 /// Tokenizes an expression into a vector of tokens
 ///
-/// ## Arguments
-/// s: &str - the expression to tokenize
+/// ```
+/// use heimdall_common::utils::strings::tokenize;
 ///
-/// ## Returns
-/// Vec<String> - the vector of tokens
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::tokenize;
-///
-/// let tokens = tokenize("arg0 + arg1");
-/// assert_eq!(tokens, vec!["arg0", "+", "arg1"]);
-///
-/// let tokens = tokenize("(arg0 + arg1) > (msg.value + 1)");
-/// assert_eq!(tokens, vec!["(", "arg0", "+", "arg1", ")", ">", "(", "msg.value", "+", "1", ")"]);
-///
-/// let tokens = tokenize("if (arg0 >= 0) {");
-/// assert_eq!(tokens, vec!["if", "(", "arg0", ">=", "0", ")", "{"]);
+/// let s = "a + b * c";
+/// let result = tokenize(s);
+/// assert_eq!(result, vec!["a", "+", "b", "*", "c"]);
 /// ```
 pub fn tokenize(s: &str) -> Vec<String> {
     let mut tokens = Vec::new();
@@ -449,49 +320,6 @@ pub enum TokenType {
 
 /// Classifies a token as a variable, constant, operator, or function call, and returns its
 /// precedence
-///
-/// ## Arguments
-/// token: &str - the token to classify
-///
-/// ## Returns
-/// (String, usize) - the token's classification, and precedence
-///
-/// ## Example
-/// ```no_run
-/// use heimdall_core::utils::strings::classify_token;
-///
-/// let (classification, precedence) = classify_token("0x01");
-/// assert_eq!(classification, TokenType::Constant);
-/// assert_eq!(precedence, 0);
-///
-/// let (classification, precedence) = classify_token("arg0");
-/// assert_eq!(classification, TokenType::Variable);
-/// assert_eq!(precedence, 0);
-///
-/// let (classification, precedence) = classify_token("+");
-/// assert_eq!(classification, TokenType::Operator);
-/// assert_eq!(precedence, 1);
-///
-/// let (classification, precedence) = classify_token("*");
-/// assert_eq!(classification, TokenType::Operator);
-/// assert_eq!(precedence, 2);
-///
-/// let (classification, precedence) = classify_token(">");
-/// assert_eq!(classification, TokenType::Operator);
-/// assert_eq!(precedence, 2);
-///
-/// let (classification, precedence) = classify_token("==");
-/// assert_eq!(classification, TokenType::Operator);
-/// assert_eq!(precedence, 2);
-///
-/// let (classification, precedence) = classify_token("memory[0x01]");
-/// assert_eq!(classification, TokenType::Variable);
-///
-/// let (classification, precedence) = classify_token("uint256");
-/// assert_eq!(classification, TokenType::Function);
-///
-/// let (classification, precedence) = classify_token("keccak256");
-/// assert_eq!(classification, Token::Function);
 pub fn classify_token(token: &str) -> TokenType {
     // return if the token is a parenthesis
     if token == "(" || token == ")" {
@@ -522,4 +350,345 @@ pub fn classify_token(token: &str) -> TokenType {
 
     // this token must be a function call
     TokenType::Function
+}
+
+#[cfg(test)]
+mod tests {
+    use ethers::types::{I256, U256};
+
+    use crate::utils::strings::*;
+
+    #[test]
+    fn test_sign_uint() {
+        let unsigned = U256::from(10);
+        let signed = sign_uint(unsigned);
+        assert_eq!(signed, I256::from(10));
+
+        let unsigned = U256::from(0);
+        let signed = sign_uint(unsigned);
+        assert_eq!(signed, I256::from(0));
+
+        let unsigned = U256::from(1000);
+        let signed = sign_uint(unsigned);
+        assert_eq!(signed, I256::from(1000));
+    }
+
+    #[test]
+    fn test_decode_hex() {
+        let hex = "48656c6c6f20776f726c64"; // "Hello world"
+        let result = decode_hex(hex);
+        assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]));
+
+        let hex = "abcdef";
+        let result = decode_hex(hex);
+        assert_eq!(result, Ok(vec![171, 205, 239]));
+
+        let hex = "012345";
+        let result = decode_hex(hex);
+        assert_eq!(result, Ok(vec![1, 35, 69]));
+    }
+
+    #[test]
+    fn test_encode_hex() {
+        let bytes = vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]; // "Hello world"
+        let result = encode_hex(bytes);
+        assert_eq!(result, "48656c6c6f20776f726c64");
+
+        let bytes = vec![171, 205, 239];
+        let result = encode_hex(bytes);
+        assert_eq!(result, "abcdef");
+
+        let bytes = vec![1, 35, 69];
+        let result = encode_hex(bytes);
+        assert_eq!(result, "012345");
+    }
+
+    #[test]
+    fn test_encode_hex_reduced() {
+        let hex = U256::from(10);
+        let result = encode_hex_reduced(hex);
+        assert_eq!(result, "0x0a");
+
+        let hex = U256::from(0);
+        let result = encode_hex_reduced(hex);
+        assert_eq!(result, "0");
+
+        let hex = U256::from(1000);
+        let result = encode_hex_reduced(hex);
+        assert_eq!(result, "0x03e8");
+    }
+
+    #[test]
+    fn test_hex_to_ascii() {
+        let hex = "48656c6c6f20776f726c64"; // "Hello world"
+        let result = hex_to_ascii(hex);
+        assert_eq!(result, "Hello world");
+
+        let hex = "616263646566"; // "abcdef"
+        let result = hex_to_ascii(hex);
+        assert_eq!(result, "abcdef");
+
+        let hex = "303132333435"; // "012345"
+        let result = hex_to_ascii(hex);
+        assert_eq!(result, "012345");
+    }
+
+    #[test]
+    fn test_replace_last() {
+        let s = "Hello, world!";
+        let old = "o";
+        let new = "0";
+        let result = replace_last(s, old, new);
+        assert_eq!(result, String::from("Hello, w0rld!"));
+
+        let s = "Hello, world!";
+        let old = "l";
+        let new = "L";
+        let result = replace_last(s, old, new);
+        assert_eq!(result, String::from("Hello, worLd!"));
+    }
+
+    #[test]
+    fn test_find_balanced_encapsulator() {
+        let s = String::from("This is (an example) string.");
+        let encap = ('(', ')');
+        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
+        assert_eq!(start, 8);
+        assert_eq!(end, 20);
+        assert!(is_balanced);
+
+        let s = String::from("This is an example) string.");
+        let encap = ('(', ')');
+        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
+        assert_eq!(start, 0);
+        assert_eq!(end, 1);
+        assert!(!is_balanced);
+
+        let s = String::from("This is (an example string.");
+        let encap = ('(', ')');
+        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
+        assert_eq!(start, 8);
+        assert_eq!(end, 1);
+        assert!(!is_balanced);
+    }
+
+    #[test]
+    fn test_find_balanced_encapsulator_backwards() {
+        let s = String::from("This is (an example) string.");
+        let encap = ('(', ')');
+        let (start, end, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
+        assert_eq!(start, 8);
+        assert_eq!(end, 20);
+        assert!(is_balanced);
+
+        let s = String::from("This is an example) string.");
+        let encap = ('(', ')');
+        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
+        assert!(!is_balanced);
+
+        let s = String::from("This is (an example string.");
+        let encap = ('(', ')');
+        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
+        assert!(!is_balanced);
+    }
+
+    #[test]
+    fn test_base26_encode() {
+        let n = 1;
+        let result = base26_encode(n);
+        assert_eq!(result, "a");
+
+        let n = 26;
+        let result = base26_encode(n);
+        assert_eq!(result, "z");
+
+        let n = 27;
+        let result = base26_encode(n);
+        assert_eq!(result, "aa");
+
+        let n = 703;
+        let result = base26_encode(n);
+        assert_eq!(result, "aaa");
+    }
+
+    #[test]
+    fn test_split_string_by_regex() {
+        let input = "Hello,world!";
+        let pattern = fancy_regex::Regex::new(r",").unwrap();
+        let result = split_string_by_regex(input, pattern);
+        assert_eq!(result, vec!["Hello", "world!"]);
+
+        let input = "This is a test.";
+        let pattern = fancy_regex::Regex::new(r"\s").unwrap();
+        let result = split_string_by_regex(input, pattern);
+        assert_eq!(result, vec!["This", "is", "a", "test."]);
+
+        let input = "The quick brown fox jumps over the lazy dog.";
+        let pattern = fancy_regex::Regex::new(r"\s+").unwrap();
+        let result = split_string_by_regex(input, pattern);
+        assert_eq!(
+            result,
+            vec!["The", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog."]
+        );
+    }
+
+    #[test]
+    fn test_extract_condition_present_balanced() {
+        let s = "require(arg0 == (address(arg0)));";
+        let keyword = "require";
+        let expected = Some("arg0 == (address(arg0))".to_string());
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_extract_condition_present_unbalanced() {
+        let s = "require(arg0 == (address(arg0));";
+        let keyword = "require";
+        let expected = None;
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_extract_condition_not_present() {
+        let s = "if (0x01 < var_c.length) {";
+        let keyword = "require";
+        let expected = None;
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_extract_condition_multiple_keywords() {
+        let s = "require(var_c.length == var_c.length, \"some revert message\");";
+        let keyword = "require";
+        let expected = Some("var_c.length == var_c.length".to_string());
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_extract_condition_empty_string() {
+        let s = "";
+        let keyword = "require";
+        let expected = None;
+        assert_eq!(extract_condition(s, keyword), expected);
+    }
+
+    #[test]
+    fn test_tokenize_basic_operators() {
+        let tokens = tokenize("arg0 + arg1");
+        assert_eq!(tokens, vec!["arg0", "+", "arg1"]);
+    }
+
+    #[test]
+    fn test_tokenize_parentheses_and_operators() {
+        let tokens = tokenize("(arg0 + arg1) > (msg.value + 1)");
+        assert_eq!(
+            tokens,
+            vec!["(", "arg0", "+", "arg1", ")", ">", "(", "msg.value", "+", "1", ")"]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_multiple_operators() {
+        let tokens = tokenize("a >= b && c != d");
+        assert_eq!(tokens, vec!["a", ">=", "b", "&&", "c", "!=", "d"]);
+    }
+
+    #[test]
+    fn test_tokenize_no_spaces() {
+        let tokens = tokenize("a+b-c*d/e");
+        assert_eq!(tokens, vec!["a", "+", "b", "-", "c", "*", "d", "/", "e"]);
+    }
+
+    #[test]
+    fn test_tokenize_whitespace_only() {
+        let tokens = tokenize("    ");
+        assert_eq!(tokens, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_tokenize_empty_string() {
+        let tokens = tokenize("");
+        assert_eq!(tokens, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_tokenize_complex_expression() {
+        let tokens = tokenize("if (x > 10 && y < 20) || z == 0 { a = b + c }");
+        assert_eq!(
+            tokens,
+            vec![
+                "if", "(", "x", ">", "10", "&&", "y", "<", "20", ")", "||", "z", "==", "0", "{",
+                "a", "=", "b", "+", "c", "}"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_separators_at_start_and_end() {
+        let tokens = tokenize("==text==");
+        assert_eq!(tokens, vec!["==", "text", "=="]);
+    }
+
+    #[test]
+    fn test_classify_token_parenthesis() {
+        let classification = classify_token("(");
+        assert_eq!(classification, TokenType::Control);
+
+        let classification = classify_token(")");
+        assert_eq!(classification, TokenType::Control);
+    }
+
+    #[test]
+    fn test_classify_token_operators_precedence_1() {
+        for operator in ["+", "-"].iter() {
+            let classification = classify_token(operator);
+            assert_eq!(classification, TokenType::Operator);
+        }
+    }
+
+    #[test]
+    fn test_classify_token_operators_precedence_2() {
+        for operator in
+            ["*", "/", "%", "|", "&", "^", "==", ">=", "<=", "!=", "!", "&&", "||"].iter()
+        {
+            let classification = classify_token(operator);
+            assert_eq!(classification, TokenType::Operator);
+        }
+    }
+
+    #[test]
+    fn test_classify_token_constant() {
+        let classification = classify_token("0x001234567890");
+        assert_eq!(classification, TokenType::Constant);
+    }
+
+    #[test]
+    fn test_classify_token_variable() {
+        for variable in [
+            "memory[0x01]",
+            "storage",
+            "var",
+            "msg.value",
+            "block.timestamp",
+            "this.balance",
+            "tx.origin",
+            "arg0",
+            "ret",
+            "calldata",
+            "abi.encode",
+        ]
+        .iter()
+        {
+            let classification = classify_token(variable);
+            assert_eq!(classification, TokenType::Variable);
+        }
+    }
+
+    #[test]
+    fn test_classify_token_function() {
+        for function in ["uint256", "address", "ecrecover", "if"].iter() {
+            let classification = classify_token(function);
+            assert_eq!(classification, TokenType::Function);
+        }
+    }
 }

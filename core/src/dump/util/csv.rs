@@ -2,13 +2,14 @@ use ethers::{
     abi::{decode, ParamType},
     types::U256,
 };
-use heimdall_common::{
+use heimdall_common::utils::{
     io::file::write_lines_to_file,
-    utils::strings::{encode_hex, hex_to_ascii},
+    strings::{encode_hex, hex_to_ascii},
 };
 
 use crate::dump::{constants::DECODE_AS_TYPES, structures::dump_state::DumpState};
 
+/// A single row in the CSV
 #[derive(Debug, Clone)]
 pub struct DumpRow {
     pub last_modified: String,
@@ -18,6 +19,7 @@ pub struct DumpRow {
     pub value: String,
 }
 
+/// Convert [`DumpState`] to a Vec of [`DumpRow`]s, which can be used to build a CSV.
 pub fn build_csv(state: &DumpState) -> Vec<DumpRow> {
     let mut lines: Vec<DumpRow> = Vec::new();
 
@@ -55,6 +57,7 @@ pub fn build_csv(state: &DumpState) -> Vec<DumpRow> {
     lines
 }
 
+/// Write the storage to a CSV file.
 pub fn write_storage_to_csv(output_dir: &str, file_name: &str, state: &DumpState) {
     let mut csv_rows = build_csv(state);
     let mut lines: Vec<String> = Vec::new();

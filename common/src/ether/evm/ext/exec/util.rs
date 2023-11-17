@@ -3,7 +3,7 @@ use ethers::types::U256;
 use crate::{
     constants::{MEMORY_REGEX, STORAGE_REGEX},
     ether::evm::core::stack::{Stack, StackFrame},
-    io::logging::Logger,
+    utils::io::logging::Logger,
 };
 
 /// Given two stacks A and B, return A - B, i.e. the items in A that are not in B.

@@ -12,11 +12,13 @@ use crossterm::{
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{
     constants::ADDRESS_REGEX,
-    io::{
-        file::{write_file, write_lines_to_file},
-        logging::Logger,
+    utils::{
+        io::{
+            file::{write_file, write_lines_to_file},
+            logging::Logger,
+        },
+        version::{current_version, remote_version},
     },
-    utils::version::{current_version, remote_version},
 };
 use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_core::{

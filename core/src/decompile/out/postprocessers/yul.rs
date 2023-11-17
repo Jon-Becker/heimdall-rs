@@ -14,6 +14,7 @@ lazy_static! {
     static ref TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
+/// Remove double negations from a line
 fn remove_double_negation(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -45,6 +46,7 @@ fn remove_double_negation(line: &str) -> String {
     cleaned
 }
 
+/// Convert bitwise operations to a variable type cast
 fn convert_bitmask_to_casting(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -88,6 +90,7 @@ fn convert_bitmask_to_casting(line: &str) -> String {
     cleaned
 }
 
+/// Removes unnecessary casts
 fn simplify_casts(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -117,6 +120,7 @@ fn simplify_casts(line: &str) -> String {
     cleaned
 }
 
+/// Removes or replaces casts with helper functions
 fn remove_replace_casts(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
@@ -142,6 +146,7 @@ fn remove_replace_casts(line: &str) -> String {
     cleaned
 }
 
+/// Removes unnecessary parentheses
 fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     // helper function to determine if parentheses are necessary
     fn are_parentheses_unnecessary(expression: &str) -> bool {
@@ -250,6 +255,7 @@ fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     cleaned
 }
 
+/// Add resolved events as comments
 fn add_resolved_events(line: &str, all_resolved_events: HashMap<String, ResolvedLog>) -> String {
     let mut cleaned = line.to_owned();
 
@@ -287,6 +293,7 @@ fn add_resolved_events(line: &str, all_resolved_events: HashMap<String, Resolved
     cleaned
 }
 
+/// Cleans up a line using postprocessing techniques
 fn cleanup(line: &str, all_resolved_events: HashMap<String, ResolvedLog>) -> String {
     let mut cleaned = line.to_owned();
 
@@ -316,6 +323,7 @@ fn cleanup(line: &str, all_resolved_events: HashMap<String, ResolvedLog>) -> Str
     cleaned
 }
 
+/// Postprocesses the cleaned lines
 pub fn postprocess(
     lines: Vec<String>,
     all_resolved_events: HashMap<String, ResolvedLog>,

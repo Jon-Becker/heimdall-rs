@@ -3,7 +3,12 @@ use heimdall_common::ether::evm::core::opcodes::WrappedOpcode;
 
 use super::util::StorageFrame;
 
-// detects the usage of precompiled contracts within the EVM
+/// Detects the usage of precompiled contracts within the EVM. Whenever an internal call is found
+/// within symbolic execution traces, this function will attempt to detect if the call is to a
+/// precompiled contract. It is relatively trivial to do this, as calls to specific addresses (i.e,
+/// `0x..01`), are precompiled contracts.
+/// Once a precompile has been detected, this function attempts to format it in a solidity-like
+/// format.
 pub fn decode_precompile(
     precompile_address: U256,
     extcalldata_memory: Vec<StorageFrame>,

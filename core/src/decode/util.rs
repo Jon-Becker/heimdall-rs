@@ -1,6 +1,7 @@
 use ethers::types::Transaction;
 use heimdall_cache::util::encode_hex;
 
+/// Get an explanation of the decoded transaction using the OpenAI API
 pub async fn get_explanation(
     decoded: String,
     transaction: Transaction,

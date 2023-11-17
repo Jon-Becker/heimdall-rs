@@ -1,11 +1,12 @@
 use std::{process::Command, time::Duration};
 
-use heimdall_common::io::{file::write_file, logging::Logger};
+use heimdall_common::utils::io::{file::write_file, logging::Logger};
 use indicatif::ProgressBar;
 use petgraph::{dot::Dot, graph::Graph};
 
 use super::CFGArgs;
 
+/// Write the generated CFG to a file in the `dot` graphviz format.
 pub fn write_cfg_to_file(contract_cfg: &Graph<String, String>, args: &CFGArgs, output_dir: String) {
     // get a new logger
     let logger = Logger::default();

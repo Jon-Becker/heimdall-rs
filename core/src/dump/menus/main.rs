@@ -9,6 +9,7 @@ use tui::{
 
 use crate::dump::{structures::dump_state::DumpState, util::table::build_rows};
 
+/// Render the TUI main view
 pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut DumpState) {
     // build main layout
     let main_layout = Layout::default()

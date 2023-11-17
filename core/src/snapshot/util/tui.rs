@@ -14,7 +14,7 @@ use crate::snapshot::{
     structures::snapshot::Snapshot,
 };
 
-// cleanup the terminal, disable raw mode, and leave the alternate screen
+/// cleanup the terminal, disable raw mode, and leave the alternate screen
 pub fn cleanup_terminal() {
     let stdout = io::stdout();
     let backend = CrosstermBackend::new(stdout);
@@ -24,6 +24,7 @@ pub fn cleanup_terminal() {
     terminal.show_cursor().unwrap();
 }
 
+/// The TUI thread handler, which will be called from the main thread.
 pub fn handle(
     snapshots: Vec<Snapshot>,
     resolved_errors: &HashMap<String, ResolvedError>,

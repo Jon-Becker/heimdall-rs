@@ -6,12 +6,28 @@ use std::{
     process::Command,
 };
 
-// decode a hex into an array of integer values
+/// Decode a hex string into a bytearray
+///
+/// ```
+/// use heimdall_cache::util::decode_hex;
+///
+/// let hex = "48656c6c6f20576f726c64"; // "Hello World" in hex
+/// let result = decode_hex(hex);
+/// assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]));
+/// ```
 pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16)).collect()
 }
 
-// encode a hex into a string
+/// Encode a bytearray into a hex string
+///
+/// ```
+/// use heimdall_cache::util::encode_hex;
+///
+/// let bytes = vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100];
+/// let result = encode_hex(bytes);
+/// assert_eq!(result, "48656c6c6f20576f726c64");
+/// ```
 pub fn encode_hex(s: Vec<u8>) -> String {
     s.iter().fold(String::new(), |mut acc, b| {
         write!(acc, "{b:02x}", b = b).unwrap();
@@ -19,6 +35,20 @@ pub fn encode_hex(s: Vec<u8>) -> String {
     })
 }
 
+/// Prettify bytes into a human-readable format \
+/// e.g. 1024 -> 1 KB
+///
+/// ```
+/// use heimdall_cache::util::prettify_bytes;
+///
+/// let bytes = 500;
+/// let result = prettify_bytes(bytes);
+/// assert_eq!(result, "500 B");
+///
+/// let bytes = 500_000;
+/// let result = prettify_bytes(bytes);
+/// assert_eq!(result, "488 KB");
+/// ```
 pub fn prettify_bytes(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{bytes} B")
@@ -34,6 +64,15 @@ pub fn prettify_bytes(bytes: u64) -> String {
     }
 }
 
+/// Write contents to a file on the disc
+///
+/// ```no_run
+/// use heimdall_cache::util::write_file;
+///
+/// let path = "/tmp/test.txt";
+/// let contents = "Hello, World!";
+/// let result = write_file(path, contents);
+/// ```
 pub fn write_file(_path: &str, contents: &str) -> Option<String> {
     let path = std::path::Path::new(_path);
     let prefix = path.parent().unwrap();
@@ -54,6 +93,15 @@ pub fn write_file(_path: &str, contents: &str) -> Option<String> {
     Some(_path.to_string())
 }
 
+/// Read contents from a file on the disc
+///
+/// ```no_run
+/// use heimdall_cache::util::read_file;
+///
+/// let path = "/tmp/test.txt";
+/// let contents = read_file(path);
+/// assert!(contents.is_some());
+/// ```
 pub fn read_file(_path: &str) -> Option<String> {
     let path = std::path::Path::new(_path);
     let mut file = match File::open(path) {
@@ -68,6 +116,14 @@ pub fn read_file(_path: &str) -> Option<String> {
     Some(contents)
 }
 
+/// Delete a file or directory on the disc
+///
+/// ```no_run
+/// use heimdall_cache::util::delete_path;
+///
+/// let path = "/tmp/test.txt";
+/// let result = delete_path(path);
+/// ```
 pub fn delete_path(_path: &str) -> bool {
     let path = match std::path::Path::new(_path).to_str() {
         Some(path) => path,

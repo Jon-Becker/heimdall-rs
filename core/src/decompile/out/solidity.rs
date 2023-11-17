@@ -2,11 +2,13 @@ use std::{collections::HashMap, time::Duration};
 
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    io::{
-        file::short_path,
-        logging::{Logger, TraceFactory},
+    utils::{
+        io::{
+            file::short_path,
+            logging::{Logger, TraceFactory},
+        },
+        strings::find_balanced_encapsulator,
     },
-    utils::strings::find_balanced_encapsulator,
 };
 use indicatif::ProgressBar;
 
@@ -20,6 +22,9 @@ use super::{
     postprocessers::solidity::postprocess,
 };
 
+/// Build the decompiled Solidity source code from the given functions. Will piece together
+/// decompiled [`Function`]s, [`ResolvedError`]s, [`ResolvedLog`]s, and [`ABIStructure`]s into a
+/// Solidity contract.
 pub fn build_solidity_output(
     args: &DecompilerArgs,
     abi: &Vec<ABIStructure>,

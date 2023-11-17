@@ -6,6 +6,8 @@ use heimdall_common::ether::{
     signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
 };
 
+/// A snapshot of a contract's state at a given point in time. Will be built over the process of
+/// symbolic-execution analysis.
 #[derive(Clone, Debug)]
 pub struct Snapshot {
     // the function's 4byte selector

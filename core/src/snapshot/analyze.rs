@@ -19,8 +19,7 @@ use heimdall_common::{
         },
         lexers::cleanup::Cleanup,
     },
-    io::logging::TraceFactory,
-    utils::strings::encode_hex_reduced,
+    utils::{io::logging::TraceFactory, strings::encode_hex_reduced},
 };
 
 /// Generates a snapshot of a VMTrace's underlying function
@@ -361,7 +360,7 @@ pub fn snapshot_trace(
             let operation = instruction.input_operations[1].clone();
 
             // add the mstore to the function's memory map
-            snapshot.memory.insert(key, StorageFrame { value: value, operations: operation });
+            snapshot.memory.insert(key, StorageFrame { value, operations: operation });
         } else if opcode_name == "CODECOPY" {
             let memory_offset = &instruction.inputs[0];
             let source_offset = instruction.inputs[1].try_into().unwrap_or(usize::MAX);
@@ -377,7 +376,7 @@ pub fn snapshot_trace(
 
                 snapshot.memory.insert(
                     key,
-                    StorageFrame { value: value, operations: WrappedOpcode::new(0x39, vec![]) },
+                    StorageFrame { value, operations: WrappedOpcode::new(0x39, vec![]) },
                 );
             }
         } else if opcode_name == "STATICCALL" {

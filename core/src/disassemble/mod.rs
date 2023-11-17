@@ -4,9 +4,11 @@ use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use heimdall_common::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::{evm::core::opcodes::opcode, rpc::get_code},
-    io::logging::Logger,
-    utils::strings::{decode_hex, encode_hex},
+    ether::{evm::core::opcodes::Opcode, rpc::get_code},
+    utils::{
+        io::logging::Logger,
+        strings::{decode_hex, encode_hex},
+    },
 };
 
 #[derive(Debug, Clone, Parser, Builder)]
@@ -43,6 +45,7 @@ impl DisassemblerArgsBuilder {
     }
 }
 
+/// Disassemble the given target's bytecode to assembly.
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::error::Error>> {
     use std::time::Instant;
     let now = Instant::now();
@@ -98,7 +101,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
     let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1))?;
 
     while program_counter < byte_array.len() {
-        let operation = opcode(byte_array[program_counter]);
+        let operation = Opcode::new(byte_array[program_counter]);
         let mut pushed_bytes: String = String::new();
 
         if operation.name.contains("PUSH") {

@@ -1,8 +1,9 @@
 pub mod http;
 pub mod integers;
+pub mod io;
 pub mod strings;
 pub mod sync;
-mod tests;
+pub mod testing;
 pub mod threading;
 pub mod time;
 pub mod version;
