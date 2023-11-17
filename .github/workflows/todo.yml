@@ -10,3 +10,4 @@ jobs:
         with:
           AUTO_ASSIGN: true
           IDENTIFIERS: '[{"name": "TODO", "labels": ["T-todo"]}, {"name": "FIX", "labels": ["T-bug"]}]'
+          ISSUE_TEMPLATE: "## New Codebase TODO\n{{ title }}\n\n## Location\n{{ url }}\n{{ snippet }}"
