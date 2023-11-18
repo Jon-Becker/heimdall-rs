@@ -173,6 +173,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url,
         decimal_counter: false,
+        name: args.name,
     })
     .await?;
     trace.add_call(

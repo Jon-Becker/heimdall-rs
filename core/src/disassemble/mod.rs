@@ -32,6 +32,10 @@ pub struct DisassemblerArgs {
     /// Whether to use base-10 for the program counter.
     #[clap(long = "decimal-counter", short = 'd')]
     pub decimal_counter: bool,
+
+    /// Name of the output file.
+    #[clap(long, short, default_value = "")]
+    pub name: String,
 }
 
 impl DisassemblerArgsBuilder {
@@ -41,6 +45,7 @@ impl DisassemblerArgsBuilder {
             verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             decimal_counter: Some(false),
+            name: Some(String::new()),
         }
     }
 }

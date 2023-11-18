@@ -145,6 +145,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
+        name: String::from(""),
     })
     .await?;
 
