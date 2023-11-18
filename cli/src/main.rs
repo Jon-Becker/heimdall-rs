@@ -255,11 +255,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            let mut file_name = "snapshot.csv".to_string();
+            let given_name = cmd.name.as_str();
+
+            if !given_name.is_empty() {
+                file_name = format!("{}-{}", given_name, file_name);
+            }
+
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}/snapshot.csv", &cmd.target));
+                output_path.push_str(&format!("/{}/{}", &cmd.target, file_name));
             } else {
-                output_path.push_str("/local/snapshot.csv");
+                output_path.push_str(&format!("/local/{}", file_name));
             }
 
             let snapshot = snapshot(cmd).await?;
