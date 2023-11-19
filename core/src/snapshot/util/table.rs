@@ -22,8 +22,11 @@ pub fn build_rows(state: &mut State, max_row_height: usize) -> Vec<Row<'static>>
         false => snapshots.len() - num_items..snapshots.len(),
     };
 
+    let mut sorted_snapshots = snapshots[indices].to_vec();
+    sorted_snapshots.sort_by(|a, b| a.selector.cmp(&b.selector));
+
     // slice storage_iter
-    for (i, snapshot) in snapshots[indices].iter().enumerate() {
+    for (i, snapshot) in sorted_snapshots.iter().enumerate() {
         rows.push(
             Row::new(vec![Cell::from(format!(" 0x{} ", snapshot.selector))])
                 .style(if snapshots.len() - state.function_index < num_items {
@@ -63,3 +66,4 @@ pub fn build_rows(state: &mut State, max_row_height: usize) -> Vec<Row<'static>>
 
     rows
 }
+
