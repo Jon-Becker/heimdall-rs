@@ -19,6 +19,7 @@ use heimdall_common::{
         },
         version::{current_version, remote_version},
     },
+    ether::rpc::chain_id,
 };
 use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_core::{
@@ -255,11 +256,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            let chain_id = heimdall_common::ether::rpc::chain_id(&cmd.rpc_url).await.unwrap();
-
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}/{}/snapshot.csv", chain_id, &cmd.target,));
+                output_path.push_str(&format!(
+                    "/{}/{}/snapshot.csv",
+                    chain_id(&cmd.rpc_url).await.unwrap(),
+                    &cmd.target,
+                ));
             } else {
                 output_path.push_str("/local/snapshot.csv");
             }
