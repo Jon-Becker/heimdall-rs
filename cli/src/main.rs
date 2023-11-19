@@ -142,9 +142,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
                 let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
 
-                abi_output_path = format!("{}/{}/{}/abi.json", &output_path, &chain_id, &cmd.target);
-                solidity_output_path = format!("{}/{}/{}/decompiled.sol", &output_path, &chain_id, &cmd.target);
-                yul_output_path = format!("{}/{}/{}/decompiled.yul", &output_path, &chain_id, &cmd.target);
+                abi_output_path = format!(
+                    "{}/{}/{}/abi.json",
+                    &output_path,
+                    &chain_id,
+                    &cmd.target
+                );
+                solidity_output_path = format!(
+                    "{}/{}/{}/decompiled.sol",
+                    &output_path,
+                    &chain_id,
+                    &cmd.target
+                );
+                yul_output_path = format!(
+                    "{}/{}/{}/decompiled.yul",
+                    &output_path,
+                    &chain_id,
+                    &cmd.target
+                );
             } else {
                 abi_output_path = format!("{}/local/abi.json", &output_path);
                 solidity_output_path = format!("{}/local/decompiled.sol", &output_path);
