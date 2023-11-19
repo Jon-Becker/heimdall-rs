@@ -255,9 +255,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            let chain_id = heimdall_common::ether::rpc::chain_id(&cmd.rpc_url).await.unwrap();
+
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}/snapshot.csv", &cmd.target));
+                output_path.push_str(&format!("/{}/{}/snapshot.csv", chain_id, &cmd.target,));
             } else {
                 output_path.push_str("/local/snapshot.csv");
             }
