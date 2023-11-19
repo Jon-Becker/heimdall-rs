@@ -66,4 +66,3 @@ pub fn build_rows(state: &mut State, max_row_height: usize) -> Vec<Row<'static>>
 
     rows
 }
-
