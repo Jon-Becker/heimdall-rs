@@ -12,6 +12,7 @@ use crossterm::{
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{
     constants::ADDRESS_REGEX,
+    ether::rpc::chain_id,
     utils::{
         io::{
             file::{write_file, write_lines_to_file},
@@ -19,7 +20,6 @@ use heimdall_common::{
         },
         version::{current_version, remote_version},
     },
-    ether::rpc::chain_id,
 };
 use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_core::{
