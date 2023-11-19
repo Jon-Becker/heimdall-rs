@@ -12,7 +12,7 @@ use crossterm::{
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{
     constants::ADDRESS_REGEX,
-    ether::rpc::chain_id,
+    ether::rpc,
     utils::{
         io::{
             file::{write_file, write_lines_to_file},
@@ -116,7 +116,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}/disassembled.asm", &cmd.target));
+                output_path.push_str(&format!(
+                    "/{}/{}/disassembled.asm",
+                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
+                    &cmd.target
+                ));
             } else {
                 output_path.push_str("/local/disassembled.asm");
             }
@@ -136,9 +140,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let solidity_output_path;
             let yul_output_path;
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                abi_output_path = format!("{}/{}/abi.json", &output_path, &cmd.target);
-                solidity_output_path = format!("{}/{}/decompiled.sol", &output_path, &cmd.target);
-                yul_output_path = format!("{}/{}/decompiled.yul", &output_path, &cmd.target);
+                let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
+
+                abi_output_path = format!("{}/{}/{}/abi.json", &output_path, &chain_id, &cmd.target);
+                solidity_output_path = format!("{}/{}/{}/decompiled.sol", &output_path, &chain_id, &cmd.target);
+                yul_output_path = format!("{}/{}/{}/decompiled.yul", &output_path, &chain_id, &cmd.target);
             } else {
                 abi_output_path = format!("{}/local/abi.json", &output_path);
                 solidity_output_path = format!("{}/local/decompiled.sol", &output_path);
@@ -206,7 +212,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}", &cmd.target));
+                output_path.push_str(&format!(
+                    "/{}/{}",
+                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
+                    &cmd.target
+                ));
             } else {
                 output_path.push_str("/local");
             }
@@ -260,7 +270,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
                 output_path.push_str(&format!(
                     "/{}/{}/snapshot.csv",
-                    chain_id(&cmd.rpc_url).await.unwrap(),
+                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
                     &cmd.target,
                 ));
             } else {
