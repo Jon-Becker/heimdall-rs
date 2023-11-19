@@ -255,7 +255,11 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Box<dyn s
     }
 
     if matches.is_empty() {
-        logger.warn("couldn't find any matches for the given function signature.");
+        logger.warn("couldn't find any matches for the given function selector.");
+        // attempt to decode calldata regardless
+        // TODO: check for encoded types, such as arrays, structs, etc.
+
+        // TODO: decode potential types that fit each input
 
         // build a trace of the calldata
         let decode_call = trace.add_call(
@@ -267,48 +271,13 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Box<dyn s
             "()".to_string(),
         );
         trace.br(decode_call);
-        trace.add_message(
-            decode_call,
-            line!(),
-            vec![format!(
-                "selector: 0x{function_selector}{}",
-                if function_selector == "00000000" { " (fallback?)" } else { "" },
-            )],
-        );
+        trace.add_message(decode_call, line!(), vec![format!("selector: 0x{function_selector}",)]);
         trace.add_message(
             decode_call,
             line!(),
             vec![format!("calldata: {} bytes", calldata.len() / 2usize)],
         );
         trace.br(decode_call);
-
-        // print out the decoded inputs
-        let mut inputs: Vec<String> = Vec::new();
-        for (i, input) in calldata[8..]
-            .chars()
-            .collect::<Vec<char>>()
-            .chunks(64)
-            .map(|c| c.iter().collect::<String>())
-            .collect::<Vec<String>>()
-            .iter()
-            .enumerate()
-        {
-            inputs.push(
-                format!(
-                    "{} {}:{}{}",
-                    if i == 0 { "input" } else { "     " },
-                    i,
-                    if i.to_string().len() <= 3 {
-                        " ".repeat(3 - i.to_string().len())
-                    } else {
-                        "".to_string()
-                    },
-                    input
-                )
-                .to_string(),
-            )
-        }
-        trace.add_message(decode_call, line!(), inputs);
 
         // force the trace to display
         trace.level = 4;
