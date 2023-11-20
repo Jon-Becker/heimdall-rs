@@ -243,7 +243,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}/dump.csv", &cmd.target));
+                output_path.push_str(&format!(
+                    "/{}/{}/dump.csv",
+                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
+                    &cmd.target
+                ));
             } else {
                 output_path.push_str("/local/dump.csv");
             }
