@@ -13,6 +13,7 @@ mod benchmarks {
                 verbose: Verbosity::new(0, 0),
                 rpc_url: String::from(""),
                 decimal_counter: true,
+                output: String::from(""),
             }).await.unwrap();
         }
 
@@ -38,6 +39,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             rpc_url: String::from(""),
             decimal_counter: false,
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -55,6 +57,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             rpc_url: String::from(""),
             decimal_counter: true,
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -72,6 +75,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             rpc_url: String::from(""),
             decimal_counter: true,
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -89,6 +93,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 1),
             rpc_url: String::from(""),
             decimal_counter: true,
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -109,6 +114,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             rpc_url: String::from(""),
             decimal_counter: true,
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -128,6 +134,7 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             decimal_counter: true,
+            output: String::from(""),
         })
         .await
         .unwrap();

@@ -32,6 +32,10 @@ pub struct DisassemblerArgs {
     /// Whether to use base-10 for the program counter.
     #[clap(long = "decimal-counter", short = 'd')]
     pub decimal_counter: bool,
+
+    /// The directory where the output files should be written.
+    #[clap(long = "output", short = 'o')]
+    pub output: String,
 }
 
 impl DisassemblerArgsBuilder {
@@ -41,6 +45,7 @@ impl DisassemblerArgsBuilder {
             verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             decimal_counter: Some(false),
+            output: Some(String::new()),
         }
     }
 }
@@ -133,7 +138,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
     }
 
     logger.info(&format!("disassembled {program_counter} bytes successfully."));
-    logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
+        logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
 
     Ok(output)
 }

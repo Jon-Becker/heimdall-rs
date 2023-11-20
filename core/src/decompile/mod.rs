@@ -179,6 +179,7 @@ pub async fn decompile(
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
+        output: String::from(""),
     })
     .await?;
     trace.add_call(
