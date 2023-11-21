@@ -71,6 +71,10 @@ pub struct DecompilerArgs {
     /// Whether to include yul source code in the output (in beta).
     #[clap(long = "include-yul")]
     pub include_yul: bool,
+
+    /// The directory where the output files should be written.
+    #[clap(long = "output", short = 'o', default_value = "")]
+    pub output: String,
 }
 
 impl DecompilerArgsBuilder {
@@ -83,6 +87,7 @@ impl DecompilerArgsBuilder {
             skip_resolving: Some(false),
             include_solidity: Some(false),
             include_yul: Some(false),
+            output: Some(String::new()),
         }
     }
 }

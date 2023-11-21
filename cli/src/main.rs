@@ -138,55 +138,71 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let result = decompile(cmd.clone()).await?;
 
-            // write to file
-            let abi_output_path;
-            let solidity_output_path;
-            let yul_output_path;
-            if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
+            // get specified output path
+            output_path.push_str(&format!("/{}", cmd.output));
 
-                abi_output_path =
-                    format!("{}/{}/{}/abi.json", &output_path, &chain_id, &cmd.target);
-                solidity_output_path =
-                    format!("{}/{}/{}/decompiled.sol", &output_path, &chain_id, &cmd.target);
-                yul_output_path =
-                    format!("{}/{}/{}/decompiled.yul", &output_path, &chain_id, &cmd.target);
+            if cmd.output == "print" {
+                if let Some(abi) = &result.abi {
+                    println!("ABI: {}", serde_json::to_string_pretty(abi).unwrap());
+                }
+                if let Some(source) = &result.source {
+                    println!("Source: {}", source);
+                }
             } else {
-                abi_output_path = format!("{}/local/abi.json", &output_path);
-                solidity_output_path = format!("{}/local/decompiled.sol", &output_path);
-                yul_output_path = format!("{}/local/decompiled.yul", &output_path);
-            }
-
-            if let Some(abi) = result.abi {
-                // write the ABI to a file
-                write_file(
-                    &abi_output_path,
-                    &format!(
-                        "[{}]",
-                        abi.iter()
-                            .map(|x| {
-                                match x {
-                                    ABIStructure::Function(x) => {
-                                        serde_json::to_string_pretty(x).unwrap()
+                // write to file
+                let (dir_path, abi_filename, solidity_filename, yul_filename) = 
+                    if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
+                        let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
+                        (
+                            format!("{}/{}/{}", output_path, chain_id, cmd.target),
+                            "abi.json",
+                            "decompiled.sol",
+                            "decompiled.yul"
+                        )
+                    } else {
+                        (
+                            format!("{}/local", output_path),
+                            "abi.json",
+                            "decompiled.sol",
+                            "decompiled.yul"
+                        )
+                    };
+        
+                std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
+        
+                if let Some(abi) = result.abi {
+                    // write the ABI to a file
+                    let full_path = format!("{}/{}", dir_path, abi_filename);
+                    write_file(
+                        &full_path,
+                        &format!(
+                            "[{}]",
+                            abi.iter()
+                                .map(|x| {
+                                    match x {
+                                        ABIStructure::Function(x) => {
+                                            serde_json::to_string_pretty(x).unwrap()
+                                        }
+                                        ABIStructure::Error(x) => {
+                                            serde_json::to_string_pretty(x).unwrap()
+                                        }
+                                        ABIStructure::Event(x) => {
+                                            serde_json::to_string_pretty(x).unwrap()
+                                        }
                                     }
-                                    ABIStructure::Error(x) => {
-                                        serde_json::to_string_pretty(x).unwrap()
-                                    }
-                                    ABIStructure::Event(x) => {
-                                        serde_json::to_string_pretty(x).unwrap()
-                                    }
-                                }
-                            })
-                            .collect::<Vec<String>>()
-                            .join(",\n")
-                    ),
-                );
-            }
-            if let Some(source) = result.source {
-                if cmd.include_solidity {
-                    write_file(&solidity_output_path, &source);
-                } else {
-                    write_file(&yul_output_path, &source);
+                                })
+                                .collect::<Vec<String>>()
+                                .join(",\n")
+                        ),
+                    );
+                }
+                if let Some(source) = &result.source {
+                    let full_path = if cmd.include_solidity {
+                        format!("{}/{}", dir_path, solidity_filename)
+                    } else {
+                        format!("{}/{}", dir_path, yul_filename)
+                    };
+                    write_file(&full_path, source);
                 }
             }
         }
