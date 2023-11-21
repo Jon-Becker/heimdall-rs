@@ -54,7 +54,7 @@ pub struct CFGArgs {
     #[clap(long = "color-edges", short)]
     pub color_edges: bool,
 
-    /// The directory where the output files should be written.
+    /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short = 'o', default_value = "")]
     pub output: String,
 }

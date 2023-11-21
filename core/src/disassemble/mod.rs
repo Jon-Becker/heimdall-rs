@@ -33,7 +33,7 @@ pub struct DisassemblerArgs {
     #[clap(long = "decimal-counter", short = 'd')]
     pub decimal_counter: bool,
 
-    /// The directory where the output files should be written.
+    /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short = 'o', default_value = "output")]
     pub output: String,
 }
