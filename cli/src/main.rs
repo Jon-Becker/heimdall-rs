@@ -12,6 +12,7 @@ use crossterm::{
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{
     constants::ADDRESS_REGEX,
+    ether::rpc,
     utils::{
         io::{
             file::{write_file, write_lines_to_file},
@@ -137,51 +138,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let result = decompile(cmd.clone()).await?;
 
-                // write to file
-                let abi_output_path;
-                let solidity_output_path;
-                let yul_output_path;
-                if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                    abi_output_path = format!("{}/{}/abi.json", &output_path, &cmd.target);
-                    solidity_output_path = format!("{}/{}/decompiled.sol", &output_path, &cmd.target);
-                    yul_output_path = format!("{}/{}/decompiled.yul", &output_path, &cmd.target);
+            // write to file
+            let abi_output_path;
+            let solidity_output_path;
+            let yul_output_path;
+            if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
+                let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
+
+                abi_output_path =
+                    format!("{}/{}/{}/abi.json", &output_path, &chain_id, &cmd.target);
+                solidity_output_path =
+                    format!("{}/{}/{}/decompiled.sol", &output_path, &chain_id, &cmd.target);
+                yul_output_path =
+                    format!("{}/{}/{}/decompiled.yul", &output_path, &chain_id, &cmd.target);
+            } else {
+                abi_output_path = format!("{}/local/abi.json", &output_path);
+                solidity_output_path = format!("{}/local/decompiled.sol", &output_path);
+                yul_output_path = format!("{}/local/decompiled.yul", &output_path);
+            }
+
+            if let Some(abi) = result.abi {
+                // write the ABI to a file
+                write_file(
+                    &abi_output_path,
+                    &format!(
+                        "[{}]",
+                        abi.iter()
+                            .map(|x| {
+                                match x {
+                                    ABIStructure::Function(x) => {
+                                        serde_json::to_string_pretty(x).unwrap()
+                                    }
+                                    ABIStructure::Error(x) => {
+                                        serde_json::to_string_pretty(x).unwrap()
+                                    }
+                                    ABIStructure::Event(x) => {
+                                        serde_json::to_string_pretty(x).unwrap()
+                                    }
+                                }
+                            })
+                            .collect::<Vec<String>>()
+                            .join(",\n")
+                    ),
+                );
+            }
+            if let Some(source) = result.source {
+                if cmd.include_solidity {
+                    write_file(&solidity_output_path, &source);
                 } else {
-                    abi_output_path = format!("{}/local/abi.json", &output_path);
-                    solidity_output_path = format!("{}/local/decompiled.sol", &output_path);
-                    yul_output_path = format!("{}/local/decompiled.yul", &output_path);
+                    write_file(&yul_output_path, &source);
                 }
-                
-                if let Some(abi) = result.abi {
-                    // write the ABI to a file
-                    write_file(
-                        &abi_output_path,
-                        &format!(
-                            "[{}]",
-                            abi.iter()
-                                .map(|x| {
-                                    match x {
-                                        ABIStructure::Function(x) => {
-                                            serde_json::to_string_pretty(x).unwrap()
-                                        }
-                                        ABIStructure::Error(x) => {
-                                            serde_json::to_string_pretty(x).unwrap()
-                                        }
-                                        ABIStructure::Event(x) => {
-                                            serde_json::to_string_pretty(x).unwrap()
-                                        }
-                                    }
-                                })
-                                .collect::<Vec<String>>()
-                                .join(",\n")
-                        ),
-                    );
-                }
-                if let Some(source) = result.source {
-                    if cmd.include_solidity {
-                        write_file(&solidity_output_path, &source);
-                    } else {
-                        write_file(&yul_output_path, &source);
-                                    }
             }
         }
 
@@ -212,7 +218,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}", &cmd.target));
+                output_path.push_str(&format!(
+                    "/{}/{}",
+                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
+                    &cmd.target
+                ));
             } else {
                 output_path.push_str("/local");
             }
@@ -236,7 +246,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}/dump.csv", &cmd.target));
+                output_path.push_str(&format!(
+                    "/{}/{}/dump.csv",
+                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
+                    &cmd.target
+                ));
             } else {
                 output_path.push_str("/local/dump.csv");
             }
@@ -264,7 +278,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // write to file
             if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!("/{}/snapshot.csv", &cmd.target));
+                output_path.push_str(&format!(
+                    "/{}/{}/snapshot.csv",
+                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
+                    &cmd.target,
+                ));
             } else {
                 output_path.push_str("/local/snapshot.csv");
             }
