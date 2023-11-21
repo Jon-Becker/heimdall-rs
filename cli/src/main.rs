@@ -232,18 +232,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let cfg = cfg(cmd.clone()).await?;
 
-            // write to file
-            if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!(
-                    "/{}/{}",
-                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
-                    &cmd.target
-                ));
-            } else {
-                output_path.push_str("/local");
-            }
+            // get specified output path
+             output_path.push_str(&format!("/{}", cmd.output));
 
-            write_cfg_to_file(&cfg, &cmd, output_path)
+            // write to file
+            let dir_path = if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
+                let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
+                format!("{}/{}/{}", output_path, chain_id, cmd.target)
+            } else {
+                format!("{}/local", output_path)
+            };
+        
+            std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
+            write_cfg_to_file(&cfg, &cmd, dir_path);
         }
 
         Subcommands::Dump(mut cmd) => {

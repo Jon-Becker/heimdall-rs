@@ -15,6 +15,7 @@ mod benchmark {
                 default: true,
                 color_edges: false,
                 format: String::from("png"),
+                output: String::from(""),
             };
             let _ = heimdall_core::cfg::cfg(args).await;
         }
@@ -32,6 +33,7 @@ mod benchmark {
                 default: true,
                 color_edges: false,
                 format: String::from("png"),
+                output: String::from(""),
             };
             let _ = heimdall_core::cfg::cfg(args).await;
         }
@@ -55,6 +57,7 @@ mod integration_tests {
             default: true,
             color_edges: false,
             format: String::from("png"),
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -78,6 +81,7 @@ mod integration_tests {
             default: true,
             color_edges: false,
             format: String::from("png"),
+            output: String::from(""),
         })
         .await
         .unwrap();

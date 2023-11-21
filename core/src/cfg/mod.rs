@@ -53,6 +53,10 @@ pub struct CFGArgs {
     /// This is useful for visualizing the flow of if statements.
     #[clap(long = "color-edges", short)]
     pub color_edges: bool,
+
+    /// The directory where the output files should be written.
+    #[clap(long = "output", short = 'o', default_value = "")]
+    pub output: String,
 }
 
 impl CFGArgsBuilder {
@@ -64,6 +68,7 @@ impl CFGArgsBuilder {
             default: Some(true),
             format: Some(String::new()),
             color_edges: Some(false),
+            output: Some(String::new()),
         }
     }
 }
