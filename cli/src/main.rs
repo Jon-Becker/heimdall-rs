@@ -34,7 +34,7 @@ use tui::{backend::CrosstermBackend, Terminal};
 #[derive(Debug, Parser)]
 #[clap(name = "heimdall", author = "Jonathan Becker <jonathan@jbecker.dev>", version)]
 pub struct Arguments {
-        #[clap(subcommand)]
+    #[clap(subcommand)]
     pub sub: Subcommands,
 }
 
@@ -76,7 +76,6 @@ pub enum Subcommands {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Arguments::parse();
-    
     // handle catching panics with
     panic::set_hook(Box::new(|panic_info| {
         // cleanup the terminal (break out of alternate screen, disable mouse capture, and show the
@@ -105,7 +104,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match args.sub {
         Subcommands::Disassemble(mut cmd) => {
+            // get specified output path
             output_path.push_str(&format!("/{}", cmd.output));
+            
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -116,14 +117,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if cmd.output == "print" {
                 println!("{}", assembly);
             } else {
-                // write to file
-                if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                    output_path.push_str(&format!("/{}/disassembled.asm", &cmd.target));
+                let (dir_path, filename) = if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
+                    (format!("{}/{}", output_path, &cmd.target), "disassembled.asm")
                 } else {
-                    output_path.push_str("/local/disassembled.asm");
-                }
-                std::fs::create_dir_all(&output_path).expect("Failed to create output directory");
-                write_file(&output_path, &assembly);
+                    (format!("{}/local", output_path), "disassembled.asm")
+                };
+            
+                std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
+                let full_path = format!("{}/{}", dir_path, filename);
+                write_file(&full_path, &assembly);
             }
         }
 
