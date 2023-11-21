@@ -261,16 +261,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let result = dump(cmd.clone()).await?;
             let mut lines = Vec::new();
 
-            // write to file
-            if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!(
-                    "/{}/{}/dump.csv",
-                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
-                    &cmd.target
-                ));
-            } else {
-                output_path.push_str("/local/dump.csv");
-            }
+            // get specified output path
+            output_path.push_str(&format!("/{}", cmd.output));
+
 
             // add header
             lines.push(String::from("last_modified,alias,slot,decoded_type,value"));
@@ -283,8 +276,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ));
             }
 
-            // write to file
-            write_lines_to_file(&output_path, lines);
+            if cmd.output == "print" {
+                for line in &lines {
+                    println!("{}", line);
+                }
+            } else {
+                // write to file
+                if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
+                    output_path.push_str(&format!(
+                        "/{}/{}/dump.csv",
+                        rpc::chain_id(&cmd.rpc_url).await.unwrap(),
+                        &cmd.target
+                    ));
+                } else {
+                    output_path.push_str("/local/dump.csv");
+                }
+                write_lines_to_file(&output_path, lines);
+            }
         }
 
         Subcommands::Snapshot(mut cmd) => {
