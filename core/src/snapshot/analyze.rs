@@ -308,11 +308,14 @@ pub fn snapshot_trace(
             let (mask_size_bytes, mut potential_types) = convert_bitmask(instruction.clone());
 
             for (i, operation) in instruction.input_operations.iter().enumerate() {
+                // check for PUSH operations
                 if operation.opcode.name.starts_with("PUSH") {
                     let address = encode_hex_reduced(instruction.inputs[i]);
 
-                    // check if address is all ff's OR if the address doesnt fit in an address mask
-                    if address.replacen("0x", "", 1).chars().all(|c| c == 'f') ||
+                    // this parameter is not likely to be an address because:
+                    // 1. if the address contains only Fs and 0s, it's likely a bitwise mask
+                    // 2. if the address is not 32 or 20 bytes, it's likely a bitwise mask
+                    if address.replacen("0x", "", 1).chars().all(|c| c == 'f' || c == '0') ||
                         (address.len() > 42 || address.len() < 32)
                     {
                         continue
