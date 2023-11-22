@@ -13,9 +13,8 @@ main() {
     # parsing parameters
     while [[ $1 ]]; do
         case $1 in
-            --)               shift; break ;;
-
-            -u|--upgrade|--update)
+            --)                    shift; break ;;
+            -u|--upgrade|--update) shift;
                 echo "bifrost: removing old binaries"
 
                 rm -rf "$BIFROST_PATH"
@@ -23,22 +22,30 @@ main() {
                 ensure curl -L https://raw.githubusercontent.com/Jon-Becker/heimdall-rs/main/bifrost/install | bash
                 exit 0
                 ;;
-            -v|--version)     shift; TARGET_VERSION=$1 ;;
-            -B|--binary|--bin) shift; USE_BINARY=true ;;
+            -v|--version)           shift; TARGET_VERSION=$1 ;;
+            -B|--binary|--bin)      shift; USE_BINARY=true ;;
+            +nightly)               shift; NIGHTLY_CHANNEL=true ;;
             -h|--help)
                 usage
                 exit 0
                 ;;
-            -l|--list|--versions)
+            -l|--list|--versions)   shift;
                 versions
                 exit 0
                 ;;
             *)
-                echo "bifrost: option '$1' not recognized\n"
+                echo "bifrost: option '$1' not recognized"
                 exit 1
                 ;;
-        esac; shift
+        esac;
     done
+
+    # print channel
+    if [ -n "$NIGHTLY_CHANNEL" ]; then
+        echo "bifrost: using nightly channel"
+    else
+        echo "bifrost: using stable channel"
+    fi
 
     # remove the current heimdall installation if it exists
     ensure rm -f "$BIFROST_BIN_DIR/heimdall"
@@ -115,21 +122,33 @@ main() {
     echo "bifrost: installation complete."
 }
 
+# list all available versions of heimdall
 versions() {
+    if [ "$NIGHTLY_CHANNEL" = true ]; then
+        msg="Available versions of Heimdall (including nightly builds):"
+        tag_filter="cat"  # Do not filter any tags
+    else
+        msg="Available versions of Heimdall:"
+        tag_filter="grep -v '+nightly'"  # Exclude nightly builds
+    fi
+
     cat 1>&2 <<EOF
 
-
-Available versions of Heimdall:
+$msg
 
 Version                                   |   Tag                      |
 ----------------------------------------- | -------------------------- |
 EOF
-    git ls-remote --tags "https://github.com/Jon-Becker/heimdall-rs"
+    git ls-remote --tags "https://github.com/Jon-Becker/heimdall-rs" \
+    | eval $tag_filter \
+    | awk '{line[NR]=$0} END {for (i=NR; i>0; i--) print line[i]}'
 }
 
+
+
+# usage prints the usage message
 usage() {
     cat 1>&2 <<EOF
-
 
 Bifrost is the version manager for Heimdall.
 
