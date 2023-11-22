@@ -107,7 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Subcommands::Disassemble(mut cmd) => {
             // get specified output path
             output_path.push_str(&format!("/{}", cmd.output));
-            
+
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -123,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     (format!("{}/local", output_path), "disassembled.asm")
                 };
-            
+
                 std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
                 let full_path = format!("{}/{}", dir_path, filename);
                 write_file(&full_path, &assembly);
@@ -150,26 +150,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             } else {
                 // write to file
-                let (dir_path, abi_filename, solidity_filename, yul_filename) = 
+                let (dir_path, abi_filename, solidity_filename, yul_filename) =
                     if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
                         let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
                         (
                             format!("{}/{}/{}", output_path, chain_id, cmd.target),
                             "abi.json",
                             "decompiled.sol",
-                            "decompiled.yul"
+                            "decompiled.yul",
                         )
                     } else {
                         (
                             format!("{}/local", output_path),
                             "abi.json",
                             "decompiled.sol",
-                            "decompiled.yul"
+                            "decompiled.yul",
                         )
                     };
-        
+
                 std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
-        
+
                 if let Some(abi) = result.abi {
                     // write the ABI to a file
                     let full_path = format!("{}/{}", dir_path, abi_filename);
@@ -233,7 +233,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let cfg = cfg(cmd.clone()).await?;
 
             // get specified output path
-             output_path.push_str(&format!("/{}", cmd.output));
+            output_path.push_str(&format!("/{}", cmd.output));
 
             // write to file
             let dir_path = if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
@@ -242,7 +242,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 format!("{}/local", output_path)
             };
-        
+
             std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
             write_cfg_to_file(&cfg, &cmd, dir_path);
         }
@@ -263,7 +263,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // get specified output path
             output_path.push_str(&format!("/{}", cmd.output));
-
 
             // add header
             lines.push(String::from("last_modified,alias,slot,decoded_type,value"));
@@ -305,7 +304,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // get specified output path
             output_path.push_str(&format!("/{}", cmd.output));
-        
+
             // write to file
             let dir_path = if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
                 let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
@@ -313,7 +312,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 format!("{}/local", output_path)
             };
-        
+
             std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
             let full_path = format!("{}/snapshot.csv", dir_path);
             generate_and_write_contract_csv(
