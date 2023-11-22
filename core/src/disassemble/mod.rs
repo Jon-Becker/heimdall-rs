@@ -138,7 +138,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
     }
 
     logger.info(&format!("disassembled {program_counter} bytes successfully."));
-        logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
+    logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
 
     Ok(output)
 }
