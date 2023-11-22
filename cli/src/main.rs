@@ -301,23 +301,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            // write to file
-            if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                output_path.push_str(&format!(
-                    "/{}/{}/snapshot.csv",
-                    rpc::chain_id(&cmd.rpc_url).await.unwrap(),
-                    &cmd.target,
-                ));
-            } else {
-                output_path.push_str("/local/snapshot.csv");
-            }
+            let snapshot_result = snapshot(cmd.clone()).await?;
 
-            let snapshot = snapshot(cmd).await?;
+            // get specified output path
+            output_path.push_str(&format!("/{}", cmd.output));
+        
+            // write to file
+            let dir_path = if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
+                let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
+                format!("{}/{}/{}", output_path, chain_id, cmd.target)
+            } else {
+                format!("{}/local", output_path)
+            };
+        
+            std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
+            let full_path = format!("{}/snapshot.csv", dir_path);
             generate_and_write_contract_csv(
-                &snapshot.snapshots,
-                &snapshot.resolved_errors,
-                &snapshot.resolved_events,
-                &output_path,
+                &snapshot_result.snapshots,
+                &snapshot_result.resolved_errors,
+                &snapshot_result.resolved_events,
+                &full_path,
             )
         }
         Subcommands::Config(cmd) => {

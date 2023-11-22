@@ -69,6 +69,10 @@ pub struct SnapshotArgs {
     /// Whether to skip opening the TUI.
     #[clap(long)]
     pub no_tui: bool,
+
+    /// The output directory to write the output to
+    #[clap(long = "output", short = 'o', default_value = "")]
+    pub output: String,
 }
 
 impl SnapshotArgsBuilder {
@@ -80,6 +84,7 @@ impl SnapshotArgsBuilder {
             default: Some(true),
             skip_resolving: Some(false),
             no_tui: Some(true),
+            output: Some(String::new()),
         }
     }
 }
