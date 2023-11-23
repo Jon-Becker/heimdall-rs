@@ -102,20 +102,14 @@ pub struct SnapshotResult {
 pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std::error::Error>> {
     use std::time::Instant;
 
+    set_logger_env(&args.verbose);
+
     let now = Instant::now();
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
     let (logger, mut trace) = get_logger_and_trace(&args.verbose);
+    let shortened_target = get_shortned_target(&args.target);
 
-    set_logger_env(&args.verbose);
-
-    // truncate target for prettier display
-    let mut shortened_target = args.target.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
     let snapshot_call = trace.add_call(
         0,
         line!(),
@@ -572,6 +566,18 @@ fn get_logger_and_trace(verbosity: &clap_verbosity_flag::Verbosity) -> (Logger, 
     })
 }
 
+fn get_shortned_target(target: &String) -> String {
+    let mut shortened_target = target.clone();
+
+    if shortened_target.len() > 66 {
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+    }
+
+    shortened_target
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -587,5 +593,20 @@ mod tests {
 
         assert_eq!(env::var("RUST_LOG").unwrap(), "SILENT");
     }
-}
 
+    #[test]
+    fn test_shorten_long_target() {
+        let long_target = "0".repeat(80);
+        let shortened_target = get_shortned_target(&long_target);
+
+        assert_eq!(shortened_target.len(), 85);
+    }
+
+    #[test]
+    fn test_shorten_short_target() {
+        let short_target = "0".repeat(66);
+        let shortened_target = get_shortned_target(&short_target);
+
+        assert_eq!(shortened_target.len(), 66);
+    }
+}
