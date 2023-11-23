@@ -101,25 +101,13 @@ pub struct SnapshotResult {
 /// signatures, access control, gas consumption, storage accesses, event emissions, and more.
 pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std::error::Error>> {
     use std::time::Instant;
+
     let now = Instant::now();
-
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
-
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
+    let (logger, mut trace) = get_logger_and_trace(&args.verbose);
+
+    set_logger_env(&args.verbose);
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
@@ -563,3 +551,41 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         resolved_events: all_resolved_events,
     })
 }
+
+fn set_logger_env(verbosity: &clap_verbosity_flag::Verbosity) {
+    let env_not_set = std::env::var("RUST_LOG").is_err();
+
+    if env_not_set {
+        let log_level = match verbosity.log_level() {
+            Some(level) => level.as_str(),
+            None => "SILENT",
+        };
+
+        std::env::set_var("RUST_LOG", log_level);
+    }
+}
+
+fn get_logger_and_trace(verbosity: &clap_verbosity_flag::Verbosity) -> (Logger, TraceFactory) {
+    Logger::new(match verbosity.log_level() {
+        Some(level) => level.as_str(),
+        None => "SILENT",
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_set_logger_env_default() {
+        env::remove_var("RUST_LOG");
+
+        let verbosity = clap_verbosity_flag::Verbosity::new(-1, 0);
+
+        set_logger_env(&verbosity);
+
+        assert_eq!(env::var("RUST_LOG").unwrap(), "SILENT");
+    }
+}
+
