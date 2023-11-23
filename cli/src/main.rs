@@ -1,7 +1,7 @@
 pub(crate) mod output;
 
 use backtrace::Backtrace;
-use output::build_output_path;
+use output::{build_output_path, print_with_less};
 use std::{io, panic};
 
 use clap::{Parser, Subcommand};
@@ -108,8 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let assembly = disassemble(cmd.clone()).await?;
 
             if cmd.output == "print" {
-                // TODO: use `less`
-                println!("{}", assembly);
+                print_with_less(&assembly).await?;
             } else {
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "disassembled.asm")
@@ -128,12 +127,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let result = decompile(cmd.clone()).await?;
 
             if cmd.output == "print" {
+                let mut output_str = String::new();
+
                 if let Some(abi) = &result.abi {
-                    println!("ABI:\n\n{}\n", serde_json::to_string_pretty(abi).unwrap());
+                    output_str.push_str(&format!(
+                        "ABI:\n\n{}\n",
+                        serde_json::to_string_pretty(abi).unwrap()
+                    ));
                 }
                 if let Some(source) = &result.source {
-                    println!("Source:\n\n{}\n", source);
+                    output_str.push_str(&format!("Source:\n\n{}\n", source));
                 }
+
+                print_with_less(&output_str).await?;
             } else {
                 // write the contract ABI
                 if let Some(abi) = result.abi {
@@ -206,7 +212,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let stringified_dot = build_cfg(&cfg, &cmd);
 
             if cmd.output == "print" {
-                println!("{}", stringified_dot);
+                print_with_less(&stringified_dot).await?;
             } else {
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "cfg.dot").await?;
@@ -240,9 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if cmd.output == "print" {
-                for line in &lines {
-                    println!("{}", line);
-                }
+                print_with_less(&lines.join("\n")).await?;
             } else {
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "dump.csv").await?;
@@ -265,9 +269,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             if cmd.output == "print" {
-                for line in &csv_lines {
-                    println!("{}", line);
-                }
+                print_with_less(&csv_lines.join("\n")).await?;
             } else {
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "snapshot.csv")
