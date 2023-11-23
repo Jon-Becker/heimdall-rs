@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, io::Write};
 
 use heimdall_common::{constants::ADDRESS_REGEX, ether::rpc};
 
@@ -29,6 +29,18 @@ pub async fn build_output_path(
 
     // output is specified, return the path
     Ok(format!("{}/{}", output, filename))
+}
+
+/// pass the input to the `less` command
+pub async fn print_with_less(input: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut child =
+        std::process::Command::new("less").stdin(std::process::Stdio::piped()).spawn()?;
+
+    let stdin = child.stdin.as_mut().unwrap();
+    stdin.write_all(input.as_bytes())?;
+
+    child.wait()?;
+    Ok(())
 }
 
 #[cfg(test)]
