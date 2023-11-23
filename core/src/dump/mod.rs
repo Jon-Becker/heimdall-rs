@@ -36,8 +36,8 @@ pub struct DumpArgs {
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
 
-    /// The output directory to write the output to
-    #[clap(long = "output", short, default_value = "", hide_default_value = true)]
+    /// The output directory to write the output to or 'print' to print to the console
+    #[clap(long = "output", short, default_value = "output", hide_default_value = true)]
     pub output: String,
 
     /// The RPC URL to use for fetching data.

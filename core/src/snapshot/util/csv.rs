@@ -2,18 +2,17 @@ use std::collections::HashMap;
 
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    utils::{io::file::write_lines_to_file, strings::encode_hex_reduced},
+    utils::strings::encode_hex_reduced,
 };
 
 use crate::snapshot::structures::snapshot::Snapshot;
 
 /// Write the snapshot data to a CSV file
-pub fn generate_and_write_contract_csv(
+pub fn generate_csv(
     snapshots: &Vec<Snapshot>,
     resolved_errors: &HashMap<String, ResolvedError>,
     resolved_events: &HashMap<String, ResolvedLog>,
-    output_path: &str,
-) {
+) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
 
     // add header
@@ -132,5 +131,5 @@ pub fn generate_and_write_contract_csv(
         lines.push(line.join(","));
     }
 
-    write_lines_to_file(output_path, lines);
+    lines
 }

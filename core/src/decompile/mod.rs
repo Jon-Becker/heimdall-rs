@@ -71,6 +71,10 @@ pub struct DecompilerArgs {
     /// Whether to include yul source code in the output (in beta).
     #[clap(long = "include-yul")]
     pub include_yul: bool,
+
+    /// The output directory to write the output to or 'print' to print to the console
+    #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
+    pub output: String,
 }
 
 impl DecompilerArgsBuilder {
@@ -83,6 +87,7 @@ impl DecompilerArgsBuilder {
             skip_resolving: Some(false),
             include_solidity: Some(false),
             include_yul: Some(false),
+            output: Some(String::new()),
         }
     }
 }
@@ -179,6 +184,7 @@ pub async fn decompile(
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
+        output: String::from(""),
     })
     .await?;
     trace.add_call(
