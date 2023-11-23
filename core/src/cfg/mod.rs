@@ -44,18 +44,13 @@ pub struct CFGArgs {
     #[clap(long, short)]
     pub default: bool,
 
-    /// Specify a format (other than dot) to output the CFG in.
-    /// For example, `--format svg` will output a SVG image of the CFG.
-    #[clap(long = "format", short, default_value = "", hide_default_value = true)]
-    pub format: String,
-
     /// Color the edges of the graph based on the JUMPI condition.
     /// This is useful for visualizing the flow of if statements.
     #[clap(long = "color-edges", short)]
     pub color_edges: bool,
 
     /// The output directory to write the output to or 'print' to print to the console
-    #[clap(long = "output", short = 'o', default_value = "")]
+    #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
 }
 
@@ -66,7 +61,6 @@ impl CFGArgsBuilder {
             verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             default: Some(true),
-            format: Some(String::new()),
             color_edges: Some(false),
             output: Some(String::new()),
         }

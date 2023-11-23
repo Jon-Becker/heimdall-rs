@@ -73,7 +73,7 @@ pub struct DecompilerArgs {
     pub include_yul: bool,
 
     /// The output directory to write the output to or 'print' to print to the console
-    #[clap(long = "output", short = 'o', default_value = "")]
+    #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
 }
 

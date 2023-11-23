@@ -70,8 +70,8 @@ pub struct SnapshotArgs {
     #[clap(long)]
     pub no_tui: bool,
 
-    /// The output directory to write the output to
-    #[clap(long = "output", short = 'o', default_value = "")]
+    /// The output directory to write the output to, or 'print' to print to the console.
+    #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
 }
 

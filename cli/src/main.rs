@@ -1,5 +1,8 @@
+pub(crate) mod output;
+
 use backtrace::Backtrace;
-use std::{env, io, panic};
+use output::build_output_path;
+use std::{io, panic};
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -10,25 +13,21 @@ use crossterm::{
 };
 
 use heimdall_cache::{cache, CacheArgs};
-use heimdall_common::{
-    constants::ADDRESS_REGEX,
-    ether::rpc,
-    utils::{
-        io::{
-            file::{write_file, write_lines_to_file},
-            logging::Logger,
-        },
-        version::{current_version, remote_version},
+use heimdall_common::utils::{
+    io::{
+        file::{write_file, write_lines_to_file},
+        logging::Logger,
     },
+    version::{current_version, remote_version},
 };
 use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_core::{
-    cfg::{cfg, output::write_cfg_to_file, CFGArgs},
+    cfg::{cfg, output::build_cfg, CFGArgs},
     decode::{decode, DecodeArgs},
     decompile::{decompile, out::abi::ABIStructure, DecompilerArgs},
     disassemble::{disassemble, DisassemblerArgs},
     dump::{dump, DumpArgs},
-    snapshot::{snapshot, util::csv::generate_and_write_contract_csv, SnapshotArgs},
+    snapshot::{snapshot, util::csv::generate_csv, SnapshotArgs},
 };
 use tui::{backend::CrosstermBackend, Terminal};
 
@@ -68,7 +67,7 @@ pub enum Subcommands {
     Dump(DumpArgs),
     #[clap(
         name = "snapshot",
-        about = "Infer function information from bytecode, including access control, gas
+        about = "Infer functiogn information from bytecode, including access control, gas
     consumption, storage accesses, event emissions, and more"
     )]
     Snapshot(SnapshotArgs),
@@ -99,15 +98,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
 
     let configuration = get_config();
-
-    // get the current working directory
-    let mut output_path = env::current_dir()?.into_os_string().into_string().unwrap();
-
     match args.sub {
         Subcommands::Disassemble(mut cmd) => {
-            // get specified output path
-            output_path.push_str(&format!("/{}", cmd.output));
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -116,17 +108,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let assembly = disassemble(cmd.clone()).await?;
 
             if cmd.output == "print" {
+                // TODO: use `less`
                 println!("{}", assembly);
             } else {
-                let (dir_path, filename) = if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                    (format!("{}/{}", output_path, &cmd.target), "disassembled.asm")
-                } else {
-                    (format!("{}/local", output_path), "disassembled.asm")
-                };
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "disassembled.asm")
+                        .await?;
 
-                std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
-                let full_path = format!("{}/{}", dir_path, filename);
-                write_file(&full_path, &assembly);
+                write_file(&output_path, &assembly);
             }
         }
 
@@ -138,43 +127,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let result = decompile(cmd.clone()).await?;
 
-            // get specified output path
-            output_path.push_str(&format!("/{}", cmd.output));
-
             if cmd.output == "print" {
                 if let Some(abi) = &result.abi {
-                    println!("ABI: {}", serde_json::to_string_pretty(abi).unwrap());
+                    println!("ABI:\n\n{}\n", serde_json::to_string_pretty(abi).unwrap());
                 }
                 if let Some(source) = &result.source {
-                    println!("Source: {}", source);
+                    println!("Source:\n\n{}\n", source);
                 }
             } else {
-                // write to file
-                let (dir_path, abi_filename, solidity_filename, yul_filename) =
-                    if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                        let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
-                        (
-                            format!("{}/{}/{}", output_path, chain_id, cmd.target),
-                            "abi.json",
-                            "decompiled.sol",
-                            "decompiled.yul",
-                        )
-                    } else {
-                        (
-                            format!("{}/local", output_path),
-                            "abi.json",
-                            "decompiled.sol",
-                            "decompiled.yul",
-                        )
-                    };
-
-                std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
-
+                // write the contract ABI
                 if let Some(abi) = result.abi {
-                    // write the ABI to a file
-                    let full_path = format!("{}/{}", dir_path, abi_filename);
+                    let output_path =
+                        build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "abi.json")
+                            .await?;
+
                     write_file(
-                        &full_path,
+                        &output_path,
                         &format!(
                             "[{}]",
                             abi.iter()
@@ -196,13 +164,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ),
                     );
                 }
+
+                // write the contract source
                 if let Some(source) = &result.source {
-                    let full_path = if cmd.include_solidity {
-                        format!("{}/{}", dir_path, solidity_filename)
+                    let output_path = if cmd.include_solidity {
+                        build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "decompiled.sol")
+                            .await?
                     } else {
-                        format!("{}/{}", dir_path, yul_filename)
+                        build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "decompiled.yul")
+                            .await?
                     };
-                    write_file(&full_path, source);
+                    write_file(&output_path, source);
                 }
             }
         }
@@ -231,20 +203,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let cfg = cfg(cmd.clone()).await?;
+            let stringified_dot = build_cfg(&cfg, &cmd);
 
-            // get specified output path
-            output_path.push_str(&format!("/{}", cmd.output));
-
-            // write to file
-            let dir_path = if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
-                format!("{}/{}/{}", output_path, chain_id, cmd.target)
+            if cmd.output == "print" {
+                println!("{}", stringified_dot);
             } else {
-                format!("{}/local", output_path)
-            };
-
-            std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
-            write_cfg_to_file(&cfg, &cmd, dir_path);
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "cfg.dot").await?;
+                write_file(&output_path, &stringified_dot);
+            }
         }
 
         Subcommands::Dump(mut cmd) => {
@@ -260,9 +227,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let result = dump(cmd.clone()).await?;
             let mut lines = Vec::new();
-
-            // get specified output path
-            output_path.push_str(&format!("/{}", cmd.output));
 
             // add header
             lines.push(String::from("last_modified,alias,slot,decoded_type,value"));
@@ -280,16 +244,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", line);
                 }
             } else {
-                // write to file
-                if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                    output_path.push_str(&format!(
-                        "/{}/{}/dump.csv",
-                        rpc::chain_id(&cmd.rpc_url).await.unwrap(),
-                        &cmd.target
-                    ));
-                } else {
-                    output_path.push_str("/local/dump.csv");
-                }
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "dump.csv").await?;
+
                 write_lines_to_file(&output_path, lines);
             }
         }
@@ -301,27 +258,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let snapshot_result = snapshot(cmd.clone()).await?;
-
-            // get specified output path
-            output_path.push_str(&format!("/{}", cmd.output));
-
-            // write to file
-            let dir_path = if ADDRESS_REGEX.is_match(&cmd.target).unwrap() {
-                let chain_id = rpc::chain_id(&cmd.rpc_url).await.unwrap();
-                format!("{}/{}/{}", output_path, chain_id, cmd.target)
-            } else {
-                format!("{}/local", output_path)
-            };
-
-            std::fs::create_dir_all(&dir_path).expect("Failed to create output directory");
-            let full_path = format!("{}/snapshot.csv", dir_path);
-            generate_and_write_contract_csv(
+            let csv_lines = generate_csv(
                 &snapshot_result.snapshots,
                 &snapshot_result.resolved_errors,
                 &snapshot_result.resolved_events,
-                &full_path,
-            )
+            );
+
+            if cmd.output == "print" {
+                for line in &csv_lines {
+                    println!("{}", line);
+                }
+            } else {
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "snapshot.csv")
+                        .await?;
+
+                write_lines_to_file(&output_path, csv_lines);
+            }
         }
+
         Subcommands::Config(cmd) => {
             config(cmd);
         }
