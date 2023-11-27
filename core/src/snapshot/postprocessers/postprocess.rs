@@ -1,4 +1,6 @@
-use heimdall_common::utils::strings::{find_balanced_encapsulator, tokenize, TokenType, classify_token};
+use heimdall_common::utils::strings::{
+    classify_token, find_balanced_encapsulator, tokenize, TokenType,
+};
 
 pub fn remove_double_negation(line: &str) -> String {
     let mut cleaned = line.to_owned();
@@ -24,7 +26,8 @@ pub fn remove_double_negation(line: &str) -> String {
 
                 // remove the double negation
                 cleaned.replace_range(
-                    subject_indices..subject_indices + first_subject_indices.0 + 2 + second_subject_indices.1,
+                    subject_indices
+                        ..subject_indices + first_subject_indices.0 + 2 + second_subject_indices.1,
                     &subject,
                 );
             }
@@ -44,12 +47,12 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
         // if there is a negation of an expression, remove the parentheses
         // helps with double negation
         if first_char == "!" && last_char == ")" {
-            return true
+            return true;
         }
 
         // remove the parentheses if the expression is within brackets
         if first_char == "[" && last_char == "]" {
-            return true
+            return true;
         }
 
         // parens required if:
@@ -57,9 +60,9 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
         //  - expression is a function call
         //  - expression is the surrounding parens of a conditional
         if first_char != "(" {
-            return false
+            return false;
         } else if last_char == ")" {
-            return true
+            return true;
         }
 
         // handle the inside of the expression
@@ -69,14 +72,14 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
         };
 
         let inner_tokens = tokenize(&inside);
-        return !inner_tokens.iter().any(|tk| classify_token(tk) == TokenType::Operator)
+        return !inner_tokens.iter().any(|tk| classify_token(tk) == TokenType::Operator);
     }
 
     let mut cleaned: String = line.to_owned();
 
     // skip lines that are defining a function
     if cleaned.contains("function") {
-        return cleaned
+        return cleaned;
     }
 
     // get the nth index of the first open paren
@@ -138,7 +141,6 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     cleaned
 }
 
-
 pub fn cleanup(line: &str) -> String {
     let line = simplify_parentheses(line, 0);
     remove_double_negation(&line)
@@ -163,10 +165,7 @@ mod tests {
     #[test]
     fn test_simplify_parentheses_complex2() {
         let line = "if (((((((((((((((cast(((((((((((arg0 * (((((arg1))))))))))))) + 1)) / 10)))))))))))))))) {";
-        assert_eq!(
-            simplify_parentheses(line, 0),
-            "if (cast(((arg0 * (arg1)) + 1) / 10)) {"
-        );
+        assert_eq!(simplify_parentheses(line, 0), "if (cast(((arg0 * (arg1)) + 1) / 10)) {");
     }
 
     #[test]
@@ -175,5 +174,4 @@ mod tests {
         let expected = "if (!storage [0x08] > (storage [0x08] + ((argO * storage [0x08]) * ( ( ( (arg® * storage [0x08]) - 0x01) / storage [0x021) + 0×01))))) { .. }";
         assert_eq!(cleanup(line), expected);
     }
-
 }
