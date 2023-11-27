@@ -1,5 +1,5 @@
 use crate::decompile::constants::AND_BITMASK_REGEX;
-
+use crate::snapshot::postprocessers::postprocess::cleanup;
 use super::{
     constants::VARIABLE_SIZE_CHECK_REGEX,
     structures::snapshot::{CalldataFrame, Snapshot, StorageFrame},
@@ -147,8 +147,11 @@ pub fn snapshot_trace(
             // this is an if conditional for the children branches
             let conditional = instruction.input_operations[1].solidify().cleanup();
 
+            // Cleanup the conditional for readibility purposes
+            let cleaned_conditional = cleanup(&conditional);
+
             // remove non-payable check and mark function as non-payable
-            if conditional == "!msg.value" {
+            if cleaned_conditional == "!msg.value" {
                 // this is marking the start of a non-payable function
                 trace.add_info(
                     trace_parent,
@@ -164,17 +167,17 @@ pub fn snapshot_trace(
 
             // perform a series of checks to determine if the condition
             // is added by the compiler and can be ignored
-            if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
+            if (cleaned_conditional.contains("msg.data.length") && cleaned_conditional.contains("0x04")) ||
                 VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
-                (conditional.replace('!', "") == "success") ||
-                (!conditional.contains("msg.sender") &&
-                    !conditional.contains("arg") &&
-                    !conditional.contains("storage"))
+                (cleaned_conditional.replace('!', "") == "success") ||
+                (!cleaned_conditional.contains("msg.sender") &&
+                    !cleaned_conditional.contains("arg") &&
+                    !cleaned_conditional.contains("storage"))
             {
                 continue
             }
 
-            snapshot.control_statements.insert(format!("if ({}) {{ .. }}", conditional));
+            snapshot.control_statements.insert(format!("if ({}) {{ .. }}", cleaned_conditional));
         } else if opcode_name == "REVERT" {
             // Safely convert U256 to usize
             let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);

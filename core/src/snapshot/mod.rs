@@ -4,6 +4,7 @@ pub mod menus;
 pub mod resolve;
 pub mod structures;
 pub mod util;
+pub mod postprocessers;
 
 use std::{
     collections::{HashMap, HashSet},
