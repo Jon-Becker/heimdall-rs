@@ -25,7 +25,7 @@ use heimdall_common::{
     },
     utils::{
         io::logging::*,
-        strings::{decode_hex, encode_hex_reduced},
+        strings::{decode_hex, encode_hex_reduced, get_shortned_target},
     },
 };
 use indicatif::ProgressBar;
@@ -206,38 +206,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         resolved_errors: all_resolved_errors,
         resolved_events: all_resolved_events,
     })
-}
-
-fn set_logger_env(verbosity: &clap_verbosity_flag::Verbosity) {
-    let env_not_set = std::env::var("RUST_LOG").is_err();
-
-    if env_not_set {
-        let log_level = match verbosity.log_level() {
-            Some(level) => level.as_str(),
-            None => "SILENT",
-        };
-
-        std::env::set_var("RUST_LOG", log_level);
-    }
-}
-
-fn get_logger_and_trace(verbosity: &clap_verbosity_flag::Verbosity) -> (Logger, TraceFactory) {
-    Logger::new(match verbosity.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    })
-}
-
-fn get_shortned_target(target: &String) -> String {
-    let mut shortened_target = target.clone();
-
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
-
-    shortened_target
 }
 
 async fn get_contract_bytecode(
@@ -728,34 +696,6 @@ async fn resolve_custom_events_signatures(
 mod tests {
     use super::*;
     use fancy_regex::Regex;
-    use std::env;
-
-    #[test]
-    fn test_set_logger_env_default() {
-        env::remove_var("RUST_LOG");
-
-        let verbosity = clap_verbosity_flag::Verbosity::new(-1, 0);
-
-        set_logger_env(&verbosity);
-
-        assert_eq!(env::var("RUST_LOG").unwrap(), "SILENT");
-    }
-
-    #[test]
-    fn test_shorten_long_target() {
-        let long_target = "0".repeat(80);
-        let shortened_target = get_shortned_target(&long_target);
-
-        assert_eq!(shortened_target.len(), 85);
-    }
-
-    #[test]
-    fn test_shorten_short_target() {
-        let short_target = "0".repeat(66);
-        let shortened_target = get_shortned_target(&short_target);
-
-        assert_eq!(shortened_target.len(), 66);
-    }
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_address() {
