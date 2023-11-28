@@ -21,7 +21,7 @@ pub fn match_parameters(
             &function
                 .arguments
                 .values()
-                .map(|(_, types)| types.get(0).unwrap().clone())
+                .map(|(_, types)| types.first().unwrap().clone())
                 .collect::<Vec<String>>()
                 .join(",")
         ));
