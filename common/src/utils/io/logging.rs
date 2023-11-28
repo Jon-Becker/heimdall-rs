@@ -108,7 +108,7 @@ impl TraceFactory {
                     "{} {} {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
-                    trace.message.get(0).expect("Failed to build trace.")
+                    trace.message.first().expect("Failed to build trace.")
                 );
 
                 // print the children
@@ -136,7 +136,7 @@ impl TraceFactory {
                 println!(
                     "{} emit {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
-                    trace.message.get(0).expect("Failed to build trace.")
+                    trace.message.first().expect("Failed to build trace.")
                 );
             }
             TraceCategory::LogUnknown => {
@@ -211,7 +211,7 @@ impl TraceFactory {
                     "{} {} create → {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
-                    trace.message.get(0).expect("Failed to build trace.")
+                    trace.message.first().expect("Failed to build trace.")
                 );
 
                 // print the children
