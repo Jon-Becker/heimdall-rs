@@ -26,7 +26,10 @@ use heimdall_common::{
 use indicatif::ProgressBar;
 use strsim::normalized_damerau_levenshtein as similarity;
 
-use crate::decode::{core::abi::is_parameter_abiencoded, util::get_explanation};
+use crate::{
+    decode::{core::abi::is_parameter_abiencoded, util::get_explanation},
+    error::Error,
+};
 
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(
@@ -82,7 +85,7 @@ impl DecodeArgsBuilder {
 /// The entrypoint for the decode module. This will attempt to decode the arguments of the target
 /// calldata, without the ABI of the target contract.
 #[allow(deprecated)]
-pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Box<dyn std::error::Error>> {
+pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     // set logger environment variable if not already set
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var(
@@ -270,17 +273,22 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Box<dyn s
         let mut i = 0;
         let mut covered_words = HashSet::new();
         while covered_words.len() != calldata_words.len() {
+            // sort covered_words and print
+            let mut tmp = covered_words.iter().collect::<Vec<&usize>>();
+            tmp.sort();
+
             let word = calldata_words[i];
 
             // check if the first word is abiencoded
             let (is_abi_encoded, ty, abi_encoded_word_coverage) =
-                is_parameter_abiencoded(i, &calldata_words);
+                is_parameter_abiencoded(i, &calldata_words)?;
 
             // if is_abi_encoded, add the type to potential_inputs
             if is_abi_encoded {
                 let potential_type = to_type(&ty.expect("no abi encoded types found"));
                 potential_inputs.push(potential_type);
-                covered_words.extend(abi_encoded_word_coverage.unwrap());
+                covered_words.extend(abi_encoded_word_coverage.unwrap()); // safe to unwrap because
+                                                                          // is_abi_encoded is true
             } else {
                 let (_, mut potential_types) = get_potential_types_for_word(word);
 
@@ -289,12 +297,15 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Box<dyn s
                 // - if we use left-padding, this is probably uintN or intN
                 // - if we use no padding, this is probably bytes32
                 match get_padding(word) {
-                    Padding::Left => potential_types.retain(|t| t.starts_with("uint")),
-                    _ => potential_types.retain(|t| t.starts_with("bytes")),
+                    Padding::Left => potential_types
+                        .retain(|t| t.starts_with("uint") || t.starts_with("address")),
+                    _ => potential_types
+                        .retain(|t| t.starts_with("bytes") || t.starts_with("string")),
                 }
 
                 let potential_type =
-                    to_type(potential_types.first().expect("no potential types found"));
+                    to_type(potential_types.first().expect("potential types is empty"));
+
                 potential_inputs.push(potential_type);
                 covered_words.insert(i);
             }

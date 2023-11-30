@@ -1728,6 +1728,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strsim",
+ "thiserror",
  "tokio",
  "tui",
 ]

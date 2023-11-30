@@ -473,7 +473,7 @@ impl Logger {
                 "{}  {}: {}",
                 pretty_timestamp().dimmed(),
                 "debug".bright_white().bold(),
-                message
+                message.replace('\n', &("\n".to_owned() + &" ".repeat(31)))
             );
         }
     }

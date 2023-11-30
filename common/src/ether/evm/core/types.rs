@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use colored::Colorize;
 use ethers::abi::{AbiEncode, ParamType, Token};
 
@@ -183,27 +185,27 @@ fn is_first_type_tuple(string: &str) -> bool {
 /// ParamType. For example, "address" will be converted to [`ParamType::Address`].
 pub fn to_type(string: &str) -> ParamType {
     let is_array = string.ends_with(']');
+    let mut array_size: VecDeque<Option<usize>> = VecDeque::new();
+    let mut string = string.to_string();
 
-    // get size of array
-    let array_size = if is_array {
-        let (start, end, valid) = find_balanced_encapsulator(string, ('[', ']'));
+    // while string contains a [..]
+    while string.ends_with(']') {
+        let (start, end, valid) = find_balanced_encapsulator(&string, ('[', ']'));
         if !valid {
-            return ParamType::Bytes
+            return ParamType::Bytes // default to bytes if invalid
         }
 
         let size = string[start + 1..end - 1].to_string();
-        match size.parse::<usize>() {
+
+        array_size.push_back(match size.parse::<usize>() {
             Ok(size) => Some(size),
             Err(_) => None,
-        }
-    } else {
-        None
-    };
+        });
 
-    // if array, remove the [..] from the string
-    let string = if is_array { string.splitn(2, '[').collect::<Vec<&str>>()[0] } else { string };
+        string = string.replacen(&format!("[{}]", &size), "", 1);
+    }
 
-    let arg_type = match string {
+    let arg_type = match string.as_str() {
         "address" => ParamType::Address,
         "bool" => ParamType::Bool,
         "string" => ParamType::String,
@@ -219,20 +221,29 @@ pub fn to_type(string: &str) -> ParamType {
                 let size = stripped.parse::<usize>().unwrap();
                 ParamType::FixedBytes(size)
             } else {
-                panic!("Invalid type: '{}'", string);
+                // default to bytes if invalid
+                ParamType::Bytes
             }
         }
     };
 
     if is_array {
-        if let Some(size) = array_size {
-            ParamType::FixedArray(Box::new(arg_type), size)
-        } else {
-            ParamType::Array(Box::new(arg_type))
+        let mut arg_type = arg_type;
+
+        // while array_size is not empty
+        while !array_size.is_empty() {
+            // pop off first element of array_size
+            if let Some(size) = array_size.pop_front().unwrap() {
+                arg_type = ParamType::FixedArray(Box::new(arg_type), size);
+            } else {
+                arg_type = ParamType::Array(Box::new(arg_type));
+            }
         }
-    } else {
-        arg_type
+
+        return arg_type;
     }
+
+    arg_type
 }
 
 /// A helper function used by the decode module to pretty format decoded tokens.
@@ -342,6 +353,8 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
         20 => potential_types.push("address".to_string()),
         _ => {}
     }
+
+    // TODO: add a check for addresses with null-byte prefixes
 
     // push arbitrary types to the array
     potential_types.push(format!("uint{}", byte_size * 8));
@@ -777,5 +790,101 @@ mod tests {
         // Invalid hex input, should result in no padding
         let input = "XYZ";
         assert_eq!(get_padding(input), Padding::None);
+    }
+
+    #[test]
+    fn test_to_type_address() {
+        let input = "address";
+        assert_eq!(super::to_type(input), ParamType::Address);
+    }
+
+    #[test]
+    fn test_to_type_bool() {
+        let input = "bool";
+        assert_eq!(super::to_type(input), ParamType::Bool);
+    }
+
+    #[test]
+    fn test_to_type_string() {
+        let input = "string";
+        assert_eq!(super::to_type(input), ParamType::String);
+    }
+
+    #[test]
+    fn test_to_type_bytes() {
+        let input = "bytes";
+        assert_eq!(super::to_type(input), ParamType::Bytes);
+    }
+
+    #[test]
+    fn test_to_type_uint256() {
+        let input = "uint256";
+        assert_eq!(super::to_type(input), ParamType::Uint(256));
+    }
+
+    #[test]
+    fn test_to_type_int() {
+        let input = "int256";
+        assert_eq!(super::to_type(input), ParamType::Int(256));
+    }
+
+    #[test]
+    fn test_to_type_bytes1() {
+        let input = "bytes1";
+        assert_eq!(super::to_type(input), ParamType::FixedBytes(1));
+    }
+
+    #[test]
+    fn test_to_type_uint() {
+        let input = "uint";
+        assert_eq!(super::to_type(input), ParamType::Uint(256));
+    }
+
+    #[test]
+    fn test_to_type_array() {
+        let input = "uint8[]";
+        assert_eq!(super::to_type(input), ParamType::Array(Box::new(ParamType::Uint(8))));
+    }
+
+    #[test]
+    fn test_to_type_nested_array() {
+        let input = "uint8[][]";
+        assert_eq!(
+            super::to_type(input),
+            ParamType::Array(Box::new(ParamType::Array(Box::new(ParamType::Uint(8)))))
+        );
+    }
+
+    #[test]
+    fn test_to_type_fixed_array() {
+        let input = "uint8[2]";
+        assert_eq!(super::to_type(input), ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2));
+    }
+
+    #[test]
+    fn test_to_type_nested_fixed_array() {
+        let input = "uint8[2][2]";
+        assert_eq!(
+            super::to_type(input),
+            ParamType::FixedArray(
+                Box::new(ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2)),
+                2
+            )
+        );
+    }
+
+    #[test]
+    fn test_to_type_nested_fixed_array_ordering() {
+        let input = "uint8[2][3][2]";
+        assert_eq!(
+            super::to_type(input),
+            ParamType::FixedArray(
+                Box::new(ParamType::FixedArray(
+                    Box::new(ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2)),
+                    3
+                )),
+                2
+            )
+        );
     }
 }
