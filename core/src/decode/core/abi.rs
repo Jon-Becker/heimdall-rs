@@ -13,9 +13,8 @@ pub fn is_parameter_abiencoded(
     let mut coverages = HashSet::from([parameter_index]);
 
     // convert this word to a U256
-    let word = U256::from_str_radix(calldata_words[parameter_index], 16)
-        .unwrap()
-        .max(U256::from(u128::max_value()));
+    // TODO: this can panic. make this entire function a `Result`
+    let word = U256::from_str_radix(calldata_words[parameter_index], 16).unwrap();
 
     // if the word is a multiple of 32, it may be an offset pointing to the start of an
     // ABI-encoded item
