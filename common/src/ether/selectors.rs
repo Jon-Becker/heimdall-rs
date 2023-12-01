@@ -9,7 +9,65 @@ use tokio::task;
 
 use crate::utils::{io::logging::Logger, strings::decode_hex};
 
-use super::{evm::core::vm::VM, signatures::ResolveSelector};
+use super::{evm::core::vm::VM, signatures::{ResolveSelector, ResolvedFunction}};
+
+// TODO: rename
+// TODO: doc
+pub async fn get_resolved_selectors(
+    contract_bytecode: &str,
+    snapshot_call: u32,
+) -> Result<
+    (HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>),
+    Box<dyn std::error::Error>,
+> {
+    let logger = Logger::default();
+
+    trace.add_call(
+        snapshot_call,
+        line!(),
+        "heimdall".to_string(),
+        "disassemble".to_string(),
+        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        "()".to_string(),
+    );
+
+    // find and resolve all selectors in the bytecode
+    let disassembled_bytecode = disassemble(DisassemblerArgs {
+        rpc_url,
+        verbose,
+        target: contract_bytecode.to_string(),
+        decimal_counter: false,
+        output: String::new(),
+    })
+    .await?;
+    let selectors = find_function_selectors(evm, &disassembled_bytecode);
+
+    let mut resolved_selectors = HashMap::new();
+    if !skip_resolving {
+        resolved_selectors =
+            resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await;
+
+        // if resolved selectors are empty, we can't perform symbolic execution
+        if resolved_selectors.is_empty() {
+            logger.error(&format!(
+                "failed to resolve any function selectors from '{shortened_target}' .",
+                shortened_target = shortened_target
+            ));
+        }
+
+        logger.info(&format!(
+            "resolved {} possible functions from {} detected selectors.",
+            resolved_selectors.len(),
+            selectors.len()
+        ));
+    } else {
+        logger.info(&format!("found {} possible function selectors.", selectors.len()));
+    }
+
+    logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
+
+    Ok((selectors, resolved_selectors))
+}
 
 /// find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
