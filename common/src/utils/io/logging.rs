@@ -439,7 +439,14 @@ impl Logger {
 
     /// log a warning message
     pub fn warn(&self, message: &str) {
-        println!("{}  {}: {}", pretty_timestamp().dimmed(), "warn".bright_yellow().bold(), message);
+        if self.level >= 0 {
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "warn".bright_yellow().bold(),
+                message
+            );
+        }
     }
 
     /// log a debug message

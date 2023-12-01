@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{cmp::Ordering, collections::HashSet};
 
 use ethers::types::U256;
 use heimdall_common::{
@@ -24,29 +24,10 @@ pub fn is_parameter_abi_encoded(
     let mut coverages = HashSet::from([parameter_index]);
 
     // convert this word to a U256
-    let word = U256::from_str_radix(calldata_words[parameter_index], 16)?;
-
-    // if the word is a multiple of 32, it may be an offset pointing to the start of an
-    // ABI-encoded item
-    if word % 32 != U256::zero() || word == U256::zero() {
-        debug_max!(
-            "parameter {}: '{}' doesnt appear to be an offset ptr",
-            parameter_index,
-            calldata_words[parameter_index]
-        );
-        return Ok(None);
-    }
-
-    // check if the pointer is pointing to a valid location in the calldata
-    let word_offset = word / 32;
-    if word_offset >= U256::from(calldata_words.len()) {
-        debug_max!(
-            "parameter {}: '{}' is out of bounds (offset check)",
-            parameter_index,
-            calldata_words[parameter_index]
-        );
-        return Ok(None);
-    }
+    let (word, word_offset) = match process_and_validate_word(parameter_index, calldata_words) {
+        Ok((word, word_offset)) => (word, word_offset),
+        Err(_) => return Ok(None),
+    };
     coverages.insert(word_offset.as_usize());
 
     // note: `size` is the size of the ABI-encoded item. It varies depending on the type of the
@@ -59,26 +40,208 @@ pub fn is_parameter_abi_encoded(
     // indicate that they aren't an array of items.
     let data_start_word_offset = word_offset + 1;
     let data_end_word_offset = data_start_word_offset + size;
-    if data_end_word_offset > U256::from(calldata_words.len()) {
-        // this could still be bytes, string, or a non ABI-encoded item
-        debug_max!(
-            "parameter {}: '{}' may be bytes, string",
+    match data_end_word_offset.cmp(&U256::from(calldata_words.len())) {
+        Ordering::Greater => is_parameter_abi_encoded_bytes(
             parameter_index,
-            calldata_words[parameter_index]
-        );
+            calldata_words,
+            word,
+            word_offset,
+            data_start_word_offset,
+            size,
+            coverages,
+        ),
+        _ => is_parameter_abi_encoded_array(
+            parameter_index,
+            calldata_words,
+            word,
+            word_offset,
+            data_start_word_offset,
+            data_end_word_offset,
+            size,
+            coverages,
+        ),
+    }
+}
 
-        // join words AFTER the word_offset. these are where potential data is.
-        let data_words = &calldata_words[data_start_word_offset.as_usize()..];
+/// Processes a word and validates that it is could be a ptr to an ABI-encoded item.
+fn process_and_validate_word(
+    parameter_index: usize,
+    calldata_words: &[&str],
+) -> Result<(U256, U256), Error> {
+    let word = U256::from_str_radix(calldata_words[parameter_index], 16)?;
 
-        // check if there are enough remaining bytes to contain the ABI-encoded item.
-        if data_words.join("").len() / 2 < size.as_usize() {
-            debug_max!(
-                "parameter {}: '{}' is out of bounds (bytes check)",
-                parameter_index,
-                calldata_words[parameter_index]
-            );
+    // if the word is a multiple of 32, it may be an offset pointing to the start of an
+    // ABI-encoded item
+    if word % 32 != U256::zero() || word == U256::zero() {
+        debug_max!("parameter {}: '{}' doesnt appear to be an offset ptr", parameter_index, word);
+        return Err(Error::BoundsError);
+    }
+
+    // check if the pointer is pointing to a valid location in the calldata
+    let word_offset = word / 32;
+    if word_offset >= U256::from(calldata_words.len()) {
+        debug_max!("parameter {}: '{}' is out of bounds (offset check)", parameter_index, word);
+        return Err(Error::BoundsError);
+    }
+
+    Ok((word, word_offset))
+}
+
+// Handle ABI-encoded bytes
+fn is_parameter_abi_encoded_bytes(
+    parameter_index: usize,
+    calldata_words: &[&str],
+    word: U256,
+    word_offset: U256,
+    data_start_word_offset: U256,
+    size: U256,
+    coverages: HashSet<usize>,
+) -> Result<Option<AbiEncoded>, Error> {
+    let mut coverages = coverages;
+    debug_max!("parameter {}: '{}' may be bytes, string", parameter_index, word);
+
+    // join words AFTER the word_offset. these are where potential data is.
+    let data_words = &calldata_words[data_start_word_offset.as_usize()..];
+
+    // check if there are enough remaining bytes to contain the ABI-encoded item.
+    if data_words.join("").len() / 2 < size.as_usize() {
+        debug_max!("parameter {}: '{}' is out of bounds (bytes check)", parameter_index, word);
+        return Ok(None);
+    }
+
+    // if `size` is less than 32 bytes, we only need to check the first word for `32 - size`
+    // null-bytes. tricky because sometimes a null byte could be part of the
+    // data.
+    if size <= U256::from(32) {
+        let potential_data = data_words[0];
+        debug_max!("with data: {}", potential_data);
+
+        // get the padding of the data
+        let padding_size = get_padding_size(potential_data);
+
+        // if the padding is greater than `32 - size`, then this is not an ABI-encoded item.
+        if padding_size > 32 - size.as_usize() {
+            debug_max!("parameter {}: '{}' with size {} cannot fit into word with padding of {} bytes (bytes)", parameter_index, word, size, padding_size);
             return Ok(None);
         }
+
+        // insert the word offset into the coverage set
+        coverages.insert(data_start_word_offset.as_usize());
+        coverages.insert(word_offset.as_usize());
+        debug_max!("parameter {}: '{}' is bytes", parameter_index, word);
+        Ok(Some(AbiEncoded { ty: String::from("bytes"), coverages }))
+    } else {
+        // recalculate data_end_word_offset based on `size`
+        // size is in bytes, and one word is 32 bytes. find out how many words we need to
+        // cover `size` bytes.
+        let word_count_for_size = U256::from((size.as_u32() as f32 / 32f32).ceil() as u32); // wont panic unless calldata is huge
+        let data_end_word_offset = data_start_word_offset + word_count_for_size;
+        let data_words = &calldata_words[data_start_word_offset.as_usize()..];
+        debug_max!("with data: {:#?}", data_words.join(""));
+
+        // get the last word of the data
+        let last_word =
+            data_words.get(word_count_for_size.as_usize() - 1).ok_or(Error::BoundsError)?;
+
+        // how many bytes should be in the last word?
+        let last_word_size = size.as_usize() % 32;
+
+        // if the padding is greater than `32 - last_word_size`, then this is not an ABI-encoded
+        // item.
+        let padding_size = get_padding_size(last_word);
+        if padding_size > 32 - last_word_size {
+            debug_max!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (bytes)", parameter_index, word, size, padding_size);
+            return Ok(None);
+        }
+
+        // insert all word offsets from `data_start_word_offset` to `data_end_word_offset` into
+        // the coverage set
+        for i in word_offset.as_usize()..data_end_word_offset.as_usize() {
+            coverages.insert(i);
+        }
+
+        debug_max!("parameter {}: '{}' is bytes", parameter_index, word);
+        Ok(Some(AbiEncoded { ty: String::from("bytes"), coverages }))
+    }
+}
+
+// Handle ABI-encoded bytes
+fn is_parameter_abi_encoded_array(
+    parameter_index: usize,
+    calldata_words: &[&str],
+    word: U256,
+    word_offset: U256,
+    data_start_word_offset: U256,
+    data_end_word_offset: U256,
+    size: U256,
+    coverages: HashSet<usize>,
+) -> Result<Option<AbiEncoded>, Error> {
+    let mut coverages = coverages;
+    debug_max!("parameter {}: '{}' may be an array", parameter_index, word);
+    let data_words =
+        &calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()];
+    debug_max!("potential array items: {:#?}", data_words);
+
+    // check if this array is a string (of bytes)
+    if let Ok(Some(abi_encoded)) = is_parameter_abi_encoded_string(
+        data_words,
+        parameter_index,
+        calldata_words,
+        word,
+        word_offset,
+        data_start_word_offset,
+        size,
+        coverages.clone(),
+    ) {
+        return Ok(Some(abi_encoded));
+    }
+    // this is an array!
+
+    // insert all word offsets from `data_start_word_offset` to `data_end_word_offset` into the
+    // coverage set
+    for i in word_offset.as_usize()..data_end_word_offset.as_usize() {
+        coverages.insert(i);
+    }
+
+    // get most-likely potential type of the array
+    let potential_type = get_potential_type(
+        data_words,
+        parameter_index,
+        calldata_words,
+        word,
+        data_start_word_offset,
+        &mut coverages,
+    );
+    let type_str = format!("{potential_type}[]");
+    debug_max!("parameter {}: '{}' is {}", parameter_index, word, type_str);
+    Ok(Some(AbiEncoded { ty: type_str, coverages }))
+}
+
+fn is_parameter_abi_encoded_string(
+    data_words: &[&str],
+    parameter_index: usize,
+    calldata_words: &[&str],
+    word: U256,
+    word_offset: U256,
+    data_start_word_offset: U256,
+    size: U256,
+    coverages: HashSet<usize>,
+) -> Result<Option<AbiEncoded>, Error> {
+    let mut coverages = coverages;
+    // check if the data words all have conforming padding
+    // we do this check because strings will typically be of the form:
+    // 0000000000000000000000000000000000000000000000000000000000000003 // length of 3
+    // 6f6e650000000000000000000000000000000000000000000000000000000000 // "one"
+    //
+    // so, if the data words have conforming padding, we can assume that this is not a string
+    // and is instead an array.
+    let padding_matches: bool = data_words
+        .iter()
+        .map(|word| get_padding(word))
+        .all(|padding| padding == get_padding(data_words[0]));
+    if !padding_matches {
+        // size is in bytes now, we just need to do the same as bytes bound checking
+        debug_max!("parameter {}: '{}' may be string", parameter_index, word);
 
         // if `size` is less than 32 bytes, we only need to check the first word for `32 - size`
         // null-bytes. tricky because sometimes a null byte could be part of the
@@ -92,27 +255,29 @@ pub fn is_parameter_abi_encoded(
 
             // if the padding is greater than `32 - size`, then this is not an ABI-encoded item.
             if padding_size > 32 - size.as_usize() {
-                debug_max!("parameter {}: '{}' with size {} cannot fit into word with padding of {} bytes (bytes)", parameter_index, calldata_words[parameter_index], size, padding_size);
+                debug_max!("parameter {}: '{}' with size {} cannot fit into word with padding of {} bytes (string)", parameter_index, word, size, padding_size);
                 return Ok(None);
             }
 
+            // yay! we have a string!
             // insert the word offset into the coverage set
             coverages.insert(data_start_word_offset.as_usize());
             coverages.insert(word_offset.as_usize());
-            debug_max!(
-                "parameter {}: '{}' is bytes",
-                parameter_index,
-                calldata_words[parameter_index]
-            );
-            Ok(Some(AbiEncoded { ty: String::from("bytes"), coverages }))
+            return Ok(Some(AbiEncoded {
+                ty: String::from("string"),
+                coverages: coverages.clone(),
+            }));
         } else {
             // recalculate data_end_word_offset based on `size`
             // size is in bytes, and one word is 32 bytes. find out how many words we need to
             // cover `size` bytes.
             let word_count_for_size = U256::from((size.as_u32() as f32 / 32f32).ceil() as u32); // wont panic unless calldata is huge
             let data_end_word_offset = data_start_word_offset + word_count_for_size;
-            let data_words = &calldata_words[data_start_word_offset.as_usize()..];
-            debug_max!("with data: {:#?}", data_words.join(""));
+            debug_max!(
+                "with data: {:#?}",
+                calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()]
+                    .join("")
+            );
 
             // get the last word of the data
             let last_word =
@@ -121,198 +286,99 @@ pub fn is_parameter_abi_encoded(
             // how many bytes should be in the last word?
             let last_word_size = size.as_usize() % 32;
 
-            // if the padding is greater than `32 - last_word_size`, then this is not an ABI-encoded
-            // item.
+            // if the padding is greater than `32 - last_word_size`, then this is not an
+            // ABI-encoded item.
             let padding_size = get_padding_size(last_word);
             if padding_size > 32 - last_word_size {
-                debug_max!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (bytes)", parameter_index, calldata_words[parameter_index], size, padding_size);
+                debug_max!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (string)", parameter_index, word, size, padding_size);
                 return Ok(None);
             }
 
-            // insert all word offsets from `data_start_word_offset` to `data_end_word_offset` into
-            // the coverage set
+            // yay! we have a string!
+            // insert all word offsets from `data_start_word_offset` to `data_end_word_offset`
+            // into the coverage set
             for i in word_offset.as_usize()..data_end_word_offset.as_usize() {
                 coverages.insert(i);
             }
-
-            debug_max!(
-                "parameter {}: '{}' is bytes",
-                parameter_index,
-                calldata_words[parameter_index]
-            );
-            Ok(Some(AbiEncoded { ty: String::from("bytes"), coverages }))
         }
-    } else {
-        // this could be an array of items.
-        debug_max!(
-            "parameter {}: '{}' may be an array",
-            parameter_index,
-            calldata_words[parameter_index]
-        );
-        let data_words =
-            &calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()];
-        debug_max!("potential array items: {:#?}", data_words);
 
-        // check if the data words all have conforming padding
-        // we do this check because strings will typically be of the form:
-        // 0000000000000000000000000000000000000000000000000000000000000003 // length of 3
-        // 6f6e650000000000000000000000000000000000000000000000000000000000 // "one"
-        //
-        // so, if the data words have conforming padding, we can assume that this is not a string
-        // and is instead an array.
-        let padding_matches: bool = data_words
-            .iter()
-            .map(|word| get_padding(word))
-            .all(|padding| padding == get_padding(data_words[0]));
-        if !padding_matches {
-            // size is in bytes now, we just need to do the same as bytes bound checking
+        debug_max!("parameter {}: '{}' is string", parameter_index, word);
+        return Ok(Some(AbiEncoded { ty: String::from("string"), coverages: coverages.clone() }));
+    }
+
+    Ok(None)
+}
+
+/// Handle determining the most potential type of an abi-encoded item.
+fn get_potential_type(
+    data_words: &[&str],
+    parameter_index: usize,
+    calldata_words: &[&str],
+    word: U256,
+    data_start_word_offset: U256,
+    coverages: &mut HashSet<usize>,
+) -> String {
+    let (_, potential_type) = data_words
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            // we need to get a slice of calldata_words from `data_start_word_offset` to the end
+            // of the calldata_words. this is because nested abi-encoded items
+            // reset the offsets of the words.
+            let data_words = &calldata_words[data_start_word_offset.as_usize()..];
+
+            // first, check if this word *could* be a nested abi-encoded item
             debug_max!(
-                "parameter {}: '{}' may be string",
+                "parameter {}: '{}' checking for nested abi-encoded data",
                 parameter_index,
-                calldata_words[parameter_index]
+                word
             );
+            if let Ok(Some(nested_abi_encoded_param)) = is_parameter_abi_encoded(i, data_words) {
+                // we need to add data_start_word_offset to all the offsets in nested_coverages
+                // because they are relative to the start of the nested abi-encoded item.
+                let nested_coverages = nested_abi_encoded_param
+                    .coverages
+                    .into_iter()
+                    .map(|nested_coverage| nested_coverage + data_start_word_offset.as_usize())
+                    .collect::<HashSet<usize>>();
 
-            // if `size` is less than 32 bytes, we only need to check the first word for `32 - size`
-            // null-bytes. tricky because sometimes a null byte could be part of the
-            // data.
-            if size <= U256::from(32) {
-                let potential_data = data_words[0];
-                debug_max!("with data: {}", potential_data);
-
-                // get the padding of the data
-                let padding_size = get_padding_size(potential_data);
-
-                // if the padding is greater than `32 - size`, then this is not an ABI-encoded item.
-                if padding_size > 32 - size.as_usize() {
-                    debug_max!("parameter {}: '{}' with size {} cannot fit into word with padding of {} bytes (string)", parameter_index, calldata_words[parameter_index], size, padding_size);
-                    return Ok(None);
-                }
-
-                // yay! we have a string!
-                // insert the word offset into the coverage set
-                coverages.insert(data_start_word_offset.as_usize());
-                coverages.insert(word_offset.as_usize());
-            } else {
-                // recalculate data_end_word_offset based on `size`
-                // size is in bytes, and one word is 32 bytes. find out how many words we need to
-                // cover `size` bytes.
-                let word_count_for_size = U256::from((size.as_u32() as f32 / 32f32).ceil() as u32); // wont panic unless calldata is huge
-                let data_end_word_offset = data_start_word_offset + word_count_for_size;
-                debug_max!(
-                    "with data: {:#?}",
-                    calldata_words
-                        [data_start_word_offset.as_usize()..data_end_word_offset.as_usize()]
-                        .join("")
-                );
-
-                // get the last word of the data
-                let last_word =
-                    data_words.get(word_count_for_size.as_usize() - 1).ok_or(Error::BoundsError)?;
-
-                // how many bytes should be in the last word?
-                let last_word_size = size.as_usize() % 32;
-
-                // if the padding is greater than `32 - last_word_size`, then this is not an
-                // ABI-encoded item.
-                let padding_size = get_padding_size(last_word);
-                if padding_size > 32 - last_word_size {
-                    debug_max!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (string)", parameter_index, calldata_words[parameter_index], size, padding_size);
-                    return Ok(None);
-                }
-
-                // yay! we have a string!
-                // insert all word offsets from `data_start_word_offset` to `data_end_word_offset`
-                // into the coverage set
-                for i in word_offset.as_usize()..data_end_word_offset.as_usize() {
-                    coverages.insert(i);
-                }
+                // merge coverages and nested_coverages
+                coverages.extend(nested_coverages);
+                return (32, vec![nested_abi_encoded_param.ty]);
             }
 
-            debug_max!(
-                "parameter {}: '{}' is string",
-                parameter_index,
-                calldata_words[parameter_index]
-            );
-            return Ok(Some(AbiEncoded { ty: String::from("string"), coverages }));
-        }
+            let (padding_size, mut potential_types) = get_potential_types_for_word(w);
 
-        // map over the array of words and get the potential types for each word, then,
-        // get the type that best fits the array.
-        let (_, potential_type) = data_words
-            .iter()
-            .enumerate()
-            .map(|(i, w)| {
-                // we need to get a slice of calldata_words from `data_start_word_offset` to the end
-                // of the calldata_words. this is because nested abi-encoded items
-                // reset the offsets of the words.
-                let data_words = &calldata_words[data_start_word_offset.as_usize()..];
-
-                // first, check if this word *could* be a nested abi-encoded item
-                debug_max!(
-                    "parameter {}: '{}' checking for nested abi-encoded data",
-                    parameter_index,
-                    calldata_words[parameter_index]
-                );
-                if let Ok(Some(nested_abi_encoded_param)) = is_parameter_abi_encoded(i, data_words)
-                {
-                    // we need to add data_start_word_offset to all the offsets in nested_coverages
-                    // because they are relative to the start of the nested abi-encoded item.
-                    let nested_coverages = nested_abi_encoded_param
-                        .coverages
-                        .into_iter()
-                        .map(|nested_coverage| nested_coverage + data_start_word_offset.as_usize())
-                        .collect::<HashSet<usize>>();
-
-                    // merge coverages and nested_coverages
-                    coverages.extend(nested_coverages);
-                    return (32, vec![nested_abi_encoded_param.ty]);
+            // perform heuristics
+            // - if we use right-padding, this is probably bytesN
+            // - if we use left-padding, this is probably uintN or intN
+            // - if we use no padding, this is probably bytes32
+            match get_padding(w) {
+                Padding::Left => {
+                    potential_types.retain(|t| t.starts_with("uint") || t.starts_with("address"))
                 }
+                _ => potential_types.retain(|t| t.starts_with("bytes") || t.starts_with("string")),
+            }
 
-                let (padding_size, mut potential_types) = get_potential_types_for_word(w);
+            (padding_size, potential_types)
+        })
+        .fold((0, String::from("")), |(max_size, mut potential_type), (size, types)| {
+            // "address" and "string" are priority types
+            if types.contains(&String::from("string")) {
+                return (32, String::from("string"));
+            } else if types.contains(&String::from("address")) {
+                return (32, String::from("address"));
+            }
 
-                // perform heuristics
-                // - if we use right-padding, this is probably bytesN
-                // - if we use left-padding, this is probably uintN or intN
-                // - if we use no padding, this is probably bytes32
-                match get_padding(w) {
-                    Padding::Left => potential_types
-                        .retain(|t| t.starts_with("uint") || t.starts_with("address")),
-                    _ => potential_types
-                        .retain(|t| t.starts_with("bytes") || t.starts_with("string")),
-                }
+            if size > max_size {
+                potential_type = types.first().expect("types is empty").clone();
+                (max_size, potential_type)
+            } else {
+                (max_size, potential_type)
+            }
+        });
 
-                (padding_size, potential_types)
-            })
-            .fold((0, String::from("")), |(max_size, mut potential_type), (size, types)| {
-                // "address" and "string" are priority types
-                if types.contains(&String::from("string")) {
-                    return (32, String::from("string"));
-                } else if types.contains(&String::from("address")) {
-                    return (32, String::from("address"));
-                }
-
-                if size > max_size {
-                    potential_type = types.first().expect("types is empty").clone();
-                    (max_size, potential_type)
-                } else {
-                    (max_size, potential_type)
-                }
-            });
-
-        // insert all word offsets from `data_start_word_offset` to `data_end_word_offset` into the
-        // coverage set
-        for i in word_offset.as_usize()..data_end_word_offset.as_usize() {
-            coverages.insert(i);
-        }
-        let type_str = format!("{potential_type}[]");
-        debug_max!(
-            "parameter {}: '{}' is {}",
-            parameter_index,
-            calldata_words[parameter_index],
-            type_str
-        );
-        Ok(Some(AbiEncoded { ty: type_str, coverages }))
-    }
+    potential_type
 }
 
 #[cfg(test)]
@@ -433,16 +499,16 @@ mod tests {
         //     - uint256[][]: [0, 2, 3, 4, 5, 6, 7, 8, 9]
         //     - string[]:    [1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
         // 0x2289b18c
-        // 0. 0000000000000000000000000000000000000000000000000000000000000040
-        // 1. 0000000000000000000000000000000000000000000000000000000000000140
-        // 2. 0000000000000000000000000000000000000000000000000000000000000002
-        // 3. 0000000000000000000000000000000000000000000000000000000000000040
-        // 4. 00000000000000000000000000000000000000000000000000000000000000a0
-        // 5. 0000000000000000000000000000000000000000000000000000000000000002
-        // 6. 0000000000000000000000000000000000000000000000000000000000000001
-        // 7. 0000000000000000000000000000000000000000000000000000000000000002
-        // 8. 0000000000000000000000000000000000000000000000000000000000000001
-        // 9. 0000000000000000000000000000000000000000000000000000000000000003
+        //  0. 0000000000000000000000000000000000000000000000000000000000000040
+        //  1. 0000000000000000000000000000000000000000000000000000000000000140
+        //  2. 0000000000000000000000000000000000000000000000000000000000000002
+        //  3. 0000000000000000000000000000000000000000000000000000000000000040
+        //  4. 00000000000000000000000000000000000000000000000000000000000000a0
+        //  5. 0000000000000000000000000000000000000000000000000000000000000002
+        //  6. 0000000000000000000000000000000000000000000000000000000000000001
+        //  7. 0000000000000000000000000000000000000000000000000000000000000002
+        //  8. 0000000000000000000000000000000000000000000000000000000000000001
+        //  9. 0000000000000000000000000000000000000000000000000000000000000003
         // 10. 0000000000000000000000000000000000000000000000000000000000000003
         // 11. 0000000000000000000000000000000000000000000000000000000000000060
         // 12. 00000000000000000000000000000000000000000000000000000000000000a0

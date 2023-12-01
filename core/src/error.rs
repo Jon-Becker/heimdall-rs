@@ -6,6 +6,8 @@ pub enum Error {
     FromStrRadixError(#[from] ethers::abi::ethereum_types::FromStrRadixErr),
     #[error("BoundsError")]
     BoundsError,
+    #[error("DecodeError")]
+    DecodeError,
     #[error("Error: {0}")]
     GenericError(String),
 }
