@@ -451,10 +451,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
 }
 
 // Attempt to decode the given calldata with the given types.
-fn try_decode(
-    inputs: &Vec<ParamType>,
-    byte_args: &Vec<u8>,
-) -> Result<(Vec<Token>, Vec<Param>), Error> {
+fn try_decode(inputs: &[ParamType], byte_args: &[u8]) -> Result<(Vec<Token>, Vec<Param>), Error> {
     if let Ok(result) = decode_abi(inputs, byte_args) {
         // convert tokens to params
         let mut params: Vec<Param> = Vec::new();
