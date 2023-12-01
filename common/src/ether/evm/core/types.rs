@@ -290,11 +290,9 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 
     match byte_size {
         1 => potential_types.push("bool".to_string()),
-        20 => potential_types.push("address".to_string()),
+        15..=20 => potential_types.push("address".to_string()),
         _ => {}
     }
-
-    // TODO: add a check for addresses with null-byte prefixes
 
     // push arbitrary types to the array
     potential_types.push(format!("uint{}", byte_size * 8));
