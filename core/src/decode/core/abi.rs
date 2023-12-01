@@ -10,15 +10,20 @@ use heimdall_common::{
 
 use crate::error::Error;
 
+#[derive(Debug, Clone)]
+pub struct AbiEncoded {
+    pub ty: String,
+    pub coverages: HashSet<usize>,
+}
+
 /// Finds the offsets of all ABI-encoded items in the given calldata.
-pub fn is_parameter_abiencoded(
+pub fn is_parameter_abi_encoded(
     parameter_index: usize,
     calldata_words: &[&str],
-) -> Result<(bool, Option<String>, Option<HashSet<usize>>), Error> {
+) -> Result<Option<AbiEncoded>, Error> {
     let mut coverages = HashSet::from([parameter_index]);
 
     // convert this word to a U256
-    // TODO: this can panic. make this entire function a `Result`
     let word = U256::from_str_radix(calldata_words[parameter_index], 16)?;
 
     // if the word is a multiple of 32, it may be an offset pointing to the start of an
@@ -29,7 +34,7 @@ pub fn is_parameter_abiencoded(
             parameter_index,
             calldata_words[parameter_index]
         );
-        return Ok((false, None, None));
+        return Ok(None);
     }
 
     // check if the pointer is pointing to a valid location in the calldata
@@ -40,7 +45,7 @@ pub fn is_parameter_abiencoded(
             parameter_index,
             calldata_words[parameter_index]
         );
-        return Ok((false, None, None));
+        return Ok(None);
     }
     coverages.insert(word_offset.as_usize());
 
@@ -72,7 +77,7 @@ pub fn is_parameter_abiencoded(
                 parameter_index,
                 calldata_words[parameter_index]
             );
-            return Ok((false, None, None));
+            return Ok(None);
         }
 
         // if `size` is less than 32 bytes, we only need to check the first word for `32 - size`
@@ -88,7 +93,7 @@ pub fn is_parameter_abiencoded(
             // if the padding is greater than `32 - size`, then this is not an ABI-encoded item.
             if padding_size > 32 - size.as_usize() {
                 debug_max!("parameter {}: '{}' with size {} cannot fit into word with padding of {} bytes (bytes)", parameter_index, calldata_words[parameter_index], size, padding_size);
-                return Ok((false, None, None));
+                return Ok(None);
             }
 
             // insert the word offset into the coverage set
@@ -99,7 +104,7 @@ pub fn is_parameter_abiencoded(
                 parameter_index,
                 calldata_words[parameter_index]
             );
-            Ok((true, Some(String::from("bytes")), Some(coverages)))
+            Ok(Some(AbiEncoded { ty: String::from("bytes"), coverages }))
         } else {
             // recalculate data_end_word_offset based on `size`
             // size is in bytes, and one word is 32 bytes. find out how many words we need to
@@ -121,7 +126,7 @@ pub fn is_parameter_abiencoded(
             let padding_size = get_padding_size(last_word);
             if padding_size > 32 - last_word_size {
                 debug_max!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (bytes)", parameter_index, calldata_words[parameter_index], size, padding_size);
-                return Ok((false, None, None));
+                return Ok(None);
             }
 
             // insert all word offsets from `data_start_word_offset` to `data_end_word_offset` into
@@ -135,7 +140,7 @@ pub fn is_parameter_abiencoded(
                 parameter_index,
                 calldata_words[parameter_index]
             );
-            Ok((true, Some(String::from("bytes")), Some(coverages)))
+            Ok(Some(AbiEncoded { ty: String::from("bytes"), coverages }))
         }
     } else {
         // this could be an array of items.
@@ -180,7 +185,7 @@ pub fn is_parameter_abiencoded(
                 // if the padding is greater than `32 - size`, then this is not an ABI-encoded item.
                 if padding_size > 32 - size.as_usize() {
                     debug_max!("parameter {}: '{}' with size {} cannot fit into word with padding of {} bytes (string)", parameter_index, calldata_words[parameter_index], size, padding_size);
-                    return Ok((false, None, None));
+                    return Ok(None);
                 }
 
                 // yay! we have a string!
@@ -212,7 +217,7 @@ pub fn is_parameter_abiencoded(
                 let padding_size = get_padding_size(last_word);
                 if padding_size > 32 - last_word_size {
                     debug_max!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (string)", parameter_index, calldata_words[parameter_index], size, padding_size);
-                    return Ok((false, None, None));
+                    return Ok(None);
                 }
 
                 // yay! we have a string!
@@ -228,7 +233,7 @@ pub fn is_parameter_abiencoded(
                 parameter_index,
                 calldata_words[parameter_index]
             );
-            return Ok((true, Some(String::from("string")), Some(coverages)));
+            return Ok(Some(AbiEncoded { ty: String::from("string"), coverages }));
         }
 
         // map over the array of words and get the potential types for each word, then,
@@ -248,25 +253,19 @@ pub fn is_parameter_abiencoded(
                     parameter_index,
                     calldata_words[parameter_index]
                 );
-                if let Ok((is_abi_encoded, ty, nested_coverages)) =
-                    is_parameter_abiencoded(i, data_words)
+                if let Ok(Some(nested_abi_encoded_param)) = is_parameter_abi_encoded(i, data_words)
                 {
                     // we need to add data_start_word_offset to all the offsets in nested_coverages
                     // because they are relative to the start of the nested abi-encoded item.
-                    let nested_coverages = nested_coverages.map(|nested_coverages| {
-                        nested_coverages
-                            .into_iter()
-                            .map(|nested_coverage| {
-                                nested_coverage + data_start_word_offset.as_usize()
-                            })
-                            .collect::<HashSet<usize>>()
-                    });
+                    let nested_coverages = nested_abi_encoded_param
+                        .coverages
+                        .into_iter()
+                        .map(|nested_coverage| nested_coverage + data_start_word_offset.as_usize())
+                        .collect::<HashSet<usize>>();
 
-                    if is_abi_encoded {
-                        // merge coverages and nested_coverages
-                        coverages.extend(nested_coverages.unwrap());
-                        return (32, vec![ty.unwrap()]);
-                    }
+                    // merge coverages and nested_coverages
+                    coverages.extend(nested_coverages);
+                    return (32, vec![nested_abi_encoded_param.ty]);
                 }
 
                 let (padding_size, mut potential_types) = get_potential_types_for_word(w);
@@ -312,7 +311,7 @@ pub fn is_parameter_abiencoded(
             calldata_words[parameter_index],
             type_str
         );
-        Ok((true, Some(type_str), Some(coverages)))
+        Ok(Some(AbiEncoded { ty: type_str, coverages }))
     }
 }
 
@@ -350,8 +349,10 @@ mod tests {
             .collect::<Vec<&str>>();
 
         for i in 0..calldata_words.len() {
-            let (is_abi_encoded, _, coverages) =
-                is_parameter_abiencoded(i, &calldata_words).unwrap();
+            let abi_encoded_params = is_parameter_abi_encoded(i, &calldata_words).unwrap();
+            let is_abi_encoded = abi_encoded_params.is_some();
+            let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
+
             println!(
                 "{i} - is_abi_encoded: {}, with word coverage: {:?}",
                 is_abi_encoded, coverages
@@ -359,13 +360,13 @@ mod tests {
 
             if i == 1 {
                 assert!(is_abi_encoded);
-                assert_eq!(coverages, Some(HashSet::from([1, 4, 5, 6])));
+                assert_eq!(coverages, HashSet::from([1, 4, 5, 6]));
             } else if i == 3 {
                 assert!(is_abi_encoded);
-                assert_eq!(coverages, Some(HashSet::from([3, 7, 8])));
+                assert_eq!(coverages, HashSet::from([3, 7, 8]));
             } else {
                 assert!(!is_abi_encoded);
-                assert_eq!(coverages, None);
+                assert_eq!(coverages, HashSet::new());
             }
         }
     }
@@ -401,8 +402,10 @@ mod tests {
             .collect::<Vec<&str>>();
 
         for i in 0..calldata_words.len() {
-            let (is_abi_encoded, _, coverages) =
-                is_parameter_abiencoded(i, &calldata_words).unwrap();
+            let abi_encoded_params = is_parameter_abi_encoded(i, &calldata_words).unwrap();
+            let is_abi_encoded = abi_encoded_params.is_some();
+            let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
+
             println!(
                 "{i} - is_abi_encoded: {}, with word coverage: {:?}",
                 is_abi_encoded, coverages
@@ -410,13 +413,13 @@ mod tests {
 
             if i == 1 {
                 assert!(is_abi_encoded);
-                assert_eq!(coverages, Some(HashSet::from([1, 4, 5, 6])));
+                assert_eq!(coverages, HashSet::from([1, 4, 5, 6]));
             } else if i == 3 {
                 assert!(is_abi_encoded);
-                assert_eq!(coverages, Some(HashSet::from([3, 7, 8, 9])));
+                assert_eq!(coverages, HashSet::from([3, 7, 8, 9]));
             } else {
                 assert!(!is_abi_encoded);
-                assert_eq!(coverages, None);
+                assert_eq!(coverages, HashSet::new());
             }
         }
     }
@@ -465,8 +468,11 @@ mod tests {
             .collect::<Vec<&str>>();
 
         for i in 0..calldata_words.len() {
-            let (is_abi_encoded, ty, coverages) =
-                is_parameter_abiencoded(i, &calldata_words).unwrap();
+            let abi_encoded_params = is_parameter_abi_encoded(i, &calldata_words).unwrap();
+            let is_abi_encoded = abi_encoded_params.is_some();
+            let coverages = abi_encoded_params.clone().map(|p| p.coverages).unwrap_or_default();
+            let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();
+
             println!(
                 "{i} - is_abi_encoded: {}, ty: {:?}, with word coverage: {:?}",
                 is_abi_encoded, ty, coverages
@@ -474,13 +480,10 @@ mod tests {
 
             if i == 0 {
                 assert!(is_abi_encoded);
-                assert_eq!(coverages, Some(HashSet::from([0, 2, 3, 4, 5, 6, 7, 8, 9])));
+                assert_eq!(coverages, HashSet::from([0, 2, 3, 4, 5, 6, 7, 8, 9]));
             } else if i == 1 {
                 assert!(is_abi_encoded);
-                assert_eq!(
-                    coverages,
-                    Some(HashSet::from([1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]))
-                );
+                assert_eq!(coverages, HashSet::from([1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]));
             }
         }
     }
@@ -519,8 +522,11 @@ mod tests {
             .collect::<Vec<&str>>();
 
         for i in 0..calldata_words.len() {
-            let (is_abi_encoded, ty, coverages) =
-                is_parameter_abiencoded(i, &calldata_words).unwrap();
+            let abi_encoded_params = is_parameter_abi_encoded(i, &calldata_words).unwrap();
+            let is_abi_encoded = abi_encoded_params.is_some();
+            let coverages = abi_encoded_params.clone().map(|p| p.coverages).unwrap_or_default();
+            let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();
+
             println!(
                 "{i} - is_abi_encoded: {}, ty: {:?}, with word coverage: {:?}",
                 is_abi_encoded, ty, coverages
@@ -528,12 +534,12 @@ mod tests {
 
             if i == 0 {
                 assert!(is_abi_encoded);
-                assert_eq!(coverages, Some(HashSet::from([0, 3, 4])));
+                assert_eq!(coverages, HashSet::from([0, 3, 4]));
             } else if i == 1 {
                 assert!(!is_abi_encoded);
             } else if i == 2 {
                 assert!(is_abi_encoded);
-                assert_eq!(coverages, Some(HashSet::from([2, 5, 6, 7, 8])));
+                assert_eq!(coverages, HashSet::from([2, 5, 6, 7, 8]));
             }
         }
     }

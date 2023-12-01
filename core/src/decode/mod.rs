@@ -27,7 +27,7 @@ use indicatif::ProgressBar;
 use strsim::normalized_damerau_levenshtein as similarity;
 
 use crate::{
-    decode::{core::abi::is_parameter_abiencoded, util::get_explanation},
+    decode::{core::abi::is_parameter_abi_encoded, util::get_explanation},
     error::Error,
 };
 
@@ -280,15 +280,10 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
             let word = calldata_words[i];
 
             // check if the first word is abiencoded
-            let (is_abi_encoded, ty, abi_encoded_word_coverage) =
-                is_parameter_abiencoded(i, &calldata_words)?;
-
-            // if is_abi_encoded, add the type to potential_inputs
-            if is_abi_encoded {
-                let potential_type = to_type(&ty.expect("no abi encoded types found"));
+            if let Some(abi_encoded) = is_parameter_abi_encoded(i, &calldata_words)? {
+                let potential_type = to_type(&abi_encoded.ty);
                 potential_inputs.push(potential_type);
-                covered_words.extend(abi_encoded_word_coverage.unwrap()); // safe to unwrap because
-                                                                          // is_abi_encoded is true
+                covered_words.extend(abi_encoded.coverages);
             } else {
                 let (_, mut potential_types) = get_potential_types_for_word(word);
 
