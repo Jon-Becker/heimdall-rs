@@ -25,6 +25,12 @@ pub struct StackFrame {
     pub operation: WrappedOpcode,
 }
 
+impl Default for Stack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Stack {
     /// Creates a new [`Stack`].
     ///

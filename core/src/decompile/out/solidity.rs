@@ -27,7 +27,7 @@ use super::{
 /// Solidity contract.
 pub fn build_solidity_output(
     args: &DecompilerArgs,
-    abi: &Vec<ABIStructure>,
+    abi: &[ABIStructure],
     functions: Vec<Function>,
     all_resolved_errors: HashMap<String, ResolvedError>,
     all_resolved_events: HashMap<String, ResolvedLog>,
