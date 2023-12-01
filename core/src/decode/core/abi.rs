@@ -87,7 +87,7 @@ fn process_and_validate_word(
     Ok((word, word_offset))
 }
 
-// Handle ABI-encoded bytes
+/// Handle ABI-encoded bytes
 fn is_parameter_abi_encoded_bytes(
     parameter_index: usize,
     calldata_words: &[&str],
@@ -165,7 +165,7 @@ fn is_parameter_abi_encoded_bytes(
     }
 }
 
-// Handle ABI-encoded bytes
+/// Handle ABI-encoded bytes
 fn is_parameter_abi_encoded_array(
     parameter_index: usize,
     calldata_words: &[&str],
@@ -217,6 +217,7 @@ fn is_parameter_abi_encoded_array(
     Ok(Some(AbiEncoded { ty: type_str, coverages }))
 }
 
+/// Determine if the given word is an abi-encoded string.
 fn is_parameter_abi_encoded_string(
     data_words: &[&str],
     parameter_index: usize,
