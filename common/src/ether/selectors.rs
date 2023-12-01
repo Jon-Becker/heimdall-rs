@@ -11,35 +11,18 @@ use crate::utils::{io::logging::Logger, strings::decode_hex};
 
 use super::{evm::core::vm::VM, signatures::{ResolveSelector, ResolvedFunction}};
 
-// TODO: rename
-// TODO: doc
+// Find all function selectors and all the data associated to this function, represented by
+// [`ResolvedFunction`]
 pub async fn get_resolved_selectors(
-    contract_bytecode: &str,
-    snapshot_call: u32,
+    disassembled_bytecode: &str,
+    skip_resolving: &bool,
+    evm: &VM,
+    shortened_target: &str,
 ) -> Result<
     (HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>),
     Box<dyn std::error::Error>,
 > {
     let logger = Logger::default();
-
-    trace.add_call(
-        snapshot_call,
-        line!(),
-        "heimdall".to_string(),
-        "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
-        "()".to_string(),
-    );
-
-    // find and resolve all selectors in the bytecode
-    let disassembled_bytecode = disassemble(DisassemblerArgs {
-        rpc_url,
-        verbose,
-        target: contract_bytecode.to_string(),
-        decimal_counter: false,
-        output: String::new(),
-    })
-    .await?;
     let selectors = find_function_selectors(evm, &disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
@@ -51,7 +34,6 @@ pub async fn get_resolved_selectors(
         if resolved_selectors.is_empty() {
             logger.error(&format!(
                 "failed to resolve any function selectors from '{shortened_target}' .",
-                shortened_target = shortened_target
             ));
         }
 

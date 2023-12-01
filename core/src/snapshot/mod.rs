@@ -17,7 +17,7 @@ use heimdall_common::{
     ether::{
         compiler::detect_compiler,
         evm::core::vm::VM,
-        selectors::{find_function_selectors, resolve_selectors},
+        selectors::{find_function_selectors, resolve_selectors, get_resolved_selectors},
         signatures::{ResolvedError, ResolvedFunction, ResolvedLog}, bytecode::get_contract_bytecode,
     },
     utils::{
@@ -156,16 +156,28 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         (contract_bytecode.len() / 2usize).try_into()?,
     );
 
-    let (selectors, resolved_selectors) = get_selectors(
-        &contract_bytecode,
-        args.skip_resolving,
-        &logger,
+    trace.add_call(
+        snapshot_call,
+        line!(),
+        "heimdall".to_string(),
+        "disassemble".to_string(),
+        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        "()".to_string(),
+    );
+
+    let disassembled_bytecode = disassemble(DisassemblerArgs {
+        rpc_url: args.rpc_url.clone(),
+        verbose: args.verbose.clone(),
+        target: args.target.clone(),
+        decimal_counter: false,
+        output: String::new(),
+    }).await?;
+
+    let (selectors, resolved_selectors) = get_resolved_selectors(
+        &disassembled_bytecode,
+        &args.skip_resolving,
         &evm,
         &shortened_target,
-        args.rpc_url.clone(),
-        args.verbose.clone(),
-        &mut trace,
-        snapshot_call,
     )
     .await?;
 
@@ -204,18 +216,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         resolved_events: all_resolved_events,
     })
 }
-
-async fn get_selectors(
-    contract_bytecode: &str,
-    skip_resolving: bool,
-    logger: &Logger,
-    evm: &VM,
-    shortened_target: &str,
-    rpc_url: String,
-    verbose: Verbosity,
-    trace: &mut TraceFactory,
-    snapshot_call: u32,
-) 
 
 async fn get_snapshots(
     selectors: HashMap<String, u128>,
@@ -256,6 +256,7 @@ async fn get_snapshots(
 
         // get a map of possible jump destinations
         let (map, jumpdest_count) =
+            // TODO: maybe it doesn't need to be cloned
             evm.clone().symbolic_exec_selector(&selector, function_entry_point);
 
         trace.add_debug(
