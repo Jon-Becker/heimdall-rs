@@ -97,7 +97,6 @@ pub async fn resolve_signatures(
     trace: &mut TraceFactory,
     func_analysis_trace: u32,
     snapshot_progress: &mut ProgressBar,
-    logger: &Logger,
     default: bool,
     all_resolved_events: &mut HashMap<String, ResolvedLog>,
     all_resolved_errors: &mut HashMap<String, ResolvedError>,
@@ -124,7 +123,6 @@ pub async fn resolve_signatures(
             &mut matched_resolved_functions,
             snapshot,
             snapshot_progress,
-            logger,
             default,
             &func_analysis_trace,
             trace,
@@ -139,7 +137,6 @@ pub async fn resolve_signatures(
     resolve_error_signatures(
         snapshot,
         snapshot_progress,
-        logger,
         &mut resolved_counter,
         all_resolved_errors,
         default,
@@ -168,7 +165,6 @@ pub async fn resolve_signatures(
     resolve_custom_events_signatures(
         snapshot,
         snapshot_progress,
-        logger,
         &mut resolved_counter,
         all_resolved_events,
         default,
@@ -198,11 +194,12 @@ async fn resolve_function_signatures(
     matched_resolved_functions: &mut Vec<ResolvedFunction>,
     snapshot: &mut Snapshot,
     snapshot_progress: &mut ProgressBar,
-    logger: &Logger,
     default: bool,
     func_analysis_trace: &u32,
     trace: &mut TraceFactory,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let (logger, _) = Logger::new("");
+
     let mut selected_function_index: u8 = 0;
 
     // sort matches by signature using score heuristic from `score_signature`
@@ -252,11 +249,12 @@ async fn resolve_function_signatures(
 async fn resolve_error_signatures(
     snapshot: &mut Snapshot,
     snapshot_progress: &mut ProgressBar,
-    logger: &Logger,
     resolved_counter: &mut i32,
     all_resolved_errors: &mut HashMap<String, ResolvedError>,
     default: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let (logger, _) = Logger::new("");
+
     let resolved_errors: HashMap<String, Vec<ResolvedError>> = resolve_selectors(
         snapshot
             .errors
@@ -308,11 +306,12 @@ async fn resolve_error_signatures(
 async fn resolve_custom_events_signatures(
     snapshot: &mut Snapshot,
     snapshot_progress: &mut ProgressBar,
-    logger: &Logger,
     resolved_counter: &mut i32,
     all_resolved_events: &mut HashMap<String, ResolvedLog>,
     default: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let (logger, _) = Logger::new("");
+
     let resolved_events: HashMap<String, Vec<ResolvedLog>> = resolve_selectors(
         snapshot
             .events

@@ -313,7 +313,6 @@ async fn get_snapshots(
                 trace,
                 func_analysis_trace, // TODO: not clone
                 &mut snapshot_progress,
-                logger,
                 args.default,
                 all_resolved_events,
                 all_resolved_errors,
