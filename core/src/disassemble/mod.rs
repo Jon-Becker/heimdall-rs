@@ -33,6 +33,10 @@ pub struct DisassemblerArgs {
     #[clap(long = "decimal-counter", short = 'd')]
     pub decimal_counter: bool,
 
+    /// Name of the output file.
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub name: String,
+
     /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
@@ -45,6 +49,7 @@ impl DisassemblerArgsBuilder {
             verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             decimal_counter: Some(false),
+            name: Some(String::new()),
             output: Some(String::new()),
         }
     }

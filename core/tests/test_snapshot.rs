@@ -15,6 +15,7 @@ mod benchmark {
                 default: true,
                 skip_resolving: true,
                 no_tui: true,
+                name: String::from(""),
                 output: String::from(""),
             };
             let _ = heimdall_core::snapshot::snapshot(args).await.unwrap();
@@ -33,6 +34,7 @@ mod benchmark {
                 default: true,
                 skip_resolving: true,
                 no_tui: true,
+                name: String::from(""),
                 output: String::from(""),
             };
             let _ = heimdall_core::snapshot::snapshot(args).await.unwrap();
@@ -57,6 +59,7 @@ mod integration_tests {
             default: true,
             skip_resolving: true,
             no_tui: true,
+            name: String::from(""),
             output: String::from(""),
         };
 
@@ -72,6 +75,7 @@ mod integration_tests {
             default: true,
             skip_resolving: true,
             no_tui: true,
+            name: String::from(""),
             output: String::from(""),
         };
 
@@ -161,6 +165,7 @@ mod integration_tests {
                 default: true,
                 skip_resolving: true,
                 no_tui: true,
+                name: String::from(""),
                 output: String::from(""),
             };
             let _ = heimdall_core::snapshot::snapshot(args).await.unwrap();
