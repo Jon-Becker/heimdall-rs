@@ -34,7 +34,7 @@ pub struct DisassemblerArgs {
     pub decimal_counter: bool,
 
     /// Name of the output file.
-    #[clap(long, short, default_value = "")]
+    #[clap(long, short, default_value = "", hide_default_value = true)]
     pub name: String,
 
     /// The output directory to write the output to or 'print' to print to the console
