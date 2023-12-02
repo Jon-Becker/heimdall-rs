@@ -105,6 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            // if the user has passed an output filename, override the default filename
             let mut filename: String = "disassembled.asm".to_string();
             let given_name = cmd.name.as_str();
 
@@ -130,6 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            // if the user has passed an output filename, override the default filename
             let mut abi_filename: String = "abi.json".to_string();
             let mut decompiled_output_filename: String = "decompiled".to_string();
 
@@ -235,6 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            // if the user has passed an output filename, override the default filename
             let mut filename = "cfg.dot".to_string();
             let given_name = cmd.name.as_str();
 
@@ -259,6 +262,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            // if the user has passed an output filename, override the default filename
             let mut filename = "dump.csv".to_string();
             let given_name = cmd.name.as_str();
 
@@ -301,6 +305,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            // if the user has passed an output filename, override the default filename
             let mut filename = "snapshot.csv".to_string();
             let given_name = cmd.name.as_str();
 
