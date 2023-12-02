@@ -1,11 +1,8 @@
-use crate::utils::io::logging::Logger;
+use crate::debug_max;
 
 // returns the compiler version used to compile the contract.
 // for example: (solc, 0.8.10) or (vyper, 0.2.16)
 pub fn detect_compiler(bytecode: &str) -> (&'static str, String) {
-    // get a new logger
-    let logger = Logger::default();
-
     let mut compiler = "unknown";
     let mut version = "unknown".to_string();
 
@@ -62,10 +59,10 @@ pub fn detect_compiler(bytecode: &str) -> (&'static str, String) {
                     .join(".");
             }
 
-            logger.debug_max(&format!(
+            debug_max!(
                 "exact compiler version match found due to cbor encoded metadata: {}",
                 version
-            ));
+            );
         }
     } else if compiler == "vyper" {
         let compiler_version = bytecode.split("767970657283").collect::<Vec<&str>>();
@@ -90,10 +87,10 @@ pub fn detect_compiler(bytecode: &str) -> (&'static str, String) {
                     .join(".");
             }
 
-            logger.debug_max(&format!(
+            debug_max!(
                 "exact compiler version match found due to cbor encoded metadata: {}",
                 version
-            ));
+            );
         }
     }
 

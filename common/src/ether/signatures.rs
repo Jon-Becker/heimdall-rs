@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use ethers::abi::Token;
 use heimdall_cache::{read_cache, store_cache};
 
-use crate::utils::{http::get_json_from_url, io::logging::Logger, strings::replace_last};
+use crate::{
+    debug_max,
+    utils::{http::get_json_from_url, strings::replace_last},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -37,10 +40,7 @@ pub trait ResolveSelector {
 #[async_trait]
 impl ResolveSelector for ResolvedError {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
-        // get a new logger
-        let logger = Logger::default();
-
-        logger.debug_max(&format!("resolving error selector {}", &selector));
+        debug_max!("resolving error selector {}", &selector);
 
         // get cached results
         if let Some(cached_results) =
@@ -49,7 +49,7 @@ impl ResolveSelector for ResolvedError {
             match cached_results.len() {
                 0 => return None,
                 _ => {
-                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
+                    debug_max!("found cached results for selector: {}", &selector);
                     return Some(cached_results);
                 }
             }
@@ -78,11 +78,7 @@ impl ResolveSelector for ResolvedError {
             .as_array()?
             .to_vec();
 
-        logger.debug_max(&format!(
-            "found {} possible functions for selector: {}",
-            &results.len(),
-            &selector
-        ));
+        debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
         let mut signature_list: Vec<ResolvedError> = Vec::new();
 
@@ -122,10 +118,7 @@ impl ResolveSelector for ResolvedError {
 #[async_trait]
 impl ResolveSelector for ResolvedLog {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
-        // get a new logger
-        let logger = Logger::default();
-
-        logger.debug_max(&format!("resolving event selector {}", &selector));
+        debug_max!("resolving event selector {}", &selector);
 
         // get cached results
         if let Some(cached_results) =
@@ -134,7 +127,7 @@ impl ResolveSelector for ResolvedLog {
             match cached_results.len() {
                 0 => return None,
                 _ => {
-                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
+                    debug_max!("found cached results for selector: {}", &selector);
                     return Some(cached_results);
                 }
             }
@@ -163,11 +156,7 @@ impl ResolveSelector for ResolvedLog {
             .as_array()?
             .to_vec();
 
-        logger.debug_max(&format!(
-            "found {} possible functions for selector: {}",
-            &results.len(),
-            &selector
-        ));
+        debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
         let mut signature_list: Vec<ResolvedLog> = Vec::new();
 
@@ -207,10 +196,7 @@ impl ResolveSelector for ResolvedLog {
 #[async_trait]
 impl ResolveSelector for ResolvedFunction {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
-        // get a new logger
-        let logger = Logger::default();
-
-        logger.debug_max(&format!("resolving event selector {}", &selector));
+        debug_max!("resolving event selector {}", &selector);
 
         // get cached results
         if let Some(cached_results) =
@@ -219,7 +205,7 @@ impl ResolveSelector for ResolvedFunction {
             match cached_results.len() {
                 0 => return None,
                 _ => {
-                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
+                    debug_max!("found cached results for selector: {}", &selector);
                     return Some(cached_results);
                 }
             }
@@ -248,11 +234,7 @@ impl ResolveSelector for ResolvedFunction {
             .as_array()?
             .to_vec();
 
-        logger.debug_max(&format!(
-            "found {} possible functions for selector: {}",
-            &results.len(),
-            &selector
-        ));
+        debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
         let mut signature_list: Vec<ResolvedFunction> = Vec::new();
 

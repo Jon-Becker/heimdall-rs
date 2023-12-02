@@ -213,7 +213,7 @@ pub fn build_abi(
                         ABIStructure::Error(x) => x.name == resolved_error.name,
                         _ => false,
                     }) {
-                        continue
+                        continue;
                     }
 
                     abi.push(ABIStructure::Error(ErrorABI {
@@ -234,7 +234,7 @@ pub fn build_abi(
                         }
                         _ => false,
                     }) {
-                        continue
+                        continue;
                     }
 
                     abi.push(ABIStructure::Error(ErrorABI {
@@ -272,7 +272,7 @@ pub fn build_abi(
                         ABIStructure::Event(x) => x.name == resolved_event.name,
                         _ => false,
                     }) {
-                        continue
+                        continue;
                     }
 
                     abi.push(ABIStructure::Event(EventABI {
@@ -293,7 +293,7 @@ pub fn build_abi(
                         }
                         _ => false,
                     }) {
-                        continue
+                        continue;
                     }
 
                     abi.push(ABIStructure::Event(EventABI {

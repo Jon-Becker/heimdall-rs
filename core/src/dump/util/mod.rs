@@ -42,8 +42,8 @@ pub async fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<State
 
     // check the cache for a matching address
     if let Some(state_diff) = read_cache(&format!("diff.{}.{}", &chain_id, &tx.hash)) {
-        logger.debug_max(&format!("found cached state diff for transaction '{}' .", &tx.hash));
-        return state_diff
+        debug_max!("found cached state diff for transaction '{}' .", &tx.hash);
+        return state_diff;
     }
 
     // make sure the RPC provider isn't empty
@@ -95,7 +95,8 @@ pub async fn get_storage_diff(tx: &Transaction, args: &DumpArgs) -> Option<State
             60 * 60 * 24 * 7;
     store_cache(&format!("diff.{}.{}", &chain_id, &tx.hash), &state_diff, Some(expiry));
 
-    logger.debug_max(&format!("fetched state diff for transaction '{}' .", &tx.hash));
+    use heimdall_common::debug_max;
+    debug_max!("fetched state diff for transaction '{}' .", &tx.hash);
 
     state_diff
 }

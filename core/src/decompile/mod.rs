@@ -4,6 +4,7 @@ pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
+use heimdall_common::debug_max;
 
 use crate::{
     decompile::{
@@ -154,10 +155,10 @@ pub async fn decompile(
         // provider
         contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
     } else if BYTECODE_REGEX.is_match(&args.target)? {
-        logger.debug_max("using provided bytecode for decompilation");
+        debug_max!("using provided bytecode for decompilation");
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
-        logger.debug_max("using provided file for decompilation.");
+        debug_max!("using provided file for decompilation.");
 
         // We are decompiling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
@@ -312,10 +313,7 @@ pub async fn decompile(
         // analyze execution tree
         let mut analyzed_function;
         if args.include_yul {
-            logger.debug_max(&format!(
-                "analyzing symbolic execution trace '0x{}' with yul analyzer",
-                selector
-            ));
+            debug_max!("analyzing symbolic execution trace '0x{}' with yul analyzer", selector);
             analyzed_function = analyze_yul(
                 map,
                 Function {
@@ -340,10 +338,7 @@ pub async fn decompile(
                 &mut Vec::new(),
             );
         } else {
-            logger.debug_max(&format!(
-                "analyzing symbolic execution trace '0x{}' with sol analyzer",
-                selector
-            ));
+            debug_max!("analyzing symbolic execution trace '0x{}' with sol analyzer", selector);
             analyzed_function = analyze_sol(
                 map,
                 Function {
