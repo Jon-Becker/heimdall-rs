@@ -4,6 +4,7 @@ pub mod menus;
 pub mod resolve;
 pub mod structures;
 pub mod util;
+use heimdall_common::debug_max;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -143,10 +144,10 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         // provider.
         contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
     } else if BYTECODE_REGEX.is_match(&args.target)? {
-        logger.debug_max("using provided bytecode for snapshotting.");
+        debug_max!("using provided bytecode for snapshotting.");
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
-        logger.debug_max("using provided file for snapshotting.");
+        debug_max!("using provided file for snapshotting.");
 
         // We are snapshotting a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
@@ -297,10 +298,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
             ),
         );
 
-        logger.debug_max(&format!(
-            "building snapshot for selector {} from symbolic execution trace",
-            selector
-        ));
+        debug_max!("building snapshot for selector {} from symbolic execution trace", selector);
         let mut snapshot = snapshot_trace(
             map,
             Snapshot {

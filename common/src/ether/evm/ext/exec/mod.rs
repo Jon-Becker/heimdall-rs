@@ -7,6 +7,7 @@ use self::util::{
     stack_diff, stack_item_source_depth_too_deep,
 };
 use crate::{
+    debug_max,
     ether::evm::core::{
         stack::Stack,
         vm::{State, VM},
@@ -36,14 +37,13 @@ impl VM {
 
             // this shouldn't be necessary, but it's safer to have it
             if self.exitcode != 255 || !self.returndata.is_empty() {
-                break
+                break;
             }
         }
 
         // get a new logger
         let logger = Logger::default();
-
-        logger.debug_max(&format!("beginning symbolic execution for selector 0x{}", selector));
+        debug_max!("beginning symbolic execution for selector 0x{}", selector);
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
@@ -56,8 +56,7 @@ impl VM {
 
         // get a new logger
         let logger = Logger::default();
-
-        logger.debug_max("beginning contract-wide symbolic execution");
+        debug_max!("beginning contract-wide symbolic execution");
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
@@ -92,10 +91,10 @@ impl VM {
 
             // if we encounter a JUMPI, create children taking both paths and break
             if state.last_instruction.opcode == 0x57 {
-                logger.debug_max(&format!(
+                debug_max!(
                     "found branch due to JUMPI instruction at {}",
                     state.last_instruction.instruction
-                ));
+                );
 
                 // jump frame contains:
                 //  1. the instruction (PC) of the JUMPI
@@ -111,13 +110,13 @@ impl VM {
 
                 // if the stack has over 16 items of the same source, it's probably a loop
                 if stack_contains_too_many_of_the_same_item(&vm.stack) {
-                    return vm_trace
+                    return vm_trace;
                 }
 
                 // if any item on the stack has a depth > 16, it's probably a loop (because of stack
                 // too deep)
                 if stack_item_source_depth_too_deep(&vm.stack) {
-                    return vm_trace
+                    return vm_trace;
                 }
 
                 // break out of loops
@@ -132,7 +131,7 @@ impl VM {
 
                             // check if any historical stack is the same as the current stack
                             if hist_stack == &vm.stack {
-                                logger.debug_max(
+                                debug_max!(
                                     "jump matches loop-detection heuristic: 'jump_path_already_handled'"
                                 );
                                 return true
@@ -143,13 +142,13 @@ impl VM {
                             if stack_diff.is_empty() {
                                 // the stack_diff is empty (the stacks are the same), so we've
                                 // already handled this path
-                                logger.debug_max(
+                                debug_max!(
                                     "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
                                 );
                                 return true
                             }
 
-                            logger.debug_max(&format!("stack diff: [{}]", stack_diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", ")));
+                            debug_max!("stack diff: [{}]", stack_diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", "));
 
                             // check if the jump condition appears to be recursive
                             if jump_condition_appears_recursive(&stack_diff, &jump_condition) {
@@ -174,12 +173,12 @@ impl VM {
 
                             false
                         }) {
-                            logger.debug_max("jump terminated.");
-                            logger.debug_max(&format!(
+                            debug_max!("jump terminated.");
+                            debug_max!(
                                 "adding historical stack {} to jump frame {:?}",
                                 &format!("{:#016x?}", vm.stack.hash()),
                                 jump_frame
-                            ));
+                            );
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
@@ -190,28 +189,28 @@ impl VM {
                             &vm.stack,
                             historical_stacks,
                         ) {
-                            logger.debug_max("jump terminated.");
-                            logger.debug_max(&format!(
+                            debug_max!("jump terminated.");
+                            debug_max!(
                                 "adding historical stack {} to jump frame {:?}",
                                 &format!("{:#016x?}", vm.stack.hash()),
                                 jump_frame
-                            ));
+                            );
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return vm_trace
+                            return vm_trace;
                         } else {
-                            logger.debug_max(&format!(
+                            debug_max!(
                                 "adding historical stack {} to jump frame {:?}",
                                 &format!("{:#016x?}", vm.stack.hash()),
                                 jump_frame
-                            ));
-                            logger.debug_max(&format!(
+                            );
+                            debug_max!(
                                 " - jump condition: {}\n        - stack: {}\n        - historical stacks: {}",
                                 state.last_instruction.input_operations[1].solidify(),
                                 vm.stack,
                                 historical_stacks.iter().map(|stack| format!("{}", stack)).collect::<Vec<String>>().join("\n            - ")
-                            ));
+                            );
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
@@ -219,18 +218,18 @@ impl VM {
                     }
                     None => {
                         // this key doesnt exist, so the jump is new
-                        logger.debug_max(&format!("added new jump frame: {:?}", jump_frame));
+                        debug_max!("added new jump frame: {:?}", jump_frame);
                         handled_jumps.insert(jump_frame, vec![vm.stack.clone()]);
                     }
                 }
 
                 // we didnt break out, so now we crate branching paths to cover all possibilities
                 *branch_count += 1;
-                logger.debug_max(&format!(
+                debug_max!(
                     "creating branching paths at instructions {} (JUMPDEST) and {} (CONTINUE)",
                     state.last_instruction.inputs[0],
                     state.last_instruction.instruction + 1
-                ));
+                );
 
                 // we need to create a trace for the path that wasn't taken.
                 if state.last_instruction.inputs[1].is_zero() {
@@ -245,7 +244,7 @@ impl VM {
 
                     // push the current path onto the stack
                     vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps, logger));
-                    break
+                    break;
                 } else {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
@@ -258,13 +257,13 @@ impl VM {
 
                     // push the current path onto the stack
                     vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps, logger));
-                    break
+                    break;
                 }
             }
 
             // when the vm exits, this path is complete
             if vm.exitcode != 255 || !vm.returndata.is_empty() {
-                break
+                break;
             }
         }
 

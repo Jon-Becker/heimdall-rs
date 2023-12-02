@@ -10,14 +10,12 @@ use tokio::task;
 use crate::utils::{io::logging::Logger, strings::decode_hex};
 
 use super::{evm::core::vm::VM, signatures::ResolveSelector};
+use crate::debug_max;
 
 /// find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
     let mut function_selectors = HashMap::new();
     let mut handled_selectors = HashSet::new();
-
-    // get a new logger
-    let logger = Logger::default();
 
     // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
     // they are function selectors
@@ -33,13 +31,15 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
 
                 // check if this function selector has already been handled
                 if handled_selectors.contains(&function_selector) {
-                    continue
+                    continue;
                 }
 
-                logger.debug_max(&format!(
+                debug_max!(
                     "optimistically assuming instruction {} {} {} is a function selector",
-                    instruction_args[0], instruction_args[1], instruction_args[2]
-                ));
+                    instruction_args[0],
+                    instruction_args[1],
+                    instruction_args[2]
+                );
 
                 // add the function selector to the handled selectors
                 handled_selectors.insert(function_selector.clone());
@@ -51,10 +51,11 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
                         x => x,
                     };
 
-                logger.debug_max(&format!(
+                debug_max!(
                     "found function selector {} at entry point {}",
-                    function_selector, function_entry_point
-                ));
+                    function_selector,
+                    function_entry_point
+                );
 
                 function_selectors.insert(function_selector, function_entry_point);
             }
@@ -83,13 +84,13 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
                 jump_condition.contains(" == ") &&
                 jump_taken == 1
             {
-                return call.last_instruction.inputs[0].try_into().unwrap_or(0)
+                return call.last_instruction.inputs[0].try_into().unwrap_or(0);
             } else if jump_taken == 1 {
                 // if handled_jumps contains the jumpi, we have already handled this jump.
                 // loops aren't supported in the dispatcher, so we can just return 0
                 if handled_jumps.contains(&call.last_instruction.inputs[0].try_into().unwrap_or(0))
                 {
-                    return 0
+                    return 0;
                 } else {
                     handled_jumps.insert(call.last_instruction.inputs[0].try_into().unwrap_or(0));
                 }
@@ -97,7 +98,7 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
         }
 
         if vm.exitcode != 255 || !vm.returndata.is_empty() {
-            break
+            break;
         }
     }
 
