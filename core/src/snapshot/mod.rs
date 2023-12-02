@@ -71,7 +71,7 @@ pub struct SnapshotArgs {
     pub no_tui: bool,
 
     /// Name for the output snapshot file.
-    #[clap(long, short, default_value = "")]
+    #[clap(long, short, default_value = "", hide_default_value = true)]
     pub name: String,
 
     /// The output directory to write the output to, or 'print' to print to the console.
