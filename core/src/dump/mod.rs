@@ -69,7 +69,7 @@ pub struct DumpArgs {
     pub chain: String,
 
     /// The name for the output file
-    #[clap(long, short, default_value = "")]
+    #[clap(long, short, default_value = "", hide_default_value = true)]
     pub name: String,
 }
 
