@@ -17,6 +17,7 @@ mod benchmark {
                 include_solidity: true,
                 include_yul: false,
                 output: String::from(""),
+                name: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -36,6 +37,7 @@ mod benchmark {
                 include_solidity: true,
                 include_yul: false,
                 output: String::from(""),
+                name: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -55,6 +57,7 @@ mod benchmark {
                 include_solidity: false,
                 include_yul: true,
                 output: String::from(""),
+                name: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -74,6 +77,7 @@ mod benchmark {
                 include_solidity: false,
                 include_yul: true,
                 output: String::from(""),
+                name: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -93,6 +97,7 @@ mod benchmark {
                 include_solidity: false,
                 include_yul: false,
                 output: String::from(""),
+                name: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -112,6 +117,7 @@ mod benchmark {
                 include_solidity: false,
                 include_yul: false,
                 output: String::from(""),
+                name: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -137,6 +143,7 @@ mod integration_tests {
             include_solidity: true,
             include_yul: false,
             output: String::from(""),
+            name: String::from(""),
         })
         .await
         .unwrap();
@@ -165,6 +172,7 @@ mod integration_tests {
             include_solidity: true,
             include_yul: false,
             output: String::from(""),
+            name: String::from(""),
         })
         .await
         .unwrap();
@@ -200,6 +208,7 @@ mod integration_tests {
             include_solidity: true,
             include_yul: false,
             output: String::from(""),
+            name: String::from(""),
         })
         .await
         .unwrap();
@@ -306,6 +315,7 @@ mod integration_tests {
                 include_solidity: true,
                 include_yul: false,
                 output: String::from(""),
+                name: String::from(""),
             })
             .await
             .unwrap();
