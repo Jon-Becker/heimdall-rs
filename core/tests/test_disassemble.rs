@@ -14,6 +14,7 @@ mod benchmarks {
                 rpc_url: String::from(""),
                 decimal_counter: true,
                 name:String::from(""),
+                output: String::from(""),
             }).await.unwrap();
         }
 
@@ -40,6 +41,7 @@ mod integration_tests {
             rpc_url: String::from(""),
             decimal_counter: false,
             name: String::from(""),
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -58,6 +60,7 @@ mod integration_tests {
             rpc_url: String::from(""),
             decimal_counter: true,
             name: String::from(""),
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -76,6 +79,7 @@ mod integration_tests {
             rpc_url: String::from(""),
             decimal_counter: true,
             name: String::from(""),
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -94,6 +98,7 @@ mod integration_tests {
             rpc_url: String::from(""),
             decimal_counter: true,
             name: String::from(""),
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -115,6 +120,7 @@ mod integration_tests {
             rpc_url: String::from(""),
             decimal_counter: true,
             name: String::from(""),
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -135,6 +141,7 @@ mod integration_tests {
             rpc_url: String::from("https://eth.llamarpc.com"),
             decimal_counter: true,
             name: String::from(""),
+            output: String::from(""),
         })
         .await
         .unwrap();

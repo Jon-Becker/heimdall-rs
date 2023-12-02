@@ -14,7 +14,7 @@ mod benchmark {
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 color_edges: false,
-                format: String::from("png"),
+                output: String::from(""),
             };
             let _ = heimdall_core::cfg::cfg(args).await;
         }
@@ -31,7 +31,7 @@ mod benchmark {
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 color_edges: false,
-                format: String::from("png"),
+                output: String::from(""),
             };
             let _ = heimdall_core::cfg::cfg(args).await;
         }
@@ -54,7 +54,7 @@ mod integration_tests {
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
             color_edges: false,
-            format: String::from("png"),
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -77,7 +77,7 @@ mod integration_tests {
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
             color_edges: false,
-            format: String::from("png"),
+            output: String::from(""),
         })
         .await
         .unwrap();

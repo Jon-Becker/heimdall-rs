@@ -36,6 +36,10 @@ pub struct DisassemblerArgs {
     /// Name of the output file.
     #[clap(long, short, default_value = "")]
     pub name: String,
+
+    /// The output directory to write the output to or 'print' to print to the console
+    #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
+    pub output: String,
 }
 
 impl DisassemblerArgsBuilder {
@@ -46,6 +50,7 @@ impl DisassemblerArgsBuilder {
             rpc_url: Some(String::new()),
             decimal_counter: Some(false),
             name: Some(String::new()),
+            output: Some(String::new()),
         }
     }
 }

@@ -71,6 +71,10 @@ pub struct DecompilerArgs {
     /// Whether to include yul source code in the output (in beta).
     #[clap(long = "include-yul")]
     pub include_yul: bool,
+
+    /// The output directory to write the output to or 'print' to print to the console
+    #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
+    pub output: String,
 }
 
 impl DecompilerArgsBuilder {
@@ -83,6 +87,7 @@ impl DecompilerArgsBuilder {
             skip_resolving: Some(false),
             include_solidity: Some(false),
             include_yul: Some(false),
+            output: Some(String::new()),
         }
     }
 }
@@ -128,9 +133,9 @@ pub async fn decompile(
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let decompile_call = trace.add_call(
         0,
@@ -180,6 +185,7 @@ pub async fn decompile(
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
         name: String::from(""),
+        output: String::from(""),
     })
     .await?;
     trace.add_call(
@@ -221,9 +227,9 @@ pub async fn decompile(
     );
     let mut shortened_target = contract_bytecode.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let vm_trace = trace.add_creation(
         decompile_call,

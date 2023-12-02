@@ -16,6 +16,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: true,
                 include_yul: false,
+                output: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -34,6 +35,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: true,
                 include_yul: false,
+                output: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -52,6 +54,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: false,
                 include_yul: true,
+                output: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -70,6 +73,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: false,
                 include_yul: true,
+                output: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -88,6 +92,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: false,
                 include_yul: false,
+                output: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -106,6 +111,7 @@ mod benchmark {
                 skip_resolving: true,
                 include_solidity: false,
                 include_yul: false,
+                output: String::from(""),
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -130,6 +136,7 @@ mod integration_tests {
             skip_resolving: true,
             include_solidity: true,
             include_yul: false,
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -157,6 +164,7 @@ mod integration_tests {
             skip_resolving: true,
             include_solidity: true,
             include_yul: false,
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -191,6 +199,7 @@ mod integration_tests {
             skip_resolving: true,
             include_solidity: true,
             include_yul: false,
+            output: String::from(""),
         })
         .await
         .unwrap();
@@ -296,6 +305,7 @@ mod integration_tests {
                 skip_resolving: true,
                 include_solidity: true,
                 include_yul: false,
+                output: String::from(""),
             })
             .await
             .unwrap();

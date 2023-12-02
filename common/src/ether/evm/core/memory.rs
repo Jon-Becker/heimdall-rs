@@ -5,6 +5,12 @@ pub struct Memory {
     // TODO: add bit-tracking for memory
 }
 
+impl Default for Memory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Memory {
     /// Creates a new [`Memory`] with an empty memory vector.
     pub fn new() -> Memory {

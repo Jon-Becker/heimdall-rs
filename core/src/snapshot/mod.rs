@@ -73,6 +73,10 @@ pub struct SnapshotArgs {
     /// Name for the output snapshot file.
     #[clap(long, short, default_value = "")]
     pub name: String,
+
+    /// The output directory to write the output to, or 'print' to print to the console.
+    #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
+    pub output: String,
 }
 
 impl SnapshotArgsBuilder {
@@ -85,6 +89,7 @@ impl SnapshotArgsBuilder {
             skip_resolving: Some(false),
             no_tui: Some(true),
             name: Some(String::new()),
+            output: Some(String::new()),
         }
     }
 }
@@ -124,9 +129,9 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let snapshot_call = trace.add_call(
         0,
@@ -174,6 +179,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         rpc_url: args.rpc_url,
         decimal_counter: false,
         name: args.name,
+        output: String::new(),
     })
     .await?;
     trace.add_call(
@@ -215,9 +221,9 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     );
     let mut shortened_target = contract_bytecode.clone();
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let vm_trace = trace.add_creation(
         snapshot_call,

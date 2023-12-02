@@ -1,23 +1,9 @@
-use std::{process::Command, time::Duration};
-
-use heimdall_common::utils::io::{file::write_file, logging::Logger};
-use indicatif::ProgressBar;
 use petgraph::{dot::Dot, graph::Graph};
 
 use super::CFGArgs;
 
 /// Write the generated CFG to a file in the `dot` graphviz format.
-pub fn write_cfg_to_file(contract_cfg: &Graph<String, String>, args: &CFGArgs, output_dir: String) {
-    // get a new logger
-    let logger = Logger::default();
-
-    // get a new progress bar
-    let progress_bar = ProgressBar::new_spinner();
-    progress_bar.enable_steady_tick(Duration::from_millis(100));
-    progress_bar.set_style(logger.info_spinner());
-    progress_bar.set_message("writing CFG .dot file".to_string());
-
-    let dot_output_path = format!("{output_dir}/cfg.dot");
+pub fn build_cfg(contract_cfg: &Graph<String, String>, args: &CFGArgs) -> String {
     let output = format!("{}", Dot::with_config(&contract_cfg, &[]));
 
     // find regex matches and replace
@@ -38,60 +24,5 @@ pub fn write_cfg_to_file(contract_cfg: &Graph<String, String>, args: &CFGArgs, o
 
     output = output.replace("[ label = \"\" ]", "[]");
 
-    write_file(&dot_output_path, &output);
-
-    progress_bar.suspend(|| {
-        logger.success(&format!("wrote generated dot to '{}' .", &dot_output_path));
-    });
-
-    if !args.format.is_empty() {
-        // check for graphviz
-        match Command::new("dot").spawn() {
-            Ok(_) => {
-                progress_bar.set_message(format!("generating CFG .{} file", &args.format));
-
-                let image_output_path = format!("{}/cfg.{}", output_dir, &args.format);
-                match Command::new("dot").arg("-T").arg(&args.format).arg(&dot_output_path).output()
-                {
-                    Ok(output) => {
-                        match String::from_utf8(output.stdout) {
-                            Ok(output) => {
-                                // write the output
-                                write_file(&image_output_path, &output);
-                                progress_bar.suspend(|| {
-                                    logger.success(&format!(
-                                        "wrote generated {} to '{}' .",
-                                        &args.format, &image_output_path
-                                    ));
-                                });
-                            }
-                            Err(_) => {
-                                progress_bar.suspend(|| {
-                                    logger.error(&format!(
-                                        "graphviz failed to generate {} file.",
-                                        &args.format
-                                    ));
-                                });
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        progress_bar.suspend(|| {
-                            logger.error(&format!(
-                                "graphviz failed to generate {} file.",
-                                &args.format
-                            ));
-                        });
-                    }
-                }
-            }
-            Err(_) => {
-                progress_bar.suspend(|| {
-                    logger.error("graphviz doesn't appear to be installed. please install graphviz to generate images.");
-                });
-            }
-        }
-    }
-
-    progress_bar.finish_and_clear();
+    output
 }

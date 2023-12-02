@@ -108,7 +108,7 @@ impl TraceFactory {
                     "{} {} {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
-                    trace.message.get(0).expect("Failed to build trace.")
+                    trace.message.first().expect("Failed to build trace.")
                 );
 
                 // print the children
@@ -136,7 +136,7 @@ impl TraceFactory {
                 println!(
                     "{} emit {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
-                    trace.message.get(0).expect("Failed to build trace.")
+                    trace.message.first().expect("Failed to build trace.")
                 );
             }
             TraceCategory::LogUnknown => {
@@ -211,7 +211,7 @@ impl TraceFactory {
                     "{} {} create → {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
                     format!("[{}]", trace.instruction).bold().bright_white(),
-                    trace.message.get(0).expect("Failed to build trace.")
+                    trace.message.first().expect("Failed to build trace.")
                 );
 
                 // print the children
@@ -439,7 +439,14 @@ impl Logger {
 
     /// log a warning message
     pub fn warn(&self, message: &str) {
-        println!("{}  {}: {}", pretty_timestamp().dimmed(), "warn".bright_yellow().bold(), message);
+        if self.level >= 0 {
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "warn".bright_yellow().bold(),
+                message
+            );
+        }
     }
 
     /// log a debug message
@@ -473,7 +480,7 @@ impl Logger {
                 "{}  {}: {}",
                 pretty_timestamp().dimmed(),
                 "debug".bright_white().bold(),
-                message
+                message.replace('\n', &("\n".to_owned() + &" ".repeat(31)))
             );
         }
     }
