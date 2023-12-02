@@ -105,11 +105,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            let mut file_name: String = "disassembled.asm".to_string();
+            let mut filename: String = "disassembled.asm".to_string();
             let given_name = cmd.name.as_str();
 
             if !given_name.is_empty() {
-                file_name = format!("{}-{}", given_name, file_name);
+                filename = format!("{}-{}", given_name, filename);
             }
 
             let assembly = disassemble(cmd.clone()).await?;
@@ -118,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 print_with_less(&assembly).await?;
             } else {
                 let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &file_name).await?;
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
 
                 write_file(&output_path, &assembly);
             }
@@ -301,11 +301,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
-            let mut file_name = "snapshot.csv".to_string();
+            let mut filename = "snapshot.csv".to_string();
             let given_name = cmd.name.as_str();
 
             if !given_name.is_empty() {
-                file_name = format!("{}-{}", given_name, file_name);
+                filename = format!("{}-{}", given_name, filename);
             }
 
             let snapshot_result = snapshot(cmd.clone()).await?;
@@ -319,7 +319,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 print_with_less(&csv_lines.join("\n")).await?;
             } else {
                 let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &file_name).await?;
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
 
                 write_lines_to_file(&output_path, csv_lines);
             }
