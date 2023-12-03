@@ -5,7 +5,7 @@ use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,
     providers::{Http, Middleware, Provider},
-    types::{Transaction, H256},
+    types::{BlockTrace, StateDiff, TraceType, Transaction, H256},
 };
 use heimdall_cache::{read_cache, store_cache};
 
@@ -27,7 +27,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
         // get a new logger
         let logger = Logger::default();
 
-debug_max!(&format!("checking chain id for rpc url: '{}'", &rpc_url));
+        debug_max!(&format!("checking chain id for rpc url: '{}'", &rpc_url));
 
         // check the cache for a matching rpc url
         let cache_key = format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-"));
@@ -158,6 +158,7 @@ pub async fn get_code(
 /// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(bytecode.is_ok());
 /// ```
+/// TODO: check for caching
 pub async fn get_transaction(
     transaction_hash: &str,
     rpc_url: &str,
@@ -171,7 +172,7 @@ pub async fn get_transaction(
         // get a new logger
         let logger = Logger::default();
 
-debug_max!(&format!(
+        debug_max!(&format!(
             "fetching calldata from node for transaction: '{}' .",
             &transaction_hash
         ));
@@ -216,5 +217,201 @@ debug_max!(&format!(
         })
     })
     .await
-    .map_err(|_| Box::from("failed to fetch calldata"))
+    .map_err(|_| Box::from("failed to get transaction"))
 }
+
+/// Get the storage diff of the provided transaction hash
+///
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_storage_diff;
+///
+/// // let storage_diff = get_storage_diff("0x0", "https://eth.llamarpc.com").await;
+/// // assert!(storage_diff.is_ok());
+/// ```
+pub async fn get_storage_diff(
+    transaction_hash: &str,
+    rpc_url: &str,
+) -> Result<Option<StateDiff>, Box<dyn std::error::Error>> {
+    backoff::future::retry(
+        ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_secs(10)),
+            ..ExponentialBackoff::default()
+        },
+        || async {
+            // create new logger
+            let logger = Logger::default();
+
+            // get chain_id
+            let chain_id = chain_id(rpc_url).await.unwrap();
+
+            // check the cache for a matching address
+            if let Some(state_diff) =
+                read_cache(&format!("diff.{}.{}", &chain_id, &transaction_hash))
+            {
+                debug_max!("found cached state diff for transaction '{}' .", &transaction_hash);
+                return Ok(state_diff);
+            }
+
+            debug_max!(&format!(
+                "fetching storage diff from node for transaction: '{}' .",
+                &transaction_hash
+            ));
+
+            // create new provider
+            let provider = match Provider::<Http>::try_from(rpc_url) {
+                Ok(provider) => provider,
+                Err(_) => {
+                    logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                    std::process::exit(1)
+                }
+            };
+
+            // safely unwrap the transaction hash
+            let transaction_hash_hex = match H256::from_str(transaction_hash) {
+                Ok(transaction_hash) => transaction_hash,
+                Err(_) => {
+                    logger.error(&format!(
+                        "failed to parse transaction hash '{}' .",
+                        &transaction_hash
+                    ));
+                    std::process::exit(1)
+                }
+            };
+
+            // fetch the state diff for the transaction
+            let state_diff = match provider
+                .trace_replay_transaction(transaction_hash_hex, vec![TraceType::StateDiff])
+                .await
+            {
+                Ok(traces) => traces.state_diff,
+                Err(e) => {
+                    logger.error(&format!(
+            "failed to replay and trace transaction '{}' . does your RPC provider support it?",
+            &transaction_hash
+        ));
+                    logger.error(&format!("error: '{e}' ."));
+                    std::process::exit(1)
+                }
+            };
+
+            // write the state diff to the cache
+            let expiry = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() +
+                60 * 60 * 24 * 7;
+            store_cache(
+                &format!("diff.{}.{}", &chain_id, &transaction_hash),
+                &state_diff,
+                Some(expiry),
+            );
+
+            debug_max!("fetched state diff for transaction '{}' .", &transaction_hash);
+
+            Ok(state_diff)
+        },
+    )
+    .await
+}
+
+/// Get the raw trace data of the provided transaction hash
+///
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_trace;
+///
+/// // let trace = get_trace("0x0", "https://eth.llamarpc.com").await;
+/// // assert!(trace.is_ok());
+/// ```
+/// TODO: check for caching
+pub async fn get_trace(
+    transaction_hash: &str,
+    rpc_url: &str,
+) -> Result<BlockTrace, Box<dyn std::error::Error>> {
+    backoff::future::retry(
+        ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_secs(10)),
+            ..ExponentialBackoff::default()
+        },
+        || async {
+            // create new logger
+            let logger = Logger::default();
+
+            // get chain_id
+            let chain_id = chain_id(rpc_url).await.unwrap();
+
+            // check the cache for a matching address
+            if let Some(block_trace) =
+                read_cache(&format!("trace.{}.{}", &chain_id, &transaction_hash))
+            {
+                debug_max!("found cached trace for transaction '{}' .", &transaction_hash);
+                return Ok(block_trace);
+            }
+
+            debug_max!(&format!(
+                "fetching trace from node for transaction: '{}' .",
+                &transaction_hash
+            ));
+
+            // create new provider
+            let provider = match Provider::<Http>::try_from(rpc_url) {
+                Ok(provider) => provider,
+                Err(_) => {
+                    logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                    std::process::exit(1)
+                }
+            };
+
+            // safely unwrap the transaction hash
+            let transaction_hash_hex = match H256::from_str(transaction_hash) {
+                Ok(transaction_hash) => transaction_hash,
+                Err(_) => {
+                    logger.error(&format!(
+                        "failed to parse transaction hash '{}' .",
+                        &transaction_hash
+                    ));
+                    std::process::exit(1)
+                }
+            };
+
+            // fetch the trace for the transaction
+            let block_trace = match provider
+                .trace_replay_transaction(
+                    transaction_hash_hex,
+                    vec![TraceType::StateDiff, TraceType::VmTrace, TraceType::Trace],
+                )
+                .await
+            {
+                Ok(traces) => traces,
+                Err(e) => {
+                    logger.error(&format!(
+                        "failed to replay and trace transaction '{}' . does your RPC provider support it?",
+                        &transaction_hash
+                    ));
+                    logger.error(&format!("error: '{e}' ."));
+                    std::process::exit(1)
+                }
+            };
+
+            // write the trace to the cache
+            let expiry = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                + 60 * 60 * 24 * 7;
+            store_cache(
+                &format!("trace.{}.{}", &chain_id, &transaction_hash),
+                &block_trace,
+                Some(expiry),
+            );
+
+            debug_max!("fetched trace for transaction '{}' .", &transaction_hash);
+
+            Ok(block_trace)
+        },
+    )
+    .await
+}
+
+// TODO: add tests
+#[cfg(test)]
+pub mod tests {}

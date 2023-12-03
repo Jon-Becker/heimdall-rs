@@ -27,6 +27,7 @@ use heimdall_core::{
     decompile::{decompile, out::abi::ABIStructure, DecompilerArgs},
     disassemble::{disassemble, DisassemblerArgs},
     dump::{dump, DumpArgs},
+    inspect::{inspect, InspectArgs},
     snapshot::{snapshot, util::csv::generate_csv, SnapshotArgs},
 };
 use tui::{backend::CrosstermBackend, Terminal};
@@ -65,6 +66,13 @@ pub enum Subcommands {
 
     #[clap(name = "dump", about = "Dump the value of all storage slots accessed by a contract")]
     Dump(DumpArgs),
+
+    #[clap(
+        name = "inspect",
+        about = "Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more"
+    )]
+    Inspect(InspectArgs),
+
     #[clap(
         name = "snapshot",
         about = "Infer functiogn information from bytecode, including access control, gas
@@ -328,6 +336,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 write_lines_to_file(&output_path, csv_lines);
             }
+        }
+
+        Subcommands::Inspect(mut cmd) => {
+            // if the user has not specified a rpc url, use the default
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
+
+            inspect(cmd).await?;
         }
 
         Subcommands::Config(cmd) => {

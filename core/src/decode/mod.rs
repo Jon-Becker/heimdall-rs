@@ -50,7 +50,7 @@ pub struct DecodeArgs {
     #[clap(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
 
-    /// The RPC provider to use for fetching target bytecode.
+    /// The RPC provider to use for fetching target calldata.
     #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
