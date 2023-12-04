@@ -1,8 +1,9 @@
 pub mod graph;
 pub mod output;
 use derive_builder::Builder;
-use heimdall_common::ether::{
-    compiler::detect_compiler, rpc::get_code, selectors::find_function_selectors,
+use heimdall_common::{
+    debug_max,
+    ether::{compiler::detect_compiler, rpc::get_code, selectors::find_function_selectors},
 };
 use indicatif::ProgressBar;
 use std::{fs, time::Duration};
@@ -52,6 +53,10 @@ pub struct CFGArgs {
     /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
+
+    /// The name for the output file
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub name: String,
 }
 
 impl CFGArgsBuilder {
@@ -63,6 +68,7 @@ impl CFGArgsBuilder {
             default: Some(true),
             color_edges: Some(false),
             output: Some(String::new()),
+            name: Some(String::new()),
         }
     }
 }
@@ -114,10 +120,10 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         // provider
         contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
     } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        logger.debug_max("using provided bytecode for cfg generation");
+        debug_max!("using provided bytecode for cfg generation");
         contract_bytecode = args.target.replacen("0x", "", 1);
     } else {
-        logger.debug_max("using provided file for cfg generation.");
+        debug_max!("using provided file for cfg generation.");
 
         // We are analyzing a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
@@ -144,6 +150,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
+        name: String::from(""),
         output: String::from(""),
     })
     .await?;
@@ -235,7 +242,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         &format!("traced and executed {jumpdest_count} possible paths."),
     );
 
-    logger.debug_max("building control flow graph from symbolic execution trace");
+    debug_max!("building control flow graph from symbolic execution trace");
     build_cfg(map, &mut contract_cfg, None, false);
 
     progress.finish_and_clear();

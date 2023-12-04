@@ -197,7 +197,7 @@ where
     let binary_vec = decode_hex(&binary_string);
 
     if binary_vec.is_err() {
-        return None
+        return None;
     }
 
     let cache: Cache<T> = match bincode::deserialize::<Cache<T>>(&binary_vec.unwrap()) {
@@ -210,7 +210,7 @@ where
                     .as_secs()
             {
                 delete_cache(key);
-                return None
+                return None;
             }
 
             c

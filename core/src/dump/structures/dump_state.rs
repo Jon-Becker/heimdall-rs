@@ -36,6 +36,7 @@ impl DumpState {
                 to_block: 9999999999,
                 no_tui: false,
                 chain: String::from("ethereum"),
+                name: String::from(""),
             },
             scroll_index: 0,
             selection_size: 1,

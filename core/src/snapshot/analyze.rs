@@ -159,7 +159,7 @@ pub fn snapshot_trace(
                     ),
                 );
                 snapshot.payable = false;
-                continue
+                continue;
             }
 
             // perform a series of checks to determine if the condition
@@ -171,7 +171,7 @@ pub fn snapshot_trace(
                     !conditional.contains("arg") &&
                     !conditional.contains("storage"))
             {
-                continue
+                continue;
             }
 
             snapshot.control_statements.insert(format!("if ({}) {{ .. }}", conditional));
@@ -318,7 +318,7 @@ pub fn snapshot_trace(
                     if address.replacen("0x", "", 1).chars().all(|c| c == 'f' || c == '0') ||
                         (address.len() > 42 || address.len() < 32)
                     {
-                        continue
+                        continue;
                     }
 
                     snapshot.addresses.insert(address);

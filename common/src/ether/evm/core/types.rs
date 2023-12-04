@@ -1,9 +1,20 @@
-use colored::Colorize;
-use ethers::abi::{AbiEncode, ParamType, Token};
+use std::collections::VecDeque;
 
-use crate::{constants::TYPE_CAST_REGEX, utils::strings::find_balanced_encapsulator};
+use ethers::abi::{AbiEncode, ParamType};
+
+use crate::{
+    constants::TYPE_CAST_REGEX,
+    utils::strings::{decode_hex, find_balanced_encapsulator},
+};
 
 use super::vm::Instruction;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Padding {
+    Left,
+    Right,
+    None,
+}
 
 /// Parse function parameters [`ParamType`]s from a function signature.
 ///
@@ -20,7 +31,7 @@ pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamTy
     // remove the function name from the signature, only keep the parameters
     let (start, end, valid) = find_balanced_encapsulator(function_signature, ('(', ')'));
     if !valid {
-        return None
+        return None;
     }
 
     let function_inputs = function_signature[start + 1..end - 1].to_string();
@@ -36,7 +47,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
 
     // if string is empty, return None
     if string.is_empty() {
-        return None
+        return None;
     }
 
     // if the string contains a tuple we cant simply split on commas
@@ -46,7 +57,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
             // get balanced encapsulator
             let (tuple_start, tuple_end, valid) = find_balanced_encapsulator(string, ('(', ')'));
             if !valid {
-                return None
+                return None;
             }
 
             // extract the tuple
@@ -67,7 +78,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
                 if is_array {
                     let (start, end, valid) = find_balanced_encapsulator(split, ('[', ']'));
                     if !valid {
-                        return None
+                        return None;
                     }
 
                     let size = split[start + 1..end - 1].to_string();
@@ -145,7 +156,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
         // iterate over the split string and convert each type to a ParamType
         for string_type in split {
             if string_type.is_empty() {
-                continue
+                continue;
             }
 
             let param_type = to_type(string_type);
@@ -171,29 +182,29 @@ fn is_first_type_tuple(string: &str) -> bool {
 
 /// A helper function used by [`extract_types_from_string`] that converts a string type to a
 /// ParamType. For example, "address" will be converted to [`ParamType::Address`].
-fn to_type(string: &str) -> ParamType {
+pub fn to_type(string: &str) -> ParamType {
     let is_array = string.ends_with(']');
+    let mut array_size: VecDeque<Option<usize>> = VecDeque::new();
+    let mut string = string.to_string();
 
-    // get size of array
-    let array_size = if is_array {
-        let (start, end, valid) = find_balanced_encapsulator(string, ('[', ']'));
+    // while string contains a [..]
+    while string.ends_with(']') {
+        let (start, end, valid) = find_balanced_encapsulator(&string, ('[', ']'));
         if !valid {
-            return ParamType::Bytes
+            return ParamType::Bytes; // default to bytes if invalid
         }
 
         let size = string[start + 1..end - 1].to_string();
-        match size.parse::<usize>() {
+
+        array_size.push_back(match size.parse::<usize>() {
             Ok(size) => Some(size),
             Err(_) => None,
-        }
-    } else {
-        None
-    };
+        });
 
-    // if array, remove the [..] from the string
-    let string = if is_array { string.splitn(2, '[').collect::<Vec<&str>>()[0] } else { string };
+        string = string.replacen(&format!("[{}]", &size), "", 1);
+    }
 
-    let arg_type = match string {
+    let arg_type = match string.as_str() {
         "address" => ParamType::Address,
         "bool" => ParamType::Bool,
         "string" => ParamType::String,
@@ -209,79 +220,29 @@ fn to_type(string: &str) -> ParamType {
                 let size = stripped.parse::<usize>().unwrap();
                 ParamType::FixedBytes(size)
             } else {
-                panic!("Invalid type: '{}'", string);
+                // default to bytes if invalid
+                ParamType::Bytes
             }
         }
     };
 
     if is_array {
-        if let Some(size) = array_size {
-            ParamType::FixedArray(Box::new(arg_type), size)
-        } else {
-            ParamType::Array(Box::new(arg_type))
+        let mut arg_type = arg_type;
+
+        // while array_size is not empty
+        while !array_size.is_empty() {
+            // pop off first element of array_size
+            if let Some(size) = array_size.pop_front().unwrap() {
+                arg_type = ParamType::FixedArray(Box::new(arg_type), size);
+            } else {
+                arg_type = ParamType::Array(Box::new(arg_type));
+            }
         }
-    } else {
-        arg_type
-    }
-}
 
-/// A helper function used by the decode module to pretty format decoded tokens.
-pub fn display(inputs: Vec<Token>, prefix: &str) -> Vec<String> {
-    let mut output = Vec::new();
-    let prefix = prefix.to_string();
-
-    for input in inputs {
-        match input {
-            Token::Address(_) => output.push(format!("{prefix}{} 0x{input}", "address".blue())),
-            Token::Int(val) => output.push(format!("{prefix}{} {}", "int    ".blue(), val)),
-            Token::Uint(val) => output.push(format!("{prefix}{} {}", "uint   ".blue(), val)),
-            Token::String(val) => output.push(format!("{prefix}{} {val}", "string ".blue())),
-            Token::Bool(val) => {
-                if val {
-                    output.push(format!("{prefix}{} true", "bool   ".blue()));
-                } else {
-                    output.push(format!("{prefix}{} false", "bool   ".blue()));
-                }
-            }
-            Token::FixedBytes(_) | Token::Bytes(_) => {
-                let bytes = input
-                    .to_string()
-                    .chars()
-                    .collect::<Vec<char>>()
-                    .chunks(64)
-                    .map(|c| c.iter().collect::<String>())
-                    .collect::<Vec<String>>();
-
-                for (i, byte) in bytes.iter().enumerate() {
-                    if i == 0 {
-                        output.push(format!("{prefix}{} 0x{}", "bytes  ".blue(), byte));
-                    } else {
-                        output.push(format!("{prefix}{}   {}", "       ".blue(), byte));
-                    }
-                }
-            }
-            Token::FixedArray(val) | Token::Array(val) => {
-                if val.is_empty() {
-                    output.push(format!("{prefix}[]"));
-                } else {
-                    output.push(format!("{prefix}["));
-                    output.extend(display(val.to_vec(), &format!("{prefix}   ")));
-                    output.push(format!("{prefix}]"));
-                }
-            }
-            Token::Tuple(val) => {
-                if val.is_empty() {
-                    output.push(format!("{prefix}()"));
-                } else {
-                    output.push(format!("{prefix}("));
-                    output.extend(display(val.to_vec(), &format!("{prefix}   ")));
-                    output.push(format!("{prefix})"));
-                }
-            }
-        };
+        return arg_type;
     }
 
-    output
+    arg_type
 }
 
 /// Convert a bitwise masking operation to a tuple containing: \
@@ -329,7 +290,7 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 
     match byte_size {
         1 => potential_types.push("bool".to_string()),
-        20 => potential_types.push("address".to_string()),
+        15..=20 => potential_types.push("address".to_string()),
         _ => {}
     }
 
@@ -359,11 +320,113 @@ pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
     }
 }
 
+/// Given a string of bytes, determine if it is left or right padded.
+pub fn get_padding(bytes: &str) -> Padding {
+    let decoded = match decode_hex(bytes) {
+        Ok(decoded) => decoded,
+        Err(_) => return Padding::None,
+    };
+
+    let size = decoded.len();
+
+    // get indices of null bytes in the decoded bytes
+    let null_byte_indices = decoded
+        .iter()
+        .enumerate()
+        .filter(|(_, byte)| **byte == 0)
+        .map(|(index, _)| index)
+        .collect::<Vec<usize>>();
+
+    // we can avoid doing a full check if any of the following are true:
+    // there are no null bytes OR
+    // neither first nor last byte is a null byte, it is not padded
+    if null_byte_indices.is_empty() ||
+        null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
+    {
+        return Padding::None;
+    }
+
+    // the first byte is a null byte AND the last byte is not a null byte, it is left padded
+    if null_byte_indices[0] == 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1 {
+        return Padding::Left;
+    }
+
+    // the first byte is not a null byte AND the last byte is a null byte, it is right padded
+    if null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] == size - 1 {
+        return Padding::Right;
+    }
+
+    // get non-null byte indices
+    let non_null_byte_indices = decoded
+        .iter()
+        .enumerate()
+        .filter(|(_, byte)| **byte != 0)
+        .map(|(index, _)| index)
+        .collect::<Vec<usize>>();
+
+    if non_null_byte_indices.is_empty() {
+        return Padding::None;
+    }
+
+    // check if the there are more null-bytes before the first non-null byte than after the last
+    // non-null byte
+    let left_hand_padding =
+        null_byte_indices.iter().filter(|index| **index < non_null_byte_indices[0]).count();
+    let right_hand_padding = null_byte_indices
+        .iter()
+        .filter(|index| **index > non_null_byte_indices[non_null_byte_indices.len() - 1])
+        .count();
+
+    match left_hand_padding.cmp(&right_hand_padding) {
+        std::cmp::Ordering::Greater => Padding::Left,
+        std::cmp::Ordering::Less => Padding::Right,
+        std::cmp::Ordering::Equal => Padding::None,
+    }
+}
+
+/// Given a string of bytes, get the max padding size for the data
+pub fn get_padding_size(bytes: &str) -> usize {
+    match get_padding(bytes) {
+        Padding::Left => {
+            // count number of null-bytes at the start of the data
+            bytes
+                .chars()
+                .collect::<Vec<char>>()
+                .chunks(2)
+                .map(|c| c.iter().collect::<String>())
+                .take_while(|c| c == "00")
+                .count()
+        }
+        Padding::Right => {
+            // count number of null-bytes at the end of the data
+            bytes
+                .chars()
+                .collect::<Vec<char>>()
+                .chunks(2)
+                .map(|c| c.iter().collect::<String>())
+                .rev()
+                .take_while(|c| c == "00")
+                .count()
+        }
+        _ => 0,
+    }
+}
+
+// Get minimum size needed to store the given word
+pub fn get_potential_types_for_word(word: &str) -> (usize, Vec<String>) {
+    // get padding of the word, note this is a maximum
+    let padding_size = get_padding_size(word);
+
+    // get number of bytes padded
+    let data_size = (word.len() / 2) - padding_size;
+    byte_size_to_type(data_size)
+}
+
 #[cfg(test)]
 mod tests {
     use ethers::abi::ParamType;
 
-    use crate::ether::evm::core::types::parse_function_parameters;
+    use crate::ether::evm::core::types::{get_padding, parse_function_parameters, Padding};
 
     #[test]
     fn test_simple_signature() {
@@ -564,6 +627,200 @@ mod tests {
                 ParamType::FixedBytes(32),
                 ParamType::Address
             ])
+        );
+    }
+
+    #[test]
+    fn test_get_padding_no_padding() {
+        // No padding, input contains no null bytes
+        let input = "11".repeat(32);
+        assert_eq!(get_padding(&input), Padding::None);
+    }
+
+    #[test]
+    fn test_get_padding_left_padding() {
+        // Left padded, first byte is null
+        let input = "00".repeat(31) + "11";
+        assert_eq!(get_padding(&input), Padding::Left);
+    }
+
+    #[test]
+    fn test_get_padding_right_padding() {
+        // Right padding, last byte is null
+        let input = "11".to_owned() + &"00".repeat(31);
+        assert_eq!(get_padding(&input), Padding::Right);
+    }
+
+    #[test]
+    fn test_get_padding_skewed_left_padding() {
+        // Both left and right null-bytes, but still left padded
+        let input = "00".repeat(30) + "1100";
+        assert_eq!(get_padding(&input), Padding::Left);
+    }
+
+    #[test]
+    fn test_get_padding_skewed_right_padding() {
+        // Both left and right null-bytes, but still right padded
+        let input = "0011".to_owned() + &"00".repeat(30);
+        assert_eq!(get_padding(&input), Padding::Right);
+    }
+
+    #[test]
+    fn test_get_padding_empty_input() {
+        // Empty input should result in no padding
+        let input = "";
+        assert_eq!(get_padding(input), Padding::None);
+    }
+
+    #[test]
+    fn test_get_padding_single_byte() {
+        // Single-byte input with null byte
+        let input = "00";
+        assert_eq!(get_padding(input), Padding::None);
+    }
+
+    #[test]
+    fn test_get_padding_single_byte_left_padding() {
+        // Single-byte input with left padding
+        let input = "0011";
+        assert_eq!(get_padding(input), Padding::Left);
+    }
+
+    #[test]
+    fn test_get_padding_single_byte_right_padding() {
+        // Single-byte input with right padding
+        let input = "1100";
+        assert_eq!(get_padding(input), Padding::Right);
+    }
+
+    #[test]
+    fn test_get_padding_single_byte_both_padding() {
+        // Single-byte input with both left and right padding
+        let input = "001100";
+        assert_eq!(get_padding(input), Padding::None);
+    }
+
+    #[test]
+    fn test_get_padding_mixed_padding() {
+        // Mixed padding, some null bytes in the middle
+        let input = "00".repeat(10) + "1122330000332211" + &"00".repeat(10);
+        assert_eq!(get_padding(&input), Padding::None);
+    }
+
+    #[test]
+    fn test_get_padding_mixed_padding_skewed_left() {
+        // Mixed padding, some null bytes in the middle
+        let input = "00".repeat(10) + "001122330000332211" + &"00".repeat(10);
+        assert_eq!(get_padding(&input), Padding::Left);
+    }
+
+    #[test]
+    fn test_get_padding_mixed_padding_skewed_right() {
+        // Mixed padding, some null bytes in the middle
+        let input = "00".repeat(10) + "112233000033221100" + &"00".repeat(10);
+        assert_eq!(get_padding(&input), Padding::Right);
+    }
+
+    #[test]
+    fn test_get_padding_invalid_hex_input() {
+        // Invalid hex input, should result in no padding
+        let input = "XYZ";
+        assert_eq!(get_padding(input), Padding::None);
+    }
+
+    #[test]
+    fn test_to_type_address() {
+        let input = "address";
+        assert_eq!(super::to_type(input), ParamType::Address);
+    }
+
+    #[test]
+    fn test_to_type_bool() {
+        let input = "bool";
+        assert_eq!(super::to_type(input), ParamType::Bool);
+    }
+
+    #[test]
+    fn test_to_type_string() {
+        let input = "string";
+        assert_eq!(super::to_type(input), ParamType::String);
+    }
+
+    #[test]
+    fn test_to_type_bytes() {
+        let input = "bytes";
+        assert_eq!(super::to_type(input), ParamType::Bytes);
+    }
+
+    #[test]
+    fn test_to_type_uint256() {
+        let input = "uint256";
+        assert_eq!(super::to_type(input), ParamType::Uint(256));
+    }
+
+    #[test]
+    fn test_to_type_int() {
+        let input = "int256";
+        assert_eq!(super::to_type(input), ParamType::Int(256));
+    }
+
+    #[test]
+    fn test_to_type_bytes1() {
+        let input = "bytes1";
+        assert_eq!(super::to_type(input), ParamType::FixedBytes(1));
+    }
+
+    #[test]
+    fn test_to_type_uint() {
+        let input = "uint";
+        assert_eq!(super::to_type(input), ParamType::Uint(256));
+    }
+
+    #[test]
+    fn test_to_type_array() {
+        let input = "uint8[]";
+        assert_eq!(super::to_type(input), ParamType::Array(Box::new(ParamType::Uint(8))));
+    }
+
+    #[test]
+    fn test_to_type_nested_array() {
+        let input = "uint8[][]";
+        assert_eq!(
+            super::to_type(input),
+            ParamType::Array(Box::new(ParamType::Array(Box::new(ParamType::Uint(8)))))
+        );
+    }
+
+    #[test]
+    fn test_to_type_fixed_array() {
+        let input = "uint8[2]";
+        assert_eq!(super::to_type(input), ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2));
+    }
+
+    #[test]
+    fn test_to_type_nested_fixed_array() {
+        let input = "uint8[2][2]";
+        assert_eq!(
+            super::to_type(input),
+            ParamType::FixedArray(
+                Box::new(ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2)),
+                2
+            )
+        );
+    }
+
+    #[test]
+    fn test_to_type_nested_fixed_array_ordering() {
+        let input = "uint8[2][3][2]";
+        assert_eq!(
+            super::to_type(input),
+            ParamType::FixedArray(
+                Box::new(ParamType::FixedArray(
+                    Box::new(ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2)),
+                    3
+                )),
+                2
+            )
         );
     }
 }

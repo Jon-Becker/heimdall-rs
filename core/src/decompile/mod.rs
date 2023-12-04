@@ -4,6 +4,7 @@ pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
+use heimdall_common::debug_max;
 
 use crate::{
     decompile::{
@@ -75,6 +76,10 @@ pub struct DecompilerArgs {
     /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
+
+    /// The name for the output file
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub name: String,
 }
 
 impl DecompilerArgsBuilder {
@@ -88,6 +93,7 @@ impl DecompilerArgsBuilder {
             include_solidity: Some(false),
             include_yul: Some(false),
             output: Some(String::new()),
+            name: Some(String::new()),
         }
     }
 }
@@ -154,10 +160,10 @@ pub async fn decompile(
         // provider
         contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
     } else if BYTECODE_REGEX.is_match(&args.target)? {
-        logger.debug_max("using provided bytecode for decompilation");
+        debug_max!("using provided bytecode for decompilation");
         contract_bytecode = args.target.clone().replacen("0x", "", 1);
     } else {
-        logger.debug_max("using provided file for decompilation.");
+        debug_max!("using provided file for decompilation.");
 
         // We are decompiling a file, so we need to read the bytecode from the file.
         contract_bytecode = match fs::read_to_string(&args.target) {
@@ -184,6 +190,7 @@ pub async fn decompile(
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
+        name: String::from(""),
         output: String::from(""),
     })
     .await?;
@@ -312,10 +319,7 @@ pub async fn decompile(
         // analyze execution tree
         let mut analyzed_function;
         if args.include_yul {
-            logger.debug_max(&format!(
-                "analyzing symbolic execution trace '0x{}' with yul analyzer",
-                selector
-            ));
+            debug_max!("analyzing symbolic execution trace '0x{}' with yul analyzer", selector);
             analyzed_function = analyze_yul(
                 map,
                 Function {
@@ -340,10 +344,7 @@ pub async fn decompile(
                 &mut Vec::new(),
             );
         } else {
-            logger.debug_max(&format!(
-                "analyzing symbolic execution trace '0x{}' with sol analyzer",
-                selector
-            ));
+            debug_max!("analyzing symbolic execution trace '0x{}' with sol analyzer", selector);
             analyzed_function = analyze_sol(
                 map,
                 Function {

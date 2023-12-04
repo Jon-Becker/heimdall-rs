@@ -67,6 +67,10 @@ pub struct DumpArgs {
     /// The chain of the target. Valid chains are ethereum, polygon, goerli, canto, and arbitrum.
     #[clap(long, default_value = "ethereum", hide_default_value = true)]
     pub chain: String,
+
+    /// The name for the output file
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub name: String,
 }
 
 impl DumpArgsBuilder {
@@ -82,6 +86,7 @@ impl DumpArgsBuilder {
             to_block: Some(9999999999),
             no_tui: Some(true),
             chain: Some(String::from("ethereum")),
+            name: Some(String::new()),
         }
     }
 }

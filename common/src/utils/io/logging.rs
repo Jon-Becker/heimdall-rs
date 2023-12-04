@@ -439,7 +439,14 @@ impl Logger {
 
     /// log a warning message
     pub fn warn(&self, message: &str) {
-        println!("{}  {}: {}", pretty_timestamp().dimmed(), "warn".bright_yellow().bold(), message);
+        if self.level >= 0 {
+            println!(
+                "{}  {}: {}",
+                pretty_timestamp().dimmed(),
+                "warn".bright_yellow().bold(),
+                message
+            );
+        }
     }
 
     /// log a debug message
@@ -473,7 +480,7 @@ impl Logger {
                 "{}  {}: {}",
                 pretty_timestamp().dimmed(),
                 "debug".bright_white().bold(),
-                message
+                message.replace('\n', &("\n".to_owned() + &" ".repeat(31)))
             );
         }
     }
@@ -513,7 +520,7 @@ impl Logger {
     ) -> u8 {
         // if silent, return the default
         if self.level == -1 {
-            return default.expect("Failed to get default option.")
+            return default.expect("Failed to get default option.");
         }
 
         // log the message with the given class
@@ -557,7 +564,7 @@ impl Logger {
             } else {
                 println!();
             }
-            return default.expect("Failed to get default option.")
+            return default.expect("Failed to get default option.");
         }
 
         // get input
@@ -566,10 +573,10 @@ impl Logger {
                 // check if default was selected
                 if selection.trim() == "" {
                     if let Some(default) = default {
-                        return default
+                        return default;
                     } else {
                         self.error("invalid selection.");
-                        return self.option(function, message, options, default, skip)
+                        return self.option(function, message, options, default, skip);
                     }
                 }
 
@@ -578,7 +585,7 @@ impl Logger {
                     Ok(i) => i,
                     Err(_) => {
                         self.error("invalid selection.");
-                        return self.option(function, message, options, default, skip)
+                        return self.option(function, message, options, default, skip);
                     }
                 };
 
@@ -892,29 +899,30 @@ mod tests {
 
     #[test]
     fn test_max() {
-        let (logger, _) = Logger::new("SILENT");
-        logger.debug_max("log");
+        let (_logger, _) = Logger::new("SILENT");
+        use crate::debug_max;
+        debug_max!("log");
 
-        let (logger, _) = Logger::new("ERROR");
-        logger.debug_max("log");
+        let (_logger, _) = Logger::new("ERROR");
+        debug_max!("log");
 
-        let (logger, _) = Logger::new("WARN");
-        logger.debug_max("log");
+        let (_logger, _) = Logger::new("WARN");
+        debug_max!("log");
 
-        let (logger, _) = Logger::new("INFO");
-        logger.debug_max("log");
+        let (_logger, _) = Logger::new("INFO");
+        debug_max!("log");
 
-        let (logger, _) = Logger::new("DEBUG");
-        logger.debug_max("log");
+        let (_logger, _) = Logger::new("DEBUG");
+        debug_max!("log");
 
-        let (logger, _) = Logger::new("TRACE");
-        logger.debug_max("log");
+        let (_logger, _) = Logger::new("TRACE");
+        debug_max!("log");
 
-        let (logger, _) = Logger::new("ALL");
-        logger.debug_max("log");
+        let (_logger, _) = Logger::new("ALL");
+        debug_max!("log");
 
-        let (logger, _) = Logger::new("MAX");
-        logger.debug_max("log");
+        let (_logger, _) = Logger::new("MAX");
+        debug_max!("log");
     }
 
     #[test]

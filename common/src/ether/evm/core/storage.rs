@@ -10,6 +10,12 @@ pub struct Storage {
     access_set: HashSet<[u8; 32]>,
 }
 
+impl Default for Storage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Storage {
     /// Creates a new [`Storage`] struct.
     ///

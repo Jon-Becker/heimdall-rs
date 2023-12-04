@@ -124,7 +124,7 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize
         }
         if open == close && open > 0 {
             end = i;
-            break
+            break;
         }
     }
     (start, end + 1, (open == close && end > start && open > 0))
@@ -155,7 +155,7 @@ pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (us
         }
         if open == close && open > 0 {
             end = i;
-            break
+            break;
         }
     }
     (s.len() - end - 1, s.len() - start, (open == close && end > start && open > 0))
@@ -233,7 +233,7 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
                 condition = condition.split(", ").collect::<Vec<&str>>()[0];
             }
 
-            return Some(condition.trim().to_string())
+            return Some(condition.trim().to_string());
         }
     }
 
@@ -323,18 +323,18 @@ pub enum TokenType {
 pub fn classify_token(token: &str) -> TokenType {
     // return if the token is a parenthesis
     if token == "(" || token == ")" {
-        return TokenType::Control
+        return TokenType::Control;
     }
 
     // check if the token is an operator
     let operators = ['+', '-', '*', '/', '=', '>', '<', '!', '&', '|', '%', '^'];
     if token.chars().all(|c| operators.contains(&c)) {
-        return TokenType::Operator
+        return TokenType::Operator;
     }
 
     // check if the token is a constant
     if token.starts_with("0x") || token.parse::<U256>().is_ok() {
-        return TokenType::Constant
+        return TokenType::Constant;
     }
 
     // check if the token is a variable
@@ -345,7 +345,7 @@ pub fn classify_token(token: &str) -> TokenType {
     .iter()
     .any(|keyword| token.contains(keyword))
     {
-        return TokenType::Variable
+        return TokenType::Variable;
     }
 
     // this token must be a function call

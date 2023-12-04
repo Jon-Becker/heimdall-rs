@@ -1,6 +1,6 @@
 use std::{str::FromStr, time::Duration};
 
-use crate::utils::io::logging::Logger;
+use crate::{debug_max, utils::io::logging::Logger};
 use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,
@@ -27,7 +27,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
         // get a new logger
         let logger = Logger::default();
 
-        logger.debug_max(&format!("checking chain id for rpc url: '{}'", &rpc_url));
+debug_max!(&format!("checking chain id for rpc url: '{}'", &rpc_url));
 
         // check the cache for a matching rpc url
         let cache_key = format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-"));
@@ -63,7 +63,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
         // cache the results
         store_cache(&cache_key, chain_id.as_u64(), None);
 
-        logger.debug_max(&format!("chain_id is '{}'", &chain_id));
+        debug_max!(&format!("chain_id is '{}'", &chain_id));
 
         Ok(chain_id.as_u64())
     })
@@ -171,7 +171,7 @@ pub async fn get_transaction(
         // get a new logger
         let logger = Logger::default();
 
-        logger.debug_max(&format!(
+debug_max!(&format!(
             "fetching calldata from node for transaction: '{}' .",
             &transaction_hash
         ));

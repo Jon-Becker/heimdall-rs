@@ -2,7 +2,10 @@ use async_trait::async_trait;
 use ethers::abi::Token;
 use heimdall_cache::{read_cache, store_cache};
 
-use crate::utils::{http::get_json_from_url, io::logging::Logger, strings::replace_last};
+use crate::{
+    debug_max,
+    utils::{http::get_json_from_url, strings::replace_last},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -37,10 +40,7 @@ pub trait ResolveSelector {
 #[async_trait]
 impl ResolveSelector for ResolvedError {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
-        // get a new logger
-        let logger = Logger::default();
-
-        logger.debug_max(&format!("resolving error selector {}", &selector));
+        debug_max!("resolving error selector {}", &selector);
 
         // get cached results
         if let Some(cached_results) =
@@ -49,15 +49,18 @@ impl ResolveSelector for ResolvedError {
             match cached_results.len() {
                 0 => return None,
                 _ => {
-                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
-                    return Some(cached_results)
+                    debug_max!("found cached results for selector: {}", &selector);
+                    return Some(cached_results);
                 }
             }
         }
 
-        // get function possibilities from etherface
+        // get function possibilities from openchain
         let signatures = match get_json_from_url(
-            &format!("https://api.etherface.io/v1/signatures/hash/error/{}/1", &selector),
+            &format!(
+                "https://api.openchain.xyz/signature-database/v1/lookup?filter=true&function=0x{}",
+                &selector
+            ),
             10,
         )
         .await
@@ -68,25 +71,20 @@ impl ResolveSelector for ResolvedError {
         };
 
         // convert the serde value into a vec of possible functions
-        let results = match signatures.get("items") {
-            Some(items) => match items.as_array() {
-                Some(items) => items.to_vec(),
-                None => return None,
-            },
-            None => return None,
-        };
+        let results = signatures
+            .get("result")?
+            .get("function")?
+            .get(&format!("0x{selector}"))?
+            .as_array()?
+            .to_vec();
 
-        logger.debug_max(&format!(
-            "found {} possible functions for selector: {}",
-            &results.len(),
-            &selector
-        ));
+        debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
         let mut signature_list: Vec<ResolvedError> = Vec::new();
 
         for signature in results {
             // get the function text signature and unwrap it into a string
-            let text_signature = match signature.get("text") {
+            let text_signature = match signature.get("name") {
                 Some(text_signature) => text_signature.to_string().replace('"', ""),
                 None => continue,
             };
@@ -120,10 +118,7 @@ impl ResolveSelector for ResolvedError {
 #[async_trait]
 impl ResolveSelector for ResolvedLog {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
-        // get a new logger
-        let logger = Logger::default();
-
-        logger.debug_max(&format!("resolving event selector {}", &selector));
+        debug_max!("resolving event selector {}", &selector);
 
         // get cached results
         if let Some(cached_results) =
@@ -132,15 +127,18 @@ impl ResolveSelector for ResolvedLog {
             match cached_results.len() {
                 0 => return None,
                 _ => {
-                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
-                    return Some(cached_results)
+                    debug_max!("found cached results for selector: {}", &selector);
+                    return Some(cached_results);
                 }
             }
         }
 
-        // get function possibilities from etherface
+        // get function possibilities from openchain
         let signatures = match get_json_from_url(
-            &format!("https://api.etherface.io/v1/signatures/hash/event/{}/1", &selector),
+            &format!(
+                "https://api.openchain.xyz/signature-database/v1/lookup?filter=true&event=0x{}",
+                &selector
+            ),
             10,
         )
         .await
@@ -151,25 +149,20 @@ impl ResolveSelector for ResolvedLog {
         };
 
         // convert the serde value into a vec of possible functions
-        let results = match signatures.get("items") {
-            Some(items) => match items.as_array() {
-                Some(items) => items.to_vec(),
-                None => return None,
-            },
-            None => return None,
-        };
+        let results = signatures
+            .get("result")?
+            .get("event")?
+            .get(&format!("0x{selector}"))?
+            .as_array()?
+            .to_vec();
 
-        logger.debug_max(&format!(
-            "found {} possible functions for selector: {}",
-            &results.len(),
-            &selector
-        ));
+        debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
         let mut signature_list: Vec<ResolvedLog> = Vec::new();
 
         for signature in results {
             // get the function text signature and unwrap it into a string
-            let text_signature = match signature.get("text") {
+            let text_signature = match signature.get("name") {
                 Some(text_signature) => text_signature.to_string().replace('"', ""),
                 None => continue,
             };
@@ -203,10 +196,7 @@ impl ResolveSelector for ResolvedLog {
 #[async_trait]
 impl ResolveSelector for ResolvedFunction {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
-        // get a new logger
-        let logger = Logger::default();
-
-        logger.debug_max(&format!("resolving event selector {}", &selector));
+        debug_max!("resolving event selector {}", &selector);
 
         // get cached results
         if let Some(cached_results) =
@@ -215,15 +205,18 @@ impl ResolveSelector for ResolvedFunction {
             match cached_results.len() {
                 0 => return None,
                 _ => {
-                    logger.debug_max(&format!("found cached results for selector: {}", &selector));
-                    return Some(cached_results)
+                    debug_max!("found cached results for selector: {}", &selector);
+                    return Some(cached_results);
                 }
             }
         }
 
-        // get function possibilities from etherface
+        // get function possibilities from openchain
         let signatures = match get_json_from_url(
-            &format!("https://api.etherface.io/v1/signatures/hash/function/{}/1", &selector),
+            &format!(
+                "https://api.openchain.xyz/signature-database/v1/lookup?filter=true&function=0x{}",
+                &selector
+            ),
             10,
         )
         .await
@@ -234,25 +227,20 @@ impl ResolveSelector for ResolvedFunction {
         };
 
         // convert the serde value into a vec of possible functions
-        let results = match signatures.get("items") {
-            Some(items) => match items.as_array() {
-                Some(items) => items.to_vec(),
-                None => return None,
-            },
-            None => return None,
-        };
+        let results = signatures
+            .get("result")?
+            .get("function")?
+            .get(&format!("0x{selector}"))?
+            .as_array()?
+            .to_vec();
 
-        logger.debug_max(&format!(
-            "found {} possible functions for selector: {}",
-            &results.len(),
-            &selector
-        ));
+        debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
         let mut signature_list: Vec<ResolvedFunction> = Vec::new();
 
         for signature in results {
             // get the function text signature and unwrap it into a string
-            let text_signature = match signature.get("text") {
+            let text_signature = match signature.get("name") {
                 Some(text_signature) => text_signature.to_string().replace('"', ""),
                 None => continue,
             };
@@ -305,6 +293,34 @@ mod tests {
     use crate::ether::signatures::{
         score_signature, ResolveSelector, ResolvedError, ResolvedFunction, ResolvedLog,
     };
+
+    #[tokio::test]
+    async fn resolve_function_signature_nominal() {
+        let signature = String::from("095ea7b3");
+        delete_cache(&format!("selector.{}", &signature));
+        let result = ResolvedFunction::resolve(&signature).await;
+        assert!(result.is_some());
+        assert!(!result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn resolve_error_signature_nominal() {
+        let signature = String::from("30cd7471");
+        delete_cache(&format!("selector.{}", &signature));
+        let result = ResolvedError::resolve(&signature).await;
+        assert!(result.is_some());
+        assert!(!result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn resolve_event_signature_nominal() {
+        let signature =
+            String::from("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
+        delete_cache(&format!("selector.{}", &signature));
+        let result = ResolvedLog::resolve(&signature).await;
+        assert!(result.is_some());
+        assert!(!result.unwrap().is_empty());
+    }
 
     #[tokio::test]
     async fn resolve_function_signature_should_return_none_when_cached_results_not_found() {

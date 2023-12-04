@@ -4,6 +4,7 @@ pub mod menus;
 pub mod resolve;
 pub mod structures;
 pub mod util;
+use heimdall_common::debug_max;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -68,6 +69,10 @@ pub struct SnapshotArgs {
     #[clap(long)]
     pub no_tui: bool,
 
+    /// Name for the output snapshot file.
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub name: String,
+
     /// The output directory to write the output to, or 'print' to print to the console.
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
@@ -82,6 +87,7 @@ impl SnapshotArgsBuilder {
             default: Some(true),
             skip_resolving: Some(false),
             no_tui: Some(true),
+            name: Some(String::new()),
             output: Some(String::new()),
         }
     }
@@ -166,6 +172,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         rpc_url: args.rpc_url.clone(),
         verbose: args.verbose.clone(),
         target: args.target.clone(),
+        name: args.name.clone(),
         decimal_counter: false,
         output: String::new(),
     })
@@ -270,10 +277,7 @@ async fn get_snapshots(
             ),
         );
 
-        logger.debug_max(&format!(
-            "building snapshot for selector {} from symbolic execution trace",
-            selector
-        ));
+        debug_max!("building snapshot for selector {} from symbolic execution trace", selector);
         let mut snapshot = snapshot_trace(
             &map,
             Snapshot {
