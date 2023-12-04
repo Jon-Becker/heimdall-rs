@@ -1,6 +1,15 @@
 use std::collections::HashMap;
 
-use heimdall_common::{ether::{signatures::{ResolvedFunction, ResolvedLog, ResolvedError, score_signature}, selectors::resolve_selectors}, utils::{io::logging::{Logger, TraceFactory}, strings::encode_hex_reduced}};
+use heimdall_common::{
+    ether::{
+        selectors::resolve_selectors,
+        signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
+    },
+    utils::{
+        io::logging::{Logger, TraceFactory},
+        strings::encode_hex_reduced,
+    },
+};
 use indicatif::ProgressBar;
 
 use super::structures::snapshot::Snapshot;
@@ -90,16 +99,17 @@ pub fn match_parameters(
     matched_functions
 }
 
+// Given a [`Snapshot`], resolve all the errors, functions and events signatures
 pub async fn resolve_signatures(
     snapshot: &mut Snapshot,
+    all_resolved_errors: &mut HashMap<String, ResolvedError>,
+    all_resolved_events: &mut HashMap<String, ResolvedLog>,
+    snapshot_progress: &mut ProgressBar,
+    trace: &mut TraceFactory,
     selector: &str,
     resolved_selectors: &HashMap<String, Vec<ResolvedFunction>>,
-    trace: &mut TraceFactory,
     func_analysis_trace: u32,
-    snapshot_progress: &mut ProgressBar,
     default: bool,
-    all_resolved_events: &mut HashMap<String, ResolvedLog>,
-    all_resolved_errors: &mut HashMap<String, ResolvedError>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let resolved_functions = match resolved_selectors.get(selector) {
         Some(func) => func.clone(),
@@ -132,13 +142,12 @@ pub async fn resolve_signatures(
 
     snapshot_progress.finish_and_clear();
 
-    // resolve custom error signatures
     let mut resolved_counter = 0;
     resolve_error_signatures(
         snapshot,
+        all_resolved_errors,
         snapshot_progress,
         &mut resolved_counter,
-        all_resolved_errors,
         default,
     )
     .await?;
@@ -164,9 +173,9 @@ pub async fn resolve_signatures(
     resolved_counter = 0;
     resolve_custom_events_signatures(
         snapshot,
+        all_resolved_events,
         snapshot_progress,
         &mut resolved_counter,
-        all_resolved_events,
         default,
     )
     .await?;
@@ -199,7 +208,6 @@ async fn resolve_function_signatures(
     trace: &mut TraceFactory,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (logger, _) = Logger::new("");
-
     let mut selected_function_index: u8 = 0;
 
     // sort matches by signature using score heuristic from `score_signature`
@@ -223,7 +231,7 @@ async fn resolve_function_signatures(
 
     let selected_match = match matched_resolved_functions.get(selected_function_index as usize) {
         Some(selected_match) => selected_match,
-        None => panic!(), // TODO: can this function panic? It used to be a continue
+        None => panic!(),
     };
 
     snapshot.resolved_function = Some(selected_match.clone());
@@ -248,9 +256,9 @@ async fn resolve_function_signatures(
 
 async fn resolve_error_signatures(
     snapshot: &mut Snapshot,
+    all_resolved_errors: &mut HashMap<String, ResolvedError>,
     snapshot_progress: &mut ProgressBar,
     resolved_counter: &mut i32,
-    all_resolved_errors: &mut HashMap<String, ResolvedError>,
     default: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (logger, _) = Logger::new("");
@@ -296,6 +304,7 @@ async fn resolve_error_signatures(
         };
 
         *resolved_counter += 1;
+
         snapshot.errors.insert(error_selector, Some(selected_match.clone()));
         all_resolved_errors.insert(error_selector_str, selected_match.clone());
     }
@@ -305,9 +314,9 @@ async fn resolve_error_signatures(
 
 async fn resolve_custom_events_signatures(
     snapshot: &mut Snapshot,
+    all_resolved_events: &mut HashMap<String, ResolvedLog>,
     snapshot_progress: &mut ProgressBar,
     resolved_counter: &mut i32,
-    all_resolved_events: &mut HashMap<String, ResolvedLog>,
     default: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (logger, _) = Logger::new("");

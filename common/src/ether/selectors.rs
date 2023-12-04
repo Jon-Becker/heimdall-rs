@@ -9,7 +9,10 @@ use tokio::task;
 
 use crate::utils::{io::logging::Logger, strings::decode_hex};
 
-use super::{evm::core::vm::VM, signatures::{ResolveSelector, ResolvedFunction}};
+use super::{
+    evm::core::vm::VM,
+    signatures::{ResolveSelector, ResolvedFunction},
+};
 
 // Find all function selectors and all the data associated to this function, represented by
 // [`ResolvedFunction`]
@@ -23,7 +26,7 @@ pub async fn get_resolved_selectors(
     Box<dyn std::error::Error>,
 > {
     let logger = Logger::default();
-    let selectors = find_function_selectors(evm, &disassembled_bytecode);
+    let selectors = find_function_selectors(evm, disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
     if !skip_resolving {

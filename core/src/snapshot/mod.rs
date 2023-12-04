@@ -11,14 +11,14 @@ use std::{
 };
 
 use clap::{AppSettings, Parser};
-use clap_verbosity_flag::Verbosity;
 use derive_builder::Builder;
 use heimdall_common::{
     ether::{
+        bytecode::get_contract_bytecode,
         compiler::detect_compiler,
         evm::core::vm::VM,
-        selectors::{find_function_selectors, resolve_selectors, get_resolved_selectors},
-        signatures::{ResolvedError, ResolvedFunction, ResolvedLog}, bytecode::get_contract_bytecode,
+        selectors::get_resolved_selectors,
+        signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
     },
     utils::{
         io::logging::*,
@@ -103,8 +103,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     set_logger_env(&args.verbose);
 
     let now = Instant::now();
-    let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
-    let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
     let (logger, mut trace) = get_logger_and_trace(&args.verbose);
     let shortened_target = get_shortned_target(&args.target);
 
@@ -137,7 +135,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
             .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
-    // create a new EVM instance
     let evm = VM::new(
         contract_bytecode.clone(),
         String::from("0x"),
@@ -171,7 +168,8 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         target: args.target.clone(),
         decimal_counter: false,
         output: String::new(),
-    }).await?;
+    })
+    .await?;
 
     let (selectors, resolved_selectors) = get_resolved_selectors(
         &disassembled_bytecode,
@@ -181,7 +179,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     )
     .await?;
 
-    let snapshots = get_snapshots(
+    let (snapshots, all_resolved_errors, all_resolved_events) = get_snapshots(
         selectors,
         resolved_selectors,
         &contract_bytecode,
@@ -190,8 +188,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         vm_trace,
         &evm,
         &args,
-        &mut all_resolved_events,
-        &mut all_resolved_errors,
     )
     .await?;
 
@@ -226,16 +222,18 @@ async fn get_snapshots(
     vm_trace: u32,
     evm: &VM,
     args: &SnapshotArgs,
-    all_resolved_events: &mut HashMap<String, ResolvedLog>,
-    all_resolved_errors: &mut HashMap<String, ResolvedError>,
-) -> Result<Vec<Snapshot>, Box<dyn std::error::Error>> {
-    // get a new progress bar
+) -> Result<
+    (Vec<Snapshot>, HashMap<String, ResolvedError>, HashMap<String, ResolvedLog>),
+    Box<dyn std::error::Error>,
+> {
+    let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
+    let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
+    let mut snapshots: Vec<Snapshot> = Vec::new();
     let mut snapshot_progress = ProgressBar::new_spinner();
+
     snapshot_progress.enable_steady_tick(Duration::from_millis(100));
     snapshot_progress.set_style(logger.info_spinner());
 
-    // perform EVM analysis
-    let mut snapshots: Vec<Snapshot> = Vec::new();
     for (selector, function_entry_point) in selectors {
         snapshot_progress.set_message(format!("executing '0x{selector}'"));
 
@@ -256,7 +254,6 @@ async fn get_snapshots(
 
         // get a map of possible jump destinations
         let (map, jumpdest_count) =
-            // TODO: maybe it doesn't need to be cloned
             evm.clone().symbolic_exec_selector(&selector, function_entry_point);
 
         trace.add_debug(
@@ -304,26 +301,23 @@ async fn get_snapshots(
             func_analysis_trace,
         );
 
-        // resolve signatures
         if !args.skip_resolving {
             resolve_signatures(
                 &mut snapshot,
+                &mut all_resolved_errors,
+                &mut all_resolved_events,
+                &mut snapshot_progress,
+                trace,
                 &selector,
                 &resolved_selectors,
-                trace,
-                func_analysis_trace, // TODO: not clone
-                &mut snapshot_progress,
+                func_analysis_trace,
                 args.default,
-                all_resolved_events,
-                all_resolved_errors,
             )
             .await?;
         }
 
-        // push
         snapshots.push(snapshot);
 
-        // get a new progress bar
         snapshot_progress = ProgressBar::new_spinner();
         snapshot_progress.enable_steady_tick(Duration::from_millis(100));
         snapshot_progress.set_style(logger.info_spinner());
@@ -331,11 +325,5 @@ async fn get_snapshots(
 
     snapshot_progress.finish_and_clear();
 
-    Ok(snapshots)
-}
-
-#[cfg(test)]
-mod tests {
-    #[tokio::test]
-    async fn test_get_selectors() {}
+    Ok((snapshots, all_resolved_errors, all_resolved_events))
 }

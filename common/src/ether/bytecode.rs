@@ -1,6 +1,9 @@
-use std::fs;
-use crate::{constants::{ADDRESS_REGEX, BYTECODE_REGEX}, utils::io::logging::Logger};
 use super::rpc::get_code;
+use crate::{
+    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
+    utils::io::logging::Logger,
+};
+use std::fs;
 
 pub async fn get_contract_bytecode(
     target: &str,
@@ -35,7 +38,7 @@ pub async fn get_contract_bytecode(
         }
     }
 }
- #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use std::fs;
 
