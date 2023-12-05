@@ -76,22 +76,25 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     }
 
     let mut cleaned: String = line.to_owned();
-
-    // skip lines that are defining a function
-    if cleaned.contains("function") {
-        return cleaned;
-    }
+    println!("cleaned");
 
     // get the nth index of the first open paren
     let nth_paren_index = match cleaned.match_indices('(').nth(paren_index) {
         Some(x) => x.0,
         None => return cleaned,
     };
-
+    
     //find it's matching close paren
-    let (paren_start, paren_end, found_match) =
+    let (paren_start, paren_end, found) =
         find_balanced_encapsulator(&cleaned[nth_paren_index..], ('(', ')'));
 
+    // remove paren_start if can't find a closing one
+    let mut found_match = found;
+
+    if !found_match {
+        cleaned.remove(nth_paren_index);
+        found_match = true;
+    }
     // add the nth open paren to the start of the paren_start
     let paren_start = paren_start + nth_paren_index;
     let paren_end = paren_end + nth_paren_index;
@@ -109,8 +112,12 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
             },
         };
 
+        println!("logical_expression: {}",  logical_expression); 
+
+        println!("checking if parenthesis necessary");
         // check if the parentheses are unnecessary and remove them if so
         if are_parentheses_unnecessary(&logical_expression) {
+            println!("parenthesis are unnecessary");
             cleaned.replace_range(
                 paren_start..paren_end,
                 match logical_expression.get(2..logical_expression.len() - 2) {
@@ -118,9 +125,12 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
                     None => "",
                 },
             );
+            println!("cleaned after replace_range {}", cleaned);
+
 
             // remove double negation, if one was created
             if cleaned.contains("!!") {
+                println!("cleared double negation");
                 cleaned = cleaned.replace("!!", "");
             }
 
@@ -130,10 +140,12 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
         } else {
             // remove double negation, if one exists
             if cleaned.contains("!!") {
+                println!("cleared double negation");
                 cleaned = cleaned.replace("!!", "");
             }
 
             // recurse into the next set of parentheses
+            println!("parenthesis are necessary - recursing");
             cleaned = simplify_parentheses(&cleaned, paren_index + 1);
         }
     }
@@ -143,6 +155,8 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
 
 pub fn cleanup(line: &str) -> String {
     let line = simplify_parentheses(line, 0);
+    println!("line before removing double negation: {}", line);
+
     remove_double_negation(&line)
 }
 
@@ -172,6 +186,13 @@ mod tests {
     fn test_remove_double_negation_and_simplify_parenthesis() {
         let line = "if (!(storage [0x08] > (storage [0x08] + ((!((!((argO * storage [0x08]))))) * ( ( ( (arg® * storage [0x08]) - 0x01) / storage [0x021) + 0×01)))))) { .. }";
         let expected = "if (!storage [0x08] > (storage [0x08] + ((argO * storage [0x08]) * ( ( ( (arg® * storage [0x08]) - 0x01) / storage [0x021) + 0×01))))) { .. }";
-        assert_eq!(cleanup(line), expected);
+        assert_eq!(simplify_parentheses(line, 0), expected);
+    }
+    
+    #[test]
+    fn test_double_negation() {
+        let line = "if (!(!((storage[keccak256(memory[0])] == Oxfffffffffffffffffffffffffffffffffffffffff)))";
+        let expected = "if !(!storage[keccak256(memory[0])] == Oxfffffffffffffffffffffffffffffffffffffffff)";
+        assert_eq!(simplify_parentheses(line, 0), expected);
     }
 }
