@@ -8,8 +8,9 @@ use std::fs;
 pub async fn get_contract_bytecode(
     target: &str,
     rpc_url: &str,
-    logger: &Logger,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let (logger, _) = Logger::new("");
+
     if ADDRESS_REGEX.is_match(target)? {
         // We are snapshotting a contract address, so we need to fetch the bytecode from the RPC
         // provider.
@@ -41,20 +42,15 @@ pub async fn get_contract_bytecode(
 #[cfg(test)]
 mod tests {
     use std::fs;
-
-    use crate::utils::io::logging::get_logger_and_trace;
-
     use super::*;
     use fancy_regex::Regex;
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_address() {
         let bytecode_regex = Regex::new(r"^[0-9a-fA-F]{0,50000}$").unwrap();
-        let (logger, _) = get_logger_and_trace(&clap_verbosity_flag::Verbosity::new(-1, 0));
         let bytecode = get_contract_bytecode(
             "0x9f00c43700bc0000Ff91bE00841F8e04c0495000",
             "https://eth.llamarpc.com",
-            &logger,
         )
         .await
         .unwrap();
@@ -68,12 +64,12 @@ mod tests {
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_bytecode() {
         let bytecode_regex = Regex::new(r"^[0-9a-fA-F]{0,50000}$").unwrap();
-        let (logger, _) = get_logger_and_trace(&clap_verbosity_flag::Verbosity::new(-1, 0));
         let bytecode = get_contract_bytecode(
             "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
             "https://eth.llamarpc.com",
-            &logger,
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         assert!(bytecode_regex.is_match(&bytecode).unwrap());
         assert!(!bytecode.starts_with("0x"));
@@ -81,15 +77,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_file_path() {
-        let (logger, _) = get_logger_and_trace(&clap_verbosity_flag::Verbosity::new(-1, 0));
         let bytecode_regex = Regex::new(r"^[0-9a-fA-F]{0,50000}$").unwrap();
         let file_path = "./mock-file.txt";
         let mock_bytecode = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001";
 
         fs::write(file_path, mock_bytecode).unwrap();
 
-        let bytecode =
-            get_contract_bytecode(file_path, "https://eth.llamarpc.com", &logger).await.unwrap();
+        let bytecode = get_contract_bytecode(file_path, "https://eth.llamarpc.com").await.unwrap();
 
         assert!(bytecode_regex.is_match(&bytecode).unwrap());
         assert!(!bytecode.starts_with("0x"));
