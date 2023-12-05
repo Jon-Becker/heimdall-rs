@@ -41,9 +41,9 @@ pub async fn get_contract_bytecode(
 }
 #[cfg(test)]
 mod tests {
-    use std::fs;
     use super::*;
     use fancy_regex::Regex;
+    use std::fs;
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_address() {

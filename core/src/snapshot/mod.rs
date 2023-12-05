@@ -121,7 +121,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         "()".to_string(),
     );
 
-    let contract_bytecode = get_contract_bytecode(&args.target, &args.rpc_url, &logger).await?;
+    let contract_bytecode = get_contract_bytecode(&args.target, &args.rpc_url).await?;
 
     // perform versioning and compiler heuristics
     let (compiler, version) = detect_compiler(&contract_bytecode);
