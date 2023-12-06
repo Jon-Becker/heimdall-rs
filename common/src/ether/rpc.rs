@@ -61,7 +61,8 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
         };
 
         // cache the results
-        store_cache(&cache_key, chain_id.as_u64(), None);
+        let _ = store_cache(&cache_key, chain_id.as_u64(), None)
+            .map_err(|_| logger.error(&format!("failed to cache chain id for rpc url: {:?}", &rpc_url)));
 
         debug_max!(&format!("chain_id is '{}'", &chain_id));
 
@@ -93,16 +94,15 @@ pub async fn get_code(
         let logger = Logger::default();
 
         // get chain_id
-        let _chain_id = chain_id(rpc_url).await.unwrap_or(1);
-
-        logger
-            .debug_max(&format!("fetching bytecode from node for contract: '{}' .", &contract_address));
+        let chain_id = chain_id(rpc_url).await.unwrap_or(1);
 
         // check the cache for a matching address
-        if let Some(bytecode) = read_cache(&format!("contract.{}.{}", &_chain_id, &contract_address)) {
+        if let Some(bytecode) = read_cache(&format!("contract.{}.{}", &chain_id, &contract_address)) {
             logger.debug(&format!("found cached bytecode for '{}' .", &contract_address));
             return Ok(bytecode)
         }
+
+        debug_max!("fetching bytecode from node for contract: '{}' .", &contract_address);
 
         // make sure the RPC provider isn't empty
         if rpc_url.is_empty() {
@@ -138,11 +138,12 @@ pub async fn get_code(
         };
 
         // cache the results
-        store_cache(
-            &format!("contract.{}.{}", &_chain_id, &contract_address),
+        let _ = store_cache(
+            &format!("contract.{}.{}", &chain_id, &contract_address),
             bytecode_as_bytes.to_string().replacen("0x", "", 1),
             None,
-        );
+        )
+        .map_err(|_| logger.error(&format!("failed to cache bytecode for contract: {:?}", &contract_address)));
 
         Ok(bytecode_as_bytes.to_string())
     })
@@ -193,7 +194,7 @@ pub async fn get_transaction(
         };
 
         // safely unwrap the transaction hash
-        let transaction_hash = match H256::from_str(transaction_hash) {
+        let transaction_hash_hex = match H256::from_str(transaction_hash) {
             Ok(transaction_hash) => transaction_hash,
             Err(_) => {
                 logger.error(&format!("failed to parse transaction hash '{}' .", &transaction_hash));
@@ -201,8 +202,8 @@ pub async fn get_transaction(
             }
         };
 
-        // fetch the transaction from the node
-        Ok(match provider.get_transaction(transaction_hash).await {
+        // get the transaction
+        let tx = match provider.get_transaction(transaction_hash_hex).await {
             Ok(tx) => match tx {
                 Some(tx) => tx,
                 None => {
@@ -214,7 +215,9 @@ pub async fn get_transaction(
                 logger.error(&format!("failed to fetch calldata from '{}' .", &transaction_hash));
                 return Err(backoff::Error::Transient { err: (), retry_after: Some(Duration::from_secs(1)) })
             }
-        })
+        };
+
+        Ok(tx)
     })
     .await
     .map_err(|_| Box::from("failed to get transaction"))
@@ -295,16 +298,17 @@ pub async fn get_storage_diff(
             };
 
             // write the state diff to the cache
-            let expiry = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs() +
-                60 * 60 * 24 * 7;
-            store_cache(
+            let _ = store_cache(
                 &format!("diff.{}.{}", &chain_id, &transaction_hash),
                 &state_diff,
-                Some(expiry),
-            );
+                None,
+            )
+            .map_err(|_| {
+                logger.error(&format!(
+                    "failed to cache state diff for transaction: {:?}",
+                    &transaction_hash
+                ))
+            });
 
             debug_max!("fetched state diff for transaction '{}' .", &transaction_hash);
 
@@ -335,17 +339,6 @@ pub async fn get_trace(
         || async {
             // create new logger
             let logger = Logger::default();
-
-            // get chain_id
-            let chain_id = chain_id(rpc_url).await.unwrap();
-
-            // check the cache for a matching address
-            if let Some(block_trace) =
-                read_cache(&format!("trace.{}.{}", &chain_id, &transaction_hash))
-            {
-                debug_max!("found cached trace for transaction '{}' .", &transaction_hash);
-                return Ok(block_trace);
-            }
 
             debug_max!(&format!(
                 "fetching trace from node for transaction: '{}' .",
@@ -391,18 +384,6 @@ pub async fn get_trace(
                     std::process::exit(1)
                 }
             };
-
-            // write the trace to the cache
-            let expiry = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                + 60 * 60 * 24 * 7;
-            store_cache(
-                &format!("trace.{}.{}", &chain_id, &transaction_hash),
-                &block_trace,
-                Some(expiry),
-            );
 
             debug_max!("fetched trace for transaction '{}' .", &transaction_hash);
 

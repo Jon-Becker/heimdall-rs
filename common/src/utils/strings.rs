@@ -3,6 +3,7 @@ use std::{fmt::Write, num::ParseIntError};
 use ethers::{
     abi::AbiEncode,
     prelude::{I256, U256},
+    types::{Bloom, H160, H256, H64},
 };
 use fancy_regex::Regex;
 
@@ -307,6 +308,34 @@ pub fn tokenize(s: &str) -> Vec<String> {
     }
 
     tokens
+}
+
+pub trait ToLowerHex {
+    fn to_lower_hex(&self) -> String;
+}
+
+impl ToLowerHex for H256 {
+    fn to_lower_hex(&self) -> String {
+        format!("{:#032x}", self)
+    }
+}
+
+impl ToLowerHex for H160 {
+    fn to_lower_hex(&self) -> String {
+        format!("{:#020x}", self)
+    }
+}
+
+impl ToLowerHex for H64 {
+    fn to_lower_hex(&self) -> String {
+        format!("{:#016x}", self)
+    }
+}
+
+impl ToLowerHex for Bloom {
+    fn to_lower_hex(&self) -> String {
+        format!("{:#064x}", self)
+    }
 }
 
 #[derive(Debug, PartialEq)]

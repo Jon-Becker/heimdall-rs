@@ -106,7 +106,8 @@ impl ResolveSelector for ResolvedError {
         }
 
         // cache the results
-        store_cache(&format!("selector.{selector}"), signature_list.clone(), None);
+        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+            .map_err(|e| debug_max!("error storing signatures in cache: {}", e));
 
         match signature_list.len() {
             0 => None,
@@ -184,7 +185,8 @@ impl ResolveSelector for ResolvedLog {
         }
 
         // cache the results
-        store_cache(&format!("selector.{selector}"), signature_list.clone(), None);
+        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+            .map_err(|e| debug_max!("error storing signatures in cache: {}", e));
 
         match signature_list.len() {
             0 => None,
@@ -263,7 +265,8 @@ impl ResolveSelector for ResolvedFunction {
         }
 
         // cache the results
-        store_cache(&format!("selector.{selector}"), signature_list.clone(), None);
+        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+            .map_err(|e| debug_max!("error storing signatures in cache: {}", e));
 
         match signature_list.len() {
             0 => None,
