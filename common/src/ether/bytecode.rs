@@ -50,7 +50,7 @@ mod tests {
         let bytecode_regex = Regex::new(r"^[0-9a-fA-F]{0,50000}$").unwrap();
         let bytecode = get_contract_bytecode(
             "0x9f00c43700bc0000Ff91bE00841F8e04c0495000",
-            "https://eth.llamarpc.com",
+            "https://rpc.ankr.com/eth",
         )
         .await
         .unwrap();
@@ -66,7 +66,7 @@ mod tests {
         let bytecode_regex = Regex::new(r"^[0-9a-fA-F]{0,50000}$").unwrap();
         let bytecode = get_contract_bytecode(
             "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
-            "https://eth.llamarpc.com",
+            "https://rpc.ankr.com/eth",
         )
         .await
         .unwrap();
@@ -83,7 +83,7 @@ mod tests {
 
         fs::write(file_path, mock_bytecode).unwrap();
 
-        let bytecode = get_contract_bytecode(file_path, "https://eth.llamarpc.com").await.unwrap();
+        let bytecode = get_contract_bytecode(file_path, "https://rpc.ankr.com/eth").await.unwrap();
 
         assert!(bytecode_regex.is_match(&bytecode).unwrap());
         assert!(!bytecode.starts_with("0x"));
