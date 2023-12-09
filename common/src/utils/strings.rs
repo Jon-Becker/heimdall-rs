@@ -360,8 +360,8 @@ pub fn classify_token(token: &str) -> TokenType {
 /// let long_target = "0".repeat(80);
 /// let shortened_target = get_shortned_target(&long_target);
 /// ```
-pub fn get_shortned_target(target: &String) -> String {
-    let mut shortened_target = target.clone();
+pub fn get_shortned_target(target: &str) -> String {
+    let mut shortened_target = target.to_string();
 
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>() +

@@ -21,7 +21,6 @@ pub async fn get_resolved_selectors(
     disassembled_bytecode: &str,
     skip_resolving: &bool,
     evm: &VM,
-    shortened_target: &str,
 ) -> Result<
     (HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>),
     Box<dyn std::error::Error>,
@@ -32,13 +31,6 @@ pub async fn get_resolved_selectors(
     if !skip_resolving {
         resolved_selectors =
             resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await;
-
-        // if resolved selectors are empty, we can't perform symbolic execution
-        if resolved_selectors.is_empty() {
-            debug_max!(&format!(
-                "failed to resolve any function selectors from '{shortened_target}' .",
-            ));
-        }
 
         debug_max!(&format!(
             "resolved {} possible functions from {} detected selectors.",

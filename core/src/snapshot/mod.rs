@@ -180,13 +180,8 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     })
     .await?;
 
-    let (selectors, resolved_selectors) = get_resolved_selectors(
-        &disassembled_bytecode,
-        &args.skip_resolving,
-        &evm,
-        &shortened_target,
-    )
-    .await?;
+    let (selectors, resolved_selectors) =
+        get_resolved_selectors(&disassembled_bytecode, &args.skip_resolving, &evm).await?;
 
     let (snapshots, all_resolved_errors, all_resolved_events) = get_snapshots(
         selectors,
