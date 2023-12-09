@@ -109,9 +109,11 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     set_logger_env(&args.verbose);
 
     let now = Instant::now();
-    let (logger, mut trace) = get_logger_and_trace(&args.verbose);
+    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
+        Some(level) => level.as_str(),
+        None => "SILENT",
+    });
     let shortened_target = get_shortned_target(&args.target);
-
     let snapshot_call = trace.add_call(
         0,
         line!(),

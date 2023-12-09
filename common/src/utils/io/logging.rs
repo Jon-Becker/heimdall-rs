@@ -625,21 +625,6 @@ pub fn set_logger_env(verbosity: &clap_verbosity_flag::Verbosity) {
     }
 }
 
-/// Returns a new instance of `Logger` and `TraceFactory` given a log level
-///
-/// ```
-/// use heimdall_common::utils::io::logging::get_logger_and_trace;
-///
-/// let verbosity = clap_verbosity_flag::Verbosity::new(-1, 0);
-/// get_logger_and_trace(&verbosity);
-/// ```
-pub fn get_logger_and_trace(verbosity: &clap_verbosity_flag::Verbosity) -> (Logger, TraceFactory) {
-    Logger::new(match verbosity.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
