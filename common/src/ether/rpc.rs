@@ -144,7 +144,7 @@ pub async fn get_code(
             None,
         );
 
-        Ok(bytecode_as_bytes.to_string())
+        Ok(bytecode_as_bytes.to_string().replacen("0x", "", 1))
     })
     .await
     .map_err(|_| Box::from("failed to fetch bytecode"))

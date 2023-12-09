@@ -1,3 +1,6 @@
+# clear cache
+heimdall cache clean || true
+
 # if --cov is passed, then we want to run the coverage command
 if [ "$1" = "--cov" ]; then
 

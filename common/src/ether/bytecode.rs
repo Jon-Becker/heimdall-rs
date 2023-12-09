@@ -42,12 +42,10 @@ pub async fn get_contract_bytecode(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fancy_regex::Regex;
     use std::fs;
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_address() {
-        let bytecode_regex = Regex::new(r"^[0-9a-fA-F]{0,50000}$").unwrap();
         let bytecode = get_contract_bytecode(
             "0x9f00c43700bc0000Ff91bE00841F8e04c0495000",
             "https://rpc.ankr.com/eth",
@@ -55,15 +53,11 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(bytecode_regex.is_match(&bytecode).unwrap());
-        // Not possible to express with regex since fancy_regex
-        // doesn't support look-arounds
-        assert!(!bytecode.starts_with("0x"));
+        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
     }
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_bytecode() {
-        let bytecode_regex = Regex::new(r"^[0-9a-fA-F]{0,50000}$").unwrap();
         let bytecode = get_contract_bytecode(
             "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
             "https://rpc.ankr.com/eth",
@@ -71,13 +65,11 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(bytecode_regex.is_match(&bytecode).unwrap());
-        assert!(!bytecode.starts_with("0x"));
+        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
     }
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_file_path() {
-        let bytecode_regex = Regex::new(r"^[0-9a-fA-F]{0,50000}$").unwrap();
         let file_path = "./mock-file.txt";
         let mock_bytecode = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001";
 
@@ -85,8 +77,7 @@ mod tests {
 
         let bytecode = get_contract_bytecode(file_path, "https://rpc.ankr.com/eth").await.unwrap();
 
-        assert!(bytecode_regex.is_match(&bytecode).unwrap());
-        assert!(!bytecode.starts_with("0x"));
+        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
 
         fs::remove_file(file_path).unwrap();
     }
