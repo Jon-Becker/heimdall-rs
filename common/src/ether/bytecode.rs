@@ -1,7 +1,7 @@
 use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    utils::io::logging::Logger,
+    utils::io::logging::Logger, debug_max,
 };
 use std::fs;
 
@@ -15,12 +15,12 @@ pub async fn get_bytecode_from_target(
         // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
         get_code(target, rpc_url).await
     } else if BYTECODE_REGEX.is_match(target)? {
-        logger.debug_max("using provided bytecode for snapshotting.");
+        debug_max!("using provided bytecode for snapshotting.");
 
         // Target is already a bytecode, so we just need to remove 0x from the begining
         Ok(target.replacen("0x", "", 1))
     } else {
-        logger.debug_max("using provided file for snapshotting.");
+        debug_max!("using provided file for snapshotting.");
 
         // Target is a file path, so we need to read the bytecode from the file.
         match fs::read_to_string(target) {
