@@ -164,7 +164,7 @@ pub async fn resolve_signatures(
     }
 
     resolved_counter = 0;
-    resolve_custom_events_signatures(
+    resolve_event_signatures(
         snapshot,
         all_resolved_events,
         snapshot_progress,
@@ -305,7 +305,7 @@ async fn resolve_error_signatures(
     Ok(())
 }
 
-async fn resolve_custom_events_signatures(
+async fn resolve_event_signatures(
     snapshot: &mut Snapshot,
     all_resolved_events: &mut HashMap<String, ResolvedLog>,
     snapshot_progress: &mut ProgressBar,
