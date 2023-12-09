@@ -232,6 +232,7 @@ impl VM {
         let input_operations =
             input_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
         let inputs = input_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
+        println!("opcode_details: {:?}", opcode_details);
 
         // Consume the minimum gas for the opcode
         let gas_cost = opcode_details.mingas;
@@ -637,12 +638,9 @@ impl VM {
                 let a = self.stack.pop();
                 let b = self.stack.pop();
 
-                let mut result = b.value.shl(a.value);
-
                 // if shift is greater than 255, result is 0
-                if a.value > U256::from(255u8) {
-                    result = U256::zero();
-                }
+                let result =
+                    if a.value > U256::from(255u8) { U256::zero() } else { b.value.shl(a.value) };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -660,15 +658,9 @@ impl VM {
                 let a = self.stack.pop();
                 let b = self.stack.pop();
 
-                let mut result = U256::zero();
-                if !b.value.is_zero() {
-                    result = b.value.shr(a.value);
-                }
-
                 // if shift is greater than 255, result is 0
-                if a.value > U256::from(255u8) {
-                    result = U256::zero();
-                }
+                let result =
+                    if a.value > U256::from(255u8) { U256::zero() } else { b.value.shr(a.value) };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
