@@ -1,7 +1,8 @@
 use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    utils::io::logging::Logger, debug_max,
+    debug_max,
+    utils::io::logging::Logger,
 };
 use std::fs;
 
@@ -76,11 +77,11 @@ mod tests {
 
         fs::write(file_path, mock_bytecode).unwrap();
 
-        let bytecode = get_bytecode_from_target(file_path, "https://rpc.ankr.com/eth").await.unwrap();
+        let bytecode =
+            get_bytecode_from_target(file_path, "https://rpc.ankr.com/eth").await.unwrap();
 
         assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
 
         fs::remove_file(file_path).unwrap();
     }
 }
-
