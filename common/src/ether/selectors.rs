@@ -49,8 +49,6 @@ pub async fn get_resolved_selectors(
         debug_max!(&format!("found {} possible function selectors.", selectors.len()));
     }
 
-    debug_max!(&format!("performing symbolic execution on '{shortened_target}' ."));
-
     Ok((selectors, resolved_selectors))
 }
 
