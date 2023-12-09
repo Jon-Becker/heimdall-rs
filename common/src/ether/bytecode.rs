@@ -5,7 +5,7 @@ use crate::{
 };
 use std::fs;
 
-pub async fn get_contract_bytecode(
+pub async fn get_bytecode_from_target(
     target: &str,
     rpc_url: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -46,7 +46,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_address() {
-        let bytecode = get_contract_bytecode(
+        let bytecode = get_bytecode_from_target(
             "0x9f00c43700bc0000Ff91bE00841F8e04c0495000",
             "https://rpc.ankr.com/eth",
         )
@@ -58,7 +58,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_bytecode() {
-        let bytecode = get_contract_bytecode(
+        let bytecode = get_bytecode_from_target(
             "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
             "https://rpc.ankr.com/eth",
         )
@@ -75,10 +75,11 @@ mod tests {
 
         fs::write(file_path, mock_bytecode).unwrap();
 
-        let bytecode = get_contract_bytecode(file_path, "https://rpc.ankr.com/eth").await.unwrap();
+        let bytecode = get_bytecode_from_target(file_path, "https://rpc.ankr.com/eth").await.unwrap();
 
         assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
 
         fs::remove_file(file_path).unwrap();
     }
 }
+

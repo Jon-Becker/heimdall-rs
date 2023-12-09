@@ -15,7 +15,7 @@ use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use heimdall_common::{
     ether::{
-        bytecode::get_contract_bytecode,
+        bytecode::get_bytecode_from_target,
         compiler::detect_compiler,
         evm::core::vm::VM,
         selectors::get_resolved_selectors,
@@ -121,7 +121,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         "()".to_string(),
     );
 
-    let contract_bytecode = get_contract_bytecode(&args.target, &args.rpc_url).await?;
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
 
     // perform versioning and compiler heuristics
     let (compiler, version) = detect_compiler(&contract_bytecode);
