@@ -12,16 +12,17 @@ pub async fn get_bytecode_from_target(
     let (logger, _) = Logger::new("");
 
     if ADDRESS_REGEX.is_match(target)? {
-        // We are snapshotting a contract address, so we need to fetch the bytecode from the RPC
-        // provider.
+        // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
         get_code(target, rpc_url).await
     } else if BYTECODE_REGEX.is_match(target)? {
         logger.debug_max("using provided bytecode for snapshotting.");
+
+        // Target is already a bytecode, so we just need to remove 0x from the begining
         Ok(target.replacen("0x", "", 1))
     } else {
         logger.debug_max("using provided file for snapshotting.");
 
-        // We are snapshotting a file, so we need to read the bytecode from the file.
+        // Target is a file path, so we need to read the bytecode from the file.
         match fs::read_to_string(target) {
             Ok(contents) => {
                 let _contents = contents.replace('\n', "");
