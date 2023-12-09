@@ -255,6 +255,26 @@ impl TraceFactory {
         self.add("call", parent_index, instruction, vec![title, returns])
     }
 
+    pub fn add_call_with_extra(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        origin: String,
+        function_name: String,
+        args: Vec<String>,
+        returns: String,
+        extra: Vec<String>,
+    ) -> u32 {
+        let title = format!(
+            "{}::{}({}) {}",
+            origin.bright_cyan(),
+            function_name.bright_cyan(),
+            args.join(", "),
+            extra.iter().map(|s| format!("[{}]", s)).collect::<Vec<String>>().join(" ").dimmed()
+        );
+        self.add("call", parent_index, instruction, vec![title, returns])
+    }
+
     /// adds a contract creation trace
     pub fn add_creation(
         &mut self,
@@ -372,6 +392,28 @@ impl Default for Logger {
         };
 
         Logger { level }
+    }
+}
+
+impl Default for TraceFactory {
+    fn default() -> Self {
+        // get the environment variable RUST_LOG and parse it
+        let level = match std::env::var("RUST_LOG") {
+            Ok(level) => match level.to_lowercase().as_str() {
+                "silent" => -1,
+                "error" => 0,
+                "warn" => 1,
+                "info" => 2,
+                "debug" => 3,
+                "trace" => 4,
+                "all" => 5,
+                "max" => 6,
+                _ => 1,
+            },
+            Err(_) => 2,
+        };
+
+        TraceFactory::new(level)
     }
 }
 

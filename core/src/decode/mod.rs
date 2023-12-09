@@ -69,6 +69,10 @@ pub struct DecodeArgs {
     /// Whether to truncate nonstandard sized calldata.
     #[clap(long, short)]
     pub truncate_calldata: bool,
+
+    /// Whether to skip resolving selectors. Heimdall will attempt to guess types.
+    #[clap(long = "skip-resolving")]
+    pub skip_resolving: bool,
 }
 
 impl DecodeArgsBuilder {
@@ -81,6 +85,7 @@ impl DecodeArgsBuilder {
             explain: Some(false),
             default: Some(true),
             truncate_calldata: Some(false),
+            skip_resolving: Some(false),
         }
     }
 }
@@ -109,7 +114,9 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     // check if we require an OpenAI API key
     if args.explain && args.openai_api_key.is_empty() {
         logger.error("OpenAI API key is required for explaining calldata. Use `heimdall decode --help` for more information.");
-        std::process::exit(1);
+        return Err(Error::GenericError(
+            "OpenAI API key is required for explaining calldata.".to_string(),
+        ));
     }
 
     // init variables
@@ -128,13 +135,15 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         calldata = args.target.to_string().replacen("0x", "", 1);
     } else {
         logger.error("invalid target. must be a transaction hash or calldata (bytes).");
-        std::process::exit(1);
+        return Err(Error::GenericError(
+            "invalid target. must be a transaction hash or calldata (bytes).".to_string(),
+        ));
     }
 
     // check if the calldata length is a standard length
     if calldata.len() % 2 != 0 || calldata.len() < 8 {
         logger.error("calldata is not a valid hex string.");
-        std::process::exit(1);
+        return Err(Error::GenericError("calldata is not a valid hex string.".to_string()));
     }
 
     // if calldata isn't a multiple of 64, it may be harder to decode.
@@ -156,16 +165,20 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         Ok(byte_args) => byte_args,
         Err(_) => {
             logger.error("failed to parse bytearray from calldata.");
-            std::process::exit(1)
+            return Err(Error::DecodeError);
         }
     };
 
     // get the function signature possibilities
-    let potential_matches = match ResolvedFunction::resolve(&function_selector).await {
-        Some(signatures) => signatures,
-        None => Vec::new(),
+    let potential_matches = if !args.skip_resolving {
+        match ResolvedFunction::resolve(&function_selector).await {
+            Some(signatures) => signatures,
+            None => Vec::new(),
+        }
+    } else {
+        Vec::new()
     };
-    if potential_matches.is_empty() {
+    if potential_matches.is_empty() && !args.skip_resolving {
         logger.warn("couldn't resolve potential matches for the given function selector.");
     }
 
@@ -359,7 +372,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         Some(selected_match) => selected_match,
         None => {
             logger.error("invalid selection.");
-            std::process::exit(1)
+            return Err(Error::GenericError("invalid selection.".to_string()));
         }
     };
 

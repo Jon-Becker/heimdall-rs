@@ -21,7 +21,7 @@ struct TransposeResponse {
 }
 
 /// executes a transpose SQL query and returns the response
-async fn _call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
+async fn call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
     // get a new logger
     let logger = Logger::default();
 
@@ -115,7 +115,7 @@ pub async fn get_transaction_list(
         bounds.1
     );
 
-    let response = match _call_transpose(&query, api_key).await {
+    let response = match call_transpose(&query, api_key).await {
         Some(response) => response,
         None => {
             logger.error("failed to get transaction list from Transpose");
@@ -197,7 +197,7 @@ pub async fn get_contract_creation(
         "{{\"sql\":\"SELECT block_number, transaction_hash FROM {chain}.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM {chain}.accounts WHERE address = '{address}' ) AND contract_address = '{address}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
     );
 
-    let response = match _call_transpose(&query, api_key).await {
+    let response = match call_transpose(&query, api_key).await {
         Some(response) => response,
         None => {
             logger.error("failed to get creation tx from Transpose");
@@ -237,7 +237,58 @@ pub async fn get_contract_creation(
             }
         };
 
-        return Some((block_number, transaction_hash))
+        return Some((block_number, transaction_hash));
+    };
+
+    None
+}
+
+/// Get the label for the given address.
+///
+/// ```
+/// use heimdall_common::resources::transpose::get_label;
+///
+/// let address = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+/// let api_key = "YOUR_API_KEY";
+///
+/// // let label = get_label(address, api_key).await;
+/// ```
+pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
+    // get a new logger
+    let logger = Logger::default();
+    let start_time = Instant::now();
+
+    // build the SQL query
+    let query = format!(
+            "{{\"sql\":\"SELECT COALESCE( (SELECT name FROM ethereum.contract_labels WHERE contract_address = '{address}' ), (SELECT ens_name FROM ethereum.ens_names WHERE primary_address = '{address}' LIMIT 1), (SELECT protocol_name FROM ethereum.protocols WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.tokens WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.collections WHERE contract_address = '{address}' ) ) as label\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
+        );
+
+    let response = match call_transpose(&query, api_key).await {
+        Some(response) => response,
+        None => {
+            logger.error("failed to get contract label from Transpose");
+            return None;
+        }
+    };
+
+    logger.debug(&format!("fetching contract creation took {:?}", start_time.elapsed()));
+
+    // parse the results
+    if let Some(result) = response.results.into_iter().next() {
+        let label: String = match result.get("label") {
+            Some(label) => match label.as_str() {
+                Some(label) => label.to_string(),
+                None => {
+                    logger.error("failed to parse label from Transpose");
+                    return None;
+                }
+            },
+            None => {
+                logger.error("failed to fetch label from Transpose response");
+                return None;
+            }
+        };
+        return Some(label);
     };
 
     None

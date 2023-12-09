@@ -344,6 +344,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            // if the user has not specified a transpose api key, use the default
+            if cmd.transpose_api_key.is_none() {
+                cmd.transpose_api_key = Some(configuration.transpose_api_key);
+            }
+
             inspect(cmd).await?;
         }
 

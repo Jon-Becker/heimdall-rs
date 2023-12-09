@@ -39,7 +39,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
         // make sure the RPC provider isn't empty
         if rpc_url.is_empty() {
             logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
-            std::process::exit(1);
+            return Err(backoff::Error::Permanent(()))
         }
 
         // create new provider
@@ -47,7 +47,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
             Ok(provider) => provider,
             Err(_) => {
                 logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
-                std::process::exit(1)
+                return Err(backoff::Error::Permanent(()))
             }
         };
 
@@ -107,7 +107,7 @@ pub async fn get_code(
         // make sure the RPC provider isn't empty
         if rpc_url.is_empty() {
             logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
-            std::process::exit(1);
+            return Err(backoff::Error::Permanent(()))
         }
 
         // create new provider
@@ -115,7 +115,7 @@ pub async fn get_code(
             Ok(provider) => provider,
             Err(_) => {
                 logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
-                std::process::exit(1)
+                return Err(backoff::Error::Permanent(()))
             }
         };
 
@@ -124,7 +124,7 @@ pub async fn get_code(
             Ok(address) => address,
             Err(_) => {
                 logger.error(&format!("failed to parse address '{}' .", &contract_address));
-                std::process::exit(1)
+                return Err(backoff::Error::Permanent(()))
             }
         };
 
@@ -181,7 +181,7 @@ pub async fn get_transaction(
         // make sure the RPC provider isn't empty
         if rpc_url.is_empty() {
             logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
-            std::process::exit(1);
+            return Err(backoff::Error::Permanent(()));
         }
 
         // create new provider
@@ -189,7 +189,7 @@ pub async fn get_transaction(
             Ok(provider) => provider,
             Err(_) => {
                 logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
-                std::process::exit(1)
+                return Err(backoff::Error::Permanent(()))
             }
         };
 
@@ -198,7 +198,7 @@ pub async fn get_transaction(
             Ok(transaction_hash) => transaction_hash,
             Err(_) => {
                 logger.error(&format!("failed to parse transaction hash '{}' .", &transaction_hash));
-                std::process::exit(1)
+                return Err(backoff::Error::Permanent(()))
             }
         };
 
@@ -208,7 +208,7 @@ pub async fn get_transaction(
                 Some(tx) => tx,
                 None => {
                     logger.error(&format!("transaction '{}' doesn't exist.", &transaction_hash));
-                    std::process::exit(1)
+                    return Err(backoff::Error::Permanent(()))
                 }
             },
             Err(_) => {
@@ -265,7 +265,7 @@ pub async fn get_storage_diff(
                 Ok(provider) => provider,
                 Err(_) => {
                     logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
-                    std::process::exit(1)
+                    return Err(backoff::Error::Permanent(()))
                 }
             };
 
@@ -277,7 +277,7 @@ pub async fn get_storage_diff(
                         "failed to parse transaction hash '{}' .",
                         &transaction_hash
                     ));
-                    std::process::exit(1)
+                    return Err(backoff::Error::Permanent(()))
                 }
             };
 
@@ -293,7 +293,7 @@ pub async fn get_storage_diff(
             &transaction_hash
         ));
                     logger.error(&format!("error: '{e}' ."));
-                    std::process::exit(1)
+                    return Err(backoff::Error::Permanent(()))
                 }
             };
 
@@ -316,6 +316,7 @@ pub async fn get_storage_diff(
         },
     )
     .await
+    .map_err(|_| Box::from("failed to get storage diff"))
 }
 
 /// Get the raw trace data of the provided transaction hash
@@ -350,7 +351,7 @@ pub async fn get_trace(
                 Ok(provider) => provider,
                 Err(_) => {
                     logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
-                    std::process::exit(1)
+                    return Err(backoff::Error::Permanent(()))
                 }
             };
 
@@ -362,7 +363,7 @@ pub async fn get_trace(
                         "failed to parse transaction hash '{}' .",
                         &transaction_hash
                     ));
-                    std::process::exit(1)
+                    return Err(backoff::Error::Permanent(()))
                 }
             };
 
@@ -381,7 +382,7 @@ pub async fn get_trace(
                         &transaction_hash
                     ));
                     logger.error(&format!("error: '{e}' ."));
-                    std::process::exit(1)
+                    return Err(backoff::Error::Permanent(()))
                 }
             };
 
@@ -391,6 +392,7 @@ pub async fn get_trace(
         },
     )
     .await
+    .map_err(|_| Box::from("failed to get trace"))
 }
 
 // TODO: add tests

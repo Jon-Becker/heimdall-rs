@@ -17,11 +17,10 @@ use std::{
 /// assert_eq!(short_path, "./something.json");
 /// ```
 pub fn short_path(path: &str) -> String {
-    let current_dir = match env::current_dir() {
-        Ok(dir) => dir.into_os_string().into_string().unwrap(),
-        Err(_) => std::process::exit(1),
-    };
-    path.replace(&current_dir, ".")
+    match env::current_dir() {
+        Ok(dir) => path.replace(&dir.into_os_string().into_string().unwrap(), "."),
+        Err(_) => path.to_owned(),
+    }
 }
 
 /// Write contents to a file on the disc

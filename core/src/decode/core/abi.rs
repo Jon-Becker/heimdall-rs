@@ -21,6 +21,7 @@ pub fn is_parameter_abi_encoded(
     parameter_index: usize,
     calldata_words: &[&str],
 ) -> Result<Option<AbiEncoded>, Error> {
+    debug_max!("calldata_words: {:#?}", calldata_words);
     let mut coverages = HashSet::from([parameter_index]);
 
     // convert this word to a U256
