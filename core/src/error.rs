@@ -12,4 +12,6 @@ pub enum Error {
     RpcError(String),
     #[error("Error: {0}")]
     GenericError(String),
+    #[error("TransposeError: {0}")]
+    TransposeError(String),
 }

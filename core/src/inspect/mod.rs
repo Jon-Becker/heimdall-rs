@@ -1,17 +1,18 @@
 mod core;
 
-use std::collections::HashMap;
-
 use clap::{AppSettings, Parser};
 
 use derive_builder::Builder;
 
+use ethers::types::TransactionTrace;
 use heimdall_common::{
     ether::rpc::{get_trace, get_transaction},
     utils::io::logging::Logger,
 };
 
-use crate::{error::Error, inspect::core::tracing::build_trace_display};
+use crate::error::Error;
+
+use self::core::{contracts::Contracts, tracing::DecodedTransactionTrace};
 
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(
@@ -54,14 +55,15 @@ impl InspectArgsBuilder {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct InspectResult {
+    pub decoded_trace: Option<DecodedTransactionTrace>,
+}
 /// The entrypoint for the inspect module. This function will analyze the given transaction and
 /// provide a detailed inspection of the transaction, including calldata & trace decoding, log
 /// visualization, and more.
 #[allow(deprecated)]
-pub async fn inspect(args: InspectArgs) -> Result<(), Error> {
-    // define
-    let mut address_labels = HashMap::new();
-
+pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     // set logger environment variable if not already set
     // TODO: abstract this to a heimdall_common util
     if std::env::var("RUST_LOG").is_err() {
@@ -75,13 +77,13 @@ pub async fn inspect(args: InspectArgs) -> Result<(), Error> {
     }
 
     // get a new logger and trace
-    let (_logger, _trace) = Logger::new(match args.verbose.log_level() {
+    let (logger, _trace) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",
     });
 
     // get calldata from RPC
-    let transaction = get_transaction(&args.target, &args.rpc_url)
+    let _transaction = get_transaction(&args.target, &args.rpc_url)
         .await
         .map_err(|e| Error::RpcError(e.to_string()))?;
 
@@ -89,18 +91,29 @@ pub async fn inspect(args: InspectArgs) -> Result<(), Error> {
     let block_trace =
         get_trace(&args.target, &args.rpc_url).await.map_err(|e| Error::RpcError(e.to_string()))?;
 
-    // build displayable trace
-    let transaction_trace_display = build_trace_display(
-        &args,
-        &transaction,
-        block_trace.trace.unwrap_or_default(),
-        &mut address_labels,
-    )
-    .await?;
+    let decoded_trace =
+        match block_trace.trace {
+            Some(trace) => <DecodedTransactionTrace as async_convert::TryFrom<
+                Vec<TransactionTrace>,
+            >>::try_from(trace)
+            .await
+            .ok(),
+            None => None,
+        };
+    if decoded_trace.is_none() {
+        logger.warn("no trace found for transaction");
+    }
 
-    transaction_trace_display.display();
+    // get contracts client and extend with addresses from trace
+    let mut contracts = Contracts::new(&args);
+    if let Some(decoded_trace) = decoded_trace.clone() {
+        contracts
+            .extend(decoded_trace.addresses(true, true).into_iter().collect())
+            .await
+            .map_err(|e| Error::GenericError(e.to_string()))?;
+    };
 
-    println!("{:#?}", block_trace.state_diff);
+    println!("{:#?}", contracts);
 
-    Ok(())
+    Ok(InspectResult { decoded_trace })
 }

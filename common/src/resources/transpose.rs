@@ -21,6 +21,7 @@ struct TransposeResponse {
 }
 
 /// executes a transpose SQL query and returns the response
+/// TODO: exponential backoff
 async fn call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
     // get a new logger
     let logger = Logger::default();

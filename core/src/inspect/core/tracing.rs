@@ -1,219 +1,292 @@
-use std::collections::HashMap;
+use std::collections::{HashSet, VecDeque};
 
-use ethers::types::{Transaction, TransactionTrace};
-use heimdall_common::{
-    resources::transpose::get_label,
-    utils::{
-        hex::ToLowerHex,
-        io::{logging::TraceFactory, types::Parameterize},
+use ethers::{
+    abi::Token,
+    types::{
+        ActionType, Address, Bytes, Call, CallResult, CallType, Create, CreateResult, Reward,
+        Suicide, TransactionTrace, U256,
     },
 };
+use heimdall_common::ether::signatures::ResolvedFunction;
+use serde::{Deserialize, Serialize};
 
-use crate::{decode::DecodeArgsBuilder, error::Error, inspect::InspectArgs};
+use crate::{decode::DecodeArgsBuilder, error::Error};
+use async_convert::{async_trait, TryFrom};
+use futures::future::try_join_all;
 
-/// Converts raw [`TransactionTrace`]s to human-readable [`TraceFactory`]
-pub async fn build_trace_display(
-    args: &InspectArgs,
-    transaction: &Transaction,
-    transaction_traces: Vec<TransactionTrace>,
-    address_labels: &mut HashMap<String, Option<String>>,
-) -> Result<TraceFactory, crate::error::Error> {
-    let mut trace = TraceFactory::default();
-    let decode_call = trace.add_call_with_extra(
-        0,
-        transaction.gas.as_u32(), // panicky
-        "heimdall".to_string(),
-        "inspect".to_string(),
-        vec![transaction.hash.to_lower_hex()],
-        "()".to_string(),
-        vec![format!("{} wei", transaction.value)],
-    );
+/// Decoded Trace
+#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
+pub struct DecodedTransactionTrace {
+    pub trace_address: Vec<usize>,
+    pub action: DecodedAction,
+    pub action_type: ActionType,
+    pub result: Option<DecodedRes>,
+    pub error: Option<String>,
+    pub subtraces: Vec<DecodedTransactionTrace>,
+}
 
-    let mut trace_indices = HashMap::new();
+/// Decoded Action
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(untagged, rename_all = "lowercase")]
+pub enum DecodedAction {
+    /// Decoded Call
+    Call(DecodedCall),
+    /// Create
+    Create(Create),
+    /// Suicide
+    Suicide(Suicide),
+    /// Reward
+    Reward(Reward),
+}
 
-    for transaction_trace in transaction_traces {
-        let trace_address = transaction_trace
-            .trace_address
-            .iter()
-            .map(|address| address.to_string())
-            .collect::<Vec<_>>()
-            .join(".");
-        let parent_address = trace_address
-            .split('.')
-            .take(trace_address.split('.').count() - 1)
-            .collect::<Vec<_>>()
-            .join(".");
+/// Decoded Call
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, Serialize)]
+pub struct DecodedCall {
+    /// Sender
+    pub from: Address,
+    /// Recipient
+    pub to: Address,
+    /// Transferred Value
+    pub value: U256,
+    /// Gas
+    pub gas: U256,
+    /// Input data
+    pub input: Bytes,
+    /// The type of the call.
+    #[serde(rename = "callType")]
+    pub call_type: CallType,
+    /// Potential resolved function
+    #[serde(rename = "resolvedFunction")]
+    pub resolved_function: Option<ResolvedFunction>,
+    /// Decoded inputs
+    #[serde(rename = "decodedInputs")]
+    pub decoded_inputs: Vec<Token>,
+}
 
-        // get trace index from parent_address
-        let parent_index = trace_indices.get(&parent_address).unwrap_or(&decode_call);
+/// Decoded Response
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum DecodedRes {
+    /// Call
+    Call(DecodedCallResult),
+    /// Create
+    Create(CreateResult),
+    /// None
+    #[default]
+    None,
+}
 
-        // get result
-        let mut result_str = "()".to_string();
-        if let Some(result) = transaction_trace.result {
-            result_str = match result {
-                ethers::types::Res::Call(res) => {
-                    // we can attempt to decode this as if it is calldata, we just need to add some
-                    // 4byte prefix.
-                    let output =
-                        format!("0x00000000{}", res.output.to_string().replacen("0x", "", 1));
-                    let result = crate::decode::decode(
-                        DecodeArgsBuilder::new()
-                            .target(output)
-                            .skip_resolving(true)
-                            .build()
-                            .map_err(|_e| Error::DecodeError)?,
-                    )
-                    .await?;
+/// Call Result
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, Serialize)]
+pub struct DecodedCallResult {
+    /// Gas used
+    #[serde(rename = "gasUsed")]
+    pub gas_used: U256,
+    /// Output bytes
+    pub output: Bytes,
+    /// Decoded outputs
+    #[serde(rename = "decodedOutputs")]
+    pub decoded_outputs: Vec<Token>,
+}
 
-                    // get first result
-                    if let Some(resolved_function) = result.first() {
-                        resolved_function
-                            .decoded_inputs
-                            .clone()
-                            .unwrap_or_default()
-                            .iter()
-                            .map(|token| token.parameterize())
-                            .collect::<Vec<String>>()
-                            .join(", ")
-                    } else {
-                        res.output.to_string()
-                    }
-                }
-                ethers::types::Res::Create(res) => res.address.to_lower_hex(),
-                ethers::types::Res::None => "()".to_string(),
+#[async_trait]
+impl TryFrom<Vec<TransactionTrace>> for DecodedTransactionTrace {
+    type Error = crate::error::Error;
+
+    async fn try_from(value: Vec<TransactionTrace>) -> Result<Self, Self::Error> {
+        // convert each [`TransactionTrace`] to a [`DecodedTransactionTrace`]
+        let handles = value.into_iter().map(|trace| {
+            <DecodedTransactionTrace as async_convert::TryFrom<TransactionTrace>>::try_from(trace)
+        });
+        let mut decoded_transaction_traces = VecDeque::from(try_join_all(handles).await?);
+
+        // get the first trace, this will be the one we are building.
+        let mut decoded_transaction_trace =
+            decoded_transaction_traces.pop_front().ok_or(Error::DecodeError)?;
+        assert!(decoded_transaction_trace.trace_address.is_empty()); // sanity check
+
+        for decoded_trace in decoded_transaction_traces {
+            // trace_address is the index of the trace in the decoded_transaction_trace. for
+            // example, if trace_address is  `[0]`, it'll be added to
+            // `decoded_transaction_trace.subtraces` at index 0. if trace_address is `[0, 0]`, it'll
+            // be added to `decoded_transaction_trace.subtraces[0].subtraces` at index 0.
+            let mut current_trace = &mut decoded_transaction_trace;
+            let trace_address = &decoded_trace.trace_address;
+
+            // Iterate through the trace address, navigating through subtraces
+            for &index in trace_address.iter().take(trace_address.len() - 1) {
+                current_trace = current_trace.subtraces.get_mut(index).ok_or(Error::DecodeError)?;
+                // You might need to define this error
+            }
+
+            // Insert the decoded trace into the correct position
+            if let Some(last_index) = trace_address.last() {
+                current_trace.subtraces.insert(*last_index, decoded_trace);
+            } else {
+                return Err(Error::DecodeError); // Trace address cannot be empty here
             }
         }
-        if result_str.replacen("0x", "", 1).is_empty() {
-            result_str = "()".to_string();
-        }
 
-        // get action
-        match transaction_trace.action {
-            ethers::types::Action::Call(call) => {
-                // add address label. we will use this to display the address in the trace, if
-                // available. (requires `transpose_api_key`)
-                if let Some(transpose_api_key) = &args.transpose_api_key {
-                    if let std::collections::hash_map::Entry::Vacant(e) =
-                        address_labels.entry(call.to.to_lower_hex())
-                    {
-                        e.insert(get_label(&call.to.to_lower_hex(), transpose_api_key).await);
-                    }
-                }
-                let address_label = address_labels
-                    .get(&call.to.to_lower_hex())
-                    .unwrap_or(&None)
-                    .clone()
-                    .unwrap_or(call.to.to_lower_hex())
-                    .to_string();
-
-                // build extra_data, which will be used to display the call type and value transfer
-                // information
-                let mut extra_data = vec![];
-                let call_type = match call.call_type {
-                    ethers::types::CallType::Call => "call",
-                    ethers::types::CallType::DelegateCall => "delegatecall",
-                    ethers::types::CallType::StaticCall => "staticcall",
-                    ethers::types::CallType::CallCode => "callcode",
-                    ethers::types::CallType::None => "none",
-                }
-                .to_string();
-                extra_data.push(call_type.clone());
-                if !call.value.is_zero() {
-                    extra_data.push(format!("{} wei", call.value));
-                }
-
-                // attempt to decode calldata
-                let calldata = call.input.to_string();
-                if !calldata.replacen("0x", "", 1).is_empty() {
-                    let result = crate::decode::decode(
-                        DecodeArgsBuilder::new()
-                            .target(calldata)
-                            .build()
-                            .map_err(|_e| Error::DecodeError)?,
-                    )
-                    .await?;
-
-                    // get first result
-                    if let Some(resolved_function) = result.first() {
-                        // convert decoded inputs Option<Vec<Token>> to Vec<Token>
-                        let decoded_inputs =
-                            resolved_function.decoded_inputs.clone().unwrap_or_default();
-
-                        // get index of parent
-                        let parent_index = trace.add_call_with_extra(
-                            *parent_index,
-                            call.gas.as_u32(), // panicky
-                            address_label,
-                            resolved_function.name.clone(),
-                            vec![decoded_inputs
-                                .iter()
-                                .map(|token| token.parameterize())
-                                .collect::<Vec<String>>()
-                                .join(", ")],
-                            result_str,
-                            extra_data,
-                        );
-
-                        // add trace_address to trace_indices
-                        trace_indices.insert(trace_address.clone(), parent_index);
-                    } else {
-                        // get index of parent
-                        let parent_index = trace.add_call_with_extra(
-                            *parent_index,
-                            call.gas.as_u32(), // panicky
-                            address_label,
-                            "unknown".to_string(),
-                            vec![format!("bytes: {}", call.input.to_string())],
-                            result_str,
-                            extra_data,
-                        );
-
-                        // add trace_address to trace_indices
-                        trace_indices.insert(trace_address.clone(), parent_index);
-                    }
-                } else {
-                    // value transfer
-                    trace.add_call_with_extra(
-                        *parent_index,
-                        call.gas.as_u32(), // panicky
-                        call.to.to_lower_hex(),
-                        "fallback".to_string(),
-                        vec![],
-                        result_str,
-                        extra_data,
-                    );
-                }
-            }
-            ethers::types::Action::Create(create) => {
-                // add address label. we will use this to display the address in the trace, if
-                // available. (requires `transpose_api_key`)
-                if let Some(transpose_api_key) = &args.transpose_api_key {
-                    if !address_labels.contains_key(&result_str) {
-                        address_labels.insert(
-                            result_str.clone(),
-                            get_label(&result_str, transpose_api_key).await,
-                        );
-                    }
-                }
-                let address_label = address_labels
-                    .get(&result_str)
-                    .unwrap_or(&None)
-                    .clone()
-                    .unwrap_or("NewContract".to_string())
-                    .to_string();
-
-                trace.add_creation(
-                    *parent_index,
-                    create.gas.as_u32(),
-                    address_label,
-                    result_str,
-                    create.init.len().try_into().map_err(|_e| Error::DecodeError)?,
-                );
-            }
-            ethers::types::Action::Suicide(_suicide) => {}
-            ethers::types::Action::Reward(_) => todo!(),
-        }
+        Ok(decoded_transaction_trace)
     }
+}
 
-    Ok(trace)
+#[async_trait]
+impl TryFrom<TransactionTrace> for DecodedTransactionTrace {
+    type Error = crate::error::Error;
+
+    async fn try_from(value: TransactionTrace) -> Result<Self, Self::Error> {
+        let action = match value.action {
+            ethers::types::Action::Call(call) => DecodedAction::Call(
+                <DecodedCall as async_convert::TryFrom<Call>>::try_from(call).await?,
+            ),
+            ethers::types::Action::Create(create) => DecodedAction::Create(create),
+            ethers::types::Action::Suicide(suicide) => DecodedAction::Suicide(suicide),
+            ethers::types::Action::Reward(reward) => DecodedAction::Reward(reward),
+        };
+
+        let result = match value.result {
+            Some(res) => match res {
+                ethers::types::Res::Call(call) => Some(DecodedRes::Call(
+                    <DecodedCallResult as async_convert::TryFrom<CallResult>>::try_from(call)
+                        .await?,
+                )),
+                ethers::types::Res::Create(create) => Some(DecodedRes::Create(create)),
+                ethers::types::Res::None => Some(DecodedRes::None),
+            },
+            None => None,
+        };
+
+        Ok(Self {
+            trace_address: value.trace_address,
+            action,
+            action_type: value.action_type,
+            result,
+            error: value.error,
+            subtraces: Vec::new(), // we will build this later
+        })
+    }
+}
+
+#[async_trait]
+impl TryFrom<Call> for DecodedCall {
+    type Error = crate::error::Error;
+
+    async fn try_from(value: Call) -> Result<Self, Self::Error> {
+        let calldata = value.input.to_string().replacen("0x", "", 1);
+        let mut decoded_inputs = Vec::new();
+        let mut resolved_function = None;
+
+        if !calldata.is_empty() {
+            let result = crate::decode::decode(
+                DecodeArgsBuilder::new()
+                    .target(calldata)
+                    .build()
+                    .map_err(|_e| Error::DecodeError)?,
+            )
+            .await?;
+
+            if let Some(first_result) = result.first() {
+                decoded_inputs = first_result.decoded_inputs.clone().unwrap_or_default();
+                resolved_function = Some(first_result.clone());
+            }
+        }
+
+        Ok(Self {
+            from: value.from,
+            to: value.to,
+            value: value.value,
+            gas: value.gas,
+            input: value.input,
+            call_type: value.call_type,
+            resolved_function,
+            decoded_inputs,
+        })
+    }
+}
+
+#[async_trait]
+impl TryFrom<CallResult> for DecodedCallResult {
+    type Error = crate::error::Error;
+
+    async fn try_from(value: CallResult) -> Result<Self, Self::Error> {
+        // we can attempt to decode this as if it is calldata, we just need to add some
+        // 4byte prefix.
+        let output = format!("0x00000000{}", value.output.to_string().replacen("0x", "", 1));
+        let result = crate::decode::decode(
+            DecodeArgsBuilder::new()
+                .target(output)
+                .skip_resolving(true)
+                .build()
+                .map_err(|_e| Error::DecodeError)?,
+        )
+        .await?;
+
+        // get first result
+        let decoded_outputs = if let Some(resolved_function) = result.first() {
+            resolved_function.decoded_inputs.clone().unwrap_or_default()
+        } else {
+            vec![]
+        };
+
+        Ok(Self { gas_used: value.gas_used, output: value.output, decoded_outputs })
+    }
+}
+
+impl DecodedTransactionTrace {
+    /// Returns a [`HashSet`] of all addresses involved in the traced transaction. if
+    /// `include_inputs`/`include_outputs` is true, the [`HashSet`] will also include the
+    /// addresses of the inputs/outputs of the transaction.
+    pub fn addresses(&self, include_inputs: bool, include_outputs: bool) -> HashSet<Address> {
+        let mut addresses = HashSet::new();
+
+        match &self.action {
+            DecodedAction::Call(call) => {
+                addresses.insert(call.from);
+                addresses.insert(call.to);
+
+                if include_inputs {
+                    let _ = call.decoded_inputs.iter().map(|token| match token {
+                        Token::Address(address) => addresses.insert(*address),
+                        _ => false,
+                    });
+                }
+                if include_outputs {
+                    let _ = self.result.iter().map(|result| {
+                        if let DecodedRes::Call(call_result) = result {
+                            let _ = call_result.decoded_outputs.iter().map(|token| match token {
+                                Token::Address(address) => addresses.insert(*address),
+                                _ => false,
+                            });
+                        }
+                    });
+                }
+            }
+            DecodedAction::Create(create) => {
+                addresses.insert(create.from);
+
+                if include_outputs {
+                    let _ = self.result.iter().map(|result| {
+                        if let DecodedRes::Create(create_result) = result {
+                            addresses.insert(create_result.address);
+                        }
+                    });
+                }
+            }
+            DecodedAction::Suicide(suicide) => {
+                addresses.insert(suicide.address);
+                addresses.insert(suicide.refund_address);
+            }
+            DecodedAction::Reward(reward) => {
+                addresses.insert(reward.author);
+            }
+        };
+
+        // add all addresses found in subtraces
+        for subtrace in &self.subtraces {
+            addresses.extend(subtrace.addresses(include_inputs, include_outputs))
+        }
+
+        addresses
+    }
 }
