@@ -8,7 +8,7 @@ use ethers::{
     abi::Token,
     types::{
         ActionType, Address, Bytes, Call, CallResult, CallType, Create, CreateResult,
-        ExecutedInstruction, Reward, Suicide, TransactionTrace, VMTrace, U256,
+        ExecutedInstruction, Reward, StorageDiff, Suicide, TransactionTrace, VMTrace, U256,
     },
 };
 use heimdall_common::{
@@ -36,6 +36,7 @@ pub struct DecodedTransactionTrace {
     pub error: Option<String>,
     pub subtraces: Vec<DecodedTransactionTrace>,
     pub logs: Vec<DecodedLog>,
+    pub diff: Vec<StorageDiff>,
 }
 
 /// Decoded Action
@@ -177,6 +178,7 @@ impl TryFrom<TransactionTrace> for DecodedTransactionTrace {
             error: value.error,
             subtraces: Vec::new(), // we will build this later
             logs: Vec::new(),      // we will build this later
+            diff: Vec::new(),      // we will build this later
         })
     }
 }
@@ -352,6 +354,44 @@ impl DecodedTransactionTrace {
         Ok(())
     }
 
+    #[async_recursion]
+    pub async fn build_state_diffs(
+        &mut self,
+        vm_trace: VMTrace,
+        parent_address: Vec<usize>,
+    ) -> Result<(), Error> {
+        // Track the current depth using trace_address. Initialize with the trace_address of self.
+        let mut current_address = parent_address.clone();
+        let mut relative_index = 0;
+
+        // Iterate over vm_trace.ops
+        for op in vm_trace.ops {
+            if let Some(ex) = op.ex {
+                if let Some(store) = ex.store {
+                    // add the diff to the correct position in the trace
+                    let mut current_trace = self.borrow_mut();
+                    for &index in current_address.iter() {
+                        current_trace =
+                            current_trace.subtraces.get_mut(index).ok_or(Error::DecodeError)?;
+                    }
+
+                    // push decoded log into current_trace.diff
+                    current_trace.diff.push(store);
+                }
+            }
+
+            // Handle subtraces if present
+            if let Some(sub) = op.sub {
+                current_address.push(relative_index);
+                let _ = &self.build_state_diffs(sub, current_address.clone()).await?;
+                current_address.pop();
+                relative_index += 1;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn add_to_trace(
         &self,
         contracts: &Contracts,
@@ -456,6 +496,19 @@ impl DecodedTransactionTrace {
                     log.data.to_lower_hex(),
                 );
             }
+        }
+
+        // for each diff, add to trace
+        for diff in &self.diff {
+            trace.add_message(
+                parent_trace_index,
+                line!(),
+                vec![format!(
+                    "store '{}' in slot '{}'",
+                    diff.val.to_lower_hex(),
+                    diff.key.to_lower_hex()
+                )],
+            );
         }
 
         // iterate over traces

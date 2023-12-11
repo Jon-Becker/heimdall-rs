@@ -1,4 +1,4 @@
-use ethers::types::{Bloom, Bytes, H160, H256, H64};
+use ethers::types::{Bloom, Bytes, H160, H256, H64, U256};
 
 use super::strings::encode_hex;
 
@@ -7,6 +7,12 @@ pub trait ToLowerHex {
 }
 
 impl ToLowerHex for H256 {
+    fn to_lower_hex(&self) -> String {
+        format!("{:#032x}", self)
+    }
+}
+
+impl ToLowerHex for U256 {
     fn to_lower_hex(&self) -> String {
         format!("{:#032x}", self)
     }

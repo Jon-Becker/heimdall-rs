@@ -1,5 +1,3 @@
-// TODO: impl decodedlog for log
-
 use async_convert::{async_trait, TryFrom};
 use ethers::types::{Address, Bytes, Log, H256, U256, U64};
 use heimdall_common::{
