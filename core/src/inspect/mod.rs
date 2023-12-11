@@ -9,8 +9,12 @@ use derive_builder::Builder;
 use ethers::types::{Log, TransactionTrace, U256, U64};
 use futures::future::try_join_all;
 use heimdall_common::{
+    debug_max,
     ether::rpc::{get_block_logs, get_trace, get_transaction},
-    utils::io::logging::Logger,
+    utils::{
+        hex::ToLowerHex,
+        io::logging::{Logger, TraceFactory},
+    },
 };
 
 use crate::error::Error;
@@ -117,7 +121,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     let handles =
         transaction_logs.into_iter().map(<DecodedLog as async_convert::TryFrom<Log>>::try_from);
 
-    logger.debug(&format!("decoding {} logs", handles.len()));
+    debug_max!(&format!("resolving event signatures for {} logs", handles.len()));
 
     // sort logs by log index
     let mut decoded_logs = try_join_all(handles).await?;
@@ -136,7 +140,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
             None => None,
         };
     if let Some(decoded_trace) = decoded_trace.as_mut() {
-        logger.debug("resolving address contract labels");
+        debug_max!("resolving address contract labels");
 
         // get contracts client
         let mut contracts = Contracts::new(&args);
@@ -156,7 +160,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
                 .warn("no state diff found for transaction. skipping state diff label resolution");
         }
 
-        logger.debug(&format!("joining {} decoded logs to trace", decoded_logs.len()));
+        debug_max!(&format!("joining {} decoded logs to trace", decoded_logs.len()));
 
         if let Some(vm_trace) = block_trace.vm_trace {
             // join logs to trace
@@ -164,6 +168,20 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
         } else {
             logger.warn("no vm trace found for transaction. skipping joining logs");
         }
+
+        let mut trace = TraceFactory::default();
+        let inspect_call = trace.add_call(
+            0,
+            transaction.gas.as_u32(),
+            "heimdall".to_string(),
+            "inspect".to_string(),
+            vec![transaction.hash.to_lower_hex()],
+            "()".to_string(),
+        );
+
+        decoded_trace.add_to_trace(&mut trace, inspect_call);
+
+        trace.display();
     } else {
         logger.warn("no trace found for transaction");
     }

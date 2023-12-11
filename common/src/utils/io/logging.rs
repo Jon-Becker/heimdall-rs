@@ -134,9 +134,10 @@ impl TraceFactory {
             }
             TraceCategory::Log => {
                 println!(
-                    "{} emit {}",
+                    "{} emit {} {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
-                    trace.message.first().expect("Failed to build trace.")
+                    trace.message.first().expect("Failed to build trace."),
+                    format!("[log index: {}]", trace.instruction).dimmed(),
                 );
             }
             TraceCategory::LogUnknown => {
@@ -146,13 +147,8 @@ impl TraceFactory {
                         let message =
                             trace.message.get(message_index).expect("Failed to build trace.");
                         println!(
-                            "{} {} {}: {}",
-                            if message_index == 0 {
-                                replace_last(prefix, "│ ", " ├─").bold().bright_white()
-                            } else {
-                                replace_last(prefix, "│ ", " │ ").bold().bright_white()
-                            },
-                            if message_index == 0 { "emit" } else { "    " },
+                            "{}      {}: {}",
+                            replace_last(prefix, "│ ", " │ ").bold().bright_white(),
                             format!("topic {message_index}").purple(),
                             message
                         );

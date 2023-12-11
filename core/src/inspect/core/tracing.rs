@@ -11,7 +11,13 @@ use ethers::{
         ExecutedInstruction, Reward, Suicide, TransactionTrace, VMTrace, U256,
     },
 };
-use heimdall_common::ether::signatures::ResolvedFunction;
+use heimdall_common::{
+    ether::signatures::ResolvedFunction,
+    utils::{
+        hex::ToLowerHex,
+        io::{logging::TraceFactory, types::Parameterize},
+    },
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{decode::DecodeArgsBuilder, error::Error};
@@ -345,4 +351,88 @@ impl DecodedTransactionTrace {
 
         Ok(())
     }
+
+    pub fn add_to_trace(&self, trace: &mut TraceFactory, parent_trace_index: u32) {
+        // iterate over traces
+        for decoded_trace in self.subtraces.iter() {
+            let parent_trace_index = match &decoded_trace.action {
+                DecodedAction::Call(call) => trace.add_call_with_extra(
+                    parent_trace_index,
+                    call.gas.as_u32(),
+                    call.to.to_lower_hex(),
+                    match call.resolved_function.as_ref() {
+                        Some(f) => f.name.clone(),
+                        None => "unknown".to_string(),
+                    },
+                    match call.resolved_function.as_ref() {
+                        Some(f) => f
+                            .decoded_inputs
+                            .clone()
+                            .unwrap_or_default()
+                            .iter()
+                            .map(|token| token.parameterize())
+                            .collect(),
+                        None => vec![],
+                    },
+                    match decoded_trace.result.as_ref() {
+                        Some(DecodedRes::Call(call_result)) => {
+                            let outputs = call_result
+                                .decoded_outputs
+                                .iter()
+                                .map(|token| token.parameterize())
+                                .collect::<Vec<String>>();
+
+                            if outputs.is_empty() {
+                                [call_result.output.to_lower_hex()].join(", ")
+                            } else {
+                                outputs.join(", ")
+                            }
+                        }
+                        _ => "".to_string(),
+                    },
+                    vec![
+                        format!("{:?}", call.call_type).to_lowercase(),
+                        format!("value: {} wei", wei_to_ether(call.value)),
+                    ],
+                ),
+                DecodedAction::Create(_) => todo!(),
+                DecodedAction::Suicide(_) => todo!(),
+                DecodedAction::Reward(_) => todo!(),
+            };
+
+            // for each log, add to trace
+            for log in &decoded_trace.logs {
+                if let Some(event) = &log.resolved_event {
+                    // TODO: ResolveLog should decode raw data
+                    trace.add_emission(
+                        parent_trace_index,
+                        log.log_index.unwrap_or(U256::zero()).as_u32(),
+                        event.name.clone(),
+                        event.inputs.clone(),
+                    );
+                    trace.add_raw_emission(
+                        parent_trace_index,
+                        log.log_index.unwrap_or(U256::zero()).as_u32(),
+                        log.topics.iter().map(|topic| topic.to_lower_hex()).collect(),
+                        log.data.to_lower_hex(),
+                    );
+                } else {
+                    trace.add_raw_emission(
+                        parent_trace_index,
+                        log.log_index.unwrap_or(U256::zero()).as_u32(),
+                        log.topics.iter().map(|topic| topic.to_lower_hex()).collect(),
+                        log.data.to_lower_hex(),
+                    );
+                }
+            }
+
+            decoded_trace.add_to_trace(trace, parent_trace_index)
+        }
+    }
+}
+
+fn wei_to_ether(wei: U256) -> f64 {
+    // convert U256 to u64
+    let wei = wei.as_u64() as f64;
+    wei / 10f64.powf(18.0)
 }

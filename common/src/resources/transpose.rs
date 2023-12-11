@@ -3,7 +3,7 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::utils::io::logging::Logger;
+use crate::{debug_max, utils::io::logging::Logger};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -255,10 +255,6 @@ pub async fn get_contract_creation(
 /// // let label = get_label(address, api_key).await;
 /// ```
 pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
-    // get a new logger
-    let logger = Logger::default();
-    let start_time = Instant::now();
-
     // build the SQL query
     let query = format!(
             "{{\"sql\":\"SELECT COALESCE( (SELECT name FROM ethereum.contract_labels WHERE contract_address = '{address}' ), (SELECT ens_name FROM ethereum.ens_names WHERE primary_address = '{address}' LIMIT 1), (SELECT protocol_name FROM ethereum.protocols WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.tokens WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.collections WHERE contract_address = '{address}' ) ) as label\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
@@ -267,12 +263,10 @@ pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
     let response = match call_transpose(&query, api_key).await {
         Some(response) => response,
         None => {
-            logger.error("failed to get contract label from Transpose");
+            debug_max!(&format!("failed to get label from Transpose for address: {}", address));
             return None;
         }
     };
-
-    logger.debug(&format!("fetching contract creation took {:?}", start_time.elapsed()));
 
     // parse the results
     if let Some(result) = response.results.into_iter().next() {
@@ -280,12 +274,18 @@ pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
             Some(label) => match label.as_str() {
                 Some(label) => label.to_string(),
                 None => {
-                    logger.error("failed to parse label from Transpose");
+                    debug_max!(&format!(
+                        "failed to parse label from Transpose for address: {}",
+                        address
+                    ));
                     return None;
                 }
             },
             None => {
-                logger.error("failed to fetch label from Transpose response");
+                debug_max!(&format!(
+                    "failed to fetch label from Transpose response for address: {}",
+                    address
+                ));
                 return None;
             }
         };
