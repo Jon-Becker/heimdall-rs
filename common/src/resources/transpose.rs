@@ -1,3 +1,4 @@
+use backoff::ExponentialBackoff;
 use indicatif::ProgressBar;
 use reqwest::header::HeaderMap;
 use serde_json::Value;
@@ -21,59 +22,67 @@ struct TransposeResponse {
 }
 
 /// executes a transpose SQL query and returns the response
-/// TODO: exponential backoff
 async fn call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse> {
-    // get a new logger
-    let logger = Logger::default();
+    backoff::future::retry(
+        ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_secs(10)),
+            ..ExponentialBackoff::default()
+        },
+        || async {
+            // get a new logger
+            let logger = Logger::default();
 
-    // build the headers
-    let mut headers = HeaderMap::new();
-    headers.insert("Content-Type", "application/json".parse().unwrap());
-    headers.insert("X-API-KEY", api_key.parse().unwrap());
+            // build the headers
+            let mut headers = HeaderMap::new();
+            headers.insert("Content-Type", "application/json".parse().unwrap());
+            headers.insert("X-API-KEY", api_key.parse().unwrap());
 
-    // clone the query
-    let query = query.to_owned();
+            // clone the query
+            let query = query.to_owned();
 
-    // make the request
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(999999999))
-        .build()
-        .unwrap();
+            // make the request
+            let client = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(Duration::from_secs(999999999))
+                .build()
+                .unwrap();
 
-    let response = match client
-        .post("https://api.transpose.io/sql")
-        .body(query.clone())
-        .headers(headers)
-        .send()
-        .await
-    {
-        Ok(res) => res,
-        Err(e) => {
-            logger.error("failed to call Transpose .");
-            logger.error(&format!("error: {e}"));
-            std::process::exit(1)
-        }
-    };
+            let response = match client
+                .post("https://api.transpose.io/sql")
+                .body(query.clone())
+                .headers(headers)
+                .send()
+                .await
+            {
+                Ok(res) => res,
+                Err(e) => {
+                    logger.error("failed to call Transpose .");
+                    logger.error(&format!("error: {e}"));
+                    return Err(backoff::Error::Permanent(()))
+                }
+            };
 
-    // parse body
-    match response.text().await {
-        Ok(body) => Some(match serde_json::from_str(&body) {
-            Ok(json) => json,
-            Err(e) => {
-                logger.error("Transpose request unsucessful.");
-                logger.debug(&format!("curl: curl -X GET \"https://api.transpose.io/sql\" -H \"accept: application/json\" -H \"Content-Type: application/json\" -H \"X-API-KEY: {api_key}\" -d {query}"));
-                logger.error(&format!("error: {e}"));
-                logger.debug(&format!("response body: {body:?}"));
-                std::process::exit(1)
+            // parse body
+            match response.text().await {
+                Ok(body) => Ok(match serde_json::from_str(&body) {
+                    Ok(json) => json,
+                    Err(e) => {
+                        logger.error("Transpose request unsucessful.");
+                        logger.debug(&format!("curl: curl -X GET \"https://api.transpose.io/sql\" -H \"accept: application/json\" -H \"Content-Type: application/json\" -H \"X-API-KEY: {api_key}\" -d {query}"));
+                        logger.error(&format!("error: {e}"));
+                        logger.debug(&format!("response body: {body:?}"));
+                        return Err(backoff::Error::Permanent(()))
+                    }
+                }),
+                Err(e) => {
+                    logger.error("failed to parse Transpose response body.");
+                    logger.error(&format!("error: {e}"));
+                    Err(backoff::Error::Permanent(()))
+                }
             }
-        }),
-        Err(e) => {
-            logger.error("failed to parse Transpose response body.");
-            logger.error(&format!("error: {e}"));
-            std::process::exit(1)
-        }
-    }
+        },
+    ).await
+    .ok()
 }
 
 /// Get all interactions with the given address. Includes transactions to, from, as well as internal
