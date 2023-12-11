@@ -400,9 +400,9 @@ pub async fn get_trace(
 /// Get all logs for the given block number
 ///
 /// ```no_run
-/// use heimdall_common::ether::rpc::get_logs;
+/// use heimdall_common::ether::rpc::get_block_logs;
 ///
-/// // let logs = get_logs(1, "https://eth.llamarpc.com").await;
+/// // let logs = get_block_logs(1, "https://eth.llamarpc.com").await;
 /// // assert!(logs.is_ok());
 /// ```
 pub async fn get_block_logs(
