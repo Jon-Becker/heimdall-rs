@@ -31,6 +31,7 @@ pub enum TraceCategory {
     Call,
     Create,
     Empty,
+    Suicide,
 }
 
 /// Individual trace, which is added to the trace factory.
@@ -155,7 +156,7 @@ impl TraceFactory {
                     }
                     println!(
                         "{}         {}: {}",
-                        replace_last(prefix, "│ ", " │ ").bold().blue(),
+                        replace_last(prefix, "│ ", " │ ").bold().bright_white(),
                         "data".purple(),
                         trace.message.last().expect("Failed to build trace.")
                     );
@@ -225,6 +226,15 @@ impl TraceFactory {
                     trace.message.get(1).expect("Failed to build trace.").bold().green()
                 )
             }
+            TraceCategory::Suicide => {
+                println!(
+                    "{} {} {} selfdestruct → {}",
+                    replace_last(prefix, "│ ", " ├─").bold().bright_white(),
+                    format!("[{}]", trace.instruction).bold().bright_white(),
+                    trace.message.first().expect("Failed to build trace."),
+                    trace.message.get(1).expect("Failed to build trace.")
+                );
+            }
         }
     }
 
@@ -282,6 +292,26 @@ impl TraceFactory {
     ) -> u32 {
         let contract = format!("{}@{}", name.green(), pointer.green(),);
         self.add("create", parent_index, instruction, vec![contract, format!("{size} bytes")])
+    }
+
+    /// adds a suicide event
+    pub fn add_suicide(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        address: String,
+        refund_address: String,
+        refund_amount: f64,
+    ) -> u32 {
+        self.add(
+            "suicide",
+            parent_index,
+            instruction,
+            vec![
+                address,
+                format!("{} {}", refund_address, format!("[{} ether]", refund_amount).dimmed()),
+            ],
+        )
     }
 
     /// adds a known log trace
@@ -359,6 +389,7 @@ impl Trace {
                 "call" => TraceCategory::Call,
                 "create" => TraceCategory::Create,
                 "empty" => TraceCategory::Empty,
+                "suicide" => TraceCategory::Suicide,
                 _ => TraceCategory::Message,
             },
             instruction,

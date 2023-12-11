@@ -179,7 +179,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
             "()".to_string(),
         );
 
-        decoded_trace.add_to_trace(&mut trace, inspect_call);
+        decoded_trace.add_to_trace(&contracts, &mut trace, inspect_call);
 
         trace.display();
     } else {

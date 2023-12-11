@@ -24,7 +24,7 @@ use crate::{decode::DecodeArgsBuilder, error::Error};
 use async_convert::{async_trait, TryFrom};
 use futures::future::try_join_all;
 
-use super::logs::DecodedLog;
+use super::{contracts::Contracts, logs::DecodedLog};
 
 /// Decoded Trace
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
@@ -352,81 +352,115 @@ impl DecodedTransactionTrace {
         Ok(())
     }
 
-    pub fn add_to_trace(&self, trace: &mut TraceFactory, parent_trace_index: u32) {
-        // iterate over traces
-        for decoded_trace in self.subtraces.iter() {
-            let parent_trace_index = match &decoded_trace.action {
-                DecodedAction::Call(call) => trace.add_call_with_extra(
-                    parent_trace_index,
-                    call.gas.as_u32(),
-                    call.to.to_lower_hex(),
-                    match call.resolved_function.as_ref() {
-                        Some(f) => f.name.clone(),
-                        None => "unknown".to_string(),
-                    },
-                    match call.resolved_function.as_ref() {
-                        Some(f) => f
-                            .decoded_inputs
-                            .clone()
-                            .unwrap_or_default()
+    pub fn add_to_trace(
+        &self,
+        contracts: &Contracts,
+        trace: &mut TraceFactory,
+        parent_trace_index: u32,
+    ) {
+        let parent_trace_index = match &self.action {
+            DecodedAction::Call(call) => trace.add_call_with_extra(
+                parent_trace_index,
+                call.gas.as_u32(),
+                contracts.get(call.to).unwrap_or(&call.to.to_lower_hex()).clone(),
+                match call.resolved_function.as_ref() {
+                    Some(f) => f.name.clone(),
+                    None => "fallback".to_string(),
+                },
+                match call.resolved_function.as_ref() {
+                    Some(f) => f
+                        .decoded_inputs
+                        .clone()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|token| token.parameterize())
+                        .collect(),
+                    None => vec![],
+                },
+                match &self.result.as_ref() {
+                    Some(DecodedRes::Call(call_result)) => {
+                        let outputs = call_result
+                            .decoded_outputs
                             .iter()
                             .map(|token| token.parameterize())
-                            .collect(),
-                        None => vec![],
-                    },
-                    match decoded_trace.result.as_ref() {
-                        Some(DecodedRes::Call(call_result)) => {
-                            let outputs = call_result
-                                .decoded_outputs
-                                .iter()
-                                .map(|token| token.parameterize())
-                                .collect::<Vec<String>>();
+                            .collect::<Vec<String>>();
 
-                            if outputs.is_empty() {
-                                [call_result.output.to_lower_hex()].join(", ")
-                            } else {
-                                outputs.join(", ")
-                            }
+                        if outputs.is_empty() {
+                            [call_result.output.to_lower_hex()].join(", ")
+                        } else {
+                            outputs.join(", ")
                         }
-                        _ => "".to_string(),
-                    },
-                    vec![
-                        format!("{:?}", call.call_type).to_lowercase(),
-                        format!("value: {} wei", wei_to_ether(call.value)),
-                    ],
-                ),
-                DecodedAction::Create(_) => todo!(),
-                DecodedAction::Suicide(_) => todo!(),
-                DecodedAction::Reward(_) => todo!(),
-            };
+                    }
+                    _ => "".to_string(),
+                },
+                vec![
+                    format!("{:?}", call.call_type).to_lowercase(),
+                    format!("value: {} wei", wei_to_ether(call.value)),
+                ],
+            ),
+            DecodedAction::Create(create) => trace.add_creation(
+                parent_trace_index,
+                create.gas.as_u32(),
+                "NewContract".to_string(),
+                match &self.result.as_ref() {
+                    Some(DecodedRes::Create(create_result)) => contracts
+                        .get(create_result.address)
+                        .unwrap_or(&create_result.address.to_lower_hex())
+                        .clone(),
+                    _ => "".to_string(),
+                },
+                create.init.len().try_into().unwrap_or(0),
+            ),
+            DecodedAction::Suicide(suicide) => trace.add_suicide(
+                parent_trace_index,
+                0,
+                suicide.address.to_lower_hex(),
+                suicide.refund_address.to_lower_hex(),
+                wei_to_ether(suicide.balance),
+            ),
+            DecodedAction::Reward(reward) => trace.add_call_with_extra(
+                parent_trace_index,
+                0,
+                Address::zero().to_lower_hex(),
+                "reward".to_string(),
+                vec![
+                    reward.author.to_lower_hex(),
+                    format!("{:?}", reward.reward_type).to_lowercase(),
+                ],
+                "()".to_string(),
+                vec![format!("value: {} ether", wei_to_ether(reward.value))],
+            ),
+        };
 
-            // for each log, add to trace
-            for log in &decoded_trace.logs {
-                if let Some(event) = &log.resolved_event {
-                    // TODO: ResolveLog should decode raw data
-                    trace.add_emission(
-                        parent_trace_index,
-                        log.log_index.unwrap_or(U256::zero()).as_u32(),
-                        event.name.clone(),
-                        event.inputs.clone(),
-                    );
-                    trace.add_raw_emission(
-                        parent_trace_index,
-                        log.log_index.unwrap_or(U256::zero()).as_u32(),
-                        log.topics.iter().map(|topic| topic.to_lower_hex()).collect(),
-                        log.data.to_lower_hex(),
-                    );
-                } else {
-                    trace.add_raw_emission(
-                        parent_trace_index,
-                        log.log_index.unwrap_or(U256::zero()).as_u32(),
-                        log.topics.iter().map(|topic| topic.to_lower_hex()).collect(),
-                        log.data.to_lower_hex(),
-                    );
-                }
+        // for each log, add to trace
+        for log in &self.logs {
+            if let Some(event) = &log.resolved_event {
+                // TODO: ResolveLog should decode raw data
+                trace.add_emission(
+                    parent_trace_index,
+                    log.log_index.unwrap_or(U256::zero()).as_u32(),
+                    event.name.clone(),
+                    event.inputs.clone(),
+                );
+                trace.add_raw_emission(
+                    parent_trace_index,
+                    log.log_index.unwrap_or(U256::zero()).as_u32(),
+                    log.topics.iter().map(|topic| topic.to_lower_hex()).collect(),
+                    log.data.to_lower_hex(),
+                );
+            } else {
+                trace.add_raw_emission(
+                    parent_trace_index,
+                    log.log_index.unwrap_or(U256::zero()).as_u32(),
+                    log.topics.iter().map(|topic| topic.to_lower_hex()).collect(),
+                    log.data.to_lower_hex(),
+                );
             }
+        }
 
-            decoded_trace.add_to_trace(trace, parent_trace_index)
+        // iterate over traces
+        for decoded_trace in self.subtraces.iter() {
+            decoded_trace.add_to_trace(contracts, trace, parent_trace_index)
         }
     }
 }
