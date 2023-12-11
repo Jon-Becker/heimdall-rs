@@ -1,13 +1,15 @@
-use std::{str::FromStr, time::Duration};
-
 use crate::{debug_max, utils::io::logging::Logger};
 use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,
     providers::{Http, Middleware, Provider},
-    types::{BlockTrace, StateDiff, TraceType, Transaction, H256},
+    types::{
+        BlockNumber::{self},
+        BlockTrace, Filter, FilterBlockOption, StateDiff, TraceType, Transaction, H256,
+    },
 };
 use heimdall_cache::{read_cache, store_cache};
+use std::{str::FromStr, time::Duration};
 
 /// Get the chainId of the provided RPC URL
 ///
@@ -393,6 +395,70 @@ pub async fn get_trace(
     )
     .await
     .map_err(|_| Box::from("failed to get trace"))
+}
+
+/// Get all logs for the given block number
+///
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_logs;
+///
+/// // let logs = get_logs(1, "https://eth.llamarpc.com").await;
+/// // assert!(logs.is_ok());
+/// ```
+pub async fn get_block_logs(
+    block_number: u64,
+    rpc_url: &str,
+) -> Result<Vec<ethers::core::types::Log>, Box<dyn std::error::Error>> {
+    backoff::future::retry(
+        ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_secs(10)),
+            ..ExponentialBackoff::default()
+        },
+        || async {
+            // create new logger
+            let logger = Logger::default();
+
+            debug_max!(&format!("fetching logs from node for block: '{}' .", &block_number));
+
+            // create new provider
+            let provider = match Provider::<Http>::try_from(rpc_url) {
+                Ok(provider) => provider,
+                Err(_) => {
+                    logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                    return Err(backoff::Error::Permanent(()))
+                }
+            };
+
+            // fetch the logs for the block
+            let logs = match provider
+                .get_logs(&Filter {
+                    block_option: FilterBlockOption::Range {
+                        from_block: Some(BlockNumber::from(block_number)),
+                        to_block: Some(BlockNumber::from(block_number)),
+                    },
+                    address: None,
+                    topics: [None, None, None, None],
+                })
+                .await
+            {
+                Ok(logs) => logs,
+                Err(e) => {
+                    logger.error(&format!(
+                        "failed to fetch logs for block '{}' . does your RPC provider support it?",
+                        &block_number
+                    ));
+                    logger.error(&format!("error: '{e}' ."));
+                    return Err(backoff::Error::Permanent(()))
+                }
+            };
+
+            debug_max!("fetched logs for block '{}' .", &block_number);
+
+            Ok(logs)
+        },
+    )
+    .await
+    .map_err(|_| Box::from("failed to get logs"))
 }
 
 // TODO: add tests

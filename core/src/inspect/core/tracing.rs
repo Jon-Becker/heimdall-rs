@@ -1,10 +1,14 @@
-use std::collections::{HashSet, VecDeque};
+use std::{
+    borrow::BorrowMut,
+    collections::{HashSet, VecDeque},
+};
 
+use async_recursion::async_recursion;
 use ethers::{
     abi::Token,
     types::{
-        ActionType, Address, Bytes, Call, CallResult, CallType, Create, CreateResult, Reward,
-        Suicide, TransactionTrace, U256,
+        ActionType, Address, Bytes, Call, CallResult, CallType, Create, CreateResult,
+        ExecutedInstruction, Reward, Suicide, TransactionTrace, VMTrace, U256,
     },
 };
 use heimdall_common::ether::signatures::ResolvedFunction;
@@ -13,6 +17,8 @@ use serde::{Deserialize, Serialize};
 use crate::{decode::DecodeArgsBuilder, error::Error};
 use async_convert::{async_trait, TryFrom};
 use futures::future::try_join_all;
+
+use super::logs::DecodedLog;
 
 /// Decoded Trace
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
@@ -23,6 +29,7 @@ pub struct DecodedTransactionTrace {
     pub result: Option<DecodedRes>,
     pub error: Option<String>,
     pub subtraces: Vec<DecodedTransactionTrace>,
+    pub logs: Vec<DecodedLog>,
 }
 
 /// Decoded Action
@@ -116,7 +123,6 @@ impl TryFrom<Vec<TransactionTrace>> for DecodedTransactionTrace {
             // Iterate through the trace address, navigating through subtraces
             for &index in trace_address.iter().take(trace_address.len() - 1) {
                 current_trace = current_trace.subtraces.get_mut(index).ok_or(Error::DecodeError)?;
-                // You might need to define this error
             }
 
             // Insert the decoded trace into the correct position
@@ -164,6 +170,7 @@ impl TryFrom<TransactionTrace> for DecodedTransactionTrace {
             result,
             error: value.error,
             subtraces: Vec::new(), // we will build this later
+            logs: Vec::new(),      // we will build this later
         })
     }
 }
@@ -288,5 +295,54 @@ impl DecodedTransactionTrace {
         }
 
         addresses
+    }
+
+    #[async_recursion]
+    pub async fn join_logs(
+        &mut self,
+        decoded_logs: &mut VecDeque<DecodedLog>,
+        vm_trace: VMTrace,
+        parent_address: Vec<usize>,
+    ) -> Result<(), Error> {
+        // Track the current depth using trace_address. Initialize with the trace_address of self.
+        let mut current_address = parent_address.clone();
+        let mut relative_index = 0;
+
+        // Iterate over vm_trace.ops
+        for op in vm_trace.ops {
+            match op.op {
+                // Check if the operation is one of the LOG operations
+                ExecutedInstruction::Known(ethers::types::Opcode::LOG0) |
+                ExecutedInstruction::Known(ethers::types::Opcode::LOG1) |
+                ExecutedInstruction::Known(ethers::types::Opcode::LOG2) |
+                ExecutedInstruction::Known(ethers::types::Opcode::LOG3) |
+                ExecutedInstruction::Known(ethers::types::Opcode::LOG4) => {
+                    // Pop the first decoded log, this is the log that corresponds to the current
+                    // operation
+                    let decoded_log = decoded_logs.pop_front().ok_or(Error::DecodeError)?;
+
+                    // add the log to the correct position in the trace
+                    let mut current_trace = self.borrow_mut();
+                    for &index in current_address.iter() {
+                        current_trace =
+                            current_trace.subtraces.get_mut(index).ok_or(Error::DecodeError)?;
+                    }
+
+                    // push decoded log into current_trace.logs
+                    current_trace.logs.push(decoded_log);
+                }
+                _ => {}
+            }
+
+            // Handle subtraces if present
+            if let Some(sub) = op.sub {
+                current_address.push(relative_index);
+                let _ = &self.join_logs(decoded_logs, sub, current_address.clone()).await?;
+                current_address.pop();
+                relative_index += 1;
+            }
+        }
+
+        Ok(())
     }
 }

@@ -349,7 +349,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.transpose_api_key = Some(configuration.transpose_api_key);
             }
 
-            inspect(cmd).await?;
+            // if the user has passed an output filename, override the default filename
+            let mut filename = "decoded_trace.json".to_string();
+            let given_name = cmd.name.as_str();
+
+            if !given_name.is_empty() {
+                filename = format!("{}-{}", given_name, filename);
+            }
+
+            let inspect_result = inspect(cmd.clone()).await?;
+
+            if cmd.output == "print" {
+                let mut output_str = String::new();
+
+                if let Some(decoded_trace) = inspect_result.decoded_trace {
+                    output_str.push_str(&format!(
+                        "Decoded Trace:\n\n{}\n",
+                        serde_json::to_string_pretty(&decoded_trace).unwrap()
+                    ));
+                }
+
+                print_with_less(&output_str).await?;
+            } else if let Some(decoded_trace) = inspect_result.decoded_trace {
+                // write decoded trace with serde
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
+
+                write_file(&output_path, &serde_json::to_string_pretty(&decoded_trace).unwrap());
+            }
         }
 
         Subcommands::Config(cmd) => {

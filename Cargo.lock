@@ -1723,6 +1723,7 @@ name = "heimdall-core"
 version = "0.6.5"
 dependencies = [
  "async-convert",
+ "async-recursion",
  "backtrace",
  "clap",
  "clap-verbosity-flag",

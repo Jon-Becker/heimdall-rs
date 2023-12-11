@@ -1,18 +1,21 @@
 mod core;
 
+use std::collections::VecDeque;
+
 use clap::{AppSettings, Parser};
 
 use derive_builder::Builder;
 
-use ethers::types::TransactionTrace;
+use ethers::types::{Log, TransactionTrace, U256, U64};
+use futures::future::try_join_all;
 use heimdall_common::{
-    ether::rpc::{get_trace, get_transaction},
+    ether::rpc::{get_block_logs, get_trace, get_transaction},
     utils::io::logging::Logger,
 };
 
 use crate::error::Error;
 
-use self::core::{contracts::Contracts, tracing::DecodedTransactionTrace};
+use self::core::{contracts::Contracts, logs::DecodedLog, tracing::DecodedTransactionTrace};
 
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(
@@ -41,6 +44,14 @@ pub struct InspectArgs {
     /// Your OPTIONAL Transpose.io API Key, used for labeling contract addresses.
     #[clap(long = "transpose-api-key", short, hide_default_value = true)]
     pub transpose_api_key: Option<String>,
+
+    /// Name for the output files.
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub name: String,
+
+    /// The output directory to write the output to, or 'print' to print to the console.
+    #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
+    pub output: String,
 }
 
 impl InspectArgsBuilder {
@@ -51,6 +62,8 @@ impl InspectArgsBuilder {
             rpc_url: Some(String::new()),
             default: Some(true),
             transpose_api_key: None,
+            name: Some(String::new()),
+            output: Some(String::from("output")),
         }
     }
 }
@@ -83,15 +96,37 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     });
 
     // get calldata from RPC
-    let _transaction = get_transaction(&args.target, &args.rpc_url)
+    let transaction = get_transaction(&args.target, &args.rpc_url)
         .await
         .map_err(|e| Error::RpcError(e.to_string()))?;
+    let block_number = transaction.block_number.unwrap_or(U64::zero()).as_u64();
 
     // get trace
     let block_trace =
         get_trace(&args.target, &args.rpc_url).await.map_err(|e| Error::RpcError(e.to_string()))?;
 
-    let decoded_trace =
+    // get logs for this transaction
+    let transaction_logs = get_block_logs(block_number, &args.rpc_url)
+        .await
+        .map_err(|e| Error::RpcError(e.to_string()))?
+        .into_iter()
+        .filter(|log| log.transaction_hash == Some(transaction.hash))
+        .collect::<Vec<_>>();
+
+    // convert Vec<Log> to Vec<DecodedLog>
+    let handles =
+        transaction_logs.into_iter().map(<DecodedLog as async_convert::TryFrom<Log>>::try_from);
+
+    logger.debug(&format!("decoding {} logs", handles.len()));
+
+    // sort logs by log index
+    let mut decoded_logs = try_join_all(handles).await?;
+    decoded_logs.sort_by(|a, b| {
+        a.log_index.unwrap_or(U256::zero()).cmp(&b.log_index.unwrap_or(U256::zero()))
+    });
+    let mut decoded_logs = VecDeque::from(decoded_logs);
+
+    let mut decoded_trace =
         match block_trace.trace {
             Some(trace) => <DecodedTransactionTrace as async_convert::TryFrom<
                 Vec<TransactionTrace>,
@@ -100,20 +135,38 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
             .ok(),
             None => None,
         };
-    if decoded_trace.is_none() {
-        logger.warn("no trace found for transaction");
-    }
+    if let Some(decoded_trace) = decoded_trace.as_mut() {
+        logger.debug("resolving address contract labels");
 
-    // get contracts client and extend with addresses from trace
-    let mut contracts = Contracts::new(&args);
-    if let Some(decoded_trace) = decoded_trace.clone() {
+        // get contracts client
+        let mut contracts = Contracts::new(&args);
         contracts
             .extend(decoded_trace.addresses(true, true).into_iter().collect())
             .await
             .map_err(|e| Error::GenericError(e.to_string()))?;
-    };
 
-    println!("{:#?}", contracts);
+        // extend with addresses from state diff
+        if let Some(state_diff) = block_trace.state_diff {
+            contracts
+                .extend(state_diff.0.keys().cloned().collect())
+                .await
+                .map_err(|e| Error::GenericError(e.to_string()))?;
+        } else {
+            logger
+                .warn("no state diff found for transaction. skipping state diff label resolution");
+        }
+
+        logger.debug(&format!("joining {} decoded logs to trace", decoded_logs.len()));
+
+        if let Some(vm_trace) = block_trace.vm_trace {
+            // join logs to trace
+            let _ = decoded_trace.join_logs(&mut decoded_logs, vm_trace, Vec::new()).await;
+        } else {
+            logger.warn("no vm trace found for transaction. skipping joining logs");
+        }
+    } else {
+        logger.warn("no trace found for transaction");
+    }
 
     Ok(InspectResult { decoded_trace })
 }
