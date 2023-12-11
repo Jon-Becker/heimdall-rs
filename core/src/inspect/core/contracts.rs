@@ -12,6 +12,7 @@ pub struct Contracts {
     transpose_api_key: Option<String>,
 }
 
+#[allow(dead_code)]
 impl Contracts {
     pub fn new(args: &InspectArgs) -> Self {
         Self { contracts: HashMap::new(), transpose_api_key: args.transpose_api_key.clone() }

@@ -40,6 +40,12 @@ pub trait ResolveSelector {
 #[async_trait]
 impl ResolveSelector for ResolvedError {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
+        // normalize selector
+        let selector = match selector.strip_prefix("0x") {
+            Some(selector) => selector,
+            None => selector,
+        };
+
         debug_max!("resolving error selector {}", &selector);
 
         // get cached results
@@ -119,6 +125,12 @@ impl ResolveSelector for ResolvedError {
 #[async_trait]
 impl ResolveSelector for ResolvedLog {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
+        // normalize selector
+        let selector = match selector.strip_prefix("0x") {
+            Some(selector) => selector,
+            None => selector,
+        };
+
         debug_max!("resolving event selector {}", &selector);
 
         // get cached results
@@ -198,6 +210,12 @@ impl ResolveSelector for ResolvedLog {
 #[async_trait]
 impl ResolveSelector for ResolvedFunction {
     async fn resolve(selector: &str) -> Option<Vec<Self>> {
+        // normalize selector
+        let selector = match selector.strip_prefix("0x") {
+            Some(selector) => selector,
+            None => selector,
+        };
+
         debug_max!("resolving event selector {}", &selector);
 
         // get cached results

@@ -2,10 +2,15 @@
 
 use async_convert::{async_trait, TryFrom};
 use ethers::types::{Address, Bytes, Log, H256, U256, U64};
+use heimdall_common::{
+    debug_max,
+    ether::signatures::{ResolveSelector, ResolvedLog},
+    utils::hex::ToLowerHex,
+};
 use serde::{Deserialize, Serialize};
 
 /// Represents a decoded log
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DecodedLog {
     /// H160. the contract that emitted the log
     pub address: Address,
@@ -18,6 +23,11 @@ pub struct DecodedLog {
 
     /// Data
     pub data: Bytes,
+
+    /// Resolved Event
+    #[serde(rename = "resolvedEvent")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_event: Option<ResolvedLog>,
 
     /// Block Hash
     #[serde(rename = "blockHash")]
@@ -66,6 +76,22 @@ impl TryFrom<Log> for DecodedLog {
     type Error = crate::error::Error;
 
     async fn try_from(value: Log) -> Result<Self, Self::Error> {
+        let signature = match value.topics.first() {
+            Some(topic) => {
+                let topic = topic.to_lower_hex();
+                Some(topic)
+            }
+            None => None,
+        };
+
+        let resolved_logs = match signature {
+            Some(signature) => {
+                debug_max!("resolving signature: {}", signature.to_string().to_lowercase());
+                ResolvedLog::resolve(&signature).await.unwrap_or(Vec::new())
+            }
+            None => Vec::new(),
+        };
+
         Ok(Self {
             address: value.address,
             topics: value.topics,
@@ -78,6 +104,7 @@ impl TryFrom<Log> for DecodedLog {
             transaction_log_index: value.transaction_log_index,
             log_type: value.log_type,
             removed: value.removed,
+            resolved_event: resolved_logs.first().cloned(),
         })
     }
 }
