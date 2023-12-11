@@ -8,24 +8,22 @@ use heimdall_common::debug_max;
 
 use std::{
     collections::{HashMap, HashSet},
-    fs,
     time::Duration,
 };
 
 use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use heimdall_common::{
-    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{
+        bytecode::get_bytecode_from_target,
         compiler::detect_compiler,
         evm::core::vm::VM,
-        rpc::get_code,
-        selectors::{find_function_selectors, resolve_selectors},
-        signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
+        selectors::get_resolved_selectors,
+        signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
     },
     utils::{
         io::logging::*,
-        strings::{decode_hex, encode_hex_reduced},
+        strings::{decode_hex, get_shortned_target},
     },
 };
 use indicatif::ProgressBar;
@@ -34,7 +32,7 @@ use crate::{
     disassemble::{disassemble, DisassemblerArgs},
     snapshot::{
         analyze::snapshot_trace,
-        resolve::match_parameters,
+        resolve::resolve_signatures,
         structures::snapshot::{GasUsed, Snapshot},
         util::tui,
     },
@@ -107,33 +105,15 @@ pub struct SnapshotResult {
 /// signatures, access control, gas consumption, storage accesses, event emissions, and more.
 pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std::error::Error>> {
     use std::time::Instant;
+
+    set_logger_env(&args.verbose);
+
     let now = Instant::now();
-
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
-
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",
     });
-    let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
-    let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
-
-    // truncate target for prettier display
-    let mut shortened_target = args.target.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
+    let shortened_target = get_shortned_target(&args.target);
     let snapshot_call = trace.add_call(
         0,
         line!(),
@@ -143,54 +123,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         "()".to_string(),
     );
 
-    let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target)? {
-        // We are snapshotting a contract address, so we need to fetch the bytecode from the RPC
-        // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
-    } else if BYTECODE_REGEX.is_match(&args.target)? {
-        debug_max!("using provided bytecode for snapshotting.");
-        contract_bytecode = args.target.clone().replacen("0x", "", 1);
-    } else {
-        debug_max!("using provided file for snapshotting.");
-
-        // We are snapshotting a file, so we need to read the bytecode from the file.
-        contract_bytecode = match fs::read_to_string(&args.target) {
-            Ok(contents) => {
-                let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents)? && _contents.len() % 2 == 0 {
-                    _contents.replacen("0x", "", 1)
-                } else {
-                    logger
-                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
-                    std::process::exit(1)
-                }
-            }
-            Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &args.target));
-                std::process::exit(1)
-            }
-        };
-    }
-
-    // disassemble the bytecode
-    let disassembled_bytecode = disassemble(DisassemblerArgs {
-        target: contract_bytecode.clone(),
-        verbose: args.verbose.clone(),
-        rpc_url: args.rpc_url,
-        decimal_counter: false,
-        name: args.name,
-        output: String::new(),
-    })
-    .await?;
-    trace.add_call(
-        snapshot_call,
-        line!(),
-        "heimdall".to_string(),
-        "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
-        "()".to_string(),
-    );
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
 
     // perform versioning and compiler heuristics
     let (compiler, version) = detect_compiler(&contract_bytecode);
@@ -210,7 +143,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
             .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
     }
 
-    // create a new EVM instance
     let evm = VM::new(
         contract_bytecode.clone(),
         String::from("0x"),
@@ -220,12 +152,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         0,
         u128::max_value(),
     );
-    let mut shortened_target = contract_bytecode.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
+    let shortened_target = get_shortned_target(&contract_bytecode);
     let vm_trace = trace.add_creation(
         snapshot_call,
         line!(),
@@ -234,318 +161,40 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         (contract_bytecode.len() / 2usize).try_into()?,
     );
 
-    // find and resolve all selectors in the bytecode
-    let selectors = find_function_selectors(&evm, &disassembled_bytecode);
+    trace.add_call(
+        snapshot_call,
+        line!(),
+        "heimdall".to_string(),
+        "disassemble".to_string(),
+        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        "()".to_string(),
+    );
 
-    let mut resolved_selectors = HashMap::new();
-    if !args.skip_resolving {
-        resolved_selectors =
-            resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await;
+    let disassembled_bytecode = disassemble(DisassemblerArgs {
+        rpc_url: args.rpc_url.clone(),
+        verbose: args.verbose.clone(),
+        target: args.target.clone(),
+        name: args.name.clone(),
+        decimal_counter: false,
+        output: String::new(),
+    })
+    .await?;
 
-        // if resolved selectors are empty, we can't perform symbolic execution
-        if resolved_selectors.is_empty() {
-            logger.error(&format!(
-                "failed to resolve any function selectors from '{shortened_target}' .",
-                shortened_target = shortened_target
-            ));
-        }
+    let (selectors, resolved_selectors) =
+        get_resolved_selectors(&disassembled_bytecode, &args.skip_resolving, &evm).await?;
 
-        logger.info(&format!(
-            "resolved {} possible functions from {} detected selectors.",
-            resolved_selectors.len(),
-            selectors.len()
-        ));
-    } else {
-        logger.info(&format!("found {} possible function selectors.", selectors.len()));
-    }
+    let (snapshots, all_resolved_errors, all_resolved_events) = get_snapshots(
+        selectors,
+        resolved_selectors,
+        &contract_bytecode,
+        &logger,
+        &mut trace,
+        vm_trace,
+        &evm,
+        &args,
+    )
+    .await?;
 
-    logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
-
-    // get a new progress bar
-    let mut snapshot_progress = ProgressBar::new_spinner();
-    snapshot_progress.enable_steady_tick(Duration::from_millis(100));
-    snapshot_progress.set_style(logger.info_spinner());
-
-    // perform EVM analysis
-    let mut snapshots: Vec<Snapshot> = Vec::new();
-    for (selector, function_entry_point) in selectors {
-        snapshot_progress.set_message(format!("executing '0x{selector}'"));
-
-        let func_analysis_trace = trace.add_call(
-            vm_trace,
-            line!(),
-            "heimdall".to_string(),
-            "analyze".to_string(),
-            vec![format!("0x{selector}")],
-            "()".to_string(),
-        );
-
-        trace.add_info(
-            func_analysis_trace,
-            function_entry_point.try_into()?,
-            &format!("discovered entry point: {function_entry_point}"),
-        );
-
-        // get a map of possible jump destinations
-        let (map, jumpdest_count) =
-            &evm.clone().symbolic_exec_selector(&selector, function_entry_point);
-
-        trace.add_debug(
-            func_analysis_trace,
-            function_entry_point.try_into()?,
-            &format!(
-                "execution tree {}",
-                match jumpdest_count {
-                    0 => {
-                        "appears to be linear".to_string()
-                    }
-                    _ => format!("has {jumpdest_count} unique branches"),
-                }
-            ),
-        );
-
-        debug_max!("building snapshot for selector {} from symbolic execution trace", selector);
-        let mut snapshot = snapshot_trace(
-            map,
-            Snapshot {
-                selector: selector.clone(),
-                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1))?,
-                entry_point: function_entry_point,
-                arguments: HashMap::new(),
-                storage: HashSet::new(),
-                memory: HashMap::new(),
-                returns: None,
-                events: HashMap::new(),
-                errors: HashMap::new(),
-                resolved_function: None,
-                pure: true,
-                view: true,
-                payable: true,
-                strings: HashSet::new(),
-                external_calls: Vec::new(),
-                gas_used: GasUsed { min: u128::MAX, max: 0, avg: 0 },
-                addresses: HashSet::new(),
-                branch_count: *jumpdest_count,
-                control_statements: HashSet::new(),
-            },
-            &mut trace,
-            func_analysis_trace,
-        );
-
-        // resolve signatures
-        if !args.skip_resolving {
-            let resolved_functions = match resolved_selectors.get(&selector) {
-                Some(func) => func.clone(),
-                None => {
-                    trace.add_warn(
-                        func_analysis_trace,
-                        line!(),
-                        "failed to resolve function signature",
-                    );
-                    Vec::new()
-                }
-            };
-
-            let mut matched_resolved_functions = match_parameters(resolved_functions, &snapshot);
-
-            trace.br(func_analysis_trace);
-            if matched_resolved_functions.is_empty() {
-                trace.add_warn(
-                    func_analysis_trace,
-                    line!(),
-                    "no resolved signatures matched this function's parameters",
-                );
-            } else {
-                let mut selected_function_index: u8 = 0;
-
-                // sort matches by signature using score heuristic from `score_signature`
-                matched_resolved_functions.sort_by(|a, b| {
-                    let a_score = score_signature(&a.signature);
-                    let b_score = score_signature(&b.signature);
-                    b_score.cmp(&a_score)
-                });
-
-                if matched_resolved_functions.len() > 1 {
-                    snapshot_progress.suspend(|| {
-                        selected_function_index = logger.option(
-                            "warn",
-                            "multiple possible matches found. select an option below",
-                            matched_resolved_functions
-                                .iter()
-                                .map(|x| x.signature.clone())
-                                .collect(),
-                            Some(0u8),
-                            args.default,
-                        );
-                    });
-                }
-
-                let selected_match =
-                    match matched_resolved_functions.get(selected_function_index as usize) {
-                        Some(selected_match) => selected_match,
-                        None => continue,
-                    };
-
-                snapshot.resolved_function = Some(selected_match.clone());
-
-                let match_trace = trace.add_info(
-                    func_analysis_trace,
-                    line!(),
-                    &format!(
-                        "{} resolved signature{} matched this function's parameters",
-                        matched_resolved_functions.len(),
-                        if matched_resolved_functions.len() > 1 { "s" } else { "" }
-                    )
-                    .to_string(),
-                );
-
-                for resolved_function in matched_resolved_functions {
-                    trace.add_message(match_trace, line!(), vec![resolved_function.signature]);
-                }
-            }
-
-            snapshot_progress.finish_and_clear();
-
-            // resolve custom error signatures
-            let mut resolved_counter = 0;
-            let resolved_errors: HashMap<String, Vec<ResolvedError>> = resolve_selectors(
-                snapshot
-                    .errors
-                    .keys()
-                    .map(|error_selector| encode_hex_reduced(*error_selector).replacen("0x", "", 1))
-                    .collect(),
-            )
-            .await;
-            for (error_selector, _) in snapshot.errors.clone() {
-                let error_selector_str = encode_hex_reduced(error_selector).replacen("0x", "", 1);
-                let mut selected_error_index: u8 = 0;
-                let mut resolved_error_selectors = match resolved_errors.get(&error_selector_str) {
-                    Some(func) => func.clone(),
-                    None => Vec::new(),
-                };
-
-                // sort matches by signature using score heuristic from `score_signature`
-                resolved_error_selectors.sort_by(|a, b| {
-                    let a_score = score_signature(&a.signature);
-                    let b_score = score_signature(&b.signature);
-                    b_score.cmp(&a_score)
-                });
-
-                if resolved_error_selectors.len() > 1 {
-                    snapshot_progress.suspend(|| {
-                        selected_error_index = logger.option(
-                            "warn",
-                            "multiple possible matches found. select an option below",
-                            resolved_error_selectors.iter().map(|x| x.signature.clone()).collect(),
-                            Some(0u8),
-                            args.default,
-                        );
-                    });
-                }
-
-                let selected_match =
-                    match resolved_error_selectors.get(selected_error_index as usize) {
-                        Some(selected_match) => selected_match,
-                        None => continue,
-                    };
-
-                resolved_counter += 1;
-                snapshot.errors.insert(error_selector, Some(selected_match.clone()));
-                all_resolved_errors.insert(error_selector_str, selected_match.clone());
-            }
-
-            if resolved_counter > 0 {
-                trace.br(func_analysis_trace);
-                let error_trace = trace.add_info(
-                    func_analysis_trace,
-                    line!(),
-                    &format!(
-                        "resolved {} error signatures from {} selectors.",
-                        resolved_counter,
-                        snapshot.errors.len()
-                    )
-                    .to_string(),
-                );
-
-                for resolved_error in all_resolved_errors.values() {
-                    trace.add_message(error_trace, line!(), vec![resolved_error.signature.clone()]);
-                }
-            }
-
-            // resolve custom event signatures
-            resolved_counter = 0;
-            let resolved_events: HashMap<String, Vec<ResolvedLog>> = resolve_selectors(
-                snapshot
-                    .events
-                    .keys()
-                    .map(|event_selector| encode_hex_reduced(*event_selector).replacen("0x", "", 1))
-                    .collect(),
-            )
-            .await;
-            for (event_selector, (_, raw_event)) in snapshot.events.clone() {
-                let mut selected_event_index: u8 = 0;
-                let event_selector_str = encode_hex_reduced(event_selector).replacen("0x", "", 1);
-                let mut resolved_event_selectors = match resolved_events.get(&event_selector_str) {
-                    Some(func) => func.clone(),
-                    None => Vec::new(),
-                };
-
-                // sort matches by signature using score heuristic from `score_signature`
-                resolved_event_selectors.sort_by(|a, b| {
-                    let a_score = score_signature(&a.signature);
-                    let b_score = score_signature(&b.signature);
-                    b_score.cmp(&a_score)
-                });
-
-                if resolved_event_selectors.len() > 1 {
-                    snapshot_progress.suspend(|| {
-                        selected_event_index = logger.option(
-                            "warn",
-                            "multiple possible matches found. select an option below",
-                            resolved_event_selectors.iter().map(|x| x.signature.clone()).collect(),
-                            Some(0u8),
-                            args.default,
-                        );
-                    });
-                }
-
-                let selected_match =
-                    match resolved_event_selectors.get(selected_event_index as usize) {
-                        Some(selected_match) => selected_match,
-                        None => continue,
-                    };
-
-                resolved_counter += 1;
-                snapshot.events.insert(event_selector, (Some(selected_match.clone()), raw_event));
-                all_resolved_events.insert(event_selector_str, selected_match.clone());
-            }
-
-            if resolved_counter > 0 {
-                let event_trace = trace.add_info(
-                    func_analysis_trace,
-                    line!(),
-                    &format!(
-                        "resolved {} event signatures from {} selectors.",
-                        resolved_counter,
-                        snapshot.events.len()
-                    ),
-                );
-
-                for resolved_event in all_resolved_events.values() {
-                    trace.add_message(event_trace, line!(), vec![resolved_event.signature.clone()]);
-                }
-            }
-        }
-
-        // push
-        snapshots.push(snapshot);
-
-        // get a new progress bar
-        snapshot_progress = ProgressBar::new_spinner();
-        snapshot_progress.enable_steady_tick(Duration::from_millis(100));
-        snapshot_progress.set_style(logger.info_spinner());
-    }
-    snapshot_progress.finish_and_clear();
     logger.info("symbolic execution completed.");
     logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
 
@@ -566,4 +215,116 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         resolved_errors: all_resolved_errors,
         resolved_events: all_resolved_events,
     })
+}
+
+async fn get_snapshots(
+    selectors: HashMap<String, u128>,
+    resolved_selectors: HashMap<String, Vec<ResolvedFunction>>,
+    contract_bytecode: &str,
+    logger: &Logger,
+    trace: &mut TraceFactory,
+    vm_trace: u32,
+    evm: &VM,
+    args: &SnapshotArgs,
+) -> Result<
+    (Vec<Snapshot>, HashMap<String, ResolvedError>, HashMap<String, ResolvedLog>),
+    Box<dyn std::error::Error>,
+> {
+    let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
+    let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
+    let mut snapshots: Vec<Snapshot> = Vec::new();
+    let mut snapshot_progress = ProgressBar::new_spinner();
+
+    snapshot_progress.enable_steady_tick(Duration::from_millis(100));
+    snapshot_progress.set_style(logger.info_spinner());
+
+    for (selector, function_entry_point) in selectors {
+        snapshot_progress.set_message(format!("executing '0x{selector}'"));
+
+        let func_analysis_trace = trace.add_call(
+            vm_trace,
+            line!(),
+            "heimdall".to_string(),
+            "analyze".to_string(),
+            vec![format!("0x{selector}")],
+            "()".to_string(),
+        );
+
+        trace.add_info(
+            func_analysis_trace,
+            function_entry_point.try_into()?,
+            &format!("discovered entry point: {function_entry_point}"),
+        );
+
+        // get a map of possible jump destinations
+        let (map, jumpdest_count) =
+            evm.clone().symbolic_exec_selector(&selector, function_entry_point);
+
+        trace.add_debug(
+            func_analysis_trace,
+            function_entry_point.try_into()?,
+            &format!(
+                "execution tree {}",
+                match jumpdest_count {
+                    0 => {
+                        "appears to be linear".to_string()
+                    }
+                    _ => format!("has {jumpdest_count} unique branches"),
+                }
+            ),
+        );
+
+        debug_max!("building snapshot for selector {} from symbolic execution trace", selector);
+        let mut snapshot = snapshot_trace(
+            &map,
+            Snapshot {
+                selector: selector.clone(),
+                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1))?,
+                entry_point: function_entry_point,
+                arguments: HashMap::new(),
+                storage: HashSet::new(),
+                memory: HashMap::new(),
+                returns: None,
+                events: HashMap::new(),
+                errors: HashMap::new(),
+                resolved_function: None,
+                pure: true,
+                view: true,
+                payable: true,
+                strings: HashSet::new(),
+                external_calls: Vec::new(),
+                gas_used: GasUsed { min: u128::MAX, max: 0, avg: 0 },
+                addresses: HashSet::new(),
+                branch_count: jumpdest_count,
+                control_statements: HashSet::new(),
+            },
+            trace,
+            func_analysis_trace,
+        );
+
+        if !args.skip_resolving {
+            resolve_signatures(
+                &mut snapshot,
+                &mut all_resolved_errors,
+                &mut all_resolved_events,
+                &mut snapshot_progress,
+                trace,
+                &selector,
+                &resolved_selectors,
+                func_analysis_trace,
+                args.default,
+            )
+            .await?;
+        }
+
+        snapshots.push(snapshot);
+
+        snapshot_progress = ProgressBar::new_spinner();
+        snapshot_progress.enable_steady_tick(Duration::from_millis(100));
+        snapshot_progress.set_style(logger.info_spinner());
+    }
+
+    snapshot_progress.finish_and_clear();
+
+    Ok((snapshots, all_resolved_errors, all_resolved_events))
 }

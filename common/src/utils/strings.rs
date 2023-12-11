@@ -352,6 +352,26 @@ pub fn classify_token(token: &str) -> TokenType {
     TokenType::Function
 }
 
+/// Returns a collapsed version of a string if this string is greater than 66 characters in length.
+/// The collapsed string consists of the first 66 characters, followed by an ellipsis ("..."), and
+/// then the last 16 characters of the original string. ```
+/// use heimdall_common::utils::strings::get_shortned_target;
+///
+/// let long_target = "0".repeat(80);
+/// let shortened_target = get_shortned_target(&long_target);
+/// ```
+pub fn get_shortned_target(target: &str) -> String {
+    let mut shortened_target = target.to_string();
+
+    if shortened_target.len() > 66 {
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+    }
+
+    shortened_target
+}
+
 #[cfg(test)]
 mod tests {
     use ethers::types::{I256, U256};
@@ -690,5 +710,21 @@ mod tests {
             let classification = classify_token(function);
             assert_eq!(classification, TokenType::Function);
         }
+    }
+
+    #[test]
+    fn test_shorten_long_target() {
+        let long_target = "0".repeat(80);
+        let shortened_target = get_shortned_target(&long_target);
+
+        assert_eq!(shortened_target.len(), 85);
+    }
+
+    #[test]
+    fn test_shorten_short_target() {
+        let short_target = "0".repeat(66);
+        let shortened_target = get_shortned_target(&short_target);
+
+        assert_eq!(shortened_target.len(), 66);
     }
 }

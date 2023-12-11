@@ -9,8 +9,40 @@ use tokio::task;
 
 use crate::utils::{io::logging::Logger, strings::decode_hex};
 
-use super::{evm::core::vm::VM, signatures::ResolveSelector};
+use super::{
+    evm::core::vm::VM,
+    signatures::{ResolveSelector, ResolvedFunction},
+};
 use crate::debug_max;
+
+// Find all function selectors and all the data associated to this function, represented by
+// [`ResolvedFunction`]
+pub async fn get_resolved_selectors(
+    disassembled_bytecode: &str,
+    skip_resolving: &bool,
+    evm: &VM,
+) -> Result<
+    (HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>),
+    Box<dyn std::error::Error>,
+> {
+    let selectors = find_function_selectors(evm, disassembled_bytecode);
+
+    let mut resolved_selectors = HashMap::new();
+    if !skip_resolving {
+        resolved_selectors =
+            resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await;
+
+        debug_max!(&format!(
+            "resolved {} possible functions from {} detected selectors.",
+            resolved_selectors.len(),
+            selectors.len()
+        ));
+    } else {
+        debug_max!(&format!("found {} possible function selectors.", selectors.len()));
+    }
+
+    Ok((selectors, resolved_selectors))
+}
 
 /// find all function selectors in the given EVM assembly.
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
