@@ -75,7 +75,7 @@ pub enum Subcommands {
 
     #[clap(
         name = "snapshot",
-        about = "Infer functiogn information from bytecode, including access control, gas
+        about = "Infer function information from bytecode, including access control, gas
     consumption, storage accesses, event emissions, and more"
     )]
     Snapshot(SnapshotArgs),
