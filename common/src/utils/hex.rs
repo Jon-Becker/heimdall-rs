@@ -14,7 +14,7 @@ impl ToLowerHex for H256 {
 
 impl ToLowerHex for U256 {
     fn to_lower_hex(&self) -> String {
-        format!("{:#032x}", self)
+        format!("{:#0x}", self)
     }
 }
 
