@@ -1,6 +1,9 @@
 use std::{env, io::Write};
 
-use heimdall_common::{constants::ADDRESS_REGEX, ether::rpc};
+use heimdall_common::{
+    constants::{ADDRESS_REGEX, TRANSACTION_HASH_REGEX},
+    ether::rpc,
+};
 
 /// build a standardized output path for the given parameters. follows the following cases:
 /// - if `output` is `print`, return `None`
@@ -19,7 +22,7 @@ pub async fn build_output_path(
         // get the current working directory
         let cwd = env::current_dir()?.into_os_string().into_string().unwrap();
 
-        if ADDRESS_REGEX.is_match(target)? {
+        if ADDRESS_REGEX.is_match(target)? || TRANSACTION_HASH_REGEX.is_match(target)? {
             let chain_id = rpc::chain_id(rpc_url).await?;
             return Ok(format!("{}/output/{}/{}/{}", cwd, chain_id, target, filename));
         } else {

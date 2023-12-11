@@ -8,6 +8,10 @@ pub enum Error {
     BoundsError,
     #[error("DecodeError")]
     DecodeError,
+    #[error("RPCError: {0}")]
+    RpcError(String),
     #[error("Error: {0}")]
     GenericError(String),
+    #[error("TransposeError: {0}")]
+    TransposeError(String),
 }

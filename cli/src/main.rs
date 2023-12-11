@@ -27,6 +27,7 @@ use heimdall_core::{
     decompile::{decompile, out::abi::ABIStructure, DecompilerArgs},
     disassemble::{disassemble, DisassemblerArgs},
     dump::{dump, DumpArgs},
+    inspect::{inspect, InspectArgs},
     snapshot::{snapshot, util::csv::generate_csv, SnapshotArgs},
 };
 use tui::{backend::CrosstermBackend, Terminal};
@@ -65,9 +66,16 @@ pub enum Subcommands {
 
     #[clap(name = "dump", about = "Dump the value of all storage slots accessed by a contract")]
     Dump(DumpArgs),
+
+    #[clap(
+        name = "inspect",
+        about = "Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more"
+    )]
+    Inspect(InspectArgs),
+
     #[clap(
         name = "snapshot",
-        about = "Infer functiogn information from bytecode, including access control, gas
+        about = "Infer function information from bytecode, including access control, gas
     consumption, storage accesses, event emissions, and more"
     )]
     Snapshot(SnapshotArgs),
@@ -225,7 +233,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.openai_api_key = configuration.openai_api_key;
             }
 
-            // set cmd.verbose to 6
+            // set cmd.verbose to 5
             cmd.verbose = clap_verbosity_flag::Verbosity::new(5, 0);
 
             let _ = decode(cmd).await;
@@ -327,6 +335,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
 
                 write_lines_to_file(&output_path, csv_lines);
+            }
+        }
+
+        Subcommands::Inspect(mut cmd) => {
+            // if the user has not specified a rpc url, use the default
+            if cmd.rpc_url.as_str() == "" {
+                cmd.rpc_url = configuration.rpc_url;
+            }
+
+            // if the user has not specified a transpose api key, use the default
+            if cmd.transpose_api_key.is_none() {
+                cmd.transpose_api_key = Some(configuration.transpose_api_key);
+            }
+
+            // if the user has passed an output filename, override the default filename
+            let mut filename = "decoded_trace.json".to_string();
+            let given_name = cmd.name.as_str();
+
+            if !given_name.is_empty() {
+                filename = format!("{}-{}", given_name, filename);
+            }
+
+            // set cmd.verbose to 5
+            cmd.verbose = clap_verbosity_flag::Verbosity::new(5, 0);
+
+            let inspect_result = inspect(cmd.clone()).await?;
+
+            if cmd.output == "print" {
+                let mut output_str = String::new();
+
+                if let Some(decoded_trace) = inspect_result.decoded_trace {
+                    output_str.push_str(&format!(
+                        "Decoded Trace:\n\n{}\n",
+                        serde_json::to_string_pretty(&decoded_trace).unwrap()
+                    ));
+                }
+
+                print_with_less(&output_str).await?;
+            } else if let Some(decoded_trace) = inspect_result.decoded_trace {
+                // write decoded trace with serde
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
+
+                write_file(&output_path, &serde_json::to_string_pretty(&decoded_trace).unwrap());
             }
         }
 

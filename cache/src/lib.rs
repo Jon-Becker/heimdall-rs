@@ -194,13 +194,9 @@ where
         None => return None,
     };
 
-    let binary_vec = decode_hex(&binary_string);
+    let binary_vec = decode_hex(&binary_string).ok()?;
 
-    if binary_vec.is_err() {
-        return None;
-    }
-
-    let cache: Cache<T> = match bincode::deserialize::<Cache<T>>(&binary_vec.unwrap()) {
+    let cache: Cache<T> = match bincode::deserialize::<Cache<T>>(&binary_vec) {
         Ok(c) => {
             // check if the cache has expired, if so, delete it and return None
             if c.expiry <
@@ -233,7 +229,11 @@ where
 /// store_cache("store_cache_key2", "value", Some(60 * 60 * 24));
 /// ```
 #[allow(deprecated)]
-pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>)
+pub fn store_cache<T>(
+    key: &str,
+    value: T,
+    expiry: Option<u64>,
+) -> Result<(), Box<dyn std::error::Error>>
 where
     T: Serialize, {
     let home = home_dir().unwrap();
@@ -247,9 +247,12 @@ where
     );
 
     let cache = Cache { value, expiry };
-    let encoded: Vec<u8> = bincode::serialize(&cache).unwrap();
+    let encoded: Vec<u8> = bincode::serialize(&cache)
+        .map_err(|e| format!("Failed to serialize cache object: {:?}", e))?;
     let binary_string = encode_hex(encoded);
     write_file(cache_file.to_str().unwrap(), &binary_string);
+
+    Ok(())
 }
 
 /// Cache subcommand handler
@@ -289,6 +292,7 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[allow(deprecated)]
+#[allow(unused_must_use)]
 #[cfg(test)]
 mod tests {
     use crate::{delete_cache, exists, keys, read_cache, store_cache};

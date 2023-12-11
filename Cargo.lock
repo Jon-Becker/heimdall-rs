@@ -78,6 +78,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-convert"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d416feee97712e43152cd42874de162b8f9b77295b1c85e5d92725cc8310bae"
+dependencies = [
+ "async-trait",
+]
+
+[[package]]
 name = "async-openai"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1650,6 +1659,7 @@ dependencies = [
  "bincode",
  "clap",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1712,6 +1722,8 @@ dependencies = [
 name = "heimdall-core"
 version = "0.6.5"
 dependencies = [
+ "async-convert",
+ "async-recursion",
  "backtrace",
  "clap",
  "clap-verbosity-flag",
@@ -1720,6 +1732,7 @@ dependencies = [
  "derive_builder",
  "ethers",
  "fancy-regex",
+ "futures",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",

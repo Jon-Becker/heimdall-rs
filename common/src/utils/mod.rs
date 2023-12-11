@@ -1,3 +1,4 @@
+pub mod hex;
 pub mod http;
 pub mod integers;
 pub mod io;

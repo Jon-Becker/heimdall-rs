@@ -1,12 +1,13 @@
 use std::time::Duration;
 
 use ethers::types::{Diff, H160};
-use heimdall_common::utils::{io::logging::Logger, threading::task_pool};
+use heimdall_common::{
+    ether::rpc::get_storage_diff,
+    utils::{io::logging::Logger, threading::task_pool},
+};
 use indicatif::ProgressBar;
 
-use crate::dump::{
-    constants::DUMP_STATE, structures::storage_slot::StorageSlot, util::get_storage_diff,
-};
+use crate::dump::{constants::DUMP_STATE, structures::storage_slot::StorageSlot};
 
 /// The main function for indexing storage slots. Will fetch the storage diff for each transaction
 /// in a threaded task pool, updating the state accordingly.
@@ -39,7 +40,9 @@ pub async fn handle(addr_hash: H160) {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         // get the storage diff for this transaction
-        let state_diff = rt.block_on(get_storage_diff(&tx, &args));
+        let state_diff = rt
+            .block_on(get_storage_diff(&tx.hash, &args.rpc_url))
+            .expect("Could not get storage diff.");
 
         // unlock state
         let mut state = DUMP_STATE.lock().unwrap();

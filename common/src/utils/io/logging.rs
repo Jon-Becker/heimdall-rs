@@ -31,6 +31,7 @@ pub enum TraceCategory {
     Call,
     Create,
     Empty,
+    Suicide,
 }
 
 /// Individual trace, which is added to the trace factory.
@@ -134,9 +135,10 @@ impl TraceFactory {
             }
             TraceCategory::Log => {
                 println!(
-                    "{} emit {}",
+                    "{} emit {} {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
-                    trace.message.first().expect("Failed to build trace.")
+                    trace.message.first().expect("Failed to build trace."),
+                    format!("[log index: {}]", trace.instruction).dimmed(),
                 );
             }
             TraceCategory::LogUnknown => {
@@ -146,20 +148,15 @@ impl TraceFactory {
                         let message =
                             trace.message.get(message_index).expect("Failed to build trace.");
                         println!(
-                            "{} {} {}: {}",
-                            if message_index == 0 {
-                                replace_last(prefix, "│ ", " ├─").bold().bright_white()
-                            } else {
-                                replace_last(prefix, "│ ", " │ ").bold().bright_white()
-                            },
-                            if message_index == 0 { "emit" } else { "    " },
+                            "{}      {}: {}",
+                            replace_last(prefix, "│ ", " │ ").bold().bright_white(),
                             format!("topic {message_index}").purple(),
                             message
                         );
                     }
                     println!(
                         "{}         {}: {}",
-                        replace_last(prefix, "│ ", " │ ").bold().blue(),
+                        replace_last(prefix, "│ ", " │ ").bold().bright_white(),
                         "data".purple(),
                         trace.message.last().expect("Failed to build trace.")
                     );
@@ -229,6 +226,15 @@ impl TraceFactory {
                     trace.message.get(1).expect("Failed to build trace.").bold().green()
                 )
             }
+            TraceCategory::Suicide => {
+                println!(
+                    "{} {} {} selfdestruct → {}",
+                    replace_last(prefix, "│ ", " ├─").bold().bright_white(),
+                    format!("[{}]", trace.instruction).bold().bright_white(),
+                    trace.message.first().expect("Failed to build trace."),
+                    trace.message.get(1).expect("Failed to build trace.")
+                );
+            }
         }
     }
 
@@ -255,6 +261,26 @@ impl TraceFactory {
         self.add("call", parent_index, instruction, vec![title, returns])
     }
 
+    pub fn add_call_with_extra(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        origin: String,
+        function_name: String,
+        args: Vec<String>,
+        returns: String,
+        extra: Vec<String>,
+    ) -> u32 {
+        let title = format!(
+            "{}::{}({}) {}",
+            origin.bright_cyan(),
+            function_name.bright_cyan(),
+            args.join(", "),
+            extra.iter().map(|s| format!("[{}]", s)).collect::<Vec<String>>().join(" ").dimmed()
+        );
+        self.add("call", parent_index, instruction, vec![title, returns])
+    }
+
     /// adds a contract creation trace
     pub fn add_creation(
         &mut self,
@@ -266,6 +292,26 @@ impl TraceFactory {
     ) -> u32 {
         let contract = format!("{}@{}", name.green(), pointer.green(),);
         self.add("create", parent_index, instruction, vec![contract, format!("{size} bytes")])
+    }
+
+    /// adds a suicide event
+    pub fn add_suicide(
+        &mut self,
+        parent_index: u32,
+        instruction: u32,
+        address: String,
+        refund_address: String,
+        refund_amount: f64,
+    ) -> u32 {
+        self.add(
+            "suicide",
+            parent_index,
+            instruction,
+            vec![
+                address,
+                format!("{} {}", refund_address, format!("[{} ether]", refund_amount).dimmed()),
+            ],
+        )
     }
 
     /// adds a known log trace
@@ -343,6 +389,7 @@ impl Trace {
                 "call" => TraceCategory::Call,
                 "create" => TraceCategory::Create,
                 "empty" => TraceCategory::Empty,
+                "suicide" => TraceCategory::Suicide,
                 _ => TraceCategory::Message,
             },
             instruction,
@@ -372,6 +419,28 @@ impl Default for Logger {
         };
 
         Logger { level }
+    }
+}
+
+impl Default for TraceFactory {
+    fn default() -> Self {
+        // get the environment variable RUST_LOG and parse it
+        let level = match std::env::var("RUST_LOG") {
+            Ok(level) => match level.to_lowercase().as_str() {
+                "silent" => -1,
+                "error" => 0,
+                "warn" => 1,
+                "info" => 2,
+                "debug" => 3,
+                "trace" => 4,
+                "all" => 5,
+                "max" => 6,
+                _ => 1,
+            },
+            Err(_) => 2,
+        };
+
+        TraceFactory::new(level)
     }
 }
 

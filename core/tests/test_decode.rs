@@ -16,6 +16,7 @@ mod benchmark {
                 explain: false,
                 default: true,
                 truncate_calldata: false,
+                skip_resolving: false,
             };
             let _ = heimdall_core::decode::decode(args).await;
         }
@@ -34,6 +35,7 @@ mod benchmark {
                 explain: false,
                 default: true,
                 truncate_calldata: false,
+                skip_resolving: false,
             };
             let _ = heimdall_core::decode::decode(args).await;
         }
@@ -52,6 +54,7 @@ mod benchmark {
                 explain: false,
                 default: true,
                 truncate_calldata: false,
+                skip_resolving: false,
             };
             let _ = heimdall_core::decode::decode(args).await;
         }
@@ -70,6 +73,7 @@ mod benchmark {
                 explain: false,
                 default: true,
                 truncate_calldata: false,
+                skip_resolving: false,
             };
             let _ = heimdall_core::decode::decode(args).await;
         }
@@ -93,6 +97,7 @@ mod tests {
             explain: false,
             default: true,
             truncate_calldata: false,
+            skip_resolving: false,
         };
         let _ = heimdall_core::decode::decode(args).await;
     }
@@ -107,6 +112,7 @@ mod tests {
             explain: false,
             default: true,
             truncate_calldata: false,
+            skip_resolving: false,
         };
         let _ = heimdall_core::decode::decode(args).await;
     }

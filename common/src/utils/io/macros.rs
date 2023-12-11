@@ -4,6 +4,6 @@ macro_rules! debug_max {
         $crate::utils::io::logging::Logger::default().debug_max($message);
     };
     ($message:expr, $($arg:tt)*) => {
-        $crate::utils::io::logging::Logger::default().debug_max(&format!($message, $($arg)*));
+        $crate::utils::io::logging::Logger::default().debug_max(&format!($message, $($arg)*))
     };
 }

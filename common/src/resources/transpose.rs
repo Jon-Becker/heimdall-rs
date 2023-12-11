@@ -4,7 +4,7 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::utils::io::logging::Logger;
+use crate::{debug_max, utils::io::logging::Logger};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -247,7 +247,58 @@ pub async fn get_contract_creation(
             }
         };
 
-        return Some((block_number, transaction_hash))
+        return Some((block_number, transaction_hash));
+    };
+
+    None
+}
+
+/// Get the label for the given address.
+///
+/// ```
+/// use heimdall_common::resources::transpose::get_label;
+///
+/// let address = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+/// let api_key = "YOUR_API_KEY";
+///
+/// // let label = get_label(address, api_key).await;
+/// ```
+pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
+    // build the SQL query
+    let query = format!(
+            "{{\"sql\":\"SELECT COALESCE( (SELECT name FROM ethereum.contract_labels WHERE contract_address = '{address}' ), (SELECT ens_name FROM ethereum.ens_names WHERE primary_address = '{address}' LIMIT 1), (SELECT protocol_name FROM ethereum.protocols WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.tokens WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.collections WHERE contract_address = '{address}' ) ) as label\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
+        );
+
+    let response = match call_transpose(&query, api_key).await {
+        Some(response) => response,
+        None => {
+            debug_max!(&format!("failed to get label from Transpose for address: {}", address));
+            return None;
+        }
+    };
+
+    // parse the results
+    if let Some(result) = response.results.into_iter().next() {
+        let label: String = match result.get("label") {
+            Some(label) => match label.as_str() {
+                Some(label) => label.to_string(),
+                None => {
+                    debug_max!(&format!(
+                        "failed to parse label from Transpose for address: {}",
+                        address
+                    ));
+                    return None;
+                }
+            },
+            None => {
+                debug_max!(&format!(
+                    "failed to fetch label from Transpose response for address: {}",
+                    address
+                ));
+                return None;
+            }
+        };
+        return Some(label);
     };
 
     None
