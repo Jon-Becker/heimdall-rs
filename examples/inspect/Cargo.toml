@@ -1,6 +1,6 @@
 [package]
 name = "heimdall-rs-inspect-example"
-version = "0.6.5"
+version = "0.7.0"
 edition = "2021"
 description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]

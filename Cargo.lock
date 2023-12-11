@@ -1654,7 +1654,7 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "heimdall-cache"
-version = "0.6.5"
+version = "0.7.0"
 dependencies = [
  "bincode",
  "clap",
@@ -1664,7 +1664,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-cli"
-version = "0.6.5"
+version = "0.7.0"
 dependencies = [
  "backtrace",
  "clap",
@@ -1683,7 +1683,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-common"
-version = "0.6.5"
+version = "0.7.0"
 dependencies = [
  "async-openai",
  "async-recursion",
@@ -1709,7 +1709,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-config"
-version = "0.6.5"
+version = "0.7.0"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -1720,7 +1720,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-core"
-version = "0.6.5"
+version = "0.7.0"
 dependencies = [
  "async-convert",
  "async-recursion",
