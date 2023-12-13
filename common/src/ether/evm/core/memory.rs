@@ -170,6 +170,10 @@ impl Memory {
             new_memory_cost - self.memory_cost()
         }
     }
+
+    pub fn origin(&self, byte: usize) -> Option<WrappedOpcode> {
+        self.bytes.get(&byte).cloned()
+    }
 }
 
 #[cfg(test)]
