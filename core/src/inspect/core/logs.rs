@@ -3,7 +3,7 @@ use ethers::types::{Address, Bytes, Log, H256, U256, U64};
 use heimdall_common::{
     debug_max,
     ether::signatures::{ResolveSelector, ResolvedLog},
-    utils::hex::ToLowerHex,
+    utils::{env::get_env, hex::ToLowerHex},
 };
 use serde::{Deserialize, Serialize};
 
@@ -74,21 +74,29 @@ impl TryFrom<Log> for DecodedLog {
     type Error = crate::error::Error;
 
     async fn try_from(value: Log) -> Result<Self, Self::Error> {
-        let signature = match value.topics.first() {
-            Some(topic) => {
-                let topic = topic.to_lower_hex();
-                Some(topic)
-            }
-            None => None,
-        };
+        let mut resolved_logs = Vec::new();
+        let skip_resolving = get_env("SKIP_RESOLVING")
+            .unwrap_or("false".to_string())
+            .parse::<bool>()
+            .unwrap_or(false);
 
-        let resolved_logs = match signature {
-            Some(signature) => {
-                debug_max!("resolving signature: {}", signature.to_string().to_lowercase());
-                ResolvedLog::resolve(&signature).await.unwrap_or(Vec::new())
-            }
-            None => Vec::new(),
-        };
+        if !skip_resolving {
+            let signature = match value.topics.first() {
+                Some(topic) => {
+                    let topic = topic.to_lower_hex();
+                    Some(topic)
+                }
+                None => None,
+            };
+
+            resolved_logs = match signature {
+                Some(signature) => {
+                    debug_max!("resolving signature: {}", signature.to_string().to_lowercase());
+                    ResolvedLog::resolve(&signature).await.unwrap_or(Vec::new())
+                }
+                None => Vec::new(),
+            };
+        }
 
         Ok(Self {
             address: value.address,

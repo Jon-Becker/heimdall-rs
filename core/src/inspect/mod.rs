@@ -12,6 +12,7 @@ use heimdall_common::{
     debug_max,
     ether::rpc::{get_block_logs, get_trace, get_transaction},
     utils::{
+        env::set_env,
         hex::ToLowerHex,
         io::logging::{Logger, TraceFactory},
     },
@@ -87,7 +88,6 @@ pub struct InspectResult {
 #[allow(deprecated)]
 pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     // set logger environment variable if not already set
-    // TODO: abstract this to a heimdall_common util
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var(
             "RUST_LOG",
@@ -97,6 +97,10 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
             },
         );
     }
+
+    // set skip_resolving env variable
+    // TODO: create a trait that can be added to a struct to set env variables
+    set_env("SKIP_RESOLVING", &args.skip_resolving.to_string());
 
     // get a new logger and trace
     let (logger, _trace) = Logger::new(match args.verbose.log_level() {
