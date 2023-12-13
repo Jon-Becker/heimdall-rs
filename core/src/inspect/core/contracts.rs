@@ -9,7 +9,7 @@ use heimdall_common::{resources::transpose::get_label, utils::hex::ToLowerHex};
 #[derive(Debug, Clone)]
 pub struct Contracts {
     pub contracts: HashMap<Address, String>,
-    transpose_api_key: Option<String>,
+    transpose_api_key: String,
     skip_resolving: bool,
 }
 
@@ -18,10 +18,7 @@ impl Contracts {
     pub fn new(args: &InspectArgs) -> Self {
         Self {
             contracts: HashMap::new(),
-            transpose_api_key: match args.transpose_api_key {
-                Some(ref key) if !key.is_empty() => Some(key.clone()),
-                _ => None,
-            },
+            transpose_api_key: args.transpose_api_key.clone(),
             skip_resolving: args.skip_resolving,
         }
     }
@@ -38,10 +35,10 @@ impl Contracts {
             return Ok(());
         }
 
-        if let Some(transpose_api_key) = &self.transpose_api_key {
+        if !self.transpose_api_key.is_empty() {
             self.contracts.insert(
                 address,
-                get_label(&address.to_lower_hex(), transpose_api_key)
+                get_label(&address.to_lower_hex(), &self.transpose_api_key)
                     .await
                     .unwrap_or(address.to_lower_hex()),
             );
@@ -61,14 +58,15 @@ impl Contracts {
         }
 
         // for each address, get the label
-        if let Some(transpose_api_key) = &self.transpose_api_key {
+        if !self.transpose_api_key.is_empty() {
+            let transpose_api_key_clone = self.transpose_api_key.clone();
             let handles: Vec<_> = addresses
                 .clone()
                 .into_iter()
                 .map(move |address| {
-                    let transpose_api_key = transpose_api_key.clone();
+                    let transpose_api_key_clone = transpose_api_key_clone.clone();
                     tokio::spawn(async move {
-                        get_label(&address.to_lower_hex(), &transpose_api_key).await
+                        get_label(&address.to_lower_hex(), &transpose_api_key_clone).await
                     })
                 })
                 .collect();

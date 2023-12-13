@@ -46,9 +46,9 @@ pub struct InspectArgs {
     #[clap(long, short)]
     pub default: bool,
 
-    /// Your OPTIONAL Transpose.io API Key, used for labeling contract addresses.
-    #[clap(long = "transpose-api-key", short, hide_default_value = true)]
-    pub transpose_api_key: Option<String>,
+    /// Your OPTIONAL Transpose.io API Key. Used to resolve contract labels.
+    #[clap(long = "transpose-api-key", short, default_value = "", hide_default_value = true)]
+    pub transpose_api_key: String,
 
     /// Name for the output files.
     #[clap(long, short, default_value = "", hide_default_value = true)]
@@ -70,7 +70,7 @@ impl InspectArgsBuilder {
             verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             default: Some(true),
-            transpose_api_key: None,
+            transpose_api_key: Some(String::new()),
             name: Some(String::new()),
             output: Some(String::from("output")),
             skip_resolving: Some(false),
