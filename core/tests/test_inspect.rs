@@ -14,9 +14,10 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
-            transpose_api_key: None,
+            transpose_api_key: String::from(""),
             name: String::from(""),
             output: String::from("output"),
+            skip_resolving: true,
         };
 
         let _ = heimdall_core::inspect::inspect(args).await.unwrap();
@@ -31,9 +32,10 @@ mod integration_tests {
             verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
-            transpose_api_key: None,
+            transpose_api_key: String::from(""),
             name: String::from(""),
             output: String::from("output"),
+            skip_resolving: true,
         };
 
         let _ = heimdall_core::inspect::inspect(args).await.unwrap();
@@ -63,6 +65,7 @@ mod integration_tests {
                 .target(txid.to_string())
                 .verbose(Verbosity::new(-1, 0))
                 .rpc_url("https://eth.llamarpc.com".to_string())
+                .skip_resolving(true)
                 .build()
                 .unwrap();
 

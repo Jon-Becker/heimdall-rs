@@ -12,6 +12,7 @@ use heimdall_common::{
     debug_max,
     ether::rpc::{get_block_logs, get_trace, get_transaction},
     utils::{
+        env::set_env,
         hex::ToLowerHex,
         io::logging::{Logger, TraceFactory},
     },
@@ -45,9 +46,9 @@ pub struct InspectArgs {
     #[clap(long, short)]
     pub default: bool,
 
-    /// Your OPTIONAL Transpose.io API Key, used for labeling contract addresses.
-    #[clap(long = "transpose-api-key", short, hide_default_value = true)]
-    pub transpose_api_key: Option<String>,
+    /// Your OPTIONAL Transpose.io API Key. Used to resolve contract labels.
+    #[clap(long = "transpose-api-key", short, default_value = "", hide_default_value = true)]
+    pub transpose_api_key: String,
 
     /// Name for the output files.
     #[clap(long, short, default_value = "", hide_default_value = true)]
@@ -56,6 +57,10 @@ pub struct InspectArgs {
     /// The output directory to write the output to, or 'print' to print to the console.
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
+
+    /// Whether to skip resolving function selectors and contract labels.
+    #[clap(long = "skip-resolving")]
+    pub skip_resolving: bool,
 }
 
 impl InspectArgsBuilder {
@@ -65,9 +70,10 @@ impl InspectArgsBuilder {
             verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             default: Some(true),
-            transpose_api_key: None,
+            transpose_api_key: Some(String::new()),
             name: Some(String::new()),
             output: Some(String::from("output")),
+            skip_resolving: Some(false),
         }
     }
 }
@@ -82,7 +88,6 @@ pub struct InspectResult {
 #[allow(deprecated)]
 pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     // set logger environment variable if not already set
-    // TODO: abstract this to a heimdall_common util
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var(
             "RUST_LOG",
@@ -92,6 +97,10 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
             },
         );
     }
+
+    // set skip_resolving env variable
+    // TODO: create a trait that can be added to a struct to set env variables
+    set_env("SKIP_RESOLVING", &args.skip_resolving.to_string());
 
     // get a new logger and trace
     let (logger, _trace) = Logger::new(match args.verbose.log_level() {

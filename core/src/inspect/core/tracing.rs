@@ -14,6 +14,7 @@ use ethers::{
 use heimdall_common::{
     ether::signatures::ResolvedFunction,
     utils::{
+        env::get_env,
         hex::ToLowerHex,
         io::{logging::TraceFactory, types::Parameterize},
     },
@@ -196,6 +197,12 @@ impl TryFrom<Call> for DecodedCall {
             let result = crate::decode::decode(
                 DecodeArgsBuilder::new()
                     .target(calldata)
+                    .skip_resolving(
+                        get_env("SKIP_RESOLVING")
+                            .unwrap_or("false".to_string())
+                            .parse::<bool>()
+                            .unwrap_or(false),
+                    )
                     .build()
                     .map_err(|_e| Error::DecodeError)?,
             )
