@@ -10,15 +10,29 @@ use heimdall_common::{resources::transpose::get_label, utils::hex::ToLowerHex};
 pub struct Contracts {
     pub contracts: HashMap<Address, String>,
     transpose_api_key: Option<String>,
+    skip_resolving: bool,
 }
 
 #[allow(dead_code)]
 impl Contracts {
     pub fn new(args: &InspectArgs) -> Self {
-        Self { contracts: HashMap::new(), transpose_api_key: args.transpose_api_key.clone() }
+        Self {
+            contracts: HashMap::new(),
+            transpose_api_key: match args.transpose_api_key {
+                Some(ref key) if !key.is_empty() => Some(key.clone()),
+                _ => None,
+            },
+            skip_resolving: args.skip_resolving,
+        }
     }
 
     pub async fn add(&mut self, address: Address) -> Result<(), Error> {
+        // if skip resolving, just add the address
+        if self.skip_resolving {
+            self.contracts.insert(address, address.to_lower_hex());
+            return Ok(());
+        }
+
         // if alias already exists, don't overwrite
         if self.contracts.contains_key(&address) {
             return Ok(());
@@ -39,6 +53,13 @@ impl Contracts {
     }
 
     pub async fn extend(&mut self, addresses: HashSet<Address>) -> Result<(), Error> {
+        // if skip resolving, just add the address
+        if self.skip_resolving {
+            self.contracts
+                .extend(addresses.into_iter().map(|address| (address, address.to_lower_hex())));
+            return Ok(());
+        }
+
         // for each address, get the label
         if let Some(transpose_api_key) = &self.transpose_api_key {
             let handles: Vec<_> = addresses

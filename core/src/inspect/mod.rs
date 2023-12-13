@@ -56,6 +56,10 @@ pub struct InspectArgs {
     /// The output directory to write the output to, or 'print' to print to the console.
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
+
+    /// Whether to skip resolving function selectors and contract labels.
+    #[clap(long = "skip-resolving")]
+    pub skip_resolving: bool,
 }
 
 impl InspectArgsBuilder {
@@ -68,6 +72,7 @@ impl InspectArgsBuilder {
             transpose_api_key: None,
             name: Some(String::new()),
             output: Some(String::from("output")),
+            skip_resolving: Some(false),
         }
     }
 }
