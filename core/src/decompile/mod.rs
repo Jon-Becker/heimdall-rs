@@ -4,7 +4,7 @@ pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
-use heimdall_common::{debug_max, ether::bytecode::get_bytecode_from_target};
+use heimdall_common::{debug_max, ether::bytecode::get_bytecode_from_target, utils::strings::get_shortned_target};
 
 use crate::{
     decompile::{
@@ -125,13 +125,7 @@ pub async fn decompile(
         std::process::exit(1);
     }
 
-    // truncate target for prettier display
-    let mut shortened_target = args.target.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
+    let shortened_target = get_shortned_target(&args.target);
     let decompile_call = trace.add_call(
         0,
         line!(),
