@@ -108,16 +108,7 @@ pub async fn decompile(
     use std::time::Instant;
     let now = Instant::now();
 
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     // get a new logger
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {

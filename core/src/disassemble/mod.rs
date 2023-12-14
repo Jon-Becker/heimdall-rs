@@ -3,7 +3,7 @@ use derive_builder::Builder;
 use heimdall_common::{
     ether::{evm::core::opcodes::Opcode, bytecode::get_bytecode_from_target},
     utils::{
-        io::logging::Logger,
+        io::logging::{Logger, set_logger_env},
         strings::{decode_hex, encode_hex},
     },
 };
@@ -57,16 +57,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
     use std::time::Instant;
     let now = Instant::now();
 
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     // get a new logger
     let (logger, _) = Logger::new(match args.verbose.log_level() {

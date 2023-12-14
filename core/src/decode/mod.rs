@@ -21,7 +21,7 @@ use heimdall_common::{
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
     utils::{
-        io::{logging::Logger, types::display},
+        io::{logging::{Logger, set_logger_env}, types::display},
         strings::decode_hex,
     },
 };
@@ -94,16 +94,7 @@ impl DecodeArgsBuilder {
 /// calldata, without the ABI of the target contract.
 #[allow(deprecated)]
 pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     // get a new logger and trace
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
