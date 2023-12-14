@@ -10,22 +10,18 @@ impl ByteTracker {
         Self(HashMap::new())
     }
 
+    /// Given an offset into memory, returns the associated opcode if it exists
     pub fn get_by_offset(&self, offset: usize) -> Option<WrappedOpcode> {
         self.0.get(self.find_range(offset).expect("ByteTracker::have_range is broken")).cloned()
     }
 
-    fn find_range(&self, offset: usize) -> Option<&Range<usize>> {
-        self.0.keys().find(|range| range.contains(&offset))
-    }
-
-    fn affected_ranges(&self, range: Range<usize>) -> Vec<Range<usize>> {
-        self.0.keys().filter(|incumbent| Self::range_collides(&range, *incumbent)).cloned().collect()
-    }
-
-    fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {
-        incumbent.start <= incoming.start && incumbent.end >= incoming.start
-    }
-
+    /// Associates the provided opcode with the range of memory modified by writing a `size`-byte value to `offset`.
+    /// 
+    /// This range is exactly `[offset, size - 1]`. This function ensures that any existing ranges that our new range would collide with are dealt with accordingly, that is:
+    /// 
+    ///  - deleted, if our range completely overwrites it,
+    ///  - split, if our range overwrites a subset that partitions it,
+    ///  - shortened, if our range overwrites such that only one "end" of it is overwritten
     pub fn write(&mut self, offset: usize, size: usize, opcode: WrappedOpcode) {
         let range: Range<usize> = Range { start: offset, end: size - 1 };
         let incumbents: Vec<Range<usize>> = self.affected_ranges(range.clone());
@@ -54,12 +50,26 @@ impl ByteTracker {
             self.0.insert(range, opcode);
         }
     }
+
+    fn find_range(&self, offset: usize) -> Option<&Range<usize>> {
+        self.0.keys().find(|range| range.contains(&offset))
+    }
+
+    fn affected_ranges(&self, range: Range<usize>) -> Vec<Range<usize>> {
+        self.0.keys().filter(|incumbent| Self::range_collides(&range, *incumbent)).cloned().collect()
+    }
+
+    fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {
+        incumbent.start <= incoming.start && incumbent.end >= incoming.start
+    }
 }
 
 /// The [`Memory`] struct represents the memory of an EVM.
 #[derive(Clone, Debug)]
 pub struct Memory {
+    /// Vector storing memory data
     pub memory: Vec<u8>,
+    /// Byte-tracking facility, allowing bytes to be associated with the opcodes that last modified them
     pub bytes: ByteTracker,
 }
 
@@ -70,7 +80,7 @@ impl Default for Memory {
 }
 
 impl Memory {
-    /// Creates a new [`Memory`] with an empty memory vector.
+    /// Creates a new [`Memory`] with an empty memory vector and empty byte tracker
     pub fn new() -> Memory {
         Memory { memory: Vec::new(), bytes: ByteTracker::new() }
     }
@@ -225,6 +235,9 @@ impl Memory {
         }
     }
 
+    /// Given an offset into memory, returns the opcode that last modified it (if it has been modified at all)
+    /// 
+    /// Due to the nature of `WrappedOpcode`, this allows the entire CFG branch to be traversed.
     pub fn origin(&self, byte: usize) -> Option<WrappedOpcode> {
         self.bytes.get_by_offset(byte)
     }
