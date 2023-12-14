@@ -1,12 +1,66 @@
-use std::collections::BTreeMap;
+use std::{collections::HashMap, ops::Range};
 
 use super::opcodes::WrappedOpcode;
+
+#[derive(Clone, Debug)]
+pub struct ByteTracker(pub HashMap<Range<usize>, WrappedOpcode>);
+
+impl ByteTracker {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn get_by_offset(&self, offset: usize) -> Option<WrappedOpcode> {
+        self.0.get(self.find_range(offset).expect("ByteTracker::have_range is broken")).cloned()
+    }
+
+    fn find_range(&self, offset: usize) -> Option<&Range<usize>> {
+        self.0.keys().find(|range| range.contains(&offset))
+    }
+
+    fn affected_ranges(&self, range: Range<usize>) -> Vec<Range<usize>> {
+        self.0.keys().filter(|incumbent| Self::range_collides(&range, *incumbent)).cloned().collect()
+    }
+
+    fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {
+        incumbent.start <= incoming.start && incumbent.end >= incoming.start
+    }
+
+    pub fn write(&mut self, offset: usize, size: usize, opcode: WrappedOpcode) {
+        let range: Range<usize> = Range { start: offset, end: size - 1 };
+        let incumbents: Vec<Range<usize>> = self.affected_ranges(range.clone());
+
+        let range_needs_deletion = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start <= incumbent.start && incoming.end >= incumbent.end;
+        let range_needs_splitting = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start > incumbent.start && incoming.end < incumbent.end;
+
+        if incumbents.is_empty() {
+            self.0.insert(range, opcode);
+        } else {
+            incumbents.iter().for_each(|incumbent| if range_needs_deletion(&range, incumbent) {
+                self.0.remove(incumbent);
+            } else if range_needs_splitting(&range, incumbent) {
+                let left: Range<usize> = Range { start: incumbent.start, end: range.start - 1 };
+                let right: Range<usize> = Range { start: range.end + 1, end: incumbent.end - 1 };
+                let old_opcode: WrappedOpcode = self.0.get(incumbent).expect("").clone();
+
+                self.0.remove(incumbent);
+                self.0.insert(left, old_opcode.clone());
+                self.0.insert(right, old_opcode.clone());
+            } else {
+                /* incumbent must need shortening */
+                todo!()
+            });
+
+            self.0.insert(range, opcode);
+        }
+    }
+}
 
 /// The [`Memory`] struct represents the memory of an EVM.
 #[derive(Clone, Debug)]
 pub struct Memory {
     pub memory: Vec<u8>,
-    pub bytes: BTreeMap<usize, WrappedOpcode>,
+    pub bytes: ByteTracker,
 }
 
 impl Default for Memory {
@@ -18,7 +72,7 @@ impl Default for Memory {
 impl Memory {
     /// Creates a new [`Memory`] with an empty memory vector.
     pub fn new() -> Memory {
-        Memory { memory: Vec::new(), bytes: BTreeMap::new() }
+        Memory { memory: Vec::new(), bytes: ByteTracker::new() }
     }
 
     /// Gets the current size of the memory in bytes.
@@ -101,7 +155,7 @@ impl Memory {
         opcode: WrappedOpcode,
     ) {
         self.store(offset, size, value);
-        self.bytes.insert(offset, opcode);
+        self.bytes.write(offset, size, opcode);
     }
 
     /// Read the given number of bytes from the memory at the given offset.
@@ -172,7 +226,7 @@ impl Memory {
     }
 
     pub fn origin(&self, byte: usize) -> Option<WrappedOpcode> {
-        self.bytes.get(&byte).cloned()
+        self.bytes.get_by_offset(byte)
     }
 }
 
