@@ -25,7 +25,7 @@ jobs:
             - uses: taiki-e/install-action@nextest
             - name: Run Tests
               run: |
-                  cargo nextest r --no-fail-fast --release -- --ignored
+                  cargo nextest r --no-fail-fast --release --nocapture -- --ignored
 
     # If any of the jobs fail, this will create a high-priority issue to signal so.
     issue:
