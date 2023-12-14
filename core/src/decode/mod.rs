@@ -127,7 +127,9 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
         // provider.
-        raw_transaction = get_transaction(&args.target, &args.rpc_url).await.unwrap();
+        raw_transaction = get_transaction(&args.target, &args.rpc_url).await.map_err(|_| {
+            Error::RpcError("failed to fetch transaction from RPC provider.".to_string())
+        })?;
 
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
     } else if CALLDATA_REGEX.is_match(&args.target).unwrap() {
