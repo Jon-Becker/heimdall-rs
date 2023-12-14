@@ -1,7 +1,13 @@
 #[cfg(test)]
 mod integration_tests {
+    use std::{
+        sync::{Arc, Mutex},
+        thread,
+        time::{Duration, Instant},
+    };
+
     use clap_verbosity_flag::Verbosity;
-    use heimdall_common::utils::{sync::blocking_await, threading::task_pool};
+    use heimdall_common::utils::threading::task_pool;
     use heimdall_core::inspect::{InspectArgs, InspectArgsBuilder};
     use serde_json::Value;
 
@@ -61,31 +67,44 @@ mod integration_tests {
 
         // task_pool(items, num_threads, f)
         let results = task_pool(txids, 10, |txid: String| {
-            let args = InspectArgsBuilder::new()
-                .target(txid.to_string())
-                .verbose(Verbosity::new(-1, 0))
-                .rpc_url("https://eth.llamarpc.com".to_string())
-                .skip_resolving(true)
-                .build()
-                .unwrap();
+            let txid_for_thread = txid.clone(); // Clone txid for use in the thread
+            let finished = Arc::new(Mutex::new(false)); // Shared state to communicate between threads
+            let finished_for_thread = finished.clone();
 
-            blocking_await(move || {
-                // get new blocking runtime
+            let handle = thread::spawn(move || {
+                let args = InspectArgsBuilder::new()
+                    .target(txid_for_thread.clone())
+                    .verbose(Verbosity::new(-1, 0))
+                    .rpc_url("https://eth.llamarpc.com".to_string())
+                    .skip_resolving(true)
+                    .build()
+                    .unwrap();
+
                 let rt = tokio::runtime::Runtime::new().unwrap();
+                let result = rt.block_on(heimdall_core::inspect::inspect(args));
 
-                // get the storage diff for this transaction
-                println!("inspecting txid: {}", txid);
-                match rt.block_on(heimdall_core::inspect::inspect(args)) {
-                    Ok(_) => {
-                        println!("inspecting txid: {} ... succeeded", txid);
-                        1
-                    }
-                    Err(_) => {
-                        println!("inspecting txid: {} ... failed", txid);
-                        0
-                    }
+                *finished_for_thread.lock().unwrap() = true; // Signal that processing is finished
+
+                result
+            });
+
+            let start_time = Instant::now();
+            loop {
+                if *finished.lock().unwrap() {
+                    break; // Exit loop if processing is finished
                 }
-            })
+
+                if start_time.elapsed() > Duration::from_secs(60) {
+                    println!("inspecting txid: {} ... slow", txid);
+                }
+
+                thread::sleep(Duration::from_millis(100));
+            }
+
+            match handle.join().unwrap() {
+                Ok(_) => 1,
+                Err(_) => 0,
+            }
         });
         let success_count = results.iter().filter(|r| **r == 1).count();
 

@@ -12,6 +12,7 @@ use ethers::{
     },
 };
 use heimdall_common::{
+    debug_max,
     ether::signatures::ResolvedFunction,
     utils::{
         env::get_env,
@@ -526,7 +527,13 @@ impl DecodedTransactionTrace {
 }
 
 fn wei_to_ether(wei: U256) -> f64 {
-    // convert U256 to u64
-    let wei = wei.as_u64() as f64;
-    wei / 10f64.powf(18.0)
+    // convert U256 to u64 safely
+    let wei_f64 = wei.min(U256::from(u64::MAX)).as_u64() as f64;
+
+    // if wei = u64::MAX, log that it was truncated
+    if wei_f64 == u64::MAX as f64 {
+        debug_max!("WARNING: wei value was truncated to u64::MAX. Original value: {}", wei);
+    }
+
+    wei_f64 / 10f64.powf(18.0)
 }
