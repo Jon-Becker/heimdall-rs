@@ -37,6 +37,7 @@ pub fn remove_double_negation(line: &str) -> String {
     cleaned
 }
 
+// TODO: move to heimdall-common as same helper as in the decompile module
 pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     // helper function to determine if parentheses are necessary
     fn are_parentheses_unnecessary(expression: &str) -> bool {
@@ -99,7 +100,7 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     let paren_start = paren_start + nth_paren_index;
     let paren_end = paren_end + nth_paren_index;
 
-    if let true = found_match {
+    if found_match {
         // get the logical expression including the char before the parentheses (to detect casts)
         let logical_expression = match paren_start {
             0 => match cleaned.get(paren_start..paren_end + 1) {
@@ -139,10 +140,8 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> String {
             cleaned = simplify_parentheses(&cleaned, paren_index);
         } else {
             // remove double negation, if one exists
-            if cleaned.contains("!!") {
-                println!("cleared double negation");
-                cleaned = cleaned.replace("!!", "");
-            }
+            println!("cleared double negation");
+            cleaned = cleaned.replace("!!", "");
 
             // recurse into the next set of parentheses
             println!("parenthesis are necessary - recursing");

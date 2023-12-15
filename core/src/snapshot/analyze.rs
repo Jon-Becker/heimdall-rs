@@ -1,5 +1,5 @@
 use crate::decompile::constants::AND_BITMASK_REGEX;
-use crate::snapshot::postprocessers::postprocess::cleanup;
+use crate::snapshot::postprocess::cleanup;
 use super::{
     constants::VARIABLE_SIZE_CHECK_REGEX,
     structures::snapshot::{CalldataFrame, Snapshot, StorageFrame},
