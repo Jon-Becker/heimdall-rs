@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use super::opcodes::WrappedOpcode;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ByteTracker(pub HashMap<Range<usize>, WrappedOpcode>);
 
 impl ByteTracker {
@@ -36,7 +36,7 @@ impl ByteTracker {
                 self.0.remove(incumbent);
             } else if range_needs_splitting(&range, incumbent) {
                 let left: Range<usize> = Range { start: incumbent.start, end: range.start - 1 };
-                let right: Range<usize> = Range { start: range.end + 1, end: incumbent.end - 1 };
+                let right: Range<usize> = Range { start: range.end + 1, end: incumbent.end };
                 let old_opcode: WrappedOpcode = self.0.get(incumbent).expect("").clone();
 
                 self.0.remove(incumbent);
@@ -44,7 +44,20 @@ impl ByteTracker {
                 self.0.insert(right, old_opcode.clone());
             } else {
                 /* incumbent must need shortening */
-                todo!()
+
+                let needs_right_shortening = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start >= incumbent.start;
+
+                if needs_right_shortening(&range, incumbent) {
+                    let remainder: Range<usize> = Range { start: incumbent.start, end: range.start - 1 };
+                    let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
+                    self.0.remove(incumbent);
+                    self.0.insert(remainder, old_opcode);
+                } else  {
+                    let remainder: Range<usize> = Range { start: range.end + 1, end: incumbent.end };
+                    let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
+                    self.0.remove(incumbent);
+                    self.0.insert(remainder, old_opcode);
+                }
             });
 
             self.0.insert(range, opcode);
@@ -60,7 +73,10 @@ impl ByteTracker {
     }
 
     fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {
-        incumbent.start <= incoming.start && incumbent.end >= incoming.start
+        (incoming.start <= incumbent.start && incoming.end >= incumbent.end) ||
+        (incoming.start <= incumbent.start && incoming.end >= incumbent.start) ||
+        (incoming.start <= incumbent.end && incoming.end >= incumbent.end) ||
+        (incoming.start > incumbent.start && incoming.end < incumbent.end)
     }
 }
 
@@ -391,5 +407,84 @@ mod tests {
     fn test_expansion_cost_2() {
         let memory = Memory::new();
         assert_eq!(memory.expansion_cost(32 * 32, 32), 101);
+    }
+
+    #[cfg(test)]
+    mod byte_tracker_tests {
+        use std::{collections::{HashMap, HashSet}, ops::Range};
+
+        use crate::ether::evm::core::{memory::ByteTracker, opcodes::WrappedOpcode};
+
+        #[test]
+        fn test_one_incumbent_and_needs_deletion() {
+            /* the values of the mapping are irrelevant for the purposes of this test, so we construct an arbitrary one and reuse it everywhere for simplicity */
+            let some_op: WrappedOpcode = WrappedOpcode::default();
+            let initial_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![((8, 16), some_op.clone()), ((32, 64), some_op.clone())];
+
+            let mut actual_byte_tracker: ByteTracker = ByteTracker(HashMap::from_iter(initial_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v))));
+
+            let offset: usize = 7;
+            let size: usize = 18;
+            actual_byte_tracker.write(offset, size, some_op.clone());
+
+            let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![((7, 17), some_op.clone()), ((32, 64), some_op.clone())];
+            let expected_byte_tracker: ByteTracker = ByteTracker(HashMap::from_iter(expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v))));
+
+            assert_eq!(actual_byte_tracker, expected_byte_tracker);
+        }
+
+        #[test]
+        fn test_one_incumbent_and_needs_splitting() {
+            /* the values of the mapping are irrelevant for the purposes of this test, so we construct an arbitrary one and reuse it everywhere for simplicity */
+            let some_op: WrappedOpcode = WrappedOpcode::default();
+            let initial_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![((7, 18), some_op.clone()), ((32, 64), some_op.clone())];
+
+            let mut actual_byte_tracker: ByteTracker = ByteTracker(HashMap::from_iter(initial_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v))));
+
+            let offset: usize = 8;
+            let size: usize = 16;
+            actual_byte_tracker.write(offset, size, some_op.clone());
+
+            let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![((7, 7), some_op.clone()), ((8, 15), some_op.clone()), ((16, 18), some_op.clone()), ((32, 64), some_op.clone())];
+            let expected_byte_tracker: ByteTracker = ByteTracker(HashMap::from_iter(expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v))));
+
+            assert_eq!(actual_byte_tracker, expected_byte_tracker);
+        }
+
+        #[test]
+        fn test_one_incumbent_and_needs_right_shortening() {
+            /* the values of the mapping are irrelevant for the purposes of this test, so we construct an arbitrary one and reuse it everywhere for simplicity */
+            let some_op: WrappedOpcode = WrappedOpcode::default();
+            let initial_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![((7, 18), some_op.clone()), ((32, 64), some_op.clone())];
+
+            let mut actual_byte_tracker: ByteTracker = ByteTracker(HashMap::from_iter(initial_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v))));
+
+            let offset: usize = 10;
+            let size: usize = 24;
+            actual_byte_tracker.write(offset, size, some_op.clone());
+
+            let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![((7, 9), some_op.clone()), ((10, 23), some_op.clone()), ((32, 64), some_op.clone())];
+            let expected_byte_tracker: ByteTracker = ByteTracker(HashMap::from_iter(expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v))));
+
+            assert_eq!(actual_byte_tracker, expected_byte_tracker);
+        }
+
+        #[test]
+        fn test_one_incumbent_and_needs_left_shortening() {
+            /* the values of the mapping are irrelevant for the purposes of this test, so we construct an arbitrary one and reuse it everywhere for simplicity */
+            let some_op: WrappedOpcode = WrappedOpcode::default();
+            let initial_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![((7, 18), some_op.clone()), ((32, 64), some_op.clone())];
+
+            let mut actual_byte_tracker: ByteTracker = ByteTracker(HashMap::from_iter(initial_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v))));
+
+            let offset: usize = 2;
+            let size: usize = 10;
+            actual_byte_tracker.write(offset, size, some_op.clone());
+
+            let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![((2, 9), some_op.clone()), ((10, 18), some_op.clone()), ((32, 64), some_op.clone())];
+            let expected_byte_tracker: ByteTracker = ByteTracker(HashMap::from_iter(expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v))));
+
+            assert_eq!(actual_byte_tracker, expected_byte_tracker);
+        }
     }
 }
