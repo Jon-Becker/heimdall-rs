@@ -3,16 +3,16 @@ pub mod output;
 use derive_builder::Builder;
 use heimdall_common::{
     debug_max,
-    ether::{compiler::detect_compiler, selectors::find_function_selectors, bytecode::get_bytecode_from_target},
+    ether::{
+        bytecode::get_bytecode_from_target, compiler::detect_compiler,
+        selectors::find_function_selectors,
+    },
 };
 use indicatif::ProgressBar;
 use std::time::Duration;
 
 use clap::{AppSettings, Parser};
-use heimdall_common::{
-    ether::evm::core::vm::VM,
-    utils::io::logging::*,
-};
+use heimdall_common::{ether::evm::core::vm::VM, utils::io::logging::*};
 use petgraph::Graph;
 
 use crate::{

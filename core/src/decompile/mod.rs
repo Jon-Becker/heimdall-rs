@@ -4,7 +4,9 @@ pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
-use heimdall_common::{debug_max, ether::bytecode::get_bytecode_from_target, utils::strings::get_shortned_target};
+use heimdall_common::{
+    debug_max, ether::bytecode::get_bytecode_from_target, utils::strings::get_shortned_target,
+};
 
 use crate::{
     decompile::{

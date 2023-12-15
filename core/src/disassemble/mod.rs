@@ -1,9 +1,9 @@
 use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use heimdall_common::{
-    ether::{evm::core::opcodes::Opcode, bytecode::get_bytecode_from_target},
+    ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
     utils::{
-        io::logging::{Logger, set_logger_env},
+        io::logging::{set_logger_env, Logger},
         strings::{decode_hex, encode_hex},
     },
 };

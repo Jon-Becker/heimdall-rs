@@ -21,7 +21,10 @@ use heimdall_common::{
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
     utils::{
-        io::{logging::{Logger, set_logger_env}, types::display},
+        io::{
+            logging::{set_logger_env, Logger},
+            types::display,
+        },
         strings::decode_hex,
     },
 };
