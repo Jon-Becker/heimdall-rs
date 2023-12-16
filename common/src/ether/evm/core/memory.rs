@@ -9,7 +9,8 @@ pub type ByteTracker = RangeMap;
 pub struct Memory {
     /// Vector storing memory data
     pub memory: Vec<u8>,
-    /// Byte-tracking facility, allowing bytes to be associated with the opcodes that last modified them
+    /// Byte-tracking facility, allowing bytes to be associated with the opcodes that last modified
+    /// them
     pub bytes: ByteTracker,
 }
 
@@ -175,8 +176,9 @@ impl Memory {
         }
     }
 
-    /// Given an offset into memory, returns the opcode that last modified it (if it has been modified at all)
-    /// 
+    /// Given an offset into memory, returns the opcode that last modified it (if it has been
+    /// modified at all)
+    ///
     /// Due to the nature of `WrappedOpcode`, this allows the entire CFG branch to be traversed.
     pub fn origin(&self, byte: usize) -> Option<WrappedOpcode> {
         self.bytes.get_by_offset(byte)
