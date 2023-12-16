@@ -2,6 +2,13 @@ use std::{collections::HashMap, ops::Range};
 
 use super::opcodes::WrappedOpcode;
 
+#[derive(Copy, Clone, Debug)]
+enum CollisionKind {
+    Deletion,
+    Splitting,
+    Shortening,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ByteTracker(pub HashMap<Range<usize>, WrappedOpcode>);
 
@@ -26,41 +33,55 @@ impl ByteTracker {
         let range: Range<usize> = Range { start: offset, end: size - 1 };
         let incumbents: Vec<Range<usize>> = self.affected_ranges(range.clone());
 
-        let range_needs_deletion = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start <= incumbent.start && incoming.end >= incumbent.end;
-        let range_needs_splitting = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start > incumbent.start && incoming.end < incumbent.end;
-
         if incumbents.is_empty() {
             self.0.insert(range, opcode);
         } else {
-            incumbents.iter().for_each(|incumbent| if range_needs_deletion(&range, incumbent) {
-                self.0.remove(incumbent);
-            } else if range_needs_splitting(&range, incumbent) {
-                let left: Range<usize> = Range { start: incumbent.start, end: range.start - 1 };
-                let right: Range<usize> = Range { start: range.end + 1, end: incumbent.end };
-                let old_opcode: WrappedOpcode = self.0.get(incumbent).expect("").clone();
+            incumbents.iter().for_each(|incumbent| {
+                match Self::classify_collision(&range, incumbent) {
+                    CollisionKind::Deletion => {
+                        self.0.remove(incumbent);
+                    },
+                    CollisionKind::Splitting => {
+                        let left: Range<usize> = Range { start: incumbent.start, end: range.start - 1 };
+                        let right: Range<usize> = Range { start: range.end + 1, end: incumbent.end };
+                        let old_opcode: WrappedOpcode = self.0.get(incumbent).expect("").clone();
 
-                self.0.remove(incumbent);
-                self.0.insert(left, old_opcode.clone());
-                self.0.insert(right, old_opcode.clone());
-            } else {
-                /* incumbent must need shortening */
+                        self.0.remove(incumbent);
+                        self.0.insert(left, old_opcode.clone());
+                        self.0.insert(right, old_opcode.clone());
+                    },
+                    CollisionKind::Shortening => {
+                        let needs_right_shortening = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start >= incumbent.start;
 
-                let needs_right_shortening = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start >= incumbent.start;
-
-                if needs_right_shortening(&range, incumbent) {
-                    let remainder: Range<usize> = Range { start: incumbent.start, end: range.start - 1 };
-                    let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
-                    self.0.remove(incumbent);
-                    self.0.insert(remainder, old_opcode);
-                } else  {
-                    let remainder: Range<usize> = Range { start: range.end + 1, end: incumbent.end };
-                    let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
-                    self.0.remove(incumbent);
-                    self.0.insert(remainder, old_opcode);
+                        if needs_right_shortening(&range, incumbent) {
+                            let remainder: Range<usize> = Range { start: incumbent.start, end: range.start - 1 };
+                            let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
+                            self.0.remove(incumbent);
+                            self.0.insert(remainder, old_opcode);
+                        } else  {
+                            let remainder: Range<usize> = Range { start: range.end + 1, end: incumbent.end };
+                            let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
+                            self.0.remove(incumbent);
+                            self.0.insert(remainder, old_opcode);
+                        }
+                    }
                 }
-            });
 
-            self.0.insert(range, opcode);
+                self.0.insert(range.clone(), opcode.clone());
+            });
+        }
+    }
+
+    fn classify_collision(incoming: &Range<usize>, incumbent: &Range<usize>) -> CollisionKind {
+        let range_needs_deletion = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start <= incumbent.start && incoming.end >= incumbent.end;
+        let range_needs_splitting = |incoming: &Range<usize>, incumbent: &Range<usize>| incoming.start > incumbent.start && incoming.end < incumbent.end;
+
+        if range_needs_deletion(incoming, incumbent) {
+            CollisionKind::Deletion
+        } else if range_needs_splitting(incoming, incumbent) {
+            CollisionKind::Splitting
+        } else {
+            CollisionKind::Shortening
         }
     }
 
@@ -411,7 +432,7 @@ mod tests {
 
     #[cfg(test)]
     mod byte_tracker_tests {
-        use std::{collections::{HashMap, HashSet}, ops::Range};
+        use std::{collections::HashMap, ops::Range};
 
         use crate::ether::evm::core::{memory::ByteTracker, opcodes::WrappedOpcode};
 
