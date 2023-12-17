@@ -25,8 +25,8 @@ impl RangeMap {
     /// Associates the provided opcode with the range of memory modified by writing a `size`-byte
     /// value to `offset`.
     ///
-    /// This range is exactly `[offset, size - 1]`. This function ensures that any existing ranges
-    /// that our new range would collide with are dealt with accordingly, that is:
+    /// This range is exactly `[offset, offset + size - 1]`. This function ensures that any existing
+    /// ranges that our new range would collide with are dealt with accordingly, that is:
     ///
     ///  - deleted, if our range completely overwrites it,
     ///  - split, if our range overwrites a subset that partitions it,
