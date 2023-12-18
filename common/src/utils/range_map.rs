@@ -137,7 +137,7 @@ mod tests {
         ));
 
         let offset: usize = 7;
-        let size: usize = 18;
+        let size: usize = 11;
         actual_byte_tracker.write(offset, size, some_op.clone());
 
         let expected_pairs: Vec<((usize, usize), WrappedOpcode)> =
@@ -162,7 +162,7 @@ mod tests {
         ));
 
         let offset: usize = 8;
-        let size: usize = 16;
+        let size: usize = 8;
         actual_byte_tracker.write(offset, size, some_op.clone());
 
         let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![
@@ -191,7 +191,7 @@ mod tests {
         ));
 
         let offset: usize = 10;
-        let size: usize = 24;
+        let size: usize = 14;
         actual_byte_tracker.write(offset, size, some_op.clone());
 
         let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![
@@ -219,7 +219,7 @@ mod tests {
         ));
 
         let offset: usize = 2;
-        let size: usize = 10;
+        let size: usize = 8;
         actual_byte_tracker.write(offset, size, some_op.clone());
 
         let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![
