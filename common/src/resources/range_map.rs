@@ -32,7 +32,7 @@ impl RangeMap {
     ///  - split, if our range overwrites a subset that partitions it,
     ///  - shortened, if our range overwrites such that only one "end" of it is overwritten
     pub fn write(&mut self, offset: usize, size: usize, opcode: WrappedOpcode) {
-        let range: Range<usize> = Range { start: offset, end: size - 1 };
+        let range: Range<usize> = Range { start: offset, end: offset + size - 1 };
         let incumbents: Vec<Range<usize>> = self.affected_ranges(range.clone());
 
         if incumbents.is_empty() {
