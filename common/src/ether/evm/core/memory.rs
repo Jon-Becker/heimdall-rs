@@ -1,4 +1,4 @@
-use crate::resources::range_map::RangeMap;
+use crate::utils::range_map::RangeMap;
 
 use super::opcodes::WrappedOpcode;
 

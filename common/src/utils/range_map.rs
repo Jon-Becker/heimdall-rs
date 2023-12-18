@@ -122,7 +122,7 @@ impl RangeMap {
 mod tests {
     use std::{collections::HashMap, ops::Range};
 
-    use crate::{ether::evm::core::opcodes::WrappedOpcode, resources::range_map::RangeMap};
+    use crate::{ether::evm::core::opcodes::WrappedOpcode, utils::range_map::RangeMap};
 
     #[test]
     fn test_one_incumbent_and_needs_deletion() {
