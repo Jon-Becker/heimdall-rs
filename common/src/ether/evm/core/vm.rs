@@ -920,7 +920,7 @@ impl VM {
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.memory.store(dest_offset, size, &value);
+                self.memory.store_with_opcode(dest_offset, size, &value, operation);
             }
 
             // CODESIZE
@@ -997,7 +997,7 @@ impl VM {
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.memory.store(dest_offset, size, &value);
+                self.memory.store_with_opcode(dest_offset, size, &value, operation);
             }
 
             // GASPRICE
@@ -1074,7 +1074,7 @@ impl VM {
                     self.consume_gas(100);
                 }
 
-                self.memory.store(dest_offset, size, &value);
+                self.memory.store_with_opcode(dest_offset, size, &value, operation);
             }
 
             // RETURNDATASIZE
@@ -1129,7 +1129,7 @@ impl VM {
                     3 * minimum_word_size + self.memory.expansion_cost(dest_offset, size);
                 self.consume_gas(gas_cost);
 
-                self.memory.store(dest_offset, size, &value);
+                self.memory.store_with_opcode(dest_offset, size, &value, operation);
             }
 
             // EXTCODEHASH and BLOCKHASH
@@ -1228,7 +1228,7 @@ impl VM {
                 let gas_cost = self.memory.expansion_cost(offset, 32);
                 self.consume_gas(gas_cost);
 
-                self.memory.store(offset, 32, value.encode().as_slice());
+                self.memory.store_with_opcode(offset, 32, value.encode().as_slice(), operation);
             }
 
             // MSTORE8
@@ -1257,7 +1257,7 @@ impl VM {
                 let gas_cost = self.memory.expansion_cost(offset, 1);
                 self.consume_gas(gas_cost);
 
-                self.memory.store(offset, 1, &[value.encode()[31]]);
+                self.memory.store_with_opcode(offset, 1, &[value.encode()[31]], operation);
             }
 
             // SLOAD
