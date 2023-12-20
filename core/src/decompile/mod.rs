@@ -4,7 +4,9 @@ pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
-use heimdall_common::debug_max;
+use heimdall_common::{
+    debug_max, ether::bytecode::get_bytecode_from_target, utils::strings::get_shortned_target,
+};
 
 use crate::{
     decompile::{
@@ -20,17 +22,15 @@ use derive_builder::Builder;
 use heimdall_common::{
     ether::{
         compiler::detect_compiler,
-        rpc::get_code,
         selectors::{find_function_selectors, resolve_selectors},
     },
     utils::strings::encode_hex_reduced,
 };
 use indicatif::ProgressBar;
-use std::{collections::HashMap, fs, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
-    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{evm::core::vm::VM, signatures::*},
     utils::io::logging::*,
 };
@@ -110,16 +110,7 @@ pub async fn decompile(
     use std::time::Instant;
     let now = Instant::now();
 
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     // get a new logger
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
@@ -136,13 +127,7 @@ pub async fn decompile(
         std::process::exit(1);
     }
 
-    // truncate target for prettier display
-    let mut shortened_target = args.target.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
+    let shortened_target = get_shortned_target(&args.target);
     let decompile_call = trace.add_call(
         0,
         line!(),
@@ -152,37 +137,7 @@ pub async fn decompile(
         "()".to_string(),
     );
 
-    // parse the various formats that are accepted as targets
-    // i.e, file, bytecode, contract address
-    let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target)? {
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
-        // provider
-        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
-    } else if BYTECODE_REGEX.is_match(&args.target)? {
-        debug_max!("using provided bytecode for decompilation");
-        contract_bytecode = args.target.clone().replacen("0x", "", 1);
-    } else {
-        debug_max!("using provided file for decompilation.");
-
-        // We are decompiling a file, so we need to read the bytecode from the file.
-        contract_bytecode = match fs::read_to_string(&args.target) {
-            Ok(contents) => {
-                let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents)? && _contents.len() % 2 == 0 {
-                    _contents.replacen("0x", "", 1)
-                } else {
-                    logger
-                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
-                    std::process::exit(1)
-                }
-            }
-            Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &args.target));
-                std::process::exit(1)
-            }
-        };
-    }
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
