@@ -30,7 +30,7 @@ use indicatif::ProgressBar;
 use strsim::normalized_damerau_levenshtein as similarity;
 
 use crate::{
-    decode::{core::abi::is_parameter_abi_encoded, util::get_explanation},
+    decode::{core::abi::try_decode_dynamic_parameter, util::get_explanation},
     error::Error,
 };
 
@@ -274,7 +274,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         logger.warn("couldn't find any matches for the given function selector.");
         // attempt to decode calldata regardless
 
-        // we're going to build a Vec<Kind> of all possible types for each
+        // we're going to build a Vec<ParamType> of all possible types for each
         let mut potential_inputs: Vec<ParamType> = Vec::new();
 
         // chunk in blocks of 32 bytes (64 hex chars)
@@ -291,14 +291,10 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         let mut i = 0;
         let mut covered_words = HashSet::new();
         while covered_words.len() != calldata_words.len() {
-            // sort covered_words and print
-            let mut tmp = covered_words.iter().collect::<Vec<&usize>>();
-            tmp.sort();
-
             let word = calldata_words[i];
 
             // check if the first word is abiencoded
-            if let Some(abi_encoded) = is_parameter_abi_encoded(i, &calldata_words)? {
+            if let Some(abi_encoded) = try_decode_dynamic_parameter(i, &calldata_words)? {
                 let potential_type = to_type(&abi_encoded.ty);
                 potential_inputs.push(potential_type);
                 covered_words.extend(abi_encoded.coverages);
