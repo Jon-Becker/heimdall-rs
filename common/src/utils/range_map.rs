@@ -103,11 +103,7 @@ impl RangeMap {
     }
 
     fn affected_ranges(&self, range: Range<usize>) -> Vec<Range<usize>> {
-        self.0
-            .keys()
-            .filter(|incumbent| Self::range_collides(&range, *incumbent))
-            .cloned()
-            .collect()
+        self.0.keys().filter(|incumbent| Self::range_collides(&range, incumbent)).cloned().collect()
     }
 
     fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {

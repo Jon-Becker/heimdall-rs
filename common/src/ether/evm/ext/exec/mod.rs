@@ -1,10 +1,14 @@
+mod jump_frame;
 mod util;
 
-use self::util::{
-    jump_condition_appears_recursive, jump_condition_contains_mutated_memory_access,
-    jump_condition_contains_mutated_storage_access,
-    jump_condition_historical_diffs_approximately_equal, stack_contains_too_many_of_the_same_item,
-    stack_diff, stack_item_source_depth_too_deep,
+use self::{
+    jump_frame::JumpFrame,
+    util::{
+        jump_condition_appears_recursive, jump_condition_contains_mutated_memory_access,
+        jump_condition_contains_mutated_storage_access,
+        jump_condition_historical_diffs_approximately_equal,
+        stack_contains_too_many_of_the_same_item, stack_diff, stack_item_source_depth_too_deep,
+    },
 };
 use crate::{
     debug_max,
@@ -14,7 +18,6 @@ use crate::{
     },
     utils::{io::logging::Logger, strings::decode_hex},
 };
-use ethers::types::U256;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -66,7 +69,7 @@ impl VM {
     fn recursive_map(
         &mut self,
         branch_count: &mut u32,
-        handled_jumps: &mut HashMap<(u128, U256, usize, bool), Vec<Stack>>,
+        handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
         logger: &Logger,
     ) -> VMTrace {
         let mut vm = self.clone();
@@ -96,16 +99,12 @@ impl VM {
                     state.last_instruction.instruction
                 );
 
-                // jump frame contains:
-                //  1. the instruction (PC) of the JUMPI
-                //  2. the jump destination
-                //  3. the stack size at the time of the JUMPI
-                //  4. whether the jump condition is zero
-                let jump_frame: (u128, U256, usize, bool) = (
+                // build hashable jump frame
+                let jump_frame = JumpFrame::new(
                     state.last_instruction.instruction,
                     state.last_instruction.inputs[0],
                     vm.stack.size(),
-                    state.last_instruction.inputs[1].is_zero(),
+                    !state.last_instruction.inputs[1].is_zero(),
                 );
 
                 // if the stack has over 16 items of the same source, it's probably a loop
