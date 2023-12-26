@@ -119,6 +119,25 @@ impl VM {
                 }
 
                 // break out of loops
+                // (1) get all keys that match jump_frame.pc and jump_frame.jumpdest
+                let matching_keys = handled_jumps
+                    .keys()
+                    .filter(|key| key.pc == jump_frame.pc && key.jumpdest == jump_frame.jumpdest)
+                    .collect::<Vec<&JumpFrame>>();
+
+                // (a) get the max stack_depth of all matching keys
+                let max_stack_depth =
+                    matching_keys.iter().map(|key| key.stack_depth).max().unwrap_or(0);
+
+                // (b) if the current stack depth is less than the max stack depth, we don't need to
+                // continue.
+                if jump_frame.stack_depth < max_stack_depth {
+                    debug_max!("jump matches loop-detection heuristic: 'jump_stack_depth_less_than_max_stack_depth'");
+                    debug_max!("jump terminated.");
+                    return vm_trace
+                }
+
+                // (2) perform heuristic checks on historical stacks
                 match handled_jumps.get_mut(&jump_frame) {
                     Some(historical_stacks) => {
                         // for every stack that we have encountered for this jump, perform some
