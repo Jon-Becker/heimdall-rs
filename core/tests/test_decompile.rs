@@ -296,6 +296,10 @@ mod integration_tests {
             "0xd1d2Eb1B1e90B638588728b4130137D262C87cae",
             "0x95e05e2Abbd26943874ac000D87C3D9e115B543c",
             "0x00000000A991C429eE2Ec6df19d40fe0c80088B8",
+            "0x737673b5e0a3c68adf4c1a87bca5623cfc537ec3",
+            "0x940259178FbF021e625510919BC2FF0B944E5613",
+            "0xff612db0583be8d5498731e4e32bc12e08fa6292",
+            "0xd5FEa30Ed719693Ec8848Dc7501b582F5de6a5BB",
         ];
 
         // define flag checks

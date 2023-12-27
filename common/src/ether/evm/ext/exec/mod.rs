@@ -279,6 +279,89 @@ impl VM {
                 }
             }
 
+            // if we encounter a JUMP
+            if state.last_instruction.opcode == 0x56 {
+                // build hashable jump frame
+                let jump_frame = JumpFrame::new(
+                    state.last_instruction.instruction,
+                    state.last_instruction.inputs[0],
+                    vm.stack.size(),
+                    true,
+                );
+
+                // perform heuristic checks on historical stacks
+                match handled_jumps.get_mut(&jump_frame) {
+                    Some(historical_stacks) => {
+                        // for every stack that we have encountered for this jump, perform some
+                        // heuristic checks to determine if this might be a loop
+                        if historical_stacks.iter().any(|hist_stack| {
+                            // check if any historical stack is the same as the current stack
+                            if hist_stack == &vm.stack {
+                                debug_max!(
+                                    "jump matches loop-detection heuristic: 'jump_path_already_handled'"
+                                );
+                                return true
+                            }
+
+                            // calculate the difference of the current stack and the historical stack
+                            let stack_diff = stack_diff(&vm.stack, hist_stack);
+                            if stack_diff.is_empty() {
+                                // the stack_diff is empty (the stacks are the same), so we've
+                                // already handled this path
+                                debug_max!(
+                                    "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
+                                );
+                                return true
+                            }
+
+                            debug_max!("stack diff: [{}]", stack_diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", "));
+
+                            false
+                        }) {
+                            debug_max!("jump terminated.");
+                            debug_max!(
+                                "adding historical stack {} to jump frame {:?}",
+                                &format!("{:#016x?}", vm.stack.hash()),
+                                jump_frame
+                            );
+
+                            // this key exists, but the stack is different, so the jump is new
+                            historical_stacks.push(vm.stack.clone());
+                            return vm_trace
+                        }
+
+                        if jump_condition_historical_diffs_approximately_equal(
+                            &vm.stack,
+                            historical_stacks,
+                        ) {
+                            debug_max!("jump terminated.");
+                            debug_max!(
+                                "adding historical stack {} to jump frame {:?}",
+                                &format!("{:#016x?}", vm.stack.hash()),
+                                jump_frame
+                            );
+
+                            // this key exists, but the stack is different, so the jump is new
+                            historical_stacks.push(vm.stack.clone());
+                            return vm_trace;
+                        } else {
+                            debug_max!(
+                                "adding historical stack {} to jump frame {:?}",
+                                &format!("{:#016x?}", vm.stack.hash()),
+                                jump_frame
+                            );
+                            // this key exists, but the stack is different, so the jump is new
+                            historical_stacks.push(vm.stack.clone());
+                        }
+                    }
+                    None => {
+                        // this key doesnt exist, so the jump is new
+                        debug_max!("added new jump frame: {:?}", jump_frame);
+                        handled_jumps.insert(jump_frame, vec![vm.stack.clone()]);
+                    }
+                }
+            }
+
             // when the vm exits, this path is complete
             if vm.exitcode != 255 || !vm.returndata.is_empty() {
                 break;
