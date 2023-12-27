@@ -16,7 +16,7 @@ use crate::{
         stack::Stack,
         vm::{State, VM},
     },
-    utils::{io::logging::Logger, strings::decode_hex},
+    utils::strings::decode_hex,
 };
 use std::collections::HashMap;
 
@@ -44,33 +44,28 @@ impl VM {
             }
         }
 
-        // get a new logger
-        let logger = Logger::default();
         debug_max!("beginning symbolic execution for selector 0x{}", selector);
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        (self.recursive_map(&mut branch_count, &mut HashMap::new(), &logger), branch_count)
+        (self.recursive_map(&mut branch_count, &mut HashMap::new()), branch_count)
     }
 
     // build a map of function jump possibilities from the EVM bytecode
     pub fn symbolic_exec(&self) -> (VMTrace, u32) {
         let mut vm = self.clone();
 
-        // get a new logger
-        let logger = Logger::default();
         debug_max!("beginning contract-wide symbolic execution");
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        (vm.recursive_map(&mut branch_count, &mut HashMap::new(), &logger), branch_count)
+        (vm.recursive_map(&mut branch_count, &mut HashMap::new()), branch_count)
     }
 
     fn recursive_map(
         &mut self,
         branch_count: &mut u32,
         handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
-        logger: &Logger,
     ) -> VMTrace {
         let mut vm = self.clone();
 
@@ -254,27 +249,19 @@ impl VM {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
-                    vm_trace.children.push(trace_vm.recursive_map(
-                        branch_count,
-                        handled_jumps,
-                        logger,
-                    ));
+                    vm_trace.children.push(trace_vm.recursive_map(branch_count, handled_jumps));
 
                     // push the current path onto the stack
-                    vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps, logger));
+                    vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps));
                     break;
                 } else {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = state.last_instruction.instruction + 1;
-                    vm_trace.children.push(trace_vm.recursive_map(
-                        branch_count,
-                        handled_jumps,
-                        logger,
-                    ));
+                    vm_trace.children.push(trace_vm.recursive_map(branch_count, handled_jumps));
 
                     // push the current path onto the stack
-                    vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps, logger));
+                    vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps));
                     break;
                 }
             }
