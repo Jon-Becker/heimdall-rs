@@ -144,8 +144,11 @@ pub fn jump_condition_historical_diffs_approximately_equal(
         );
     }
 
-    // check if all stack diffs are exactly length 1
-    if !stack_diffs.iter().all(|diff| diff.len() == 1) {
+    // get stack length / 10, rounded up as threshold
+    let threshold = (stack.size() as f64 / 10f64).ceil() as usize;
+
+    // check if all stack diffs are similar
+    if !stack_diffs.iter().all(|diff| diff.len() <= threshold) {
         return false;
     }
 
