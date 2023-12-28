@@ -40,7 +40,7 @@ impl VM {
 
             // this shouldn't be necessary, but it's safer to have it
             if self.exitcode != 255 || !self.returndata.is_empty() {
-                break;
+                break
             }
         }
 
@@ -104,13 +104,13 @@ impl VM {
 
                 // if the stack has over 16 items of the same source, it's probably a loop
                 if stack_contains_too_many_of_the_same_item(&vm.stack) {
-                    return vm_trace;
+                    return vm_trace
                 }
 
                 // if any item on the stack has a depth > 16, it's probably a loop (because of stack
                 // too deep)
                 if stack_item_source_depth_too_deep(&vm.stack) {
-                    return vm_trace;
+                    return vm_trace
                 }
 
                 // break out of loops
@@ -211,7 +211,7 @@ impl VM {
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return vm_trace;
+                            return vm_trace
                         } else {
                             debug_max!(
                                 "adding historical stack {} to jump frame {:?}",
@@ -253,7 +253,7 @@ impl VM {
 
                     // push the current path onto the stack
                     vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps));
-                    break;
+                    break
                 } else {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
@@ -262,7 +262,7 @@ impl VM {
 
                     // push the current path onto the stack
                     vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps));
-                    break;
+                    break
                 }
             }
 
@@ -330,7 +330,7 @@ impl VM {
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return vm_trace;
+                            return vm_trace
                         } else {
                             debug_max!(
                                 "adding historical stack {} to jump frame {:?}",
@@ -351,7 +351,7 @@ impl VM {
 
             // when the vm exits, this path is complete
             if vm.exitcode != 255 || !vm.returndata.is_empty() {
-                break;
+                break
             }
         }
 

@@ -91,7 +91,7 @@ mod integration_tests {
             let start_time = Instant::now();
             loop {
                 if *finished.lock().unwrap() {
-                    break; // Exit loop if processing is finished
+                    break // Exit loop if processing is finished
                 }
 
                 if start_time.elapsed() > Duration::from_secs(60) {

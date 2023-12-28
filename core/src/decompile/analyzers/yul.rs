@@ -115,7 +115,7 @@ pub fn analyze_yul(
                         "unable to decode event emission at instruction {}",
                         instruction.instruction
                     ));
-                    continue;
+                    continue
                 }
             };
 
@@ -167,7 +167,7 @@ pub fn analyze_yul(
 
             // handle case with error string abiencoded
             if revert_data.starts_with(&decode_hex("4e487b71").unwrap()) {
-                continue;
+                continue
             }
             // handle case with custom error OR empty revert
             else {
@@ -189,7 +189,7 @@ pub fn analyze_yul(
                             instruction.input_operations[1].yulify()
                         );
 
-                        break;
+                        break
                     }
                 }
             }
@@ -429,7 +429,7 @@ pub fn analyze_yul(
         for j in (0..conditional_map.len()).rev() {
             if conditional_map[j] == jumped_conditional.clone().unwrap() {
                 conditional_map.remove(j);
-                break;
+                break
             }
         }
 

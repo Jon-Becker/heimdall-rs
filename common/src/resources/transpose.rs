@@ -247,7 +247,7 @@ pub async fn get_contract_creation(
             }
         };
 
-        return Some((block_number, transaction_hash));
+        return Some((block_number, transaction_hash))
     };
 
     None
@@ -273,7 +273,7 @@ pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
         Some(response) => response,
         None => {
             debug_max!(&format!("failed to get label from Transpose for address: {}", address));
-            return None;
+            return None
         }
     };
 
@@ -287,7 +287,7 @@ pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
                         "failed to parse label from Transpose for address: {}",
                         address
                     ));
-                    return None;
+                    return None
                 }
             },
             None => {
@@ -295,10 +295,10 @@ pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
                     "failed to fetch label from Transpose response for address: {}",
                     address
                 ));
-                return None;
+                return None
             }
         };
-        return Some(label);
+        return Some(label)
     };
 
     None

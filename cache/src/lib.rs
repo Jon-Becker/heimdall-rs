@@ -206,7 +206,7 @@ where
                     .as_secs()
             {
                 delete_cache(key);
-                return None;
+                return None
             }
 
             c

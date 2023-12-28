@@ -63,7 +63,7 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
 
                 // check if this function selector has already been handled
                 if handled_selectors.contains(&function_selector) {
-                    continue;
+                    continue
                 }
 
                 debug_max!(
@@ -116,13 +116,13 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
                 jump_condition.contains(" == ") &&
                 jump_taken == 1
             {
-                return call.last_instruction.inputs[0].try_into().unwrap_or(0);
+                return call.last_instruction.inputs[0].try_into().unwrap_or(0)
             } else if jump_taken == 1 {
                 // if handled_jumps contains the jumpi, we have already handled this jump.
                 // loops aren't supported in the dispatcher, so we can just return 0
                 if handled_jumps.contains(&call.last_instruction.inputs[0].try_into().unwrap_or(0))
                 {
-                    return 0;
+                    return 0
                 } else {
                     handled_jumps.insert(call.last_instruction.inputs[0].try_into().unwrap_or(0));
                 }
@@ -130,7 +130,7 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
         }
 
         if vm.exitcode != 255 || !vm.returndata.is_empty() {
-            break;
+            break
         }
     }
 

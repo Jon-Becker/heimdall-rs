@@ -24,9 +24,9 @@ pub async fn build_output_path(
 
         if ADDRESS_REGEX.is_match(target)? || TRANSACTION_HASH_REGEX.is_match(target)? {
             let chain_id = rpc::chain_id(rpc_url).await?;
-            return Ok(format!("{}/output/{}/{}/{}", cwd, chain_id, target, filename));
+            return Ok(format!("{}/output/{}/{}/{}", cwd, chain_id, target, filename))
         } else {
-            return Ok(format!("{}/output/local/{}", cwd, filename));
+            return Ok(format!("{}/output/local/{}", cwd, filename))
         }
     }
 

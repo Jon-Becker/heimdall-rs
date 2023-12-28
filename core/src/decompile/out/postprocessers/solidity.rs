@@ -177,12 +177,12 @@ fn simplify_parentheses(line: &str, paren_index: usize) -> String {
         // if there is a negation of an expression, remove the parentheses
         // helps with double negation
         if first_char == "!" && last_char == ")" {
-            return true;
+            return true
         }
 
         // remove the parentheses if the expression is within brackets
         if first_char == "[" && last_char == "]" {
-            return true;
+            return true
         }
 
         // parens required if:
@@ -190,14 +190,14 @@ fn simplify_parentheses(line: &str, paren_index: usize) -> String {
         //  - expression is a function call
         //  - expression is the surrounding parens of a conditional
         if first_char != "(" {
-            return false;
+            return false
         } else if last_char == ")" {
-            return true;
+            return true
         }
 
         // don't include instantiations
         if expression.contains("memory ret") {
-            return false;
+            return false
         }
 
         // handle the inside of the expression
@@ -207,14 +207,14 @@ fn simplify_parentheses(line: &str, paren_index: usize) -> String {
         };
 
         let inner_tokens = tokenize(&inside);
-        return !inner_tokens.iter().any(|tk| classify_token(tk) == TokenType::Operator);
+        return !inner_tokens.iter().any(|tk| classify_token(tk) == TokenType::Operator)
     }
 
     let mut cleaned: String = line.to_owned();
 
     // skip lines that are defining a function
     if cleaned.contains("function") {
-        return cleaned;
+        return cleaned
     }
 
     // get the nth index of the first open paren
@@ -414,7 +414,7 @@ fn convert_access_to_variable(line: &str) -> String {
 fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
     // skip lines that don't contain an assignment, or contain a return or external calls
     if !line.contains(" = ") || line.contains("bool success") || line.contains("return") {
-        return false;
+        return false
     }
 
     // get var name
@@ -423,25 +423,25 @@ fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
 
     // skip lines that contain assignments to storage
     if var_name.contains("stor_") {
-        return false;
+        return false
     }
 
     //remove unused vars
     for x in lines {
         // break if the line contains a function definition
         if x.contains("function") {
-            break;
+            break
         }
 
         if x.contains(" = ") {
             let assignment = x.split(" = ").map(|x| x.trim()).collect::<Vec<&str>>();
             if assignment[1].contains(var_name) {
-                return false;
+                return false
             } else if assignment[0].contains(var_name) {
-                return true;
+                return true
             }
         } else if x.contains(var_name) {
-            return false;
+            return false
         }
     }
 
@@ -456,12 +456,12 @@ fn move_casts_to_declaration(line: &str) -> String {
     // if line contains "function" wipe the set
     if cleaned.contains("function") {
         type_declaration_set.clear();
-        return cleaned.to_owned();
+        return cleaned.to_owned()
     }
 
     // if the line doesn't contain an instantiation, return
     if !cleaned.contains(" = ") {
-        return cleaned.to_owned();
+        return cleaned.to_owned()
     }
 
     let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
@@ -471,7 +471,7 @@ fn move_casts_to_declaration(line: &str) -> String {
         Some(x) => {
             // the match must occur at index 0
             if x.start() != 0 {
-                return cleaned.to_owned();
+                return cleaned.to_owned()
             }
 
             // find the matching close paren
@@ -480,7 +480,7 @@ fn move_casts_to_declaration(line: &str) -> String {
 
             // the close paren must be at the end of the expression
             if paren_end != instantiation[1].len() - 1 {
-                return cleaned.to_owned();
+                return cleaned.to_owned()
             }
 
             // get the inside of the parens
@@ -515,19 +515,19 @@ fn replace_expression_with_var(line: &str) -> String {
 
     // skip function definitions
     if cleaned.contains("function") {
-        return cleaned;
+        return cleaned
     }
 
     // iterate over variable map
     for (var, expression) in var_map.iter() {
         // skip numeric expressions
         if expression.parse::<u128>().is_ok() {
-            continue;
+            continue
         }
 
         // skip expressions that are already variables. i.e, check if they contain a space
         if !expression.contains(' ') {
-            continue;
+            continue
         }
 
         // replace the expression with the variable
@@ -576,7 +576,7 @@ fn inherit_infer_mem_type(line: &str) -> String {
 
     // if the line does not contains an instantiation, return
     if !line.contains(" = ") || line.trim().starts_with("stor") {
-        return cleaned;
+        return cleaned
     }
 
     let instantiation = line.split(" = ").collect::<Vec<&str>>();
@@ -597,7 +597,7 @@ fn inherit_infer_mem_type(line: &str) -> String {
             if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty() {
                 cleaned = format!("{var_type} {cleaned}");
                 type_map.insert(var_name.to_string(), var_type.to_string());
-                break;
+                break
             }
         }
     }
@@ -636,7 +636,7 @@ fn inherit_infer_storage_type(line: &str) {
         // since the regex is greedy, match the memory brackets
         let matched_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
         if !matched_loc.2 {
-            return;
+            return
         }
         let mut storage_slot =
             format!("storage{}", storage_access.get(matched_loc.0..matched_loc.1).unwrap());
@@ -680,7 +680,7 @@ fn inherit_infer_storage_type(line: &str) {
                         lhs_type = var_type.to_string();
 
                         // continue, so we cannot use this var in rhs
-                        continue;
+                        continue
                     }
 
                     // check for vars in rhs
@@ -765,7 +765,7 @@ fn replace_resolved(
 
     // line must contain CustomError_ or Event_
     if !cleaned.contains("CustomError_") && !cleaned.contains("Event_") {
-        return cleaned;
+        return cleaned
     }
 
     // not the best way to do it, can perf later
@@ -805,7 +805,7 @@ fn cleanup(
 
     // skip comments
     if cleaned.starts_with('/') {
-        return cleaned;
+        return cleaned
     }
 
     // Find and convert all castings
@@ -880,7 +880,7 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
         ) {
             cleaned_lines.push(line.to_string());
         } else {
-            continue;
+            continue
         }
     }
 

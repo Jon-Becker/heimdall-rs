@@ -589,7 +589,7 @@ impl Logger {
     ) -> u8 {
         // if silent, return the default
         if self.level == -1 {
-            return default.expect("Failed to get default option.");
+            return default.expect("Failed to get default option.")
         }
 
         // log the message with the given class
@@ -633,7 +633,7 @@ impl Logger {
             } else {
                 println!();
             }
-            return default.expect("Failed to get default option.");
+            return default.expect("Failed to get default option.")
         }
 
         // get input
@@ -642,10 +642,10 @@ impl Logger {
                 // check if default was selected
                 if selection.trim() == "" {
                     if let Some(default) = default {
-                        return default;
+                        return default
                     } else {
                         self.error("invalid selection.");
-                        return self.option(function, message, options, default, skip);
+                        return self.option(function, message, options, default, skip)
                     }
                 }
 
@@ -654,7 +654,7 @@ impl Logger {
                     Ok(i) => i,
                     Err(_) => {
                         self.error("invalid selection.");
-                        return self.option(function, message, options, default, skip);
+                        return self.option(function, message, options, default, skip)
                     }
                 };
 
