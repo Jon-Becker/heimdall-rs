@@ -34,7 +34,7 @@ pub fn stack_contains_too_many_of_the_same_item(stack: &Stack) -> bool {
         debug_max!(
             "jump matches loop-detection heuristic: 'stack_contains_too_many_of_the_same_item'",
         );
-        return true;
+        return true
     }
 
     false
@@ -50,7 +50,7 @@ pub fn stack_item_source_depth_too_deep(stack: &Stack) -> bool {
 
         logger
             .debug_max("jump matches loop-detection heuristic: 'stack_item_source_depth_too_deep'");
-        return true;
+        return true
     }
 
     false
@@ -70,7 +70,7 @@ pub fn jump_condition_appears_recursive(stack_diff: &[StackFrame], jump_conditio
 
         logger
             .debug_max("jump matches loop-detection heuristic: 'jump_condition_appears_recursive'");
-        return true;
+        return true
     }
 
     false
@@ -85,7 +85,7 @@ pub fn jump_condition_contains_mutated_memory_access(
     if stack_diff.iter().any(|frame| {
         memory_accesses.any(|_match| {
             if _match.is_err() {
-                return false;
+                return false
             }
             let memory_access = _match.unwrap();
             let slice = &jump_condition[memory_access.start()..memory_access.end()];
@@ -93,7 +93,7 @@ pub fn jump_condition_contains_mutated_memory_access(
         })
     }) {
         debug_max!("jump matches loop-detection heuristic: 'jump_condition_contains_mutated_memory_access'");
-        return true;
+        return true
     }
 
     false
@@ -108,7 +108,7 @@ pub fn jump_condition_contains_mutated_storage_access(
     if stack_diff.iter().any(|frame| {
         storage_accesses.any(|_match| {
             if _match.is_err() {
-                return false;
+                return false
             }
             let storage_access = _match.unwrap();
             let slice = &jump_condition[storage_access.start()..storage_access.end()];
@@ -116,7 +116,7 @@ pub fn jump_condition_contains_mutated_storage_access(
         })
     }) {
         debug_max!("jump matches loop-detection heuristic: 'jump_condition_contains_mutated_storage_access'");
-        return true;
+        return true
     }
 
     false
@@ -130,7 +130,7 @@ pub fn jump_condition_historical_diffs_approximately_equal(
     // break if historical_stacks.len() < 4
     // this is an arbitrary number, i picked it randomly :D
     if historical_stacks.len() < 4 {
-        return false;
+        return false
     }
 
     // get the stack diffs for all historical stacks
@@ -149,12 +149,12 @@ pub fn jump_condition_historical_diffs_approximately_equal(
 
     // check if all stack diffs are similar
     if !stack_diffs.iter().all(|diff| diff.len() <= threshold) {
-        return false;
+        return false
     }
 
     // check if all stack diffs are the same
     if !stack_diffs.iter().all(|diff| diff[0] == stack_diffs[0][0]) {
-        return false;
+        return false
     }
 
     debug_max!("jump matches loop-detection heuristic: 'jump_condition_historical_diffs_approximately_equal'");

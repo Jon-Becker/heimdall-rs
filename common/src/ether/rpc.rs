@@ -254,7 +254,7 @@ pub async fn get_storage_diff(
                 read_cache(&format!("diff.{}.{}", &chain_id, &transaction_hash))
             {
                 debug_max!("found cached state diff for transaction '{}' .", &transaction_hash);
-                return Ok(state_diff);
+                return Ok(state_diff)
             }
 
             debug_max!(&format!(

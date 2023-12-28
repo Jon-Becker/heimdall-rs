@@ -18,7 +18,7 @@ use crate::dump::{
 pub fn handle(args: &DumpArgs, output_dir: &str) {
     // if no TUI is requested, just run the dump
     if args.no_tui {
-        return;
+        return
     }
 
     // create new TUI terminal
@@ -67,7 +67,7 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
                                     match command {
                                         ":q" | ":quit" => {
                                             state.view = TUIView::Killed;
-                                            break;
+                                            break
                                         }
                                         ":h" | ":help" => {
                                             state.view = TUIView::Help;
@@ -127,7 +127,7 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
                             }
 
                             drop(state);
-                            continue;
+                            continue
                         }
 
                         match key.code {
@@ -154,7 +154,7 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
                                             value.decode_as_type_index += 1;
                                         }
                                     } else if i >= scroll_index + selection_size {
-                                        break;
+                                        break
                                     }
                                 }
                             }
@@ -176,7 +176,7 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
                                             value.decode_as_type_index -= 1;
                                         }
                                     } else if i >= scroll_index + selection_size {
-                                        break;
+                                        break
                                     }
                                 }
                             }

@@ -56,7 +56,7 @@ impl ResolveSelector for ResolvedError {
                 0 => return None,
                 _ => {
                     debug_max!("found cached results for selector: {}", &selector);
-                    return Some(cached_results);
+                    return Some(cached_results)
                 }
             }
         }
@@ -141,7 +141,7 @@ impl ResolveSelector for ResolvedLog {
                 0 => return None,
                 _ => {
                     debug_max!("found cached results for selector: {}", &selector);
-                    return Some(cached_results);
+                    return Some(cached_results)
                 }
             }
         }
@@ -226,7 +226,7 @@ impl ResolveSelector for ResolvedFunction {
                 0 => return None,
                 _ => {
                     debug_max!("found cached results for selector: {}", &selector);
-                    return Some(cached_results);
+                    return Some(cached_results)
                 }
             }
         }

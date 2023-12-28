@@ -55,7 +55,7 @@ pub fn match_parameters(
                                 &resolved_function.name,
                                 &resolved_function.inputs.join(",")
                             );
-                            continue;
+                            continue
                         }
                     } else if !potential_types.contains(input) {
                         matched = false;
@@ -66,7 +66,7 @@ pub fn match_parameters(
                             &resolved_function.name,
                             &resolved_function.inputs.join(",")
                         );
-                        break;
+                        break
                     }
                 }
                 None => {
@@ -78,7 +78,7 @@ pub fn match_parameters(
                         &resolved_function.name,
                         &resolved_function.inputs.join(",")
                     );
-                    break;
+                    break
                 }
             }
         }

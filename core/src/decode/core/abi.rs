@@ -89,14 +89,14 @@ fn process_and_validate_word(
     // ABI-encoded item
     if word % 32 != U256::zero() || word == U256::zero() {
         debug_max!("parameter {}: '{}' doesnt appear to be an offset ptr", parameter_index, word);
-        return Err(Error::BoundsError);
+        return Err(Error::BoundsError)
     }
 
     // check if the pointer is pointing to a valid location in the calldata
     let word_offset = word / 32;
     if word_offset >= U256::from(calldata_words.len()) {
         debug_max!("parameter {}: '{}' is out of bounds (offset check)", parameter_index, word);
-        return Err(Error::BoundsError);
+        return Err(Error::BoundsError)
     }
 
     Ok((word, word_offset))
@@ -123,7 +123,7 @@ fn try_decode_dynamic_parameter_bytes(
     // to contain the ABI-encoded item. If there aren't, return an [`Error::BoundsError`].
     if data_words.join("").len() / 2 < size.as_usize() {
         debug_max!("parameter {}: '{}' is out of bounds (bytes check)", parameter_index, word);
-        return Ok(None);
+        return Ok(None)
     }
 
     // (3) calculate how many words are needed to store the encoded data with size `size`.
@@ -142,7 +142,7 @@ fn try_decode_dynamic_parameter_bytes(
     let padding_size = get_padding_size(last_word);
     if padding_size > 32 - last_word_size {
         debug_max!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (bytes)", parameter_index, word, size, padding_size);
-        return Ok(None);
+        return Ok(None)
     }
 
     // (5) we've covered all words from `data_start_word_offset` to `data_end_word_offset`,
@@ -186,7 +186,7 @@ fn try_decode_dynamic_parameter_array(
         size,
         coverages.clone(),
     ) {
-        return Ok(Some(abi_encoded));
+        return Ok(Some(abi_encoded))
     }
 
     // (3) this is not a `string` type, so we can assume that it is an array. we can extend
@@ -240,7 +240,7 @@ fn try_decode_dynamic_parameter_string(
         .all(|padding| padding == get_padding(data_words[0]))
     {
         debug_max!("parameter {}: '{}' is not string (conforming padding)", parameter_index, word);
-        return Ok(None);
+        return Ok(None)
     }
     debug_max!("parameter {}: '{}' may be string", parameter_index, word);
 
@@ -263,7 +263,7 @@ fn try_decode_dynamic_parameter_string(
     let padding_size = get_padding_size(last_word);
     if padding_size > 32 - last_word_size {
         debug_max!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (string)", parameter_index, word, size, padding_size);
-        return Err(Error::BoundsError);
+        return Err(Error::BoundsError)
     }
 
     // (5) we've covered all words from `data_start_word_offset` to `data_end_word_offset`,
@@ -311,7 +311,7 @@ fn get_potential_type(
 
                 // merge coverages and nested_coverages
                 coverages.extend(nested_coverages);
-                return (32, vec![nested_abi_encoded_param.ty]);
+                return (32, vec![nested_abi_encoded_param.ty])
             }
 
             let (padding_size, mut potential_types) = get_potential_types_for_word(w);
@@ -332,9 +332,9 @@ fn get_potential_type(
         .fold((0, String::from("")), |(max_size, mut potential_type), (size, types)| {
             // "address" and "string" are priority types
             if types.contains(&String::from("string")) {
-                return (32, String::from("string"));
+                return (32, String::from("string"))
             } else if types.contains(&String::from("address")) {
-                return (32, String::from("address"));
+                return (32, String::from("address"))
             }
 
             if size > max_size {
