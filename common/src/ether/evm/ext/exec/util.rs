@@ -22,6 +22,18 @@ pub fn stack_diff(a: &Stack, b: &Stack) -> Vec<StackFrame> {
     diff
 }
 
+/// Check if the given stack contains too many items to feasibly
+/// reach the bottom of the stack without being a loop.
+pub fn stack_contains_too_many_items(stack: &Stack) -> bool {
+    if stack.size() > 320 {
+        // 320 is an arbitrary number, i picked it randomly :D
+        debug_max!("jump matches loop-detection heuristic: 'stack_contains_too_many_items'",);
+        return true
+    }
+
+    false
+}
+
 /// Check if the given stack contains too many of the same item.
 /// If the stack contains more than 16 of the same item (with the same sources), it is considered a
 /// loop.
@@ -123,10 +135,7 @@ pub fn jump_condition_contains_mutated_storage_access(
 }
 
 /// check if all stack diffs for all historical stacks are exactly length 1, and the same
-pub fn jump_condition_historical_diffs_approximately_equal(
-    stack: &Stack,
-    historical_stacks: &[Stack],
-) -> bool {
+pub fn historical_diffs_approximately_equal(stack: &Stack, historical_stacks: &[Stack]) -> bool {
     // break if historical_stacks.len() < 4
     // this is an arbitrary number, i picked it randomly :D
     if historical_stacks.len() < 4 {
