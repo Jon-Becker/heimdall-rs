@@ -1,20 +1,24 @@
 mod jump_frame;
 mod util;
 
-use self::{
-    jump_frame::JumpFrame,
-    util::{
-        jump_condition_appears_recursive, jump_condition_contains_mutated_memory_access,
-        jump_condition_contains_mutated_storage_access,
-        jump_condition_historical_diffs_approximately_equal,
-        stack_contains_too_many_of_the_same_item, stack_diff, stack_item_source_depth_too_deep,
-    },
-};
 use crate::{
     debug_max,
-    ether::evm::core::{
-        stack::Stack,
-        vm::{State, VM},
+    ether::evm::{
+        core::{
+            stack::Stack,
+            vm::{State, VM},
+        },
+        ext::exec::{
+            jump_frame::JumpFrame,
+            util::{
+                historical_diffs_approximately_equal, jump_condition_appears_recursive,
+                jump_condition_contains_mutated_memory_access,
+                jump_condition_contains_mutated_storage_access,
+                jump_stack_depth_less_than_max_stack_depth, stack_contains_too_many_items,
+                stack_contains_too_many_of_the_same_item, stack_diff,
+                stack_item_source_depth_too_deep,
+            },
+        },
     },
     utils::strings::decode_hex,
 };
@@ -87,20 +91,31 @@ impl VM {
             vm_trace.operations.push(state.clone());
             vm_trace.gas_used = vm.gas_used;
 
-            // if we encounter a JUMPI, create children taking both paths and break
-            if state.last_instruction.opcode == 0x57 {
+            // if we encounter a JUMP(I), create children taking both paths and break
+            if state.last_instruction.opcode == 0x57 || state.last_instruction.opcode == 0x56 {
                 debug_max!(
-                    "found branch due to JUMPI instruction at {}",
+                    "found branch due to JUMP{} instruction at {}",
+                    if state.last_instruction.opcode == 0x57 { "I" } else { "" },
                     state.last_instruction.instruction
                 );
+
+                let jump_condition: Option<String> =
+                    state.last_instruction.input_operations.get(1).map(|op| op.solidify());
+                let jump_taken =
+                    state.last_instruction.inputs.get(1).map(|op| !op.is_zero()).unwrap_or(true);
 
                 // build hashable jump frame
                 let jump_frame = JumpFrame::new(
                     state.last_instruction.instruction,
                     state.last_instruction.inputs[0],
                     vm.stack.size(),
-                    !state.last_instruction.inputs[1].is_zero(),
+                    jump_taken,
                 );
+
+                // if the stack contains too many items, it's probably a loop
+                if stack_contains_too_many_items(&vm.stack) {
+                    return vm_trace
+                }
 
                 // if the stack has over 16 items of the same source, it's probably a loop
                 if stack_contains_too_many_of_the_same_item(&vm.stack) {
@@ -113,77 +128,63 @@ impl VM {
                     return vm_trace
                 }
 
-                // break out of loops
-                // (1) get all keys that match jump_frame.pc and jump_frame.jumpdest
-                let matching_keys = handled_jumps
-                    .keys()
-                    .filter(|key| key.pc == jump_frame.pc && key.jumpdest == jump_frame.jumpdest)
-                    .collect::<Vec<&JumpFrame>>();
-
-                // (a) get the max stack_depth of all matching keys
-                let max_stack_depth =
-                    matching_keys.iter().map(|key| key.stack_depth).max().unwrap_or(0);
-
-                // (b) if the current stack depth is less than the max stack depth, we don't need to
-                // continue.
-                if jump_frame.stack_depth < max_stack_depth {
-                    debug_max!("jump matches loop-detection heuristic: 'jump_stack_depth_less_than_max_stack_depth'");
-                    debug_max!("jump terminated.");
+                // if the jump stack depth is less than the max stack depth of all previous matching
+                // jumps, it's probably a loop
+                if jump_stack_depth_less_than_max_stack_depth(&jump_frame, handled_jumps) {
                     return vm_trace
                 }
 
-                // (2) perform heuristic checks on historical stacks
+                // perform heuristic checks on historical stacks
                 match handled_jumps.get_mut(&jump_frame) {
                     Some(historical_stacks) => {
                         // for every stack that we have encountered for this jump, perform some
                         // heuristic checks to determine if this might be a loop
                         if historical_stacks.iter().any(|hist_stack| {
-                            // get a solidity repr of the jump condition
-                            let jump_condition =
-                                state.last_instruction.input_operations[1].solidify();
+                            if let Some(jump_condition) = &jump_condition {
 
-                            // check if any historical stack is the same as the current stack
-                            if hist_stack == &vm.stack {
-                                debug_max!(
-                                    "jump matches loop-detection heuristic: 'jump_path_already_handled'"
-                                );
-                                return true
+                                // check if any historical stack is the same as the current stack
+                                if hist_stack == &vm.stack {
+                                    debug_max!(
+                                        "jump matches loop-detection heuristic: 'jump_path_already_handled'"
+                                    );
+                                    return true
+                                }
+
+                                // calculate the difference of the current stack and the historical stack
+                                let stack_diff = stack_diff(&vm.stack, hist_stack);
+                                if stack_diff.is_empty() {
+                                    // the stack_diff is empty (the stacks are the same), so we've
+                                    // already handled this path
+                                    debug_max!(
+                                        "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
+                                    );
+                                    return true
+                                }
+
+                                debug_max!("stack diff: [{}]", stack_diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", "));
+
+                                // check if the jump condition appears to be recursive
+                                if jump_condition_appears_recursive(&stack_diff, jump_condition) {
+                                    return true
+                                }
+
+                                // check for mutated memory accesses in the jump condition
+                                if jump_condition_contains_mutated_memory_access(
+                                    &stack_diff,
+                                    jump_condition,
+                                ) {
+                                    return true
+                                }
+
+                                // check for mutated memory accesses in the jump condition
+                                if jump_condition_contains_mutated_storage_access(
+                                    &stack_diff,
+                                    jump_condition,
+                                ) {
+                                    return true
+                                }
+
                             }
-
-                            // calculate the difference of the current stack and the historical stack
-                            let stack_diff = stack_diff(&vm.stack, hist_stack);
-                            if stack_diff.is_empty() {
-                                // the stack_diff is empty (the stacks are the same), so we've
-                                // already handled this path
-                                debug_max!(
-                                    "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
-                                );
-                                return true
-                            }
-
-                            debug_max!("stack diff: [{}]", stack_diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", "));
-
-                            // check if the jump condition appears to be recursive
-                            if jump_condition_appears_recursive(&stack_diff, &jump_condition) {
-                                return true
-                            }
-
-                            // check for mutated memory accesses in the jump condition
-                            if jump_condition_contains_mutated_memory_access(
-                                &stack_diff,
-                                &jump_condition,
-                            ) {
-                                return true
-                            }
-
-                            // check for mutated memory accesses in the jump condition
-                            if jump_condition_contains_mutated_storage_access(
-                                &stack_diff,
-                                &jump_condition,
-                            ) {
-                                return true
-                            }
-
                             false
                         }) {
                             debug_max!("jump terminated.");
@@ -198,10 +199,7 @@ impl VM {
                             return vm_trace
                         }
 
-                        if jump_condition_historical_diffs_approximately_equal(
-                            &vm.stack,
-                            historical_stacks,
-                        ) {
+                        if historical_diffs_approximately_equal(&vm.stack, historical_stacks) {
                             debug_max!("jump terminated.");
                             debug_max!(
                                 "adding historical stack {} to jump frame {:?}",
@@ -219,8 +217,8 @@ impl VM {
                                 jump_frame
                             );
                             debug_max!(
-                                " - jump condition: {}\n        - stack: {}\n        - historical stacks: {}",
-                                state.last_instruction.input_operations[1].solidify(),
+                                " - jump condition: {:?}\n        - stack: {}\n        - historical stacks: {}",
+                                jump_condition,
                                 vm.stack,
                                 historical_stacks.iter().map(|stack| format!("{}", stack)).collect::<Vec<String>>().join("\n            - ")
                             );
@@ -236,6 +234,10 @@ impl VM {
                     }
                 }
 
+                if state.last_instruction.opcode == 0x56 {
+                    continue
+                }
+
                 // we didnt break out, so now we crate branching paths to cover all possibilities
                 *branch_count += 1;
                 debug_max!(
@@ -245,7 +247,7 @@ impl VM {
                 );
 
                 // we need to create a trace for the path that wasn't taken.
-                if state.last_instruction.inputs[1].is_zero() {
+                if !jump_taken {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
@@ -263,89 +265,6 @@ impl VM {
                     // push the current path onto the stack
                     vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps));
                     break
-                }
-            }
-
-            // if we encounter a JUMP
-            if state.last_instruction.opcode == 0x56 {
-                // build hashable jump frame
-                let jump_frame = JumpFrame::new(
-                    state.last_instruction.instruction,
-                    state.last_instruction.inputs[0],
-                    vm.stack.size(),
-                    true,
-                );
-
-                // perform heuristic checks on historical stacks
-                match handled_jumps.get_mut(&jump_frame) {
-                    Some(historical_stacks) => {
-                        // for every stack that we have encountered for this jump, perform some
-                        // heuristic checks to determine if this might be a loop
-                        if historical_stacks.iter().any(|hist_stack| {
-                            // check if any historical stack is the same as the current stack
-                            if hist_stack == &vm.stack {
-                                debug_max!(
-                                    "jump matches loop-detection heuristic: 'jump_path_already_handled'"
-                                );
-                                return true
-                            }
-
-                            // calculate the difference of the current stack and the historical stack
-                            let stack_diff = stack_diff(&vm.stack, hist_stack);
-                            if stack_diff.is_empty() {
-                                // the stack_diff is empty (the stacks are the same), so we've
-                                // already handled this path
-                                debug_max!(
-                                    "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
-                                );
-                                return true
-                            }
-
-                            debug_max!("stack diff: [{}]", stack_diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", "));
-
-                            false
-                        }) {
-                            debug_max!("jump terminated.");
-                            debug_max!(
-                                "adding historical stack {} to jump frame {:?}",
-                                &format!("{:#016x?}", vm.stack.hash()),
-                                jump_frame
-                            );
-
-                            // this key exists, but the stack is different, so the jump is new
-                            historical_stacks.push(vm.stack.clone());
-                            return vm_trace
-                        }
-
-                        if jump_condition_historical_diffs_approximately_equal(
-                            &vm.stack,
-                            historical_stacks,
-                        ) {
-                            debug_max!("jump terminated.");
-                            debug_max!(
-                                "adding historical stack {} to jump frame {:?}",
-                                &format!("{:#016x?}", vm.stack.hash()),
-                                jump_frame
-                            );
-
-                            // this key exists, but the stack is different, so the jump is new
-                            historical_stacks.push(vm.stack.clone());
-                            return vm_trace
-                        } else {
-                            debug_max!(
-                                "adding historical stack {} to jump frame {:?}",
-                                &format!("{:#016x?}", vm.stack.hash()),
-                                jump_frame
-                            );
-                            // this key exists, but the stack is different, so the jump is new
-                            historical_stacks.push(vm.stack.clone());
-                        }
-                    }
-                    None => {
-                        // this key doesnt exist, so the jump is new
-                        debug_max!("added new jump frame: {:?}", jump_frame);
-                        handled_jumps.insert(jump_frame, vec![vm.stack.clone()]);
-                    }
                 }
             }
 

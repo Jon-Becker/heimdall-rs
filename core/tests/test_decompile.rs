@@ -301,6 +301,7 @@ mod integration_tests {
             "0xff612db0583be8d5498731e4e32bc12e08fa6292",
             "0xd5FEa30Ed719693Ec8848Dc7501b582F5de6a5BB",
             "0x4C727a07246A70862e45B2E58fcd82c0eD5Eda85",
+            "0x9baa53dD2aB408D9135e549831C06E5c6407bF1d",
         ];
 
         // define flag checks
