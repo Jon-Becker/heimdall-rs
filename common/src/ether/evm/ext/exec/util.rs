@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ethers::types::U256;
 
 use crate::{
@@ -6,6 +8,8 @@ use crate::{
     ether::evm::core::stack::{Stack, StackFrame},
     utils::io::logging::Logger,
 };
+
+use super::jump_frame::JumpFrame;
 
 /// Given two stacks A and B, return A - B, i.e. the items in A that are not in B.
 /// This operation takes order into account, so if A = [1, 2, 3] and B = [1, 3, 2], then A - B =
@@ -28,6 +32,36 @@ pub fn stack_contains_too_many_items(stack: &Stack) -> bool {
     if stack.size() > 320 {
         // 320 is an arbitrary number, i picked it randomly :D
         debug_max!("jump matches loop-detection heuristic: 'stack_contains_too_many_items'",);
+        return true
+    }
+
+    false
+}
+
+/// Check if the current jump frame has a stack depth less than the max stack depth of all previous
+/// matching jumps. If yes, the stack is not growing and we likely have a loop.
+pub fn jump_stack_depth_less_than_max_stack_depth(
+    current_jump_frame: &JumpFrame,
+    handled_jumps: &HashMap<JumpFrame, Vec<Stack>>,
+) -> bool {
+    // (1) get all keys that match current_jump_frame.pc and current_jump_frame.jumpdest
+    let matching_keys = handled_jumps
+        .keys()
+        .filter(|key| {
+            key.pc == current_jump_frame.pc && key.jumpdest == current_jump_frame.jumpdest
+        })
+        .collect::<Vec<&JumpFrame>>();
+
+    // (a) get the max stack_depth of all matching keys
+    let max_stack_depth = matching_keys.iter().map(|key| key.stack_depth).max().unwrap_or(0);
+
+    // (b) if the current stack depth is less than the max stack depth, we don't need to
+    // continue.
+    if current_jump_frame.stack_depth < max_stack_depth {
+        debug_max!(
+            "jump matches loop-detection heuristic: 'jump_stack_depth_less_than_max_stack_depth'"
+        );
+        debug_max!("jump terminated.");
         return true
     }
 
@@ -162,7 +196,7 @@ pub fn historical_diffs_approximately_equal(stack: &Stack, historical_stacks: &[
     }
 
     // check if all stack diffs are the same
-    if !stack_diffs.iter().all(|diff| diff[0] == stack_diffs[0][0]) {
+    if !stack_diffs.iter().all(|diff| diff.get(0) == stack_diffs.get(0).unwrap_or(&vec![]).get(0)) {
         return false
     }
 
