@@ -22,7 +22,10 @@ main() {
                 ensure curl -L https://raw.githubusercontent.com/Jon-Becker/heimdall-rs/main/bifrost/install | bash
                 exit 0
                 ;;
-            -v|--version)           shift; TARGET_VERSION=$1 ;;
+            -v|--version)           shift;
+                TARGET_VERSION=$1
+                shift
+                ;;
             -B|--binary|--bin)      shift; USE_BINARY=true ;;
             +nightly)               shift; NIGHTLY_CHANNEL=true ;;
             -h|--help)
@@ -66,8 +69,21 @@ main() {
     cd "heimdall-rs"
     ensure git fetch origin
 
+    # if we are nightly, use `main` branch
+    if [ -n "$NIGHTLY_CHANNEL" ]; then
+        ensure git checkout main > /dev/null 2>&1
+
+        # get the latest short commit hash
+        TARGET_VERSION=$(git rev-parse --short HEAD)
+
+        # get the latest tag
+        tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+
+        # build nightly version
+        nightly_version="$tag+nightly.$TARGET_VERSION"
+        echo "bifrost: installing version $nightly_version."
     # if they specified a version, checkout that tag or branch
-    if [ -n "$TARGET_VERSION" ]; then
+    elif [ -n "$TARGET_VERSION" ]; then
         echo "bifrost: installing version $TARGET_VERSION."
 
         ensure git checkout $TARGET_VERSION > /dev/null 2>&1
@@ -84,6 +100,12 @@ main() {
 
     # if the user wants to use the precompiled binary, download it
     if [ -n "$USE_BINARY" ]; then
+        # nightly binaries are not available
+        if [ -n "$NIGHTLY_CHANNEL" ]; then
+            echo "bifrost: nightly binaries are not available."
+            exit 1
+        fi
+
         # cd into the binary directory
         ensure cd $BIFROST_BIN_DIR
         echo "bifrost: fetching binary."
@@ -108,6 +130,13 @@ main() {
 
         # remove periods from version and cast as int
         VERSION=$(echo $VERSION | sed -E 's/\.//g')
+
+        # if nightly, we need to update cargo.toml versions (hacky lol)
+        if [ -n "$NIGHTLY_CHANNEL" ]; then
+            find . -name 'Cargo.toml' -type f | while read -r file; do
+                set_version "$file" "$nightly_version"
+            done
+        fi
 
         # if VERSION > 0.6.0 (60), use the new build system
         if [ $VERSION -ge 60 ]; then
@@ -155,7 +184,7 @@ Bifrost is the version manager for Heimdall.
 Install and manage specific versions of Heimdall and it's packages.
 
 USAGE:
-    bifrost <OPTIONS>
+    bifrost [FLAGS] <OPTIONS>
 
 OPTIONS:
     -h, --help      Print help information
@@ -163,6 +192,9 @@ OPTIONS:
     -B, --binary    Install a precompiled binary instead of building from source
     -v, --version   Install a specific version
     -l, --list      List all available versions
+
+FLAGS:
+    +nightly        Install the latest nightly build
 
 EOF
 }
@@ -183,6 +215,13 @@ requires_cmd() {
         echo "bifrost: '$1' is required but not installed on this system"
         exit 1
     fi
+}
+
+# set the version of $1 to $2
+set_version() {
+    local file=$1
+    local version=$2
+    sed -i "" "s/^version.*/version = \"${version}\"/" $file
 }
 
 # run main
