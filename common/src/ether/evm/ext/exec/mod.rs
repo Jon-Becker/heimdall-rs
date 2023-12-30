@@ -24,7 +24,7 @@ use crate::{
 };
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct VMTrace {
     pub instruction: u128,
     pub gas_used: u128,

@@ -5,7 +5,9 @@ pub mod precompile;
 pub mod resolve;
 pub mod util;
 use heimdall_common::{
-    debug_max, ether::bytecode::get_bytecode_from_target, utils::strings::get_shortned_target,
+    debug_max,
+    ether::{bytecode::get_bytecode_from_target, evm::ext::exec::VMTrace},
+    utils::{strings::get_shortned_target, threading::run_with_timeout},
 };
 
 use crate::{
@@ -80,6 +82,10 @@ pub struct DecompilerArgs {
     /// The name for the output file
     #[clap(long, short, default_value = "", hide_default_value = true)]
     pub name: String,
+
+    /// The timeout for each function's symbolic execution in milliseconds.
+    #[clap(long, short, default_value = "10000", hide_default_value = true)]
+    pub timeout: u64,
 }
 
 impl DecompilerArgsBuilder {
@@ -94,6 +100,7 @@ impl DecompilerArgsBuilder {
             include_yul: Some(false),
             output: Some(String::new()),
             name: Some(String::new()),
+            timeout: Some(10000),
         }
     }
 }
@@ -252,8 +259,22 @@ pub async fn decompile(
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdest_count) =
-            &evm.clone().symbolic_exec_selector(&selector, function_entry_point);
+        let mut evm_clone = evm.clone();
+        let selector_clone = selector.clone();
+        let (map, jumpdest_count) = match run_with_timeout(
+            move || evm_clone.symbolic_exec_selector(&selector_clone, function_entry_point),
+            Duration::from_millis(args.timeout),
+        ) {
+            Some(map) => map,
+            None => {
+                trace.add_error(
+                    func_analysis_trace,
+                    line!(),
+                    &format!("symbolic execution timed out!"),
+                );
+                (VMTrace::default(), 0)
+            }
+        };
 
         trace.add_debug(
             func_analysis_trace,
@@ -276,7 +297,7 @@ pub async fn decompile(
         if args.include_yul {
             debug_max!("analyzing symbolic execution trace '0x{}' with yul analyzer", selector);
             analyzed_function = analyze_yul(
-                map,
+                &map,
                 Function {
                     selector: selector.clone(),
                     entry_point: function_entry_point,
@@ -301,7 +322,7 @@ pub async fn decompile(
         } else {
             debug_max!("analyzing symbolic execution trace '0x{}' with sol analyzer", selector);
             analyzed_function = analyze_sol(
-                map,
+                &map,
                 Function {
                     selector: selector.clone(),
                     entry_point: function_entry_point,
@@ -324,6 +345,14 @@ pub async fn decompile(
                 &mut Vec::new(),
                 (0, 0),
             );
+        }
+
+        // add notice to analyzed_function if jumpdest_count == 0, indicating that
+        // symbolic execution timed out
+        if jumpdest_count == 0 {
+            analyzed_function
+                .notices
+                .push("symbolic execution timed out. please report this!".to_string());
         }
 
         let argument_count = analyzed_function.arguments.len();

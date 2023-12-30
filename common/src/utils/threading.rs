@@ -63,6 +63,28 @@ pub fn task_pool<
     results
 }
 
+/// Takes a function and some arguments, and runs the function in a separate thread. If the function
+/// doesnt finish within the given timeout, the thread is killed, and the function returns None.
+pub fn run_with_timeout<T, F>(f: F, timeout: std::time::Duration) -> Option<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> T + Send + 'static, {
+    let (tx, rx) = unbounded();
+    let handle = thread::spawn(move || {
+        let result = f();
+        tx.send(result).unwrap();
+    });
+
+    let result = rx.recv_timeout(timeout);
+    if result.is_err() {
+        handle.thread().unpark();
+        return None
+    }
+
+    handle.join().unwrap();
+    Some(result.unwrap())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::utils::threading::*;
@@ -108,5 +130,47 @@ mod tests {
 
         let results = task_pool(items, num_threads, f);
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_run_with_timeout() {
+        // Test case with a function that finishes within the timeout
+        let timeout = std::time::Duration::from_secs(1);
+        let f = || 1;
+        let result = run_with_timeout(f, timeout);
+        assert_eq!(result, Some(1));
+
+        // Test case with a function that doesnt finish within the timeout
+        let timeout = std::time::Duration::from_millis(1);
+        let f = || std::thread::sleep(std::time::Duration::from_secs(1));
+        let result = run_with_timeout(f, timeout);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_run_with_timeout_with_panic() {
+        // Test case with a function that panics
+        let timeout = std::time::Duration::from_secs(1);
+        let f = || panic!("test");
+        let result = run_with_timeout(f, timeout);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_run_with_timeout_with_args() {
+        // Test case with a function that takes arguments
+        let timeout = std::time::Duration::from_secs(1);
+        let f = |x: i32| x * 2;
+        let result = run_with_timeout(move || f(2), timeout);
+        assert_eq!(result, Some(4));
+    }
+
+    #[test]
+    fn test_run_with_timeout_infinite_loop() {
+        // Test case with a function that runs an infinite loop
+        let timeout = std::time::Duration::from_secs(1);
+        let f = || loop {};
+        let result = run_with_timeout(f, timeout);
+        assert_eq!(result, None);
     }
 }
