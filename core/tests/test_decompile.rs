@@ -18,6 +18,7 @@ mod benchmark {
                 include_yul: false,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -38,6 +39,7 @@ mod benchmark {
                 include_yul: false,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -58,6 +60,7 @@ mod benchmark {
                 include_yul: true,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -78,6 +81,7 @@ mod benchmark {
                 include_yul: true,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -98,6 +102,7 @@ mod benchmark {
                 include_yul: false,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -118,6 +123,7 @@ mod benchmark {
                 include_yul: false,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::decompile::decompile(args).await;
         }
@@ -144,6 +150,7 @@ mod integration_tests {
             include_yul: false,
             output: String::from(""),
             name: String::from(""),
+            timeout: 10000,
         })
         .await
         .unwrap();
@@ -173,6 +180,7 @@ mod integration_tests {
             include_yul: false,
             output: String::from(""),
             name: String::from(""),
+            timeout: 10000,
         })
         .await
         .unwrap();
@@ -209,6 +217,7 @@ mod integration_tests {
             include_yul: false,
             output: String::from(""),
             name: String::from(""),
+            timeout: 10000,
         })
         .await
         .unwrap();
@@ -322,6 +331,7 @@ mod integration_tests {
                 include_yul: false,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             })
             .await
             .unwrap();
