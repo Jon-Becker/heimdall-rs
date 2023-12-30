@@ -215,7 +215,7 @@ fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     let paren_end = paren_end + nth_paren_index;
 
     // if a match was found, check if the parens are unnecessary
-    if let true = found_match {
+    if found_match {
         // get the logical expression including the char before the parentheses (to detect casts)
         let logical_expression = match paren_start {
             0 => match cleaned.get(paren_start..paren_end + 1) {

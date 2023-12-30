@@ -107,10 +107,12 @@ impl RangeMap {
     }
 
     fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {
-        (incoming.start <= incumbent.start && incoming.end >= incumbent.end) ||
-            (incoming.start <= incumbent.start && incoming.end >= incumbent.start) ||
-            (incoming.start <= incumbent.end && incoming.end >= incumbent.end) ||
-            (incoming.start > incumbent.start && incoming.end < incumbent.end)
+        !(incoming.start <= incumbent.start &&
+            incoming.end < incumbent.end &&
+            incoming.end < incumbent.start ||
+            incoming.start > incumbent.start &&
+                incoming.end >= incumbent.end &&
+                incoming.start > incumbent.end)
     }
 }
 
@@ -228,5 +230,21 @@ mod tests {
         ));
 
         assert_eq!(actual_byte_tracker, expected_byte_tracker);
+    }
+
+    #[test]
+    fn test_range_collides() {
+        let range: Range<usize> = Range { start: 0, end: 10 };
+        let incumbent: Range<usize> = Range { start: 5, end: 15 };
+
+        assert!(RangeMap::range_collides(&range, &incumbent));
+    }
+
+    #[test]
+    fn test_range_does_not_collide() {
+        let range: Range<usize> = Range { start: 0, end: 10 };
+        let incumbent: Range<usize> = Range { start: 11, end: 15 };
+
+        assert!(!RangeMap::range_collides(&range, &incumbent));
     }
 }

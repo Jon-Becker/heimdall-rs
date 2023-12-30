@@ -195,7 +195,7 @@ pub async fn resolve_signatures(
 async fn resolve_function_signatures(
     matched_resolved_functions: &mut Vec<ResolvedFunction>,
     snapshot: &mut Snapshot,
-    snapshot_progress: &mut ProgressBar,
+    snapshot_progress: &ProgressBar,
     default: bool,
     func_analysis_trace: &u32,
     trace: &mut TraceFactory,
@@ -250,7 +250,7 @@ async fn resolve_function_signatures(
 async fn resolve_error_signatures(
     snapshot: &mut Snapshot,
     all_resolved_errors: &mut HashMap<String, ResolvedError>,
-    snapshot_progress: &mut ProgressBar,
+    snapshot_progress: &ProgressBar,
     resolved_counter: &mut i32,
     default: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -308,7 +308,7 @@ async fn resolve_error_signatures(
 async fn resolve_event_signatures(
     snapshot: &mut Snapshot,
     all_resolved_events: &mut HashMap<String, ResolvedLog>,
-    snapshot_progress: &mut ProgressBar,
+    snapshot_progress: &ProgressBar,
     resolved_counter: &mut i32,
     default: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
