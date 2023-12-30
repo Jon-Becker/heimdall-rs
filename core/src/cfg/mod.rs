@@ -7,6 +7,7 @@ use heimdall_common::{
         bytecode::get_bytecode_from_target, compiler::detect_compiler,
         selectors::find_function_selectors,
     },
+    utils::threading::run_with_timeout,
 };
 use indicatif::ProgressBar;
 use std::time::Duration;
@@ -56,6 +57,10 @@ pub struct CFGArgs {
     /// The name for the output file
     #[clap(long, short, default_value = "", hide_default_value = true)]
     pub name: String,
+
+    /// Timeout for symbolic execution
+    #[clap(long, short, default_value = "10000", hide_default_value = true)]
+    pub timeout: u64,
 }
 
 impl CFGArgsBuilder {
@@ -68,6 +73,7 @@ impl CFGArgsBuilder {
             color_edges: Some(false),
             output: Some(String::new()),
             name: Some(String::new()),
+            timeout: Some(10000),
         }
     }
 }
@@ -194,7 +200,14 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     );
 
     // get a map of possible jump destinations
-    let (map, jumpdest_count) = &evm.symbolic_exec();
+    let (map, jumpdest_count) =
+        match run_with_timeout(move || evm.symbolic_exec(), Duration::from_millis(args.timeout)) {
+            Some(map) => map,
+            None => {
+                logger.error("symbolic execution timed out.");
+                return Err("symbolic execution timed out.".into())
+            }
+        };
 
     // add jumpdests to the trace
     trace.add_info(
@@ -204,7 +217,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     );
 
     debug_max!("building control flow graph from symbolic execution trace");
-    build_cfg(map, &mut contract_cfg, None, false);
+    build_cfg(&map, &mut contract_cfg, None, false);
 
     progress.finish_and_clear();
     logger.info("symbolic execution completed.");

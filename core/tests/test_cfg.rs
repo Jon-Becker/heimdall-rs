@@ -16,6 +16,7 @@ mod benchmark {
                 color_edges: false,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::cfg::cfg(args).await;
         }
@@ -34,6 +35,7 @@ mod benchmark {
                 color_edges: false,
                 output: String::from(""),
                 name: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::cfg::cfg(args).await;
         }
@@ -58,6 +60,7 @@ mod integration_tests {
             color_edges: false,
             output: String::from(""),
             name: String::from(""),
+            timeout: 10000,
         })
         .await
         .unwrap();
@@ -82,6 +85,7 @@ mod integration_tests {
             color_edges: false,
             output: String::from(""),
             name: String::from(""),
+            timeout: 10000,
         })
         .await
         .unwrap();
