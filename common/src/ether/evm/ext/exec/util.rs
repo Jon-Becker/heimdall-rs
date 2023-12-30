@@ -196,7 +196,10 @@ pub fn historical_diffs_approximately_equal(stack: &Stack, historical_stacks: &[
     }
 
     // check if all stack diffs are the same
-    if !stack_diffs.iter().all(|diff| diff.get(0) == stack_diffs.get(0).unwrap_or(&vec![]).get(0)) {
+    if !stack_diffs
+        .iter()
+        .all(|diff| diff.first() == stack_diffs.first().unwrap_or(&vec![]).first())
+    {
         return false
     }
 

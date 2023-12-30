@@ -232,7 +232,7 @@ fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     let paren_end = paren_end + nth_paren_index;
 
     // if a match was found, check if the parens are unnecessary
-    if let true = found_match {
+    if found_match {
         // get the logical expression including the char before the parentheses (to detect casts)
         let logical_expression = match paren_start {
             0 => match cleaned.get(paren_start..paren_end + 1) {
@@ -299,7 +299,7 @@ fn convert_access_to_variable(line: &str) -> String {
 
     // since the regex is greedy, match the memory brackets
     let matched_loc = find_balanced_encapsulator(memory_access, ('[', ']'));
-    if let true = matched_loc.2 {
+    if matched_loc.2 {
         let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
 
         // safe to unwrap since we know these indices exist
@@ -338,7 +338,7 @@ fn convert_access_to_variable(line: &str) -> String {
 
     // since the regex is greedy, match the memory brackets
     let matched_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
-    if let true = matched_loc.2 {
+    if matched_loc.2 {
         let mut stor_map = STORAGE_LOOKUP_MAP.lock().unwrap();
 
         // safe to unwrap since we know these indices exist

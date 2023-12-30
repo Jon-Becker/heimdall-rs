@@ -531,7 +531,7 @@ pub fn snapshot_trace(
     }
 
     // recurse into the children of the VMTrace map
-    for (_, child) in vm_trace.children.iter().enumerate() {
+    for child in vm_trace.children.iter() {
         snapshot = snapshot_trace(child, snapshot, trace, trace_parent);
     }
 

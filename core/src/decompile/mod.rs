@@ -267,11 +267,7 @@ pub async fn decompile(
         ) {
             Some(map) => map,
             None => {
-                trace.add_error(
-                    func_analysis_trace,
-                    line!(),
-                    &format!("symbolic execution timed out!"),
-                );
+                trace.add_error(func_analysis_trace, line!(), "symbolic execution timed out!");
                 (VMTrace::default(), 0)
             }
         };

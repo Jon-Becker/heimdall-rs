@@ -273,7 +273,7 @@ async fn get_snapshots(
                 trace.add_error(
                     func_analysis_trace,
                     line!(),
-                    &format!("symbolic execution timed out, skipping snapshotting."),
+                    "symbolic execution timed out, skipping snapshotting.",
                 );
                 continue
             }
