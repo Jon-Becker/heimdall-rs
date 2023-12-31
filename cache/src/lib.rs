@@ -3,8 +3,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
 
+use error::Error;
 use util::*;
 
+pub mod error;
 pub mod util;
 
 /// Clap argument parser for the cache subcommand
@@ -68,15 +70,27 @@ pub struct Cache<T> {
 /// assert!(!keys("*").contains(&"clear_cache_key".to_string()));
 /// ```
 #[allow(deprecated)]
-pub fn clear_cache() {
-    let home = home_dir().unwrap();
+pub fn clear_cache() -> Result<(), Error> {
+    let home = home_dir().ok_or(Error::Generic(
+        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
+    ))?;
     let cache_dir = home.join(".bifrost").join("cache");
 
-    for entry in cache_dir.read_dir().unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        delete_path(path.to_str().unwrap());
+    for entry in cache_dir
+        .read_dir()
+        .map_err(|e| Error::Generic(format!("failed to read cache directory: {:?}", e)))?
+    {
+        let entry =
+            entry.map_err(|e| Error::Generic(format!("failed to read cache entry: {:?}", e)))?;
+        delete_path(
+            entry
+                .path()
+                .to_str()
+                .ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+        );
     }
+
+    Ok(())
 }
 
 /// Check if a cached object exists
@@ -94,12 +108,14 @@ pub fn clear_cache() {
 /// assert!(!exists("non_existent_key"));
 /// ```
 #[allow(deprecated)]
-pub fn exists(key: &str) -> bool {
-    let home = home_dir().unwrap();
+pub fn exists(key: &str) -> Result<bool, Error> {
+    let home = home_dir().ok_or(Error::Generic(
+        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
+    ))?;
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
-    cache_file.exists()
+    Ok(cache_file.exists())
 }
 
 /// List all cached objects
@@ -120,18 +136,29 @@ pub fn exists(key: &str) -> bool {
 /// assert!(keys("keys_*").contains(&"keys_key".to_string()));
 /// ```
 #[allow(deprecated)]
-pub fn keys(pattern: &str) -> Vec<String> {
-    let home = home_dir().unwrap();
+pub fn keys(pattern: &str) -> Result<Vec<String>, Error> {
+    let home = home_dir().ok_or(Error::Generic(
+        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
+    ))?;
     let cache_dir = home.join(".bifrost").join("cache");
     let mut keys = Vec::new();
 
     // remove wildcard
     let pattern = pattern.replace('*', "");
 
-    for entry in cache_dir.read_dir().unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        let key = path.file_name().unwrap().to_str().unwrap().to_string();
+    for entry in cache_dir
+        .read_dir()
+        .map_err(|e| Error::Generic(format!("failed to read cache directory: {:?}", e)))?
+    {
+        let entry =
+            entry.map_err(|e| Error::Generic(format!("failed to read cache entry: {:?}", e)))?;
+        let key = entry
+            .path()
+            .file_name()
+            .ok_or(Error::Generic("failed to get file name".to_string()))?
+            .to_str()
+            .ok_or(Error::Generic("failed to convert path to string".to_string()))?
+            .to_string();
         if pattern.is_empty() || key.contains(&pattern) {
             keys.push(key.replace(".bin", ""));
         }
@@ -140,7 +167,7 @@ pub fn keys(pattern: &str) -> Vec<String> {
     // sort keys alphabetically
     keys.sort();
 
-    keys
+    Ok(keys)
 }
 
 /// Delete a cached object
@@ -160,14 +187,19 @@ pub fn keys(pattern: &str) -> Vec<String> {
 /// assert!(!keys("*").contains(&"delete_cache_key".to_string()));
 /// ```
 #[allow(deprecated)]
-pub fn delete_cache(key: &str) {
-    let home = home_dir().unwrap();
+pub fn delete_cache(key: &str) -> Result<(), Error> {
+    let home = home_dir().ok_or(Error::Generic(
+        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
+    ))?;
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
     if cache_file.exists() {
-        std::fs::remove_file(cache_file).unwrap();
+        std::fs::remove_file(cache_file)
+            .map_err(|e| Error::IOError(format!("failed to delete cache file: {:?}", e)))?;
     }
+
+    Ok(())
 }
 
 /// Read a cached object
@@ -179,41 +211,45 @@ pub fn delete_cache(key: &str) {
 /// store_cache("read_cache_key", "value", None);
 ///
 /// /// read the cached object
-/// assert_eq!(read_cache::<String>("read_cache_key").unwrap(), "value");
+/// assert_eq!(read_cache::<String>("read_cache_key").unwrap().unwrap(), "value");
 /// ```
 #[allow(deprecated)]
-pub fn read_cache<T>(key: &str) -> Option<T>
+pub fn read_cache<T>(key: &str) -> Result<Option<T>, Error>
 where
     T: 'static + DeserializeOwned, {
-    let home = home_dir().unwrap();
+    let home = home_dir().ok_or(Error::Generic(
+        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
+    ))?;
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
-    let binary_string = match read_file(cache_file.to_str().unwrap()) {
+    let binary_string = match read_file(
+        cache_file
+            .to_str()
+            .ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+    ) {
         Some(s) => s,
-        None => return None,
+        None => return Ok(None),
     };
 
-    let binary_vec = decode_hex(&binary_string).ok()?;
+    let binary_vec = decode_hex(&binary_string)
+        .map_err(|e| Error::Generic(format!("failed to decode hex: {:?}", e)))?;
 
-    let cache: Cache<T> = match bincode::deserialize::<Cache<T>>(&binary_vec) {
-        Ok(c) => {
-            // check if the cache has expired, if so, delete it and return None
-            if c.expiry <
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
-            {
-                delete_cache(key);
-                return None
-            }
+    let cache: Cache<T> = bincode::deserialize::<Cache<T>>(&binary_vec)
+        .map_err(|e| Error::Generic(format!("failed to deserialize cache object: {:?}", e)))?;
 
-            c
-        }
-        Err(_) => return None,
-    };
-    Some(*Box::new(cache.value))
+    // check if the cache has expired, if so, delete it and return None
+    if cache.expiry <
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| Error::Generic(format!("failed to get current time: {:?}", e)))?
+            .as_secs()
+    {
+        delete_cache(key)?;
+        return Ok(None);
+    }
+
+    Ok(Some(*Box::new(cache.value)))
 }
 
 /// Store a value in the cache, with an optional expiry time \
@@ -229,26 +265,27 @@ where
 /// store_cache("store_cache_key2", "value", Some(60 * 60 * 24));
 /// ```
 #[allow(deprecated)]
-pub fn store_cache<T>(
-    key: &str,
-    value: T,
-    expiry: Option<u64>,
-) -> Result<(), Box<dyn std::error::Error>>
+pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>) -> Result<(), Error>
 where
     T: Serialize, {
-    let home = home_dir().unwrap();
+    let home = home_dir().ok_or(Error::Generic(
+        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
+    ))?;
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
     // expire in 90 days
     let expiry = expiry.unwrap_or(
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() +
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| Error::Generic(format!("failed to get current time: {:?}", e)))?
+            .as_secs() +
             60 * 60 * 24 * 90,
     );
 
     let cache = Cache { value, expiry };
     let encoded: Vec<u8> = bincode::serialize(&cache)
-        .map_err(|e| format!("Failed to serialize cache object: {:?}", e))?;
+        .map_err(|e| Error::Generic(format!("failed to serialize cache object: {:?}", e)))?;
     let binary_string = encode_hex(encoded);
     write_file(cache_file.to_str().unwrap(), &binary_string);
 
@@ -257,14 +294,14 @@ where
 
 /// Cache subcommand handler
 #[allow(deprecated)]
-pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub fn cache(args: CacheArgs) -> Result<(), Error> {
     match args.sub {
         Subcommands::Clean(_) => {
-            clear_cache();
+            clear_cache()?;
             println!("Cache cleared.")
         }
         Subcommands::Ls(_) => {
-            let keys = keys("*");
+            let keys = keys("*")?;
             println!("Displaying {} cached objects:", keys.len());
 
             for (i, key) in keys.iter().enumerate() {
@@ -283,7 +320,7 @@ pub fn cache(args: CacheArgs) -> Result<(), Box<dyn std::error::Error>> {
                 size += metadata.len();
             }
 
-            println!("Cached objects: {}", keys("*").len());
+            println!("Cached objects: {}", keys("*")?.len());
             println!("Cache size: {}", prettify_bytes(size));
         }
     }
@@ -314,7 +351,7 @@ mod tests {
     fn test_get_cache() {
         store_cache("key3", "value".to_string(), None);
         let value = read_cache("key3");
-        let value: String = value.unwrap();
+        let value: String = value.unwrap().unwrap();
 
         // assert stored value matches
         assert_eq!(value, "value");
@@ -351,7 +388,7 @@ mod tests {
 
         store_cache("struct2", test_struct, None);
         let value = read_cache("struct2");
-        let value: TestStruct = value.unwrap();
+        let value: TestStruct = value.unwrap().unwrap();
 
         // assert stored value matches
         assert_eq!(value.name, "test");
@@ -364,7 +401,7 @@ mod tests {
         store_cache("some_other_key", "some_value", None);
         store_cache("not_a_key", "some_value", None);
 
-        assert_eq!(keys("some_"), vec!["some_key", "some_other_key"]);
+        assert_eq!(keys("some_").unwrap(), vec!["some_key", "some_other_key"]);
     }
 
     #[test]
@@ -378,14 +415,14 @@ mod tests {
 
         assert!(["a", "b", "c", "d", "e", "f"]
             .iter()
-            .all(|key| { keys("*").contains(&key.to_string()) }));
+            .all(|key| { keys("*").unwrap().contains(&key.to_string()) }));
     }
 
     #[test]
     fn test_exists() {
-        assert!(!exists("does_not_exist"));
+        assert!(!exists("does_not_exist").unwrap());
         store_cache("does_not_exist", "some_value", None);
-        assert!(exists("does_not_exist"));
+        assert!(exists("does_not_exist").unwrap());
         delete_cache("does_not_exist");
     }
 }
