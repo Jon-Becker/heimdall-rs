@@ -1,6 +1,6 @@
 [package]
 name = "heimdall-rs-decompile-example"
-version = "0.7.2"
+version = "0.7.3"
 edition = "2021"
 description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
