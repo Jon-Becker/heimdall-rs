@@ -61,13 +61,13 @@ pub struct Cache<T> {
 /// store_cache("clear_cache_key", "value", None);
 ///
 /// /// assert that the cache contains the key
-/// assert!(keys("*").contains(&"clear_cache_key".to_string()));
+/// assert!(keys("*").expect("!").contains(&"clear_cache_key".to_string()));
 ///
 /// /// clear the cache
 /// clear_cache();
 ///
 /// /// assert that the cache no longer contains the key
-/// assert!(!keys("*").contains(&"clear_cache_key".to_string()));
+/// assert!(!keys("*").expect("!").contains(&"clear_cache_key".to_string()));
 /// ```
 #[allow(deprecated)]
 pub fn clear_cache() -> Result<(), Error> {
@@ -102,10 +102,10 @@ pub fn clear_cache() -> Result<(), Error> {
 /// store_cache("exists_key", "value", None);
 ///
 /// /// assert that the cache contains the key
-/// assert!(exists("exists_key"));
+/// assert!(exists("exists_key").expect("!"));
 ///
 /// /// assert that the cache does not contain a non-existent key
-/// assert!(!exists("non_existent_key"));
+/// assert!(!exists("non_existent_key").expect("!"));
 /// ```
 #[allow(deprecated)]
 pub fn exists(key: &str) -> Result<bool, Error> {
@@ -127,13 +127,13 @@ pub fn exists(key: &str) -> Result<bool, Error> {
 /// store_cache("keys_key", "value", None);
 ///
 /// /// assert that the cache contains the key
-/// assert!(keys("*").contains(&"keys_key".to_string()));
+/// assert!(keys("*").expect("!").contains(&"keys_key".to_string()));
 ///
 /// /// assert that the cache does not contain a non-existent key
-/// assert!(!keys("*").contains(&"non_existent_key".to_string()));
+/// assert!(!keys("*").expect("!").contains(&"non_existent_key".to_string()));
 ///
 /// /// assert that the cache contains the key
-/// assert!(keys("keys_*").contains(&"keys_key".to_string()));
+/// assert!(keys("keys_*").expect("!").contains(&"keys_key".to_string()));
 /// ```
 #[allow(deprecated)]
 pub fn keys(pattern: &str) -> Result<Vec<String>, Error> {
@@ -178,13 +178,13 @@ pub fn keys(pattern: &str) -> Result<Vec<String>, Error> {
 /// store_cache("delete_cache_key", "value", None);
 ///
 /// /// assert that the cache contains the key
-/// assert!(keys("*").contains(&"delete_cache_key".to_string()));
+/// assert!(keys("*").expect("!").contains(&"delete_cache_key".to_string()));
 ///
 /// /// delete the cached object
 /// delete_cache("delete_cache_key");
 ///
 /// /// assert that the cache does not contain the key
-/// assert!(!keys("*").contains(&"delete_cache_key".to_string()));
+/// assert!(!keys("*").expect("!").contains(&"delete_cache_key".to_string()));
 /// ```
 #[allow(deprecated)]
 pub fn delete_cache(key: &str) -> Result<(), Error> {
@@ -211,7 +211,7 @@ pub fn delete_cache(key: &str) -> Result<(), Error> {
 /// store_cache("read_cache_key", "value", None);
 ///
 /// /// read the cached object
-/// assert_eq!(read_cache::<String>("read_cache_key").unwrap().unwrap(), "value");
+/// assert_eq!(read_cache::<String>("read_cache_key").expect("!").expect("!"), "value");
 /// ```
 #[allow(deprecated)]
 pub fn read_cache<T>(key: &str) -> Result<Option<T>, Error>
