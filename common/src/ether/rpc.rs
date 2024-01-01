@@ -60,7 +60,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
             Ok(chain_id) => chain_id,
             Err(_) => {
                 logger.error(&format!("failed to fetch chain id from '{}' .", &rpc_url));
-                return Err(backoff::Error::Transient { err: (), retry_after: Some(Duration::from_secs(1)) })
+                return Err(backoff::Error::Transient { err: (), retry_after: None })
             }
         };
 
@@ -136,7 +136,7 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
             Ok(bytecode) => bytecode,
             Err(_) => {
                 logger.error(&format!("failed to fetch bytecode from '{}' .", &contract_address));
-                return Err(backoff::Error::Transient { err: (), retry_after: Some(Duration::from_secs(1)) })
+                return Err(backoff::Error::Transient { err: (), retry_after: None })
             }
         };
 
@@ -213,7 +213,7 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
             },
             Err(_) => {
                 logger.error(&format!("failed to fetch calldata from '{}' .", &transaction_hash));
-                return Err(backoff::Error::Transient { err: (), retry_after: Some(Duration::from_secs(1)) })
+                return Err(backoff::Error::Transient { err: (), retry_after: None })
             }
         };
 
@@ -284,16 +284,18 @@ pub async fn get_storage_diff(
             };
 
             // fetch the state diff for the transaction
-            let state_diff = provider
+            let state_diff = match provider
                 .trace_replay_transaction(transaction_hash_hex, vec![TraceType::StateDiff])
-                .await
-                .map_err(|_| {
+                .await {
+                Ok(traces) => traces.state_diff,
+                Err(_) => {
                     logger.error(&format!(
                         "failed to replay and trace transaction '{}' . does your RPC provider support it?",
                         &transaction_hash
-                    ))
-                })?
-                .state_diff;
+                    ));
+                    return Err(backoff::Error::Transient { err: (), retry_after: None })
+                }
+            };
 
             // write the state diff to the cache
             store_cache(
@@ -377,7 +379,7 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
                         &transaction_hash
                     ));
                     logger.error(&format!("error: '{e}' ."));
-                    return Err(backoff::Error::Permanent(()))
+                    return Err(backoff::Error::Transient { err: (), retry_after: None })
                 }
             };
 
@@ -418,12 +420,12 @@ pub async fn get_block_logs(
                 Ok(provider) => provider,
                 Err(_) => {
                     logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
-                    return Err(backoff::Error::Permanent(()))
+                    return Err(backoff::Error::Permanent(()));
                 }
             };
 
             // fetch the logs for the block
-            let logs = provider
+            let logs = match provider
                 .get_logs(&Filter {
                     block_option: FilterBlockOption::Range {
                         from_block: Some(BlockNumber::from(block_number)),
@@ -433,12 +435,16 @@ pub async fn get_block_logs(
                     topics: [None, None, None, None],
                 })
                 .await
-                .map_err(|_| {
+            {
+                Ok(logs) => logs,
+                Err(_) => {
                     logger.error(&format!(
                         "failed to fetch logs for block '{}' . does your RPC provider support it?",
                         &block_number
-                    ))
-                })?;
+                    ));
+                    return Err(backoff::Error::Transient { err: (), retry_after: None });
+                }
+            };
 
             debug_max!("fetched logs for block '{}' .", &block_number);
 
@@ -451,4 +457,110 @@ pub async fn get_block_logs(
 
 // TODO: add tests
 #[cfg(test)]
-pub mod tests {}
+pub mod tests {
+    use crate::{ether::rpc::*, utils::hex::ToLowerHex};
+
+    #[tokio::test]
+    async fn test_chain_id() {
+        let rpc_url = "https://eth.llamarpc.com";
+        let rpc_chain_id = chain_id(rpc_url).await.expect("chain_id() returned an error!");
+
+        assert_eq!(rpc_chain_id, 1);
+    }
+
+    #[tokio::test]
+    async fn test_chain_id_invalid_rpc_url() {
+        let rpc_url = "https://none.llamarpc.com";
+        let rpc_chain_id = chain_id(rpc_url).await;
+
+        assert!(rpc_chain_id.is_err())
+    }
+
+    #[tokio::test]
+    async fn test_get_code() {
+        let contract_address = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+        let rpc_url = "https://eth.llamarpc.com";
+        let bytecode =
+            get_code(contract_address, rpc_url).await.expect("get_code() returned an error!");
+
+        assert!(!bytecode.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_code_invalid_contract_address() {
+        let contract_address = "0x0";
+        let rpc_url = "https://eth.llamarpc.com";
+        let bytecode = get_code(contract_address, rpc_url).await;
+
+        assert!(bytecode.is_err())
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction() {
+        let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
+        let rpc_url = "https://eth.llamarpc.com";
+        let transaction = get_transaction(transaction_hash, rpc_url)
+            .await
+            .expect("get_transaction() returned an error!");
+
+        assert_eq!(transaction.hash.to_lower_hex(), transaction_hash);
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_invalid_transaction_hash() {
+        let transaction_hash = "0x0";
+        let rpc_url = "https://eth.llamarpc.com";
+        let transaction = get_transaction(transaction_hash, rpc_url).await;
+
+        assert!(transaction.is_err())
+    }
+
+    #[tokio::test]
+    async fn test_get_storage_diff() {
+        let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
+        let rpc_url = "https://eth.llamarpc.com";
+        let storage_diff = get_storage_diff(transaction_hash, rpc_url)
+            .await
+            .expect("get_storage_diff() returned an error!");
+
+        assert!(storage_diff.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_storage_diff_invalid_transaction_hash() {
+        let transaction_hash = "0x0";
+        let rpc_url = "https://eth.llamarpc.com";
+        let storage_diff = get_storage_diff(transaction_hash, rpc_url).await;
+
+        assert!(storage_diff.is_err())
+    }
+
+    #[tokio::test]
+    async fn test_get_trace() {
+        let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
+        let rpc_url = "https://eth.llamarpc.com";
+        let trace = get_trace(transaction_hash, rpc_url).await;
+
+        assert!(trace.is_ok())
+    }
+
+    #[tokio::test]
+    async fn test_get_trace_invalid_transaction_hash() {
+        let transaction_hash = "0x0";
+        let rpc_url = "https://eth.llamarpc.com";
+        let trace = get_trace(transaction_hash, rpc_url).await;
+
+        assert!(trace.is_err())
+    }
+
+    #[tokio::test]
+    async fn test_get_block_logs() {
+        let block_number = 18_000_000;
+        let rpc_url = "https://eth.llamarpc.com";
+        let logs = get_block_logs(block_number, rpc_url)
+            .await
+            .expect("get_block_logs() returned an error!");
+
+        assert!(!logs.is_empty());
+    }
+}
