@@ -353,9 +353,9 @@ mod tests {
     #[tokio::test]
     async fn resolve_function_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_nocache");
-        let result = ResolvedFunction::resolve(&signature).await.unwrap();
+        let result = ResolvedFunction::resolve(&signature).await;
 
-        assert_eq!(result, None,)
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -363,50 +363,50 @@ mod tests {
     {
         let _ = delete_cache(&format!("selector.{}", "test_signature"));
         let signature = String::from("test_signature");
-        let result = ResolvedFunction::resolve(&signature).await.unwrap();
-        assert_eq!(result, None);
+        let result = ResolvedFunction::resolve(&signature).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn resolve_error_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await.unwrap();
-        assert_eq!(result, None);
+        let result = ResolvedError::resolve(&signature).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn resolve_error_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await.unwrap();
-        assert_eq!(result, None);
+        let result = ResolvedError::resolve(&signature).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn resolve_error_signature_should_return_none_when_json_url_returns_empty_signatures() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await.unwrap();
-        assert_eq!(result, None);
+        let result = ResolvedError::resolve(&signature).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn resolve_event_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await.unwrap();
-        assert_eq!(result, None);
+        let result = ResolvedLog::resolve(&signature).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn resolve_event_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await.unwrap();
-        assert_eq!(result, None);
+        let result = ResolvedLog::resolve(&signature).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn resolve_event_signature_should_return_none_when_json_url_returns_empty_signatures() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await.unwrap();
-        assert_eq!(result, None);
+        let result = ResolvedLog::resolve(&signature).await;
+        assert!(result.is_err());
     }
 
     #[test]
