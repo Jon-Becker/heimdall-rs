@@ -110,7 +110,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         logger.error("OpenAI API key is required for explaining calldata. Use `heimdall decode --help` for more information.");
         return Err(Error::GenericError(
             "OpenAI API key is required for explaining calldata.".to_string(),
-        ))
+        ));
     }
 
     // init variables
@@ -118,7 +118,10 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     let mut calldata;
 
     // determine whether or not the target is a transaction hash
-    if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
+    if TRANSACTION_HASH_REGEX
+        .is_match(&args.target)
+        .map_err(|_| Error::GenericError("failed to match transaction hash regex.".to_string()))?
+    {
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
         // provider.
         raw_transaction = get_transaction(&args.target, &args.rpc_url).await.map_err(|_| {
@@ -126,20 +129,23 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         })?;
 
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
-    } else if CALLDATA_REGEX.is_match(&args.target).unwrap() {
+    } else if CALLDATA_REGEX
+        .is_match(&args.target)
+        .map_err(|_| Error::GenericError("failed to match calldata regex.".to_string()))?
+    {
         // We are decoding raw calldata, so we can just use the provided calldata.
         calldata = args.target.to_string().replacen("0x", "", 1);
     } else {
         logger.error("invalid target. must be a transaction hash or calldata (bytes).");
         return Err(Error::GenericError(
             "invalid target. must be a transaction hash or calldata (bytes).".to_string(),
-        ))
+        ));
     }
 
     // check if the calldata length is a standard length
     if calldata.len() % 2 != 0 || calldata.len() < 8 {
         logger.error("calldata is not a valid hex string.");
-        return Err(Error::GenericError("calldata is not a valid hex string.".to_string()))
+        return Err(Error::GenericError("calldata is not a valid hex string.".to_string()));
     }
 
     // if calldata isn't a multiple of 64, it may be harder to decode.
@@ -161,13 +167,15 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         Ok(byte_args) => byte_args,
         Err(_) => {
             logger.error("failed to parse bytearray from calldata.");
-            return Err(Error::DecodeError)
+            return Err(Error::DecodeError);
         }
     };
 
     // get the function signature possibilities
     let potential_matches = if !args.skip_resolving {
-        match ResolvedFunction::resolve(&function_selector).await {
+        match ResolvedFunction::resolve(&function_selector).await.map_err(|e| {
+            Error::GenericError(format!("failed to resolve function selector: {}", e))
+        })? {
             Some(signatures) => signatures,
             None => Vec::new(),
         }
@@ -219,7 +227,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
                         Some(decoded_function_call) => decoded_function_call.1,
                         None => {
                             logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
-                            continue
+                            continue;
                         }
                     };
 
@@ -276,10 +284,10 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
+                let s = std::str::from_utf8(chunk).map_err(|_| Error::DecodeError);
                 s
             })
-            .collect::<Vec<&str>>();
+            .collect::<Result<Vec<&str>, Error>>()?;
 
         // while calldata_words is not empty, iterate over it
         let mut i = 0;
@@ -337,7 +345,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
             matches.push(resolved_function);
         } else {
             logger.error("failed to dynamically decode calldata.");
-            return Err(Error::DecodeError)
+            return Err(Error::DecodeError);
         }
     }
 
@@ -364,7 +372,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         Some(selected_match) => selected_match,
         None => {
             logger.error("invalid selection.");
-            return Err(Error::GenericError("invalid selection.".to_string()))
+            return Err(Error::GenericError("invalid selection.".to_string()));
         }
     };
 
@@ -401,10 +409,12 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     );
 
     // build inputs
-    for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
+    for (i, input) in
+        selected_match.decoded_inputs.as_ref().ok_or(Error::DecodeError)?.iter().enumerate()
+    {
         let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
         if decoded_inputs_as_message.is_empty() {
-            break
+            break;
         }
 
         if i == 0 {
@@ -468,7 +478,7 @@ fn try_decode(inputs: &[ParamType], byte_args: &[u8]) -> Result<(Vec<Token>, Vec
             });
         }
 
-        return Ok((result, params))
+        return Ok((result, params));
     }
 
     Err(Error::DecodeError)

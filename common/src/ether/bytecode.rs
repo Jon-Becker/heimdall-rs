@@ -2,20 +2,26 @@ use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     debug_max,
+    error::Error,
     utils::io::logging::Logger,
 };
 use std::fs;
 
-pub async fn get_bytecode_from_target(
-    target: &str,
-    rpc_url: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<String, Error> {
     let (logger, _) = Logger::new("");
 
-    if ADDRESS_REGEX.is_match(target)? {
+    if ADDRESS_REGEX
+        .is_match(target)
+        .map_err(|e| Error::Generic(format!("failed to match address regex: {}", e)))?
+    {
         // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
-        get_code(target, rpc_url).await
-    } else if BYTECODE_REGEX.is_match(target)? {
+        get_code(target, rpc_url).await.map_err(|e| {
+            Error::Generic(format!("failed to fetch bytecode from RPC provider: {}", e))
+        })
+    } else if BYTECODE_REGEX
+        .is_match(target)
+        .map_err(|e| Error::Generic(format!("failed to match bytecode regex: {}", e)))?
+    {
         debug_max!("using provided bytecode for snapshotting.");
 
         // Target is already a bytecode, so we just need to remove 0x from the begining
@@ -27,7 +33,11 @@ pub async fn get_bytecode_from_target(
         match fs::read_to_string(target) {
             Ok(contents) => {
                 let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents)? && _contents.len() % 2 == 0 {
+                if BYTECODE_REGEX
+                    .is_match(&_contents)
+                    .map_err(|e| Error::Generic(format!("failed to match bytecode regex: {}", e)))? &&
+                    _contents.len() % 2 == 0
+                {
                     Ok(_contents.replacen("0x", "", 1))
                 } else {
                     logger.error(&format!("file '{}' doesn't contain valid bytecode.", &target));

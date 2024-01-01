@@ -92,7 +92,12 @@ impl TryFrom<Log> for DecodedLog {
             resolved_logs = match signature {
                 Some(signature) => {
                     debug_max!("resolving signature: {}", signature.to_string().to_lowercase());
-                    ResolvedLog::resolve(&signature).await.unwrap_or(Vec::new())
+                    ResolvedLog::resolve(&signature)
+                        .await
+                        .map_err(|e| {
+                            Self::Error::GenericError(format!("failed to resolve signature: {}", e))
+                        })?
+                        .unwrap_or(Vec::new())
                 }
                 None => Vec::new(),
             };

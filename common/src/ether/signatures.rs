@@ -4,6 +4,7 @@ use heimdall_cache::{read_cache, store_cache};
 
 use crate::{
     debug_max,
+    error::Error,
     utils::{http::get_json_from_url, strings::replace_last},
 };
 use serde::{Deserialize, Serialize};
@@ -32,14 +33,14 @@ pub struct ResolvedLog {
 
 #[async_trait]
 pub trait ResolveSelector {
-    async fn resolve(selector: &str) -> Option<Vec<Self>>
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error>
     where
         Self: Sized;
 }
 
 #[async_trait]
 impl ResolveSelector for ResolvedError {
-    async fn resolve(selector: &str) -> Option<Vec<Self>> {
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
         // normalize selector
         let selector = match selector.strip_prefix("0x") {
             Some(selector) => selector,
@@ -51,12 +52,13 @@ impl ResolveSelector for ResolvedError {
         // get cached results
         if let Some(cached_results) =
             read_cache::<Vec<ResolvedError>>(&format!("selector.{selector}"))
+                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
         {
             match cached_results.len() {
-                0 => return None,
+                0 => return Ok(None),
                 _ => {
                     debug_max!("found cached results for selector: {}", &selector);
-                    return Some(cached_results)
+                    return Ok(Some(cached_results))
                 }
             }
         }
@@ -70,19 +72,20 @@ impl ResolveSelector for ResolvedError {
             10,
         )
         .await
-        .unwrap()
+        .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
         {
             Some(signatures) => signatures,
-            None => return None,
+            None => return Ok(None),
         };
 
         // convert the serde value into a vec of possible functions
         let results = signatures
-            .get("result")?
-            .get("function")?
-            .get(&format!("0x{selector}"))?
-            .as_array()?
-            .to_vec();
+            .get("result")
+            .and_then(|result| result.get("function"))
+            .and_then(|function| function.get(format!("0x{selector}")))
+            .and_then(|item| item.as_array())
+            .map(|array| array.to_vec())
+            .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
 
         debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
@@ -115,16 +118,16 @@ impl ResolveSelector for ResolvedError {
         let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
             .map_err(|e| debug_max!("error storing signatures in cache: {}", e));
 
-        match signature_list.len() {
+        Ok(match signature_list.len() {
             0 => None,
             _ => Some(signature_list),
-        }
+        })
     }
 }
 
 #[async_trait]
 impl ResolveSelector for ResolvedLog {
-    async fn resolve(selector: &str) -> Option<Vec<Self>> {
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
         // normalize selector
         let selector = match selector.strip_prefix("0x") {
             Some(selector) => selector,
@@ -136,12 +139,13 @@ impl ResolveSelector for ResolvedLog {
         // get cached results
         if let Some(cached_results) =
             read_cache::<Vec<ResolvedLog>>(&format!("selector.{selector}"))
+                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
         {
             match cached_results.len() {
-                0 => return None,
+                0 => return Ok(None),
                 _ => {
                     debug_max!("found cached results for selector: {}", &selector);
-                    return Some(cached_results)
+                    return Ok(Some(cached_results))
                 }
             }
         }
@@ -155,19 +159,20 @@ impl ResolveSelector for ResolvedLog {
             10,
         )
         .await
-        .unwrap()
+        .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
         {
             Some(signatures) => signatures,
-            None => return None,
+            None => return Ok(None),
         };
 
         // convert the serde value into a vec of possible functions
         let results = signatures
-            .get("result")?
-            .get("event")?
-            .get(&format!("0x{selector}"))?
-            .as_array()?
-            .to_vec();
+            .get("result")
+            .and_then(|result| result.get("event"))
+            .and_then(|function| function.get(format!("0x{selector}")))
+            .and_then(|item| item.as_array())
+            .map(|array| array.to_vec())
+            .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
 
         debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
@@ -200,16 +205,16 @@ impl ResolveSelector for ResolvedLog {
         let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
             .map_err(|e| debug_max!("error storing signatures in cache: {}", e));
 
-        match signature_list.len() {
+        Ok(match signature_list.len() {
             0 => None,
             _ => Some(signature_list),
-        }
+        })
     }
 }
 
 #[async_trait]
 impl ResolveSelector for ResolvedFunction {
-    async fn resolve(selector: &str) -> Option<Vec<Self>> {
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
         // normalize selector
         let selector = match selector.strip_prefix("0x") {
             Some(selector) => selector,
@@ -221,12 +226,13 @@ impl ResolveSelector for ResolvedFunction {
         // get cached results
         if let Some(cached_results) =
             read_cache::<Vec<ResolvedFunction>>(&format!("selector.{selector}"))
+                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
         {
             match cached_results.len() {
-                0 => return None,
+                0 => return Ok(None),
                 _ => {
                     debug_max!("found cached results for selector: {}", &selector);
-                    return Some(cached_results)
+                    return Ok(Some(cached_results))
                 }
             }
         }
@@ -240,19 +246,20 @@ impl ResolveSelector for ResolvedFunction {
             10,
         )
         .await
-        .unwrap()
+        .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
         {
             Some(signatures) => signatures,
-            None => return None,
+            None => return Ok(None),
         };
 
         // convert the serde value into a vec of possible functions
         let results = signatures
-            .get("result")?
-            .get("function")?
-            .get(&format!("0x{selector}"))?
-            .as_array()?
-            .to_vec();
+            .get("result")
+            .and_then(|result| result.get("function"))
+            .and_then(|function| function.get(format!("0x{selector}")))
+            .and_then(|item| item.as_array())
+            .map(|array| array.to_vec())
+            .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
 
         debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
 
@@ -286,10 +293,10 @@ impl ResolveSelector for ResolvedFunction {
         let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
             .map_err(|e| debug_max!("error storing signatures in cache: {}", e));
 
-        match signature_list.len() {
+        Ok(match signature_list.len() {
             0 => None,
             _ => Some(signature_list),
-        }
+        })
     }
 }
 
@@ -318,8 +325,8 @@ mod tests {
     #[tokio::test]
     async fn resolve_function_signature_nominal() {
         let signature = String::from("095ea7b3");
-        delete_cache(&format!("selector.{}", &signature));
-        let result = ResolvedFunction::resolve(&signature).await;
+        let _ = delete_cache(&format!("selector.{}", &signature));
+        let result = ResolvedFunction::resolve(&signature).await.unwrap();
         assert!(result.is_some());
         assert!(!result.unwrap().is_empty());
     }
@@ -327,8 +334,8 @@ mod tests {
     #[tokio::test]
     async fn resolve_error_signature_nominal() {
         let signature = String::from("30cd7471");
-        delete_cache(&format!("selector.{}", &signature));
-        let result = ResolvedError::resolve(&signature).await;
+        let _ = delete_cache(&format!("selector.{}", &signature));
+        let result = ResolvedError::resolve(&signature).await.unwrap();
         assert!(result.is_some());
         assert!(!result.unwrap().is_empty());
     }
@@ -337,8 +344,8 @@ mod tests {
     async fn resolve_event_signature_nominal() {
         let signature =
             String::from("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
-        delete_cache(&format!("selector.{}", &signature));
-        let result = ResolvedLog::resolve(&signature).await;
+        let _ = delete_cache(&format!("selector.{}", &signature));
+        let result = ResolvedLog::resolve(&signature).await.unwrap();
         assert!(result.is_some());
         assert!(!result.unwrap().is_empty());
     }
@@ -346,7 +353,7 @@ mod tests {
     #[tokio::test]
     async fn resolve_function_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_nocache");
-        let result = ResolvedFunction::resolve(&signature).await;
+        let result = ResolvedFunction::resolve(&signature).await.unwrap();
 
         assert_eq!(result, None,)
     }
@@ -354,51 +361,51 @@ mod tests {
     #[tokio::test]
     async fn resolve_function_signature_should_return_none_when_json_url_returns_empty_signatures()
     {
-        delete_cache(&format!("selector.{}", "test_signature"));
+        let _ = delete_cache(&format!("selector.{}", "test_signature"));
         let signature = String::from("test_signature");
-        let result = ResolvedFunction::resolve(&signature).await;
+        let result = ResolvedFunction::resolve(&signature).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn resolve_error_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await;
+        let result = ResolvedError::resolve(&signature).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn resolve_error_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await;
+        let result = ResolvedError::resolve(&signature).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn resolve_error_signature_should_return_none_when_json_url_returns_empty_signatures() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await;
+        let result = ResolvedError::resolve(&signature).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn resolve_event_signature_should_return_none_when_cached_results_not_found() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await;
+        let result = ResolvedLog::resolve(&signature).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn resolve_event_signature_should_return_none_when_json_url_returns_none() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await;
+        let result = ResolvedLog::resolve(&signature).await.unwrap();
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn resolve_event_signature_should_return_none_when_json_url_returns_empty_signatures() {
         let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await;
+        let result = ResolvedLog::resolve(&signature).await.unwrap();
         assert_eq!(result, None);
     }
 

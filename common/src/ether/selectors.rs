@@ -171,7 +171,7 @@ where
 
         // create a new thread for each selector
         threads.push(task::spawn(async move {
-            if let Some(function) = T::resolve(&selector).await {
+            if let Ok(Some(function)) = T::resolve(&selector).await {
                 let mut _resolved_functions =
                     function_clone.lock().expect("Could not obtain lock on function_clone.");
                 let mut _resolve_progress =

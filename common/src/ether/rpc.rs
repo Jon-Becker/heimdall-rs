@@ -1,4 +1,4 @@
-use crate::{debug_max, utils::io::logging::Logger};
+use crate::{debug_max, error::Error, utils::io::logging::Logger};
 use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,
@@ -16,10 +16,10 @@ use std::{str::FromStr, time::Duration};
 /// ```no_run
 /// use heimdall_common::ether::rpc::chain_id;
 ///
-/// // let chain_id = chain_id("https://eth.llamarpc.com").await.unwrap();
+/// // let chain_id = chain_id("https://eth.llamarpc.com").await?;
 /// //assert_eq!(chain_id, 1);
 /// ```
-pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> {
+pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
     backoff::future::retry(
         ExponentialBackoff {
             max_elapsed_time: Some(Duration::from_secs(10)),
@@ -33,7 +33,9 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
 
         // check the cache for a matching rpc url
         let cache_key = format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-"));
-        if let Some(chain_id) = read_cache(&cache_key) {
+        if let Some(chain_id) = read_cache(&cache_key)
+            .map_err(|_| logger.error(&format!("failed to read cache for rpc url: {:?}", &rpc_url)))?
+        {
             logger.debug(&format!("found cached chain id for rpc url: {:?}", &rpc_url));
             return Ok(chain_id)
         }
@@ -63,15 +65,15 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
         };
 
         // cache the results
-        let _ = store_cache(&cache_key, chain_id.as_u64(), None)
-            .map_err(|_| logger.error(&format!("failed to cache chain id for rpc url: {:?}", &rpc_url)));
+        store_cache(&cache_key, chain_id.as_u64(), None)
+            .map_err(|_| logger.error(&format!("failed to cache chain id for rpc url: {:?}", &rpc_url)))?;
 
         debug_max!(&format!("chain_id is '{}'", &chain_id));
 
         Ok(chain_id.as_u64())
     })
     .await
-    .map_err(|_| Box::from("failed to fetch chain id"))
+    .map_err(|e| Error::Generic(format!("failed to get chain id: {:?}", e)))
 }
 
 /// Get the bytecode of the provided contract address
@@ -82,10 +84,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Box<dyn std::error::Error>> 
 /// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(bytecode.is_ok());
 /// ```
-pub async fn get_code(
-    contract_address: &str,
-    rpc_url: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, Error> {
     backoff::future::retry(
         ExponentialBackoff {
             max_elapsed_time: Some(Duration::from_secs(10)),
@@ -99,7 +98,9 @@ pub async fn get_code(
         let chain_id = chain_id(rpc_url).await.unwrap_or(1);
 
         // check the cache for a matching address
-        if let Some(bytecode) = read_cache(&format!("contract.{}.{}", &chain_id, &contract_address)) {
+        if let Some(bytecode) = read_cache(&format!("contract.{}.{}", &chain_id, &contract_address))
+            .map_err(|_| logger.error(&format!("failed to read cache for contract: {:?}", &contract_address)))?
+        {
             logger.debug(&format!("found cached bytecode for '{}' .", &contract_address));
             return Ok(bytecode)
         }
@@ -140,17 +141,17 @@ pub async fn get_code(
         };
 
         // cache the results
-        let _ = store_cache(
+        store_cache(
             &format!("contract.{}.{}", &chain_id, &contract_address),
             bytecode_as_bytes.to_string().replacen("0x", "", 1),
             None,
         )
-        .map_err(|_| logger.error(&format!("failed to cache bytecode for contract: {:?}", &contract_address)));
+        .map_err(|_| logger.error(&format!("failed to cache bytecode for contract: {:?}", &contract_address)))?;
 
         Ok(bytecode_as_bytes.to_string().replacen("0x", "", 1))
     })
     .await
-    .map_err(|_| Box::from("failed to fetch bytecode"))
+    .map_err(|_| Error::Generic(format!("failed to get bytecode for contract: {:?}", &contract_address)))
 }
 
 /// Get the raw transaction data of the provided transaction hash
@@ -162,10 +163,7 @@ pub async fn get_code(
 /// // assert!(bytecode.is_ok());
 /// ```
 /// TODO: check for caching
-pub async fn get_transaction(
-    transaction_hash: &str,
-    rpc_url: &str,
-) -> Result<Transaction, Box<dyn std::error::Error>> {
+pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Transaction, Error> {
     backoff::future::retry(
         ExponentialBackoff {
             max_elapsed_time: Some(Duration::from_secs(10)),
@@ -222,7 +220,7 @@ pub async fn get_transaction(
         Ok(tx)
     })
     .await
-    .map_err(|_| Box::from("failed to get transaction"))
+    .map_err(|_| Error::Generic(format!("failed to get transaction: {:?}", &transaction_hash)))
 }
 
 /// Get the storage diff of the provided transaction hash
@@ -236,7 +234,7 @@ pub async fn get_transaction(
 pub async fn get_storage_diff(
     transaction_hash: &str,
     rpc_url: &str,
-) -> Result<Option<StateDiff>, Box<dyn std::error::Error>> {
+) -> Result<Option<StateDiff>, Error> {
     backoff::future::retry(
         ExponentialBackoff {
             max_elapsed_time: Some(Duration::from_secs(10)),
@@ -247,11 +245,13 @@ pub async fn get_storage_diff(
             let logger = Logger::default();
 
             // get chain_id
-            let chain_id = chain_id(rpc_url).await.unwrap();
+            let chain_id = chain_id(rpc_url).await
+                .map_err(|_| logger.error(&format!("failed to get chain id for rpc url: {:?}", &rpc_url)))?;
 
             // check the cache for a matching address
             if let Some(state_diff) =
                 read_cache(&format!("diff.{}.{}", &chain_id, &transaction_hash))
+                .map_err(|_| logger.error(&format!("failed to read cache for transaction: {:?}", &transaction_hash)))?
             {
                 debug_max!("found cached state diff for transaction '{}' .", &transaction_hash);
                 return Ok(state_diff)
@@ -284,23 +284,19 @@ pub async fn get_storage_diff(
             };
 
             // fetch the state diff for the transaction
-            let state_diff = match provider
+            let state_diff = provider
                 .trace_replay_transaction(transaction_hash_hex, vec![TraceType::StateDiff])
                 .await
-            {
-                Ok(traces) => traces.state_diff,
-                Err(e) => {
+                .map_err(|_| {
                     logger.error(&format!(
-            "failed to replay and trace transaction '{}' . does your RPC provider support it?",
-            &transaction_hash
-        ));
-                    logger.error(&format!("error: '{e}' ."));
-                    return Err(backoff::Error::Permanent(()))
-                }
-            };
+                        "failed to replay and trace transaction '{}' . does your RPC provider support it?",
+                        &transaction_hash
+                    ))
+                })?
+                .state_diff;
 
             // write the state diff to the cache
-            let _ = store_cache(
+            store_cache(
                 &format!("diff.{}.{}", &chain_id, &transaction_hash),
                 &state_diff,
                 None,
@@ -310,7 +306,7 @@ pub async fn get_storage_diff(
                     "failed to cache state diff for transaction: {:?}",
                     &transaction_hash
                 ))
-            });
+            })?;
 
             debug_max!("fetched state diff for transaction '{}' .", &transaction_hash);
 
@@ -318,7 +314,7 @@ pub async fn get_storage_diff(
         },
     )
     .await
-    .map_err(|_| Box::from("failed to get storage diff"))
+    .map_err(|_| Error::Generic(format!("failed to get storage diff for transaction: {:?}", &transaction_hash)))
 }
 
 /// Get the raw trace data of the provided transaction hash
@@ -330,10 +326,7 @@ pub async fn get_storage_diff(
 /// // assert!(trace.is_ok());
 /// ```
 /// TODO: check for caching
-pub async fn get_trace(
-    transaction_hash: &str,
-    rpc_url: &str,
-) -> Result<BlockTrace, Box<dyn std::error::Error>> {
+pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTrace, Error> {
     backoff::future::retry(
         ExponentialBackoff {
             max_elapsed_time: Some(Duration::from_secs(10)),
@@ -394,7 +387,7 @@ pub async fn get_trace(
         },
     )
     .await
-    .map_err(|_| Box::from("failed to get trace"))
+    .map_err(|_| Error::Generic(format!("failed to get trace for transaction: {:?}", &transaction_hash)))
 }
 
 /// Get all logs for the given block number
@@ -408,7 +401,7 @@ pub async fn get_trace(
 pub async fn get_block_logs(
     block_number: u64,
     rpc_url: &str,
-) -> Result<Vec<ethers::core::types::Log>, Box<dyn std::error::Error>> {
+) -> Result<Vec<ethers::core::types::Log>, Error> {
     backoff::future::retry(
         ExponentialBackoff {
             max_elapsed_time: Some(Duration::from_secs(10)),
@@ -430,7 +423,7 @@ pub async fn get_block_logs(
             };
 
             // fetch the logs for the block
-            let logs = match provider
+            let logs = provider
                 .get_logs(&Filter {
                     block_option: FilterBlockOption::Range {
                         from_block: Some(BlockNumber::from(block_number)),
@@ -440,17 +433,12 @@ pub async fn get_block_logs(
                     topics: [None, None, None, None],
                 })
                 .await
-            {
-                Ok(logs) => logs,
-                Err(e) => {
+                .map_err(|_| {
                     logger.error(&format!(
                         "failed to fetch logs for block '{}' . does your RPC provider support it?",
                         &block_number
-                    ));
-                    logger.error(&format!("error: '{e}' ."));
-                    return Err(backoff::Error::Permanent(()))
-                }
-            };
+                    ))
+                })?;
 
             debug_max!("fetched logs for block '{}' .", &block_number);
 
@@ -458,7 +446,7 @@ pub async fn get_block_logs(
         },
     )
     .await
-    .map_err(|_| Box::from("failed to get logs"))
+    .map_err(|_| Error::Generic(format!("failed to get logs for block: {:?}", &block_number)))
 }
 
 // TODO: add tests
