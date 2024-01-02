@@ -1675,6 +1675,7 @@ dependencies = [
  "heimdall-core",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
  "tui",
 ]

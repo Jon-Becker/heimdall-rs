@@ -34,6 +34,16 @@ if [ "$1" = "--cov" ]; then
         echo "coverage.xml not found"
         exit 1
     fi
+
+# if --doc is passed, then we want to run the doc command
+elif [ "$1" = "--doc" ]; then
+    cargo test --workspace --doc
+
+# if --heavy is passed, then we want to run the heavy command
+elif [ "$1" = "--heavy" ]; then
+    cargo nextest r --no-fail-fast --release -- --ignored
+
+# just run nextest
 else
     cargo nextest r --no-fail-fast --release
 fi

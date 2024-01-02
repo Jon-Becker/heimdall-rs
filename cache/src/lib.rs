@@ -196,7 +196,7 @@ pub fn delete_cache(key: &str) -> Result<(), Error> {
 
     if cache_file.exists() {
         std::fs::remove_file(cache_file)
-            .map_err(|e| Error::IOError(format!("failed to delete cache file: {:?}", e)))?;
+            .map_err(|e| Error::Generic(format!("failed to delete cache file: {:?}", e)))?;
     }
 
     Ok(())
@@ -228,8 +228,8 @@ where
             .to_str()
             .ok_or(Error::Generic("failed to convert path to string".to_string()))?,
     ) {
-        Some(s) => s,
-        None => return Ok(None),
+        Ok(s) => s,
+        Err(_) => return Ok(None),
     };
 
     let binary_vec = decode_hex(&binary_string)
@@ -287,7 +287,12 @@ where
     let encoded: Vec<u8> = bincode::serialize(&cache)
         .map_err(|e| Error::Generic(format!("failed to serialize cache object: {:?}", e)))?;
     let binary_string = encode_hex(encoded);
-    write_file(cache_file.to_str().unwrap(), &binary_string);
+    write_file(
+        cache_file
+            .to_str()
+            .ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+        &binary_string,
+    )?;
 
     Ok(())
 }
@@ -309,14 +314,22 @@ pub fn cache(args: CacheArgs) -> Result<(), Error> {
             }
         }
         Subcommands::Size(_) => {
-            let home = home_dir().unwrap();
+            let home = home_dir().ok_or(Error::Generic(
+                "failed to get home directory. does your os support `std::env::home_dir()`?"
+                    .to_string(),
+            ))?;
             let cache_dir = home.join(".bifrost").join("cache");
             let mut size = 0;
 
-            for entry in cache_dir.read_dir().unwrap() {
-                let entry = entry.unwrap();
+            for entry in cache_dir
+                .read_dir()
+                .map_err(|e| Error::Generic(format!("failed to read cache directory: {:?}", e)))?
+            {
+                let entry = entry
+                    .map_err(|e| Error::Generic(format!("failed to read cache entry: {:?}", e)))?;
                 let path = entry.path();
-                let metadata = std::fs::metadata(path).unwrap();
+                let metadata = std::fs::metadata(path)
+                    .map_err(|e| Error::Generic(format!("failed to get metadata: {:?}", e)))?;
                 size += metadata.len();
             }
 

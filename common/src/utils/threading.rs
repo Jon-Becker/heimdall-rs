@@ -9,7 +9,11 @@ use std::{sync::Arc, thread};
 ///
 /// let items = vec![1, 2, 3, 4, 5];
 /// let num_threads = 2;
-/// let results = task_pool(items, num_threads, |item| item * 2);
+/// let mut results = task_pool(items, num_threads, |item| item * 2);
+///
+/// // sort
+/// results.sort();
+///
 /// assert_eq!(results, vec![2, 4, 6, 8, 10]);
 /// ```
 pub fn task_pool<

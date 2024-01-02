@@ -5,6 +5,8 @@ use heimdall_common::{
     ether::rpc,
 };
 
+use crate::error::Error;
+
 /// build a standardized output path for the given parameters. follows the following cases:
 /// - if `output` is `print`, return `None`
 /// - if `output` is the default value (`output`)
@@ -16,14 +18,25 @@ pub async fn build_output_path(
     target: &str,
     rpc_url: &str,
     filename: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Error> {
     // if output is the default value, build a path based on the target
     if output == "output" {
         // get the current working directory
-        let cwd = env::current_dir()?.into_os_string().into_string().unwrap();
+        let cwd = env::current_dir()?
+            .into_os_string()
+            .into_string()
+            .map_err(|_| Error::Generic("Unable to get current working directory".to_string()))?;
 
-        if ADDRESS_REGEX.is_match(target)? || TRANSACTION_HASH_REGEX.is_match(target)? {
-            let chain_id = rpc::chain_id(rpc_url).await?;
+        if ADDRESS_REGEX
+            .is_match(target)
+            .map_err(|_| Error::Generic("Unable to parse target with ADDRESS_REGEX".to_string()))? ||
+            TRANSACTION_HASH_REGEX.is_match(target).map_err(|_| {
+                Error::Generic("Unable to parse target with TRANSACTION_HASH_REGEX".to_string())
+            })?
+        {
+            let chain_id = rpc::chain_id(rpc_url)
+                .await
+                .map_err(|_| Error::Generic("Unable to get chain id".to_string()))?;
             return Ok(format!("{}/output/{}/{}/{}", cwd, chain_id, target, filename))
         } else {
             return Ok(format!("{}/output/local/{}", cwd, filename))
@@ -35,11 +48,14 @@ pub async fn build_output_path(
 }
 
 /// pass the input to the `less` command
-pub async fn print_with_less(input: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn print_with_less(input: &str) -> Result<(), Error> {
     let mut child =
         std::process::Command::new("less").stdin(std::process::Stdio::piped()).spawn()?;
 
-    let stdin = child.stdin.as_mut().unwrap();
+    let stdin = child
+        .stdin
+        .as_mut()
+        .ok_or_else(|| Error::Generic("unable to get stdin for less".to_string()))?;
     stdin.write_all(input.as_bytes())?;
 
     child.wait()?;
