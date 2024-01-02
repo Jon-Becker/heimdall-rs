@@ -173,11 +173,9 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
 
     // get the function signature possibilities
     let potential_matches = if !args.skip_resolving {
-        match ResolvedFunction::resolve(&function_selector).await.map_err(|e| {
-            Error::GenericError(format!("failed to resolve function selector: {}", e))
-        })? {
-            Some(signatures) => signatures,
-            None => Vec::new(),
+        match ResolvedFunction::resolve(&function_selector).await {
+            Ok(Some(signatures)) => signatures,
+            _ => Vec::new(),
         }
     } else {
         Vec::new()
