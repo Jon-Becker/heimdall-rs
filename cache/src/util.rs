@@ -3,8 +3,11 @@ use std::{
     fs::File,
     io::{Read, Write},
     num::ParseIntError,
+    path::Path,
     process::Command,
 };
+
+use crate::error::Error;
 
 /// Decode a hex string into a bytearray
 ///
@@ -29,8 +32,8 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 /// assert_eq!(result, "48656c6c6f20576f726c64");
 /// ```
 pub fn encode_hex(s: Vec<u8>) -> String {
-    s.iter().fold(String::new(), |mut acc, b| {
-        write!(acc, "{b:02x}", b = b).unwrap();
+    s.iter().fold(String::new(), |mut acc: String, b| {
+        write!(acc, "{b:02x}", b = b).expect("unable to write");
         acc
     })
 }
@@ -72,25 +75,25 @@ pub fn prettify_bytes(bytes: u64) -> String {
 /// let path = "/tmp/test.txt";
 /// let contents = "Hello, World!";
 /// let result = write_file(path, contents);
+///
+/// assert!(result.is_ok());
 /// ```
-pub fn write_file(_path: &str, contents: &str) -> Option<String> {
-    let path = std::path::Path::new(_path);
-    let prefix = path.parent().unwrap();
-    match std::fs::create_dir_all(prefix) {
-        Ok(_) => {}
-        Err(_) => return None,
+pub fn write_file(path_str: &str, contents: &str) -> Result<(), Error> {
+    let path = Path::new(path_str);
+
+    if let Some(prefix) = path.parent() {
+        std::fs::create_dir_all(prefix)?;
+    } else {
+        return Err(Error::IOError(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Unable to create directory",
+        )));
     }
 
-    let mut file = match File::create(path) {
-        Ok(file) => file,
-        Err(_) => return None,
-    };
-    match file.write_all(contents.as_bytes()) {
-        Ok(_) => {}
-        Err(_) => return None,
-    }
+    let mut file = File::create(path)?;
+    file.write_all(contents.as_bytes())?;
 
-    Some(_path.to_string())
+    Ok(())
 }
 
 /// Read contents from a file on the disc
@@ -100,20 +103,15 @@ pub fn write_file(_path: &str, contents: &str) -> Option<String> {
 ///
 /// let path = "/tmp/test.txt";
 /// let contents = read_file(path);
-/// assert!(contents.is_some());
+/// assert!(contents.is_ok());
 /// ```
-pub fn read_file(_path: &str) -> Option<String> {
-    let path = std::path::Path::new(_path);
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(_) => return None,
-    };
+pub fn read_file(path: &str) -> Result<String, Error> {
+    let path = Path::new(path);
+    let mut file = File::open(path)
+        .map_err(|e| Error::IOError(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
     let mut contents = String::new();
-    match file.read_to_string(&mut contents) {
-        Ok(_) => {}
-        Err(_) => return None,
-    }
-    Some(contents)
+    file.read_to_string(&mut contents)?;
+    Ok(contents)
 }
 
 /// Delete a file or directory on the disc
@@ -191,7 +189,7 @@ mod tests {
         let path = "/tmp/test.txt";
         let contents = "Hello, World!";
         let result = write_file(path, contents);
-        assert_eq!(result, Some(path.to_string()));
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -200,24 +198,24 @@ mod tests {
         let path = "/root/test.txt";
         let contents = "Hello, World!";
         let result = write_file(path, contents);
-        assert_eq!(result, None);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_read_file_successful() {
         let path = "/tmp/test.txt";
         let contents = "Hello, World!";
-        write_file(path, contents);
+        write_file(path, contents).expect("unable to write file");
 
         let result = read_file(path);
-        assert!(result.is_some());
+        assert!(result.is_ok());
     }
 
     #[test]
     fn test_read_file_failure() {
         let path = "/nonexistent/test.txt";
         let result = read_file(path);
-        assert_eq!(result, None);
+        assert!(result.is_err());
     }
 
     #[test]
