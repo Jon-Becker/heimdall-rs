@@ -76,7 +76,7 @@ where
     let (tx, rx) = unbounded();
     let handle = thread::spawn(move || {
         let result = f();
-        tx.send(result).unwrap();
+        let _ = tx.send(result);
     });
 
     let result = rx.recv_timeout(timeout);
