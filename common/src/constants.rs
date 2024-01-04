@@ -10,9 +10,7 @@ lazy_static! {
     pub static ref TRANSACTION_HASH_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]{64}$").unwrap();
 
     /// The following regex is used to validate raw bytecode files as targets.
-    /// It also restricts the file to a maximum of ~24kb, the maximum size of a
-    /// contract on Ethereum.
-    pub static ref BYTECODE_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]{0,50000}$").unwrap();
+    pub static ref BYTECODE_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]$").unwrap();
 
     /// The following regex is used to validate raw calldata
     pub static ref CALLDATA_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]*$").unwrap();
