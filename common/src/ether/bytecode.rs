@@ -30,24 +30,21 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
         debug_max!("using provided file for snapshotting.");
 
         // Target is a file path, so we need to read the bytecode from the file.
-        match fs::read_to_string(target) {
-            Ok(contents) => {
-                let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX
-                    .is_match(&_contents)
-                    .map_err(|e| Error::Generic(format!("failed to match bytecode regex: {}", e)))? &&
-                    _contents.len() % 2 == 0
-                {
-                    Ok(_contents.replacen("0x", "", 1))
-                } else {
-                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &target));
-                    std::process::exit(1)
-                }
-            }
-            Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &target));
-                std::process::exit(1)
-            }
+        let contents = fs::read_to_string(target).map_err(|e| {
+            logger.error(&format!("failed to open file '{}' .", &target));
+            Error::FilesystemError(e)
+        })?;
+
+        let contents = contents.replace('\n', "");
+        if BYTECODE_REGEX
+            .is_match(&contents)
+            .map_err(|e| Error::Generic(format!("failed to match bytecode regex: {}", e)))? &&
+            contents.len() % 2 == 0
+        {
+            Ok(contents.replacen("0x", "", 1))
+        } else {
+            logger.error(&format!("file '{}' doesn't contain valid bytecode.", &target));
+            return Err(Error::ParseError("file doesn't contain valid bytecode.".to_string()));
         }
     }
 }
@@ -63,9 +60,9 @@ mod tests {
             "https://rpc.ankr.com/eth",
         )
         .await
-        .unwrap();
+        .expect("failed to get bytecode from target");
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
+        assert!(BYTECODE_REGEX.is_match(&bytecode).expect("failed to match bytecode regex"));
     }
 
     #[tokio::test]
@@ -75,9 +72,9 @@ mod tests {
             "https://rpc.ankr.com/eth",
         )
         .await
-        .unwrap();
+        .expect("failed to get bytecode from target");
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
+        assert!(BYTECODE_REGEX.is_match(&bytecode).expect("failed to match bytecode regex"));
     }
 
     #[tokio::test]
@@ -85,13 +82,14 @@ mod tests {
         let file_path = "./mock-file.txt";
         let mock_bytecode = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001";
 
-        fs::write(file_path, mock_bytecode).unwrap();
+        fs::write(file_path, mock_bytecode).expect("failed to write mock bytecode to file");
 
-        let bytecode =
-            get_bytecode_from_target(file_path, "https://rpc.ankr.com/eth").await.unwrap();
+        let bytecode = get_bytecode_from_target(file_path, "https://rpc.ankr.com/eth")
+            .await
+            .expect("failed to get bytecode from target");
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
+        assert!(BYTECODE_REGEX.is_match(&bytecode).expect("failed to match bytecode regex"));
 
-        fs::remove_file(file_path).unwrap();
+        fs::remove_file(file_path).expect("failed to remove mock file");
     }
 }

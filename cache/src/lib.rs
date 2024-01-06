@@ -354,7 +354,7 @@ mod tests {
         store_cache("key", "value".to_string(), None);
 
         // assert cached file exists
-        let home = home_dir().unwrap();
+        let home = home_dir().expect("failed to get home_dir");
         let cache_dir = home.join(".bifrost").join("cache");
         let cache_file = cache_dir.join("key.bin");
         assert!(cache_file.exists());
@@ -364,7 +364,7 @@ mod tests {
     fn test_get_cache() {
         store_cache("key3", "value".to_string(), None);
         let value = read_cache("key3");
-        let value: String = value.unwrap().unwrap();
+        let value: String = value.expect("failed to get cache").expect("failed to get cache");
 
         // assert stored value matches
         assert_eq!(value, "value");
@@ -383,7 +383,7 @@ mod tests {
         store_cache("struct", test_struct, None);
 
         // assert cached file exists
-        let home = home_dir().unwrap();
+        let home = home_dir().expect("failed to get home_dir");
         let cache_dir = home.join(".bifrost").join("cache");
         let cache_file = cache_dir.join("struct.bin");
         assert!(cache_file.exists());
@@ -401,7 +401,7 @@ mod tests {
 
         store_cache("struct2", test_struct, None);
         let value = read_cache("struct2");
-        let value: TestStruct = value.unwrap().unwrap();
+        let value: TestStruct = value.expect("failed to get cache").expect("failed to get cache");
 
         // assert stored value matches
         assert_eq!(value.name, "test");
@@ -414,7 +414,7 @@ mod tests {
         store_cache("some_other_key", "some_value", None);
         store_cache("not_a_key", "some_value", None);
 
-        assert_eq!(keys("some_").unwrap(), vec!["some_key", "some_other_key"]);
+        assert_eq!(keys("some_").expect("failed to get keys"), vec!["some_key", "some_other_key"]);
     }
 
     #[test]
@@ -428,14 +428,14 @@ mod tests {
 
         assert!(["a", "b", "c", "d", "e", "f"]
             .iter()
-            .all(|key| { keys("*").unwrap().contains(&key.to_string()) }));
+            .all(|key| { keys("*").expect("failed to get keys").contains(&key.to_string()) }));
     }
 
     #[test]
     fn test_exists() {
-        assert!(!exists("does_not_exist").unwrap());
+        assert!(!exists("does_not_exist").expect("failed to check if key exists"));
         store_cache("does_not_exist", "some_value", None);
-        assert!(exists("does_not_exist").unwrap());
+        assert!(exists("does_not_exist").expect("failed to check if key exists"));
         delete_cache("does_not_exist");
     }
 }

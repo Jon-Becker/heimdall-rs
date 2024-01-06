@@ -167,6 +167,7 @@ fn simplify_casts(line: &str) -> String {
 }
 
 /// Simplifies expressions by removing unnecessary parentheses
+// TODO: implement simplify_parentheses correctly with a tokenier
 fn simplify_parentheses(line: &str, paren_index: usize) -> String {
     // helper function to determine if parentheses are necessary
     fn are_parentheses_unnecessary(expression: &str) -> bool {

@@ -191,7 +191,7 @@ where
         }
     }
 
-    resolve_progress.lock().unwrap().finish_and_clear();
+    resolve_progress.lock().expect("failed to acquire lock on resolve_progress").finish_and_clear();
 
     let x =
         resolved_functions.lock().expect("Could not obtain lock on resolved_functions.").clone();

@@ -1,4 +1,4 @@
-use std::{fmt::Write, num::ParseIntError};
+use std::{fmt::Write, num::ParseIntError, ops::Range};
 
 use ethers::{
     abi::AbiEncode,
@@ -6,7 +6,7 @@ use ethers::{
 };
 use fancy_regex::Regex;
 
-use crate::constants::REDUCE_HEX_REGEX;
+use crate::{constants::REDUCE_HEX_REGEX, error::Error};
 
 /// Converts a signed integer into an unsigned integer
 pub fn sign_uint(unsigned: U256) -> I256 {
@@ -105,10 +105,13 @@ pub fn replace_last(s: &str, old: &str, new: &str) -> String {
 /// use heimdall_common::utils::strings::find_balanced_encapsulator;
 ///
 /// let s = "Hello (World)";
-/// let result = find_balanced_encapsulator(s, ('(', ')'));
-/// assert_eq!(result, (6, 13, true));
+/// let result = find_balanced_encapsulator(s, ('(', ')')).expect("should find balanced encapsulator");
+/// assert_eq!(result, (7..12));
+/// // extract the condition
+/// let condition = &s[result];
+/// assert_eq!(condition, "World");
 /// ```
-pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> Result<Range<usize>, Error> {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -127,7 +130,15 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize
             break
         }
     }
-    (start, end + 1, (open == close && end > start && open > 0))
+
+    if !(open == close && end > start && open > 0) {
+        return Err(Error::ParseError(format!(
+            "string '{}' doesn't contain balanced encapsulator {}{}.",
+            s, encap.0, encap.1
+        )))
+    }
+
+    Ok(start + 1..end)
 }
 
 /// Finds balanced parentheses in a string, starting from the end
@@ -136,10 +147,14 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize
 /// use heimdall_common::utils::strings::find_balanced_encapsulator_backwards;
 ///
 /// let s = "Hello (World)";
-/// let result = find_balanced_encapsulator_backwards(s, ('(', ')'));
-/// assert_eq!(result, (6, 13, true));
+/// let result = find_balanced_encapsulator_backwards(s, ('(', ')')).expect("should find balanced encapsulator");
+/// assert_eq!(result, (7..12));
+/// assert_eq!(&s[result], "World");
 /// ```
-pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator_backwards(
+    s: &str,
+    encap: (char, char),
+) -> Result<Range<usize>, Error> {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -158,7 +173,15 @@ pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (us
             break
         }
     }
-    (s.len() - end - 1, s.len() - start, (open == close && end > start && open > 0))
+
+    if !(open == close && end > start && open > 0) {
+        return Err(Error::ParseError(format!(
+            "string '{}' doesn't contain balanced encapsulator {}{}.",
+            s, encap.0, encap.1
+        )))
+    }
+
+    Ok(s.len() - end..s.len() - start - 1)
 }
 
 /// Encodes a number into a base26 string
@@ -222,19 +245,17 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
         let sliced = s[start + keyword.len()..].to_string();
 
         // find the balanced encapsulator
-        let (start, end, is_balanced) = find_balanced_encapsulator(&sliced, ('(', ')'));
+        let encap_range = find_balanced_encapsulator(&sliced, ('(', ')')).ok()?;
 
         // extract the condition if balanced encapsulator is found
-        if is_balanced {
-            let mut condition = &sliced[start + 1..end - 1];
+        let mut condition = sliced[encap_range].to_string();
 
-            // require() statements can include revert messages or error codes
-            if condition.contains(", ") {
-                condition = condition.split(", ").collect::<Vec<&str>>()[0];
-            }
-
-            return Some(condition.trim().to_string())
+        // require() statements can include revert messages or error codes
+        if condition.contains(", ") {
+            condition = condition.split(", ").collect::<Vec<&str>>()[0].to_owned();
         }
+
+        return Some(condition.trim().to_string())
     }
 
     None
@@ -472,44 +493,38 @@ mod tests {
     fn test_find_balanced_encapsulator() {
         let s = String::from("This is (an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
-        assert_eq!(start, 8);
-        assert_eq!(end, 20);
-        assert!(is_balanced);
+        let range =
+            find_balanced_encapsulator(&s, encap).expect("should find balanced encapsulator");
+        assert_eq!(range, 9..19);
 
         let s = String::from("This is an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
-        assert_eq!(start, 0);
-        assert_eq!(end, 1);
-        assert!(!is_balanced);
+        let result = find_balanced_encapsulator(&s, encap);
+        assert!(result.is_err());
 
         let s = String::from("This is (an example string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
-        assert_eq!(start, 8);
-        assert_eq!(end, 1);
-        assert!(!is_balanced);
+        let result = find_balanced_encapsulator(&s, encap);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_find_balanced_encapsulator_backwards() {
         let s = String::from("This is (an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
-        assert_eq!(start, 8);
-        assert_eq!(end, 20);
-        assert!(is_balanced);
+        let range = find_balanced_encapsulator_backwards(&s, encap)
+            .expect("should find balanced encapsulator");
+        assert_eq!(range, 9..19);
 
         let s = String::from("This is an example) string.");
         let encap = ('(', ')');
-        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
-        assert!(!is_balanced);
+        let result = find_balanced_encapsulator_backwards(&s, encap);
+        assert!(result.is_err());
 
         let s = String::from("This is (an example string.");
         let encap = ('(', ')');
-        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
-        assert!(!is_balanced);
+        let result = find_balanced_encapsulator_backwards(&s, encap);
+        assert!(result.is_err());
     }
 
     #[test]

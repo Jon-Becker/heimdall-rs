@@ -1,9 +1,10 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::Range};
 
 use ethers::abi::{AbiEncode, ParamType};
 
 use crate::{
     constants::TYPE_CAST_REGEX,
+    error::Error,
     utils::strings::{decode_hex, find_balanced_encapsulator},
 };
 
@@ -23,18 +24,16 @@ pub enum Padding {
 /// use ethers::abi::ParamType;
 ///
 /// let function_signature = "foo(uint256,uint256)";
-/// let function_parameters = parse_function_parameters(function_signature).unwrap();
+/// let function_parameters = parse_function_parameters(function_signature)
+///     .expect("failed to parse function parameters");
 ///
 /// assert_eq!(function_parameters, vec![ParamType::Uint(256), ParamType::Uint(256)]);
 /// ```
 pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamType>> {
     // remove the function name from the signature, only keep the parameters
-    let (start, end, valid) = find_balanced_encapsulator(function_signature, ('(', ')'));
-    if !valid {
-        return None
-    }
+    let param_range = find_balanced_encapsulator(function_signature, ('(', ')')).ok()?;
 
-    let function_inputs = function_signature[start + 1..end - 1].to_string();
+    let function_inputs = function_signature[param_range].to_string();
 
     // get inputs from the string
     extract_types_from_string(&function_inputs)
@@ -55,16 +54,13 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
         // check if first type is a tuple
         if is_first_type_tuple(string) {
             // get balanced encapsulator
-            let (tuple_start, tuple_end, valid) = find_balanced_encapsulator(string, ('(', ')'));
-            if !valid {
-                return None
-            }
+            let tuple_range = find_balanced_encapsulator(string, ('(', ')')).ok()?;
 
             // extract the tuple
-            let tuple_types = string[tuple_start + 1..tuple_end - 1].to_string();
+            let tuple_types = string[tuple_range.clone()].to_string();
 
             // remove the tuple from the string
-            let mut string = string[tuple_end..].to_string();
+            let mut string = string[tuple_range.end + 1..].to_string();
 
             // if string is not empty, split on commas and check if tuple is an array
             let mut is_array = false;
@@ -76,12 +72,9 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
 
                 // get array size, or none if []
                 if is_array {
-                    let (start, end, valid) = find_balanced_encapsulator(split, ('[', ']'));
-                    if !valid {
-                        return None
-                    }
+                    let array_range = find_balanced_encapsulator(split, ('[', ']')).ok()?;
 
-                    let size = split[start + 1..end - 1].to_string();
+                    let size = split[array_range].to_string();
                     array_size = match size.parse::<usize>() {
                         Ok(size) => Some(size),
                         Err(_) => None,
@@ -189,12 +182,12 @@ pub fn to_type(string: &str) -> ParamType {
 
     // while string contains a [..]
     while string.ends_with(']') {
-        let (start, end, valid) = find_balanced_encapsulator(&string, ('[', ']'));
-        if !valid {
-            return ParamType::Bytes // default to bytes if invalid
-        }
+        let array_range = match find_balanced_encapsulator(&string, ('[', ']')) {
+            Ok(range) => range,
+            Err(_) => return ParamType::Bytes, // default to bytes if invalid
+        };
 
-        let size = string[start + 1..end - 1].to_string();
+        let size = string[array_range].to_string();
 
         array_size.push_back(match size.parse::<usize>() {
             Ok(size) => Some(size),
@@ -217,7 +210,7 @@ pub fn to_type(string: &str) -> ParamType {
                 let size = stripped.parse::<usize>().unwrap_or(256);
                 ParamType::Int(size)
             } else if let Some(stripped) = string.strip_prefix("bytes") {
-                let size = stripped.parse::<usize>().unwrap();
+                let size = stripped.parse::<usize>().unwrap_or(32);
                 ParamType::FixedBytes(size)
             } else {
                 // default to bytes if invalid
@@ -232,7 +225,9 @@ pub fn to_type(string: &str) -> ParamType {
         // while array_size is not empty
         while !array_size.is_empty() {
             // pop off first element of array_size
-            if let Some(size) = array_size.pop_front().unwrap() {
+            if let Some(size) =
+                array_size.pop_front().expect("impossible case: failed to pop from array_size")
+            {
                 arg_type = ParamType::FixedArray(Box::new(arg_type), size);
             } else {
                 arg_type = ParamType::Array(Box::new(arg_type));
@@ -304,7 +299,17 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 }
 
 /// Given a string (typically a line of decompiled source code), extract a type cast if one exists.
-pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
+// TODO: instead of returning a String, return a ParamType
+/// ```
+/// use heimdall_common::ether::evm::core::types::find_cast;
+///
+/// let line = "uint256(0x000011)";
+/// let (range, cast_type) = find_cast(line).expect("failed to find type cast");
+/// assert_eq!(range, 8..16);
+/// assert_eq!(&line[range], "0x000011");
+/// assert_eq!(cast_type, "uint256");
+/// ```
+pub fn find_cast(line: &str) -> Result<(Range<usize>, String), Error> {
     // find the start of the cast
     match TYPE_CAST_REGEX.find(line).expect("Failed to find type cast.") {
         Some(m) => {
@@ -313,10 +318,10 @@ pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
             let cast_type = line[start..].split('(').collect::<Vec<&str>>()[0].to_string();
 
             // find where the cast ends
-            let (a, b, _) = find_balanced_encapsulator(&line[end..], ('(', ')'));
-            (end + a, end + b, Some(cast_type))
+            let range = find_balanced_encapsulator(&line[end..], ('(', ')'))?;
+            Ok((end + range.start..end + range.end, cast_type))
         }
-        None => (0, 0, None),
+        None => Err(Error::ParseError("failed to find type cast".to_string())),
     }
 }
 

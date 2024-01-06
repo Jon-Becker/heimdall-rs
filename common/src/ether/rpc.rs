@@ -162,7 +162,6 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
 /// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(bytecode.is_ok());
 /// ```
-/// TODO: check for caching
 pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Transaction, Error> {
     backoff::future::retry(
         ExponentialBackoff {
@@ -455,7 +454,6 @@ pub async fn get_block_logs(
     .map_err(|_| Error::Generic(format!("failed to get logs for block: {:?}", &block_number)))
 }
 
-// TODO: add tests
 #[cfg(test)]
 pub mod tests {
     use crate::{ether::rpc::*, utils::hex::ToLowerHex};

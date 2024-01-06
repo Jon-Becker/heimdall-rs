@@ -45,7 +45,7 @@ impl RangeMap {
                     }
                     CollisionKind::Splitting => {
                         let left: Range<usize> =
-                            Range { start: incumbent.start, end: range.start - 1 };
+                            Range { start: incumbent.start, end: range.start.saturating_sub(1) };
                         let right: Range<usize> =
                             Range { start: range.end + 1, end: incumbent.end };
                         let old_opcode: WrappedOpcode = self.0.get(incumbent).expect("").clone();
@@ -61,8 +61,10 @@ impl RangeMap {
                             };
 
                         if needs_right_shortening(&range, incumbent) {
-                            let remainder: Range<usize> =
-                                Range { start: incumbent.start, end: range.start - 1 };
+                            let remainder: Range<usize> = Range {
+                                start: incumbent.start,
+                                end: range.start.saturating_sub(1),
+                            };
                             let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
                             self.0.remove(incumbent);
                             self.0.insert(remainder, old_opcode);

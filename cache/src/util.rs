@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn test_delete_path_successful() {
         let path = "/tmp/test_dir";
-        std::fs::create_dir(path).unwrap();
+        std::fs::create_dir(path).expect("unable to create directory");
 
         let result = delete_path(path);
         assert!(result);

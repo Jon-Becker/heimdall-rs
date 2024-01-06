@@ -74,9 +74,8 @@ mod tests {
         let filename = "cfg.dot";
 
         let path = build_output_path(output, target, rpc_url, filename).await;
-        assert!(path.is_ok());
         assert!(path
-            .unwrap()
+            .expect("failed to build output path")
             .ends_with("/output/1/0x0000000000000000000000000000000000000001/cfg.dot"));
     }
 
@@ -89,8 +88,7 @@ mod tests {
         let filename = "cfg.dot";
 
         let path = build_output_path(output, target, rpc_url, filename).await;
-        assert!(path.is_ok());
-        assert!(path.unwrap().ends_with("/output/local/cfg.dot"));
+        assert!(path.expect("failed to build output path").ends_with("/output/local/cfg.dot"));
     }
 
     #[tokio::test]
@@ -101,7 +99,6 @@ mod tests {
         let filename = "cfg.dot";
 
         let path = build_output_path(output, target, rpc_url, filename).await;
-        assert!(path.is_ok());
-        assert_eq!(path.unwrap(), "/some_dir/cfg.dot".to_string());
+        assert_eq!(path.expect("failed to build output path"), "/some_dir/cfg.dot".to_string());
     }
 }
