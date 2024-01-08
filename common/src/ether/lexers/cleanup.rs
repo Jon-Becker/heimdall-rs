@@ -3,6 +3,7 @@ use crate::{
         AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MUL_BY_ONE_REGEX,
         NON_ZERO_BYTE_REGEX,
     },
+    error::Error,
     ether::evm::core::types::{byte_size_to_type, find_cast},
     utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards},
 };
@@ -14,17 +15,23 @@ pub trait Cleanup {
 }
 
 /// Convert bitwise operations to a variable type cast
-fn convert_bitmask_to_casting(line: &str) -> String {
+fn convert_bitmask_to_casting(line: &str) -> Result<String, Error> {
     let mut cleaned = line.to_owned();
 
-    match AND_BITMASK_REGEX.find(&cleaned).unwrap() {
+    match AND_BITMASK_REGEX
+        .find(&cleaned)
+        .map_err(|e| Error::Generic(format!("failed to find bitmask: {}", e)))?
+    {
         Some(bitmask) => {
             let cast = bitmask.as_str();
             let cast_size = NON_ZERO_BYTE_REGEX.find_iter(cast).count();
             let (_, cast_types) = byte_size_to_type(cast_size);
 
             // get the cast subject
-            let mut subject = cleaned.get(bitmask.end()..).unwrap().replace(';', "");
+            let mut subject = cleaned
+                .get(bitmask.end()..)
+                .ok_or(Error::Generic(format!("failed to get cast subject: {}", bitmask.end())))?
+                .replace(';', "");
 
             // attempt to find matching parentheses
             let subject_range = find_balanced_encapsulator(&subject, ('(', ')'))
@@ -52,10 +59,13 @@ fn convert_bitmask_to_casting(line: &str) -> String {
                 cleaned.replace(&format!("{cast}{subject}"), &format!("{solidity_type}{subject}"));
 
             // attempt to cast again
-            cleaned = convert_bitmask_to_casting(&cleaned);
+            cleaned = convert_bitmask_to_casting(&cleaned)?;
         }
         None => {
-            if let Some(bitmask) = AND_BITMASK_REGEX_2.find(&cleaned).unwrap() {
+            if let Some(bitmask) = AND_BITMASK_REGEX_2
+                .find(&cleaned)
+                .map_err(|e| Error::Generic(format!("failed to find bitmask: {}", e)))?
+            {
                 let cast = bitmask.as_str();
                 let cast_size = NON_ZERO_BYTE_REGEX.find_iter(cast).count();
                 let (_, cast_types) = byte_size_to_type(cast_size);
@@ -63,14 +73,24 @@ fn convert_bitmask_to_casting(line: &str) -> String {
                 // get the cast subject
                 let mut subject = match cleaned
                     .get(0..bitmask.start())
-                    .unwrap()
+                    .ok_or(Error::Generic(format!(
+                        "failed to get cast subject: {}",
+                        bitmask.start()
+                    )))?
                     .replace(';', "")
                     .split('=')
                     .collect::<Vec<&str>>()
                     .last()
                 {
                     Some(subject) => subject.to_string(),
-                    None => cleaned.get(0..bitmask.start()).unwrap().replace(';', ""),
+                    None => cleaned
+                        .get(0..bitmask.start())
+                        .ok_or(Error::Generic(format!(
+                            "failed to get cast subject: {}",
+                            bitmask.start()
+                        )))?
+                        .to_string()
+                        .replace(';', ""),
                 };
 
                 // attempt to find matching parentheses
@@ -99,12 +119,12 @@ fn convert_bitmask_to_casting(line: &str) -> String {
                     .replace(&format!("{subject}{cast}"), &format!("{solidity_type}{subject}"));
 
                 // attempt to cast again
-                cleaned = convert_bitmask_to_casting(&cleaned);
+                cleaned = convert_bitmask_to_casting(&cleaned)?;
             }
         }
     }
 
-    cleaned
+    Ok(cleaned)
 }
 
 /// Removes unnecessary casts
@@ -148,7 +168,7 @@ impl Cleanup for String {
         self = simplify_casts(&self);
 
         // convert bitmasks to casts
-        self = convert_bitmask_to_casting(&self);
+        self = convert_bitmask_to_casting(&self).unwrap_or(self);
 
         // simplify arithmatic
         self = simplify_arithmatic(&self);
@@ -167,7 +187,7 @@ mod tests {
             "(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) & (arg0);",
         );
 
-        assert_eq!(convert_bitmask_to_casting(&line), String::from("uint256(arg0);"));
+        assert_eq!(convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"), String::from("uint256(arg0);"));
     }
 
     #[test]
@@ -176,7 +196,7 @@ mod tests {
             "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);",
         );
 
-        assert_eq!(convert_bitmask_to_casting(&line), String::from("uint256(arg0);"));
+        assert_eq!(convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"), String::from("uint256(arg0);"));
     }
 
     #[test]
@@ -185,7 +205,7 @@ mod tests {
             "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00);",
         );
 
-        assert_eq!(convert_bitmask_to_casting(&line), String::from("uint248(arg0);"));
+        assert_eq!(convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"), String::from("uint248(arg0);"));
     }
 
     #[test]

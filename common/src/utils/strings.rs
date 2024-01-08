@@ -1,4 +1,4 @@
-use std::{fmt::Write, num::ParseIntError, ops::Range};
+use std::{fmt::Write, ops::Range};
 
 use ethers::{
     abi::AbiEncode,
@@ -19,18 +19,24 @@ pub fn sign_uint(unsigned: U256) -> I256 {
 /// use heimdall_common::utils::strings::decode_hex;
 ///
 /// let hex = "48656c6c6f20576f726c64"; // "Hello World" in hex
-/// let result = decode_hex(hex);
-/// assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]));
+/// let result = decode_hex(hex).expect("should decode hex");
+/// assert_eq!(result, vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]);
 /// ```
-pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, ParseIntError> {
+pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, Error> {
     // normalize
     s = s.trim_start_matches("0x");
 
     if s.len() == 0 {
-        return Ok(vec![])
+        return Ok(vec![]);
     }
 
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16)).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(&s[i..i + 2], 16)
+                .map_err(|e| Error::ParseError(format!("failed to parse hex string: {}", e)))
+        })
+        .collect()
 }
 
 /// Encodes a vector of bytes into a hex string
@@ -44,7 +50,7 @@ pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, ParseIntError> {
 /// ```
 pub fn encode_hex(s: Vec<u8>) -> String {
     s.iter().fold(String::new(), |mut acc, b| {
-        write!(acc, "{b:02x}", b = b).unwrap();
+        write!(acc, "{b:02x}", b = b).expect("unable to write");
         acc
     })
 }
@@ -73,13 +79,14 @@ pub fn encode_hex_reduced(s: U256) -> String {
 /// use heimdall_common::utils::strings::hex_to_ascii;
 ///
 /// let hex = "48656c6c6f20576f726c64"; // "Hello World" in hex
-/// let result = hex_to_ascii(hex);
+/// let result = hex_to_ascii(hex).expect("should decode hex");
 /// assert_eq!(result, "Hello World");
 /// ```
-pub fn hex_to_ascii(s: &str) -> String {
+pub fn hex_to_ascii(s: &str) -> Result<String, Error> {
     let mut result = String::new();
     for i in 0..s.len() / 2 {
-        let byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap();
+        let byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16)
+            .map_err(|e| Error::ParseError(format!("failed to parse hex string: {}", e)))?;
         result.push(byte as char);
     }
 
@@ -87,7 +94,7 @@ pub fn hex_to_ascii(s: &str) -> String {
     result = result.replace('\r', "");
     result = result.replace('\n', "");
 
-    result
+    Ok(result)
 }
 
 /// Replaces the last occurrence of a substring in a string
@@ -134,7 +141,7 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> Result<Range<
         }
         if open == close && open > 0 {
             end = i;
-            break
+            break;
         }
     }
 
@@ -142,7 +149,7 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> Result<Range<
         return Err(Error::ParseError(format!(
             "string '{}' doesn't contain balanced encapsulator {}{}.",
             s, encap.0, encap.1
-        )))
+        )));
     }
 
     Ok(start + 1..end)
@@ -177,7 +184,7 @@ pub fn find_balanced_encapsulator_backwards(
         }
         if open == close && open > 0 {
             end = i;
-            break
+            break;
         }
     }
 
@@ -185,7 +192,7 @@ pub fn find_balanced_encapsulator_backwards(
         return Err(Error::ParseError(format!(
             "string '{}' doesn't contain balanced encapsulator {}{}.",
             s, encap.0, encap.1
-        )))
+        )));
     }
 
     Ok(s.len() - end..s.len() - start - 1)
@@ -220,7 +227,10 @@ pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
     let mut substrings = vec![];
     let mut last_end = 0;
     for m in matches {
-        let m = m.unwrap();
+        let m = match m {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
         let start = m.start();
         let end = m.end();
         if start > last_end {
@@ -262,7 +272,7 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
             condition = condition.split(", ").collect::<Vec<&str>>()[0].to_owned();
         }
 
-        return Some(condition.trim().to_string())
+        return Some(condition.trim().to_string());
     }
 
     None
@@ -303,8 +313,8 @@ pub fn tokenize(s: &str) -> Vec<String> {
             // Check if current character and last character form a compound operator (like "==",
             // ">=", "&&", "||")
             if let Some(last) = last_char {
-                if compound_operator_first_chars.contains(&last) &&
-                    (c == '=' || c == '&' || c == '|')
+                if compound_operator_first_chars.contains(&last)
+                    && (c == '=' || c == '&' || c == '|')
                 {
                     // Remove the last character as a single token
                     tokens.pop();
@@ -351,18 +361,18 @@ pub enum TokenType {
 pub fn classify_token(token: &str) -> TokenType {
     // return if the token is a parenthesis
     if token == "(" || token == ")" {
-        return TokenType::Control
+        return TokenType::Control;
     }
 
     // check if the token is an operator
     let operators = ['+', '-', '*', '/', '=', '>', '<', '!', '&', '|', '%', '^'];
     if token.chars().all(|c| operators.contains(&c)) {
-        return TokenType::Operator
+        return TokenType::Operator;
     }
 
     // check if the token is a constant
     if token.starts_with("0x") || token.parse::<U256>().is_ok() {
-        return TokenType::Constant
+        return TokenType::Constant;
     }
 
     // check if the token is a variable
@@ -373,7 +383,7 @@ pub fn classify_token(token: &str) -> TokenType {
     .iter()
     .any(|keyword| token.contains(keyword))
     {
-        return TokenType::Variable
+        return TokenType::Variable;
     }
 
     // this token must be a function call
@@ -392,9 +402,9 @@ pub fn get_shortned_target(target: &str) -> String {
     let mut shortened_target = target.to_string();
 
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     shortened_target
@@ -424,16 +434,16 @@ mod tests {
     #[test]
     fn test_decode_hex() {
         let hex = "48656c6c6f20776f726c64"; // "Hello world"
-        let result = decode_hex(hex);
-        assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]));
+        let result = decode_hex(hex).expect("should decode hex");
+        assert_eq!(result, vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]);
 
         let hex = "abcdef";
-        let result = decode_hex(hex);
-        assert_eq!(result, Ok(vec![171, 205, 239]));
+        let result = decode_hex(hex).expect("should decode hex");
+        assert_eq!(result, vec![171, 205, 239]);
 
         let hex = "012345";
-        let result = decode_hex(hex);
-        assert_eq!(result, Ok(vec![1, 35, 69]));
+        let result = decode_hex(hex).expect("should decode hex");
+        assert_eq!(result, vec![1, 35, 69]);
     }
 
     #[test]
@@ -469,15 +479,15 @@ mod tests {
     #[test]
     fn test_hex_to_ascii() {
         let hex = "48656c6c6f20776f726c64"; // "Hello world"
-        let result = hex_to_ascii(hex);
+        let result = hex_to_ascii(hex).expect("should decode hex");
         assert_eq!(result, "Hello world");
 
         let hex = "616263646566"; // "abcdef"
-        let result = hex_to_ascii(hex);
+        let result = hex_to_ascii(hex).expect("should decode hex");
         assert_eq!(result, "abcdef");
 
         let hex = "303132333435"; // "012345"
-        let result = hex_to_ascii(hex);
+        let result = hex_to_ascii(hex).expect("should decode hex");
         assert_eq!(result, "012345");
     }
 
@@ -556,17 +566,17 @@ mod tests {
     #[test]
     fn test_split_string_by_regex() {
         let input = "Hello,world!";
-        let pattern = fancy_regex::Regex::new(r",").unwrap();
+        let pattern = fancy_regex::Regex::new(r",").expect("failed to compile regex");
         let result = split_string_by_regex(input, pattern);
         assert_eq!(result, vec!["Hello", "world!"]);
 
         let input = "This is a test.";
-        let pattern = fancy_regex::Regex::new(r"\s").unwrap();
+        let pattern = fancy_regex::Regex::new(r"\s").expect("failed to compile regex");
         let result = split_string_by_regex(input, pattern);
         assert_eq!(result, vec!["This", "is", "a", "test."]);
 
         let input = "The quick brown fox jumps over the lazy dog.";
-        let pattern = fancy_regex::Regex::new(r"\s+").unwrap();
+        let pattern = fancy_regex::Regex::new(r"\s+").expect("failed to compile regex");
         let result = split_string_by_regex(input, pattern);
         assert_eq!(
             result,

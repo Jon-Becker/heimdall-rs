@@ -6,4 +6,6 @@ pub enum Error {
     ParseError(String),
     #[error("Filesystem error: {0}")]
     FilesystemError(#[from] std::io::Error),
+    #[error("HTTP error: {0}")]
+    HttpError(#[from] reqwest::Error),
 }

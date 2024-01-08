@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::error::Error;
+
 use super::http::get_json_from_url;
 
 #[derive(Debug)]
@@ -27,13 +29,13 @@ pub fn current_version() -> Version {
 }
 
 /// get the latest version from github
-pub async fn remote_version() -> Version {
+pub async fn remote_version() -> Result<Version, Error> {
     // get the latest release from github
     let remote_repository_url =
         "https://api.github.com/repos/Jon-Becker/heimdall-rs/releases/latest";
 
     // retrieve the latest release tag from github
-    if let Some(release) = get_json_from_url(remote_repository_url, 1).await.unwrap() {
+    if let Some(release) = get_json_from_url(remote_repository_url, 1).await? {
         if let Some(tag_name) = release["tag_name"].as_str() {
             let version_string = tag_name.replace('v', "");
             let version_parts: Vec<&str> = version_string.split('.').collect();
@@ -43,13 +45,13 @@ pub async fn remote_version() -> Version {
                 let minor = version_parts[1].parse::<u32>().unwrap_or(0);
                 let patch = version_parts[2].parse::<u32>().unwrap_or(0);
 
-                return Version { major, minor, patch }
+                return Ok(Version { major, minor, patch })
             }
         }
     }
 
     // if we can't get the latest release, return a default version
-    Version { major: 0, minor: 0, patch: 0 }
+    Ok(Version { major: 0, minor: 0, patch: 0 })
 }
 
 impl Display for Version {

@@ -133,7 +133,12 @@ pub fn jump_condition_contains_mutated_memory_access(
             if _match.is_err() {
                 return false
             }
-            let memory_access = _match.unwrap();
+
+            let memory_access = match _match {
+                Ok(access) => access,
+                Err(_) => return false,
+            };
+
             let slice = &jump_condition[memory_access.start()..memory_access.end()];
             frame.operation.solidify().contains(slice)
         })
@@ -156,7 +161,10 @@ pub fn jump_condition_contains_mutated_storage_access(
             if _match.is_err() {
                 return false
             }
-            let storage_access = _match.unwrap();
+            let storage_access = match _match {
+                Ok(access) => access,
+                Err(_) => return false,
+            };
             let slice = &jump_condition[storage_access.start()..storage_access.end()];
             frame.operation.solidify().contains(slice)
         })

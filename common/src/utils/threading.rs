@@ -47,7 +47,7 @@ pub fn task_pool<
         let shared_f = Arc::clone(&shared_f);
         let handle = thread::spawn(move || {
             let chunk_results: Vec<R> = chunk.into_iter().map(|item| shared_f(item)).collect();
-            tx.send(chunk_results).unwrap();
+            let _ = tx.send(chunk_results);
         });
         handles.push(handle);
     }
@@ -55,7 +55,10 @@ pub fn task_pool<
     // Wait for all threads to finish and collect the results
     let mut results = Vec::new();
     for _ in 0..num_threads {
-        let chunk_results = rx.recv().unwrap();
+        let chunk_results = match rx.recv() {
+            Ok(chunk_results) => chunk_results,
+            Err(_) => continue,
+        };
         results.extend(chunk_results);
     }
 
@@ -76,7 +79,7 @@ where
     let (tx, rx) = unbounded();
     let handle = thread::spawn(move || {
         let result = f();
-        tx.send(result).unwrap();
+        let _ = tx.send(result);
     });
 
     let result = rx.recv_timeout(timeout);
@@ -85,8 +88,8 @@ where
         return None
     }
 
-    handle.join().unwrap();
-    Some(result.unwrap())
+    handle.join().ok();
+    Some(result.ok()?)
 }
 
 #[cfg(test)]

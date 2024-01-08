@@ -40,7 +40,7 @@ impl VM {
         selector: &str,
         entry_point: u128,
     ) -> Result<(VMTrace, u32), Error> {
-        self.calldata = decode_hex(selector).unwrap();
+        self.calldata = decode_hex(selector)?;
 
         // step through the bytecode until we reach the entry point
         while self.bytecode.len() >= self.instruction as usize && (self.instruction <= entry_point)

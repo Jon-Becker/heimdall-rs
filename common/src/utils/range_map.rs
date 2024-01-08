@@ -65,13 +65,13 @@ impl RangeMap {
                                 start: incumbent.start,
                                 end: range.start.saturating_sub(1),
                             };
-                            let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
+                            let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().expect("impossible case: incumbent range not found");
                             self.0.remove(incumbent);
                             self.0.insert(remainder, old_opcode);
                         } else {
                             let remainder: Range<usize> =
                                 Range { start: range.end + 1, end: incumbent.end };
-                            let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
+                            let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().expect("impossible case: incumbent range not found");
                             self.0.remove(incumbent);
                             self.0.insert(remainder, old_opcode);
                         }
