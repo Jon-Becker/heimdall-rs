@@ -45,6 +45,7 @@ pub async fn get_resolved_selectors(
 }
 
 /// find all function selectors in the given EVM assembly.
+// TODO: update get_resolved_selectors logic to support vyper, huff
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
     let mut function_selectors = HashMap::new();
     let mut handled_selectors = HashSet::new();
@@ -97,6 +98,7 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
 }
 
 /// resolve a selector's function entry point from the EVM bytecode
+// TODO: update resolve_entry_point logic to support vyper
 pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     let mut vm = evm.clone();
     let mut handled_jumps = HashSet::new();
@@ -104,7 +106,10 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     // execute the EVM call to find the entry point for the given selector
     vm.calldata = decode_hex(selector).expect("Failed to decode selector.");
     while vm.bytecode.len() >= vm.instruction as usize {
-        let call = vm.step();
+        let call = match vm.step() {
+            Ok(call) => call,
+            Err(_) => break, // the call failed, so we can't resolve the selector
+        };
 
         // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
         if call.last_instruction.opcode == 0x57 {

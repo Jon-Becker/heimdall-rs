@@ -29,9 +29,9 @@ pub enum Padding {
 ///
 /// assert_eq!(function_parameters, vec![ParamType::Uint(256), ParamType::Uint(256)]);
 /// ```
-pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamType>> {
+pub fn parse_function_parameters(function_signature: &str) -> Result<Vec<ParamType>, Error> {
     // remove the function name from the signature, only keep the parameters
-    let param_range = find_balanced_encapsulator(function_signature, ('(', ')')).ok()?;
+    let param_range = find_balanced_encapsulator(function_signature, ('(', ')'))?;
 
     let function_inputs = function_signature[param_range].to_string();
 
@@ -41,12 +41,10 @@ pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamTy
 
 /// Helper function for extracting types from a string. Used by [`parse_function_parameters`],
 /// typically after entering a nested tuple or similar.
-fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
+fn extract_types_from_string(string: &str) -> Result<Vec<ParamType>, Error> {
     let mut types = Vec::new();
-
-    // if string is empty, return None
     if string.is_empty() {
-        return None
+        return Ok(types)
     }
 
     // if the string contains a tuple we cant simply split on commas
@@ -54,7 +52,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
         // check if first type is a tuple
         if is_first_type_tuple(string) {
             // get balanced encapsulator
-            let tuple_range = find_balanced_encapsulator(string, ('(', ')')).ok()?;
+            let tuple_range = find_balanced_encapsulator(string, ('(', ')'))?;
 
             // extract the tuple
             let tuple_types = string[tuple_range.clone()].to_string();
@@ -72,7 +70,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
 
                 // get array size, or none if []
                 if is_array {
-                    let array_range = find_balanced_encapsulator(split, ('[', ']')).ok()?;
+                    let array_range = find_balanced_encapsulator(split, ('[', ']'))?;
 
                     let size = split[array_range].to_string();
                     array_size = match size.parse::<usize>() {
@@ -95,29 +93,27 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
 
                 if let Some(array_size) = array_size {
                     // recursively call this function to extract the tuple types
-                    let inner_types = extract_types_from_string(&tuple_types);
+                    let inner_types = extract_types_from_string(&tuple_types)?;
 
                     types.push(ParamType::FixedArray(
-                        Box::new(ParamType::Tuple(inner_types.unwrap())),
+                        Box::new(ParamType::Tuple(inner_types)),
                         array_size,
                     ))
                 } else {
                     // recursively call this function to extract the tuple types
-                    let inner_types = extract_types_from_string(&tuple_types);
+                    let inner_types = extract_types_from_string(&tuple_types)?;
 
-                    types.push(ParamType::Array(Box::new(ParamType::Tuple(inner_types.unwrap()))))
+                    types.push(ParamType::Array(Box::new(ParamType::Tuple(inner_types))))
                 }
             } else {
                 // recursively call this function to extract the tuple types
-                let inner_types = extract_types_from_string(&tuple_types);
+                let inner_types = extract_types_from_string(&tuple_types)?;
 
-                types.push(ParamType::Tuple(inner_types.unwrap()));
+                types.push(ParamType::Tuple(inner_types));
             }
 
             // recursively call this function to extract the remaining types
-            if let Some(mut remaining_types) = extract_types_from_string(&string) {
-                types.append(&mut remaining_types);
-            }
+            types.append(&mut extract_types_from_string(&string)?);
         } else {
             // first type is not a tuple, so we can extract it
             let string_parts = string.splitn(2, ',').collect::<Vec<&str>>();
@@ -126,9 +122,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
             if string_parts[0].is_empty() {
                 // the first type is empty, so we can just recursively call this function to extract
                 // the remaining types
-                if let Some(mut remaining_types) = extract_types_from_string(string_parts[1]) {
-                    types.append(&mut remaining_types);
-                }
+                types.append(&mut extract_types_from_string(string_parts[1])?);
             } else {
                 let param_type = to_type(string_parts[0]);
                 types.push(param_type);
@@ -137,9 +131,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
                 let string = string[string_parts[0].len() + 1..].to_string();
 
                 // recursively call this function to extract the remaining types
-                if let Some(mut remaining_types) = extract_types_from_string(&string) {
-                    types.append(&mut remaining_types);
-                }
+                types.append(&mut extract_types_from_string(&string)?);
             }
         }
     } else {
@@ -157,10 +149,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
         }
     }
 
-    match types.len() {
-        0 => None,
-        _ => Some(types),
-    }
+    Ok(types)
 }
 
 /// A helper function used by [`extract_types_from_string`] to check if the first type in a string
@@ -436,42 +425,46 @@ mod tests {
     #[test]
     fn test_simple_signature() {
         let solidity_type = "test(uint256)".to_string();
-        let param_type = parse_function_parameters(&solidity_type);
-        assert_eq!(param_type, Some(vec![ParamType::Uint(256)]));
+        let param_type =
+            parse_function_parameters(&solidity_type).expect("failed to parse function parameters");
+        assert_eq!(param_type, vec![ParamType::Uint(256)]);
     }
 
     #[test]
     fn test_multiple_signature() {
         let solidity_type = "test(uint256,string)".to_string();
-        let param_type = parse_function_parameters(&solidity_type);
-        assert_eq!(param_type, Some(vec![ParamType::Uint(256), ParamType::String]));
+        let param_type =
+            parse_function_parameters(&solidity_type).expect("failed to parse function parameters");
+        assert_eq!(param_type, vec![ParamType::Uint(256), ParamType::String]);
     }
 
     #[test]
     fn test_array_signature() {
         let solidity_type = "test(uint256,string[],uint256)";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![
+            vec![
                 ParamType::Uint(256),
                 ParamType::Array(Box::new(ParamType::String)),
                 ParamType::Uint(256)
-            ])
+            ]
         );
     }
 
     #[test]
     fn test_array_fixed_signature() {
         let solidity_type = "test(uint256,string[2],uint256)";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![
+            vec![
                 ParamType::Uint(256),
                 ParamType::FixedArray(Box::new(ParamType::String), 2),
                 ParamType::Uint(256)
-            ])
+            ]
         );
     }
 
@@ -479,10 +472,11 @@ mod tests {
     fn test_complex_signature() {
         let solidity_type =
             "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![
+            vec![
                 ParamType::Uint(256),
                 ParamType::String,
                 ParamType::Tuple(vec![
@@ -495,7 +489,7 @@ mod tests {
                     ParamType::Uint(256),
                     ParamType::Uint(160)
                 ])
-            ])
+            ]
         );
     }
 
@@ -503,10 +497,11 @@ mod tests {
     fn test_tuple_signature() {
         let solidity_type =
             "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![ParamType::Tuple(vec![
+            vec![ParamType::Tuple(vec![
                 ParamType::Address,
                 ParamType::Address,
                 ParamType::Uint(24),
@@ -515,7 +510,7 @@ mod tests {
                 ParamType::Uint(256),
                 ParamType::Uint(256),
                 ParamType::Uint(160)
-            ])])
+            ])]
         );
     }
 
@@ -523,10 +518,11 @@ mod tests {
     fn test_tuple_array_signature() {
         let solidity_type =
             "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)[])";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![ParamType::Array(Box::new(ParamType::Tuple(vec![
+            vec![ParamType::Array(Box::new(ParamType::Tuple(vec![
                 ParamType::Address,
                 ParamType::Address,
                 ParamType::Uint(24),
@@ -535,7 +531,7 @@ mod tests {
                 ParamType::Uint(256),
                 ParamType::Uint(256),
                 ParamType::Uint(160)
-            ])))])
+            ])))]
         );
     }
 
@@ -543,10 +539,11 @@ mod tests {
     fn test_tuple_fixedarray_signature() {
         let solidity_type =
             "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)[2])";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![ParamType::FixedArray(
+            vec![ParamType::FixedArray(
                 Box::new(ParamType::Tuple(vec![
                     ParamType::Address,
                     ParamType::Address,
@@ -558,17 +555,18 @@ mod tests {
                     ParamType::Uint(160)
                 ])),
                 2
-            )])
+            )]
         );
     }
 
     #[test]
     fn test_nested_tuple_signature() {
         let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![ParamType::Tuple(vec![
+            vec![ParamType::Tuple(vec![
                 ParamType::Address,
                 ParamType::Address,
                 ParamType::Uint(24),
@@ -579,17 +577,18 @@ mod tests {
                     ParamType::Uint(256)
                 ]))),
                 ParamType::Uint(160)
-            ])])
+            ])]
         );
     }
 
     #[test]
     fn test_seaport_fulfill_advanced_order() {
         let solidity_type = "fulfillAdvancedOrder(((address,address,(uint8,address,uint256,uint256,uint256)[],(uint8,address,uint256,uint256,uint256,address)[],uint8,uint256,uint256,bytes32,uint256,bytes32,uint256),uint120,uint120,bytes,bytes),(uint256,uint8,uint256,uint256,bytes32[])[],bytes32,address)";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![
+            vec![
                 ParamType::Tuple(vec![
                     ParamType::Tuple(vec![
                         ParamType::Address,
@@ -631,7 +630,7 @@ mod tests {
                 ]))),
                 ParamType::FixedBytes(32),
                 ParamType::Address
-            ])
+            ]
         );
     }
 

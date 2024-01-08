@@ -142,8 +142,6 @@ fn simplify_arithmatic(line: &str) -> String {
     cleaned.replace("!!", "")
 }
 
-
-
 impl Cleanup for String {
     fn cleanup(mut self) -> Self {
         // remove unnecessary casts
@@ -225,9 +223,6 @@ mod tests {
     fn test_simplify_arithmatic_complex_2() {
         let line = String::from("uint256(arg0) / 0x01 + 0x01 * 0x01;");
 
-        assert_eq!(
-            simplify_arithmatic(&line),
-            String::from("uint256(arg0) + 0x01;")
-        );
+        assert_eq!(simplify_arithmatic(&line), String::from("uint256(arg0) + 0x01;"));
     }
 }

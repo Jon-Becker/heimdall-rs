@@ -22,7 +22,14 @@ pub fn sign_uint(unsigned: U256) -> I256 {
 /// let result = decode_hex(hex);
 /// assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]));
 /// ```
-pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
+pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, ParseIntError> {
+    // normalize
+    s = s.trim_start_matches("0x");
+
+    if s.len() == 0 {
+        return Ok(vec![])
+    }
+
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16)).collect()
 }
 

@@ -3,6 +3,7 @@ mod util;
 
 use crate::{
     debug_max,
+    error::Error,
     ether::evm::{
         core::{
             stack::Stack,
@@ -34,13 +35,17 @@ pub struct VMTrace {
 
 impl VM {
     /// Run symbolic execution on a given function selector within a contract
-    pub fn symbolic_exec_selector(&mut self, selector: &str, entry_point: u128) -> (VMTrace, u32) {
+    pub fn symbolic_exec_selector(
+        &mut self,
+        selector: &str,
+        entry_point: u128,
+    ) -> Result<(VMTrace, u32), Error> {
         self.calldata = decode_hex(selector).unwrap();
 
         // step through the bytecode until we reach the entry point
         while self.bytecode.len() >= self.instruction as usize && (self.instruction <= entry_point)
         {
-            self.step();
+            self.step()?;
 
             // this shouldn't be necessary, but it's safer to have it
             if self.exitcode != 255 || !self.returndata.is_empty() {
@@ -52,25 +57,25 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        (self.recursive_map(&mut branch_count, &mut HashMap::new()), branch_count)
+        Ok((self.recursive_map(&mut branch_count, &mut HashMap::new())?, branch_count))
     }
 
     // build a map of function jump possibilities from the EVM bytecode
-    pub fn symbolic_exec(&self) -> (VMTrace, u32) {
+    pub fn symbolic_exec(&self) -> Result<(VMTrace, u32), Error> {
         let mut vm = self.clone();
 
         debug_max!("beginning contract-wide symbolic execution");
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        (vm.recursive_map(&mut branch_count, &mut HashMap::new()), branch_count)
+        Ok((vm.recursive_map(&mut branch_count, &mut HashMap::new())?, branch_count))
     }
 
     fn recursive_map(
         &mut self,
         branch_count: &mut u32,
         handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
-    ) -> VMTrace {
+    ) -> Result<VMTrace, Error> {
         let mut vm = self.clone();
 
         // create a new VMTrace object
@@ -85,7 +90,7 @@ impl VM {
 
         // step through the bytecode until we find a JUMPI instruction
         while vm.bytecode.len() >= vm.instruction as usize {
-            let state = vm.step();
+            let state = vm.step()?;
 
             // update vm_trace
             vm_trace.operations.push(state.clone());
@@ -114,24 +119,24 @@ impl VM {
 
                 // if the stack contains too many items, it's probably a loop
                 if stack_contains_too_many_items(&vm.stack) {
-                    return vm_trace
+                    return Ok(vm_trace)
                 }
 
                 // if the stack has over 16 items of the same source, it's probably a loop
                 if stack_contains_too_many_of_the_same_item(&vm.stack) {
-                    return vm_trace
+                    return Ok(vm_trace)
                 }
 
                 // if any item on the stack has a depth > 16, it's probably a loop (because of stack
                 // too deep)
                 if stack_item_source_depth_too_deep(&vm.stack) {
-                    return vm_trace
+                    return Ok(vm_trace)
                 }
 
                 // if the jump stack depth is less than the max stack depth of all previous matching
                 // jumps, it's probably a loop
                 if jump_stack_depth_less_than_max_stack_depth(&jump_frame, handled_jumps) {
-                    return vm_trace
+                    return Ok(vm_trace)
                 }
 
                 // perform heuristic checks on historical stacks
@@ -196,7 +201,7 @@ impl VM {
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return vm_trace
+                            return Ok(vm_trace)
                         }
 
                         if historical_diffs_approximately_equal(&vm.stack, historical_stacks) {
@@ -209,7 +214,7 @@ impl VM {
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return vm_trace
+                            return Ok(vm_trace)
                         } else {
                             debug_max!(
                                 "adding historical stack {} to jump frame {:?}",
@@ -251,19 +256,19 @@ impl VM {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
-                    vm_trace.children.push(trace_vm.recursive_map(branch_count, handled_jumps));
+                    vm_trace.children.push(trace_vm.recursive_map(branch_count, handled_jumps)?);
 
                     // push the current path onto the stack
-                    vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps));
+                    vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps)?);
                     break
                 } else {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = state.last_instruction.instruction + 1;
-                    vm_trace.children.push(trace_vm.recursive_map(branch_count, handled_jumps));
+                    vm_trace.children.push(trace_vm.recursive_map(branch_count, handled_jumps)?);
 
                     // push the current path onto the stack
-                    vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps));
+                    vm_trace.children.push(vm.recursive_map(branch_count, handled_jumps)?);
                     break
                 }
             }
@@ -274,6 +279,11 @@ impl VM {
             }
         }
 
-        vm_trace
+        Ok(vm_trace)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO: add tests for symbolic execution & recursive_map
 }
