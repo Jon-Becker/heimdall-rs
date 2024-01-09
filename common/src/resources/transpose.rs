@@ -4,7 +4,7 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::{utils::io::logging::Logger, error::Error};
+use crate::{error::Error, utils::io::logging::Logger};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,7 +125,8 @@ pub async fn get_transaction_list(
         bounds.1
     );
 
-    let response = call_transpose(&query, api_key).await
+    let response = call_transpose(&query, api_key)
+        .await
         .ok_or(Error::Generic("failed to get transaction list from Transpose".to_string()))?;
 
     transaction_list_progress.finish_and_clear();
@@ -135,12 +136,15 @@ pub async fn get_transaction_list(
 
     // parse the results
     for result in response.results {
-        let block_number = result.get("block_number")
+        let block_number = result
+            .get("block_number")
             .ok_or(Error::Generic("failed to parse block_number from Transpose".to_string()))?
             .as_u64()
-            .ok_or(Error::Generic("failed to parse block_number from Transpose".to_string()))? as u128;
+            .ok_or(Error::Generic("failed to parse block_number from Transpose".to_string()))?
+            as u128;
 
-        let transaction_hash = result.get("transaction_hash")
+        let transaction_hash = result
+            .get("transaction_hash")
             .ok_or(Error::Generic("failed to parse transaction_hash from Transpose".to_string()))?
             .as_str()
             .ok_or(Error::Generic("failed to parse transaction_hash from Transpose".to_string()))?
@@ -193,11 +197,13 @@ pub async fn get_contract_creation(
 
     // parse the results
     if let Some(result) = response.results.into_iter().next() {
-        let block_number = result.get("block_number")
+        let block_number = result
+            .get("block_number")
             .and_then(|block_number| block_number.as_u64())
             .map(|block_number| block_number as u128)?;
 
-        let transaction_hash = result.get("transaction_hash")
+        let transaction_hash = result
+            .get("transaction_hash")
             .and_then(|transaction_hash| transaction_hash.as_str())
             .map(|transaction_hash| transaction_hash.to_string())?;
 
@@ -227,9 +233,7 @@ pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
 
     // parse the results
     if let Some(result) = response.results.into_iter().next() {
-        return result.get("label")
-            .and_then(|label| label.as_str())
-            .map(|label| label.to_string())
+        return result.get("label").and_then(|label| label.as_str()).map(|label| label.to_string())
     };
 
     None

@@ -987,6 +987,9 @@ mod tests {
 
         set_logger_env(&verbosity);
 
-        assert_eq!(env::var("RUST_LOG").expect("failed to get RUST_LOG environment variable"), "SILENT");
+        assert_eq!(
+            env::var("RUST_LOG").expect("failed to get RUST_LOG environment variable"),
+            "SILENT"
+        );
     }
 }

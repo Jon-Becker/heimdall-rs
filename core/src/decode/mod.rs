@@ -118,10 +118,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     let mut calldata;
 
     // determine whether or not the target is a transaction hash
-    if TRANSACTION_HASH_REGEX
-        .is_match(&args.target)
-        .map_err(|_| Error::GenericError("failed to match transaction hash regex.".to_string()))?
-    {
+    if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap_or(false) {
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
         // provider.
         raw_transaction = get_transaction(&args.target, &args.rpc_url).await.map_err(|_| {
@@ -129,10 +126,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         })?;
 
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
-    } else if CALLDATA_REGEX
-        .is_match(&args.target)
-        .map_err(|_| Error::GenericError("failed to match calldata regex.".to_string()))?
-    {
+    } else if CALLDATA_REGEX.is_match(&args.target).unwrap_or(false) {
         // We are decoding raw calldata, so we can just use the provided calldata.
         calldata = args.target.to_string().replacen("0x", "", 1);
     } else {

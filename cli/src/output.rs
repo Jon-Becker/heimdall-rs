@@ -27,12 +27,8 @@ pub async fn build_output_path(
             .into_string()
             .map_err(|_| Error::Generic("Unable to get current working directory".to_string()))?;
 
-        if ADDRESS_REGEX
-            .is_match(target)
-            .map_err(|_| Error::Generic("Unable to parse target with ADDRESS_REGEX".to_string()))? ||
-            TRANSACTION_HASH_REGEX.is_match(target).map_err(|_| {
-                Error::Generic("Unable to parse target with TRANSACTION_HASH_REGEX".to_string())
-            })?
+        if ADDRESS_REGEX.is_match(target).unwrap_or(false) ||
+            TRANSACTION_HASH_REGEX.is_match(target).unwrap_or(false)
         {
             let chain_id = rpc::chain_id(rpc_url)
                 .await
