@@ -26,7 +26,7 @@ pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, Error> {
     // normalize
     s = s.trim_start_matches("0x");
 
-    if s.len() == 0 {
+    if s.is_empty() {
         return Ok(vec![]);
     }
 
