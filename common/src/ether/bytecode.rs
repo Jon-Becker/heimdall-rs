@@ -1,7 +1,6 @@
 use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    debug_max,
     error::Error,
     utils::io::logging::Logger,
 };
@@ -16,13 +15,9 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
             Error::Generic(format!("failed to fetch bytecode from RPC provider: {}", e))
         })
     } else if BYTECODE_REGEX.is_match(target).unwrap_or(false) {
-        debug_max!("using provided bytecode for snapshotting.");
-
         // Target is already a bytecode, so we just need to remove 0x from the begining
         Ok(target.replacen("0x", "", 1))
     } else {
-        debug_max!("using provided file for snapshotting.");
-
         // Target is a file path, so we need to read the bytecode from the file.
         let contents = fs::read_to_string(target).map_err(|e| {
             logger.error(&format!("failed to open file '{}' .", &target));
