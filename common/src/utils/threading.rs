@@ -89,7 +89,7 @@ where
     }
 
     handle.join().ok();
-    Some(result.ok()?)
+    result.ok()
 }
 
 #[cfg(test)]

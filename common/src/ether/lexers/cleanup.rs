@@ -187,7 +187,10 @@ mod tests {
             "(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) & (arg0);",
         );
 
-        assert_eq!(convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"), String::from("uint256(arg0);"));
+        assert_eq!(
+            convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"),
+            String::from("uint256(arg0);")
+        );
     }
 
     #[test]
@@ -196,7 +199,10 @@ mod tests {
             "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);",
         );
 
-        assert_eq!(convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"), String::from("uint256(arg0);"));
+        assert_eq!(
+            convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"),
+            String::from("uint256(arg0);")
+        );
     }
 
     #[test]
@@ -205,7 +211,10 @@ mod tests {
             "(arg0) & (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00);",
         );
 
-        assert_eq!(convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"), String::from("uint248(arg0);"));
+        assert_eq!(
+            convert_bitmask_to_casting(&line).expect("failed to convert bitmask to casting"),
+            String::from("uint248(arg0);")
+        );
     }
 
     #[test]

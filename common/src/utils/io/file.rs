@@ -4,7 +4,8 @@ use std::{
     env,
     fs::File,
     io::{Read, Write},
-    process::Command, path::Path,
+    path::Path,
+    process::Command,
 };
 
 /// Convert a long path to a short path.
@@ -97,7 +98,6 @@ pub fn delete_path(_path: &str) -> bool {
 
     Command::new("rm").args(["-rf", path]).output().is_ok()
 }
-
 
 #[cfg(test)]
 mod tests {

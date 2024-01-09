@@ -204,7 +204,6 @@ impl WrappedOpcode {
                 let solidified_slot = self.inputs[0]._solidify();
 
                 // are dealing with a slot that is a constant, we can just use the slot directly
-                // TODO: instead of propogating is_match errors, we can just unwrap_or(false). do this across the codebase
                 if WORD_REGEX.is_match(&solidified_slot).unwrap_or(false) {
                     // convert to usize
                     match usize::from_str_radix(&solidified_slot.replacen("0x", "", 1), 16) {

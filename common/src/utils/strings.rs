@@ -26,7 +26,7 @@ pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, Error> {
     // normalize
     s = s.trim_start_matches("0x");
 
-    if s.len() == 0 {
+    if s.is_empty() {
         return Ok(vec![]);
     }
 
@@ -313,8 +313,8 @@ pub fn tokenize(s: &str) -> Vec<String> {
             // Check if current character and last character form a compound operator (like "==",
             // ">=", "&&", "||")
             if let Some(last) = last_char {
-                if compound_operator_first_chars.contains(&last)
-                    && (c == '=' || c == '&' || c == '|')
+                if compound_operator_first_chars.contains(&last) &&
+                    (c == '=' || c == '&' || c == '|')
                 {
                     // Remove the last character as a single token
                     tokens.pop();
@@ -402,9 +402,9 @@ pub fn get_shortned_target(target: &str) -> String {
     let mut shortened_target = target.to_string();
 
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>()
-            + "..."
-            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>() +
+            "..." +
+            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     shortened_target

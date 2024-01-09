@@ -651,7 +651,7 @@ fn inherit_infer_storage_type(line: &str) {
         // if the storage_slot is a variable, replace it with the value
         // ex: storage[var_b] => storage[keccak256(var_a)]
         // helps with type inference
-        if MEM_VAR_REGEX.is_match(&storage_slot).unwrap() {
+        if MEM_VAR_REGEX.is_match(&storage_slot).unwrap_or(false) {
             for (var, value) in var_map.clone().iter() {
                 if storage_slot.contains(var) {
                     line = line.replace(var, value);
