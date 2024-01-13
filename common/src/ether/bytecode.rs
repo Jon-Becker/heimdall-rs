@@ -6,6 +6,9 @@ use crate::{
 };
 use std::fs;
 
+// TODO: this should return Vec<u8> instead of String
+// TODO: we dont need to pass rpc_url here, we should be able to use Configuration::load().
+/// Get the bytecode from the target, which can be a contract address, a bytecode or a file path.
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<String, Error> {
     let (logger, _) = Logger::new("");
 

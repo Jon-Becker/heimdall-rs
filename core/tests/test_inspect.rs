@@ -26,7 +26,7 @@ mod integration_tests {
             skip_resolving: true,
         };
 
-        let _ = heimdall_core::inspect::inspect(args).await.unwrap();
+        let _ = heimdall_core::inspect::inspect(args).await.expect("failed to inspect");
     }
 
     #[tokio::test]
@@ -44,7 +44,7 @@ mod integration_tests {
             skip_resolving: true,
         };
 
-        let _ = heimdall_core::inspect::inspect(args).await.unwrap();
+        let _ = heimdall_core::inspect::inspect(args).await.expect("failed to inspect");
     }
 
     /// Thorough testing for inspect across a large number of transactions.
@@ -53,15 +53,15 @@ mod integration_tests {
     fn heavy_test_inspect_thorough() {
         // load ./tests/testdata/txids.json into a vector using serde
         let txids = serde_json::from_str::<Value>(
-            &std::fs::read_to_string("./tests/testdata/txids.json").unwrap(),
+            &std::fs::read_to_string("./tests/testdata/txids.json").expect("failed to read file"),
         )
-        .unwrap()
+        .expect("failed to parse json")
         .get("txids")
-        .unwrap()
+        .expect("failed to get txids")
         .as_array()
-        .unwrap()
+        .expect("failed to convert txids to array")
         .iter()
-        .map(|v| v.as_str().unwrap().to_string())
+        .map(|v| v.as_str().expect("failed to stringify json value").to_string())
         .collect::<Vec<String>>();
         let total = txids.len();
 
@@ -78,19 +78,21 @@ mod integration_tests {
                     .rpc_url("https://eth.llamarpc.com".to_string())
                     .skip_resolving(true)
                     .build()
-                    .unwrap();
+                    .expect("failed to build inspect args");
 
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("failed to create runtime");
                 let result = rt.block_on(heimdall_core::inspect::inspect(args));
 
-                *finished_for_thread.lock().unwrap() = true; // Signal that processing is finished
+                *finished_for_thread
+                    .lock()
+                    .expect("failed to acquire lock on `finished_for_thread`") = true; // Signal that processing is finished
 
                 result
             });
 
             let start_time = Instant::now();
             loop {
-                if *finished.lock().unwrap() {
+                if *finished.lock().expect("failed to acquire lock on `finished`") {
                     break // Exit loop if processing is finished
                 }
 
@@ -101,7 +103,7 @@ mod integration_tests {
                 thread::sleep(Duration::from_millis(100));
             }
 
-            match handle.join().unwrap() {
+            match handle.join().expect("faied to join thread") {
                 Ok(_) => 1,
                 Err(_) => 0,
             }

@@ -4,6 +4,8 @@ pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
+use ethers::types::H160;
+use heimdall_cache::util::decode_hex;
 use heimdall_common::{
     debug_max,
     ether::{bytecode::get_bytecode_from_target, evm::ext::exec::VMTrace},
@@ -18,6 +20,7 @@ use crate::{
         util::*,
     },
     disassemble::{disassemble, DisassemblerArgs},
+    error::Error,
 };
 
 use derive_builder::Builder;
@@ -111,9 +114,7 @@ pub struct DecompileResult {
     pub abi: Option<Vec<ABIStructure>>,
 }
 
-pub async fn decompile(
-    args: DecompilerArgs,
-) -> Result<DecompileResult, Box<dyn std::error::Error>> {
+pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -129,9 +130,11 @@ pub async fn decompile(
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
     // ensure both --include-sol and --include-yul aren't set
+    // TODO: is there any reason to not allow both `--include-sol` and `--include-yul`?
     if args.include_solidity && args.include_yul {
-        logger.error("arguments '--include-sol' and '--include-yul' are mutually exclusive.");
-        std::process::exit(1);
+        return Err(Error::Generic(
+            "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
+        ));
     }
 
     let shortened_target = get_shortned_target(&args.target);
@@ -144,7 +147,9 @@ pub async fn decompile(
         "()".to_string(),
     );
 
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+        .await
+        .map_err(|e| Error::Generic(format!("failed to get bytecode from target: {}", e)))?;
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
@@ -185,11 +190,12 @@ pub async fn decompile(
 
     // create a new EVM instance
     let evm = VM::new(
-        contract_bytecode.clone(),
-        String::from("0x"),
-        String::from("0x6865696d64616c6c000000000061646472657373"),
-        String::from("0x6865696d64616c6c0000000000006f726967696e"),
-        String::from("0x6865696d64616c6c00000000000063616c6c6572"),
+        &decode_hex(&contract_bytecode)
+            .map_err(|e| Error::ParseError(format!("failed to decode bytecode: {}", e)))?,
+        &[],
+        H160::default(),
+        H160::default(),
+        H160::default(),
         0,
         u128::max_value(),
     );
@@ -204,7 +210,9 @@ pub async fn decompile(
         line!(),
         "contract".to_string(),
         shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into()?,
+        (contract_bytecode.len() / 2usize)
+            .try_into()
+            .map_err(|e| Error::ParseError(format!("failed to parse bytecode length: {}", e)))?,
     );
 
     // find and resolve all selectors in the bytecode
@@ -254,7 +262,7 @@ pub async fn decompile(
 
         trace.add_info(
             func_analysis_trace,
-            function_entry_point.try_into()?,
+            function_entry_point.try_into().unwrap_or(u32::MAX),
             &format!("discovered entry point: {function_entry_point}"),
         );
 
@@ -265,7 +273,9 @@ pub async fn decompile(
             move || evm_clone.symbolic_exec_selector(&selector_clone, function_entry_point),
             Duration::from_millis(args.timeout),
         ) {
-            Some(map) => map,
+            Some(map) => map.map_err(|e| {
+                Error::Generic(format!("failed to perform symbolic execution: {}", e))
+            })?,
             None => {
                 trace.add_error(func_analysis_trace, line!(), "symbolic execution timed out!");
                 (VMTrace::default(), 0)
@@ -274,7 +284,7 @@ pub async fn decompile(
 
         trace.add_debug(
             func_analysis_trace,
-            function_entry_point.try_into()?,
+            function_entry_point.try_into().unwrap_or(u32::MAX),
             &format!(
                 "execution tree {}",
                 match jumpdest_count {
@@ -314,7 +324,7 @@ pub async fn decompile(
                 &mut trace,
                 func_analysis_trace,
                 &mut Vec::new(),
-            );
+            )?;
         } else {
             debug_max!("analyzing symbolic execution trace '0x{}' with sol analyzer", selector);
             analyzed_function = analyze_sol(
@@ -340,7 +350,7 @@ pub async fn decompile(
                 func_analysis_trace,
                 &mut Vec::new(),
                 (0, 0),
-            );
+            )?;
         }
 
         // add notice to analyzed_function if jumpdest_count == 0, indicating that
@@ -605,29 +615,36 @@ pub async fn decompile(
     logger.info("symbolic execution completed.");
     logger.info("building decompilation output.");
 
-    let abi = build_abi(&args, analyzed_functions.clone(), &mut trace, decompile_call)?;
+    let abi = build_abi(&args, analyzed_functions.clone(), &mut trace, decompile_call)
+        .map_err(|e| Error::Generic(format!("failed to build abi: {}", e)))?;
     trace.display();
     logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
 
     Ok(DecompileResult {
         source: if args.include_solidity {
-            Some(build_solidity_output(
-                &args,
-                &abi,
-                analyzed_functions,
-                all_resolved_errors,
-                all_resolved_events,
-                &mut trace,
-                decompile_call,
-            )?)
+            Some(
+                build_solidity_output(
+                    &args,
+                    &abi,
+                    analyzed_functions,
+                    all_resolved_errors,
+                    all_resolved_events,
+                    &mut trace,
+                    decompile_call,
+                )
+                .map_err(|e| Error::Generic(format!("failed to build solidity output: {}", e)))?,
+            )
         } else if args.include_yul {
-            Some(build_yul_output(
-                &args,
-                analyzed_functions,
-                all_resolved_events,
-                &mut trace,
-                decompile_call,
-            )?)
+            Some(
+                build_yul_output(
+                    &args,
+                    analyzed_functions,
+                    all_resolved_events,
+                    &mut trace,
+                    decompile_call,
+                )
+                .map_err(|e| Error::Generic(format!("failed to build yul output: {}", e)))?,
+            )
         } else {
             None
         },

@@ -108,7 +108,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     // check if we require an OpenAI API key
     if args.explain && args.openai_api_key.is_empty() {
         logger.error("OpenAI API key is required for explaining calldata. Use `heimdall decode --help` for more information.");
-        return Err(Error::GenericError(
+        return Err(Error::Generic(
             "OpenAI API key is required for explaining calldata.".to_string(),
         ));
     }
@@ -131,7 +131,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         calldata = args.target.to_string().replacen("0x", "", 1);
     } else {
         logger.error("invalid target. must be a transaction hash or calldata (bytes).");
-        return Err(Error::GenericError(
+        return Err(Error::Generic(
             "invalid target. must be a transaction hash or calldata (bytes).".to_string(),
         ));
     }
@@ -139,7 +139,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     // check if the calldata length is a standard length
     if calldata.len() % 2 != 0 || calldata.len() < 8 {
         logger.error("calldata is not a valid hex string.");
-        return Err(Error::GenericError("calldata is not a valid hex string.".to_string()));
+        return Err(Error::Generic("calldata is not a valid hex string.".to_string()));
     }
 
     // if calldata isn't a multiple of 64, it may be harder to decode.
@@ -181,12 +181,8 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     let mut matches: Vec<ResolvedFunction> = Vec::new();
     for potential_match in &potential_matches {
         // convert the string inputs into a vector of decoded types
-        let mut inputs: Vec<ParamType> = Vec::new();
-        if let Some(type_) = parse_function_parameters(&potential_match.signature) {
-            for input in type_ {
-                inputs.push(input);
-            }
-        }
+        let inputs: Vec<ParamType> = parse_function_parameters(&potential_match.signature)
+            .map_err(|e| Error::Generic(format!("failed to parse function parameters: {}", e)))?;
 
         if let Ok(result) = decode_abi(&inputs, &byte_args) {
             // convert tokens to params
@@ -364,7 +360,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         Some(selected_match) => selected_match,
         None => {
             logger.error("invalid selection.");
-            return Err(Error::GenericError("invalid selection.".to_string()));
+            return Err(Error::Generic("invalid selection.".to_string()));
         }
     };
 

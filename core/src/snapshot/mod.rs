@@ -4,6 +4,7 @@ pub mod menus;
 pub mod resolve;
 pub mod structures;
 pub mod util;
+use ethers::types::H160;
 use heimdall_common::{debug_max, utils::threading::run_with_timeout};
 
 use std::{
@@ -30,6 +31,7 @@ use indicatif::ProgressBar;
 
 use crate::{
     disassemble::{disassemble, DisassemblerArgs},
+    error::Error,
     snapshot::{
         analyze::snapshot_trace,
         resolve::resolve_signatures,
@@ -108,7 +110,7 @@ pub struct SnapshotResult {
 /// The main snapshot function, which will be called from the main thread. This module is
 /// responsible for generating a high-level overview of the target contract, including function
 /// signatures, access control, gas consumption, storage accesses, event emissions, and more.
-pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std::error::Error>> {
+pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
     use std::time::Instant;
 
     set_logger_env(&args.verbose);
@@ -128,7 +130,9 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         "()".to_string(),
     );
 
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+        .await
+        .map_err(|e| Error::Generic(format!("failed to get bytecode from target: {}", e)))?;
 
     // perform versioning and compiler heuristics
     let (compiler, version) = detect_compiler(&contract_bytecode);
@@ -149,11 +153,12 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     }
 
     let evm = VM::new(
-        contract_bytecode.clone(),
-        String::from("0x"),
-        String::from("0x6865696d64616c6c000000000061646472657373"),
-        String::from("0x6865696d64616c6c0000000000006f726967696e"),
-        String::from("0x6865696d64616c6c00000000000063616c6c6572"),
+        &decode_hex(&contract_bytecode)
+            .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))?,
+        &[],
+        H160::zero(),
+        H160::zero(),
+        H160::zero(),
         0,
         u128::max_value(),
     );
@@ -163,7 +168,9 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         line!(),
         "contract".to_string(),
         shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into()?,
+        (contract_bytecode.len() / 2usize)
+            .try_into()
+            .expect("failed to convert bytecode length to u32"),
     );
 
     trace.add_call(
@@ -186,7 +193,9 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     .await?;
 
     let (selectors, resolved_selectors) =
-        get_resolved_selectors(&disassembled_bytecode, &args.skip_resolving, &evm).await?;
+        get_resolved_selectors(&disassembled_bytecode, &args.skip_resolving, &evm)
+            .await
+            .map_err(|e| Error::Generic(format!("failed to get resolved selectors: {}", e)))?;
 
     let (snapshots, all_resolved_errors, all_resolved_events) = get_snapshots(
         selectors,
@@ -198,7 +207,8 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         &evm,
         &args,
     )
-    .await?;
+    .await
+    .map_err(|e| Error::Generic(format!("failed to get snapshots: {}", e)))?;
 
     logger.info("symbolic execution completed.");
     logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
@@ -211,7 +221,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
             &all_resolved_events,
             if args.target.len() > 64 { &shortened_target } else { args.target.as_str() },
             (compiler, &version),
-        )
+        )?
     }
 
     trace.display();
@@ -231,10 +241,7 @@ async fn get_snapshots(
     vm_trace: u32,
     evm: &VM,
     args: &SnapshotArgs,
-) -> Result<
-    (Vec<Snapshot>, HashMap<String, ResolvedError>, HashMap<String, ResolvedLog>),
-    Box<dyn std::error::Error>,
-> {
+) -> Result<(Vec<Snapshot>, HashMap<String, ResolvedError>, HashMap<String, ResolvedLog>), Error> {
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut snapshots: Vec<Snapshot> = Vec::new();
@@ -257,7 +264,7 @@ async fn get_snapshots(
 
         trace.add_info(
             func_analysis_trace,
-            function_entry_point.try_into()?,
+            function_entry_point.try_into().unwrap_or(u32::MAX),
             &format!("discovered entry point: {function_entry_point}"),
         );
 
@@ -268,7 +275,9 @@ async fn get_snapshots(
             move || evm_clone.symbolic_exec_selector(&selector_clone, function_entry_point),
             Duration::from_millis(args.timeout),
         ) {
-            Some(map) => map,
+            Some(map) => map.map_err(|e| {
+                Error::Generic(format!("failed to symbolically execute selector: {}", e))
+            })?,
             None => {
                 trace.add_error(
                     func_analysis_trace,
@@ -281,7 +290,7 @@ async fn get_snapshots(
 
         trace.add_debug(
             func_analysis_trace,
-            function_entry_point.try_into()?,
+            function_entry_point.try_into().unwrap_or(u32::MAX),
             &format!(
                 "execution tree {}",
                 match jumpdest_count {
@@ -298,7 +307,8 @@ async fn get_snapshots(
             &map,
             Snapshot {
                 selector: selector.clone(),
-                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1))?,
+                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1))
+                    .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))?,
                 entry_point: function_entry_point,
                 arguments: HashMap::new(),
                 storage: HashSet::new(),
@@ -319,7 +329,7 @@ async fn get_snapshots(
             },
             trace,
             func_analysis_trace,
-        );
+        )?;
 
         if !args.skip_resolving {
             resolve_signatures(

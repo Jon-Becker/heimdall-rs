@@ -1,6 +1,8 @@
 pub mod graph;
 pub mod output;
 use derive_builder::Builder;
+use ethers::types::H160;
+use heimdall_cache::util::decode_hex;
 use heimdall_common::{
     debug_max,
     ether::{
@@ -19,6 +21,7 @@ use petgraph::Graph;
 use crate::{
     cfg::graph::build_cfg,
     disassemble::{disassemble, DisassemblerArgs},
+    error::Error,
 };
 
 #[derive(Debug, Clone, Parser, Builder)]
@@ -80,7 +83,7 @@ impl CFGArgsBuilder {
 
 /// The main entry point for the CFG module. Will generate a control flow graph of the target
 /// bytecode, after performing symbolic execution and discovering all possible execution paths.
-pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::error::Error>> {
+pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -109,7 +112,9 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         "()".to_string(),
     );
 
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+        .await
+        .map_err(|e| Error::Generic(format!("failed to get bytecode from target: {}", e)))?;
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
@@ -152,11 +157,12 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
 
     // create a new EVM instance
     let evm = VM::new(
-        contract_bytecode.clone(),
-        String::from("0x"),
-        String::from("0x6865696d64616c6c000000000061646472657373"),
-        String::from("0x6865696d64616c6c0000000000006f726967696e"),
-        String::from("0x6865696d64616c6c00000000000063616c6c6572"),
+        &decode_hex(&contract_bytecode)
+            .map_err(|e| Error::ParseError(format!("failed to decode bytecode: {}", e)))?,
+        &[],
+        H160::default(),
+        H160::default(),
+        H160::default(),
         0,
         u128::max_value(),
     );
@@ -173,7 +179,9 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         line!(),
         "contract".to_string(),
         shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into().unwrap(),
+        (contract_bytecode.len() / 2usize)
+            .try_into()
+            .map_err(|_| Error::ParseError("failed to parse bytecode length".to_string()))?,
     );
 
     // find all selectors in the bytecode
@@ -202,10 +210,11 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     // get a map of possible jump destinations
     let (map, jumpdest_count) =
         match run_with_timeout(move || evm.symbolic_exec(), Duration::from_millis(args.timeout)) {
-            Some(map) => map,
+            Some(map) => map.map_err(|e| {
+                Error::Generic(format!("failed to perform symbolic execution: {}", e))
+            })?,
             None => {
-                logger.error("symbolic execution timed out.");
-                return Err("symbolic execution timed out.".into())
+                return Err(Error::Generic("symbolic execution timed out".to_string()));
             }
         };
 
@@ -217,7 +226,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     );
 
     debug_max!("building control flow graph from symbolic execution trace");
-    build_cfg(&map, &mut contract_cfg, None, false);
+    build_cfg(&map, &mut contract_cfg, None, false)?;
 
     progress.finish_and_clear();
     logger.info("symbolic execution completed.");

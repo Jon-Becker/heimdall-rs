@@ -153,7 +153,7 @@ mod integration_tests {
             timeout: 10000,
         })
         .await
-        .unwrap();
+        .expect("failed to decompile");
 
         println!("{result:?}");
 
@@ -161,7 +161,7 @@ mod integration_tests {
         for line in &["function Unresolved_19045a25(bytes memory arg0, bytes memory arg1) public payable returns (address) {",
             " = ecrecover("] {
             println!("{line}");
-            assert!(result.source.clone().unwrap().contains(line));
+            assert!(result.source.clone().expect("decompile source is empty").contains(line));
         }
 
         // drop path
@@ -183,7 +183,7 @@ mod integration_tests {
             timeout: 10000,
         })
         .await
-        .unwrap();
+        .expect("failed to decompile");
 
         // assert that the output is correct
         for line in &["function Unresolved_06fdde03() public view returns (bytes memory) {",
@@ -198,7 +198,7 @@ mod integration_tests {
             "function Unresolved_d0e30db0() public payable {",
             "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"] {
             println!("{line}");
-            assert!(result.source.clone().unwrap().contains(line));
+            assert!(result.source.clone().expect("decompile source is empty").contains(line));
         }
 
         // drop path
@@ -220,14 +220,14 @@ mod integration_tests {
             timeout: 10000,
         })
         .await
-        .unwrap();
+        .expect("failed to decompile");
 
         // assert that the output is correct
         for line in &["function Unresolved_2fa61cd8(address arg0) public view payable returns (uint16) {",
             "function Unresolved_41161b10(bytes memory arg0, address arg1) public payable returns (bool) {",
             "function Unresolved_06fdde03() public pure payable returns (bytes memory) {"] {
             println!("{line}");
-            assert!(result.source.clone().unwrap().contains(line));
+            assert!(result.source.clone().expect("decompile source is empty").contains(line));
         }
 
         // drop path
@@ -334,11 +334,11 @@ mod integration_tests {
                 timeout: 10000,
             })
             .await
-            .unwrap();
+            .expect("failed to decompile");
 
             // assert that the number of opening and closing brackets, parentheses, and curly braces
             // are equal
-            let output = result.source.unwrap();
+            let output = result.source.expect("decompile source is empty");
             let open_brackets = output.matches('{').count();
             let close_brackets = output.matches('}').count();
             assert_eq!(open_brackets, close_brackets);

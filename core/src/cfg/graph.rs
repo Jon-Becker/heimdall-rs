@@ -5,6 +5,8 @@ use heimdall_common::{ether::evm::ext::exec::VMTrace, utils::strings::encode_hex
 use petgraph::{matrix_graph::NodeIndex, Graph};
 
 use lazy_static::lazy_static;
+
+use crate::error::Error;
 lazy_static! {
     static ref INSTRUCTION_NODE_MAP: Mutex<HashMap<u128, NodeIndex<u32>>> =
         Mutex::new(HashMap::new());
@@ -13,12 +15,13 @@ lazy_static! {
 
 /// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
 /// control-flow graph found by the symbolic execution engine.
+// TODO: should this be a trait for VMTrace to implement?
 pub fn build_cfg(
     vm_trace: &VMTrace,
     contract_cfg: &mut Graph<String, String>,
     parent_node: Option<NodeIndex<u32>>,
     jump_taken: bool,
-) {
+) -> Result<(), Error> {
     let mut cfg_node: String = String::new();
     let mut parent_node = parent_node;
 
@@ -26,14 +29,20 @@ pub fn build_cfg(
     for operation in &vm_trace.operations {
         let instruction = operation.last_instruction.clone();
 
-        let opcode_name = instruction.opcode_details.clone().unwrap().name;
+        let opcode_name = instruction
+            .opcode_details
+            .clone()
+            .ok_or(Error::Generic("failed to get opcode details for instruction".to_string()))?
+            .name;
 
         let assembly = format!(
             "{} {} {}",
             encode_hex_reduced(U256::from(instruction.instruction)),
             opcode_name,
             if opcode_name.contains("PUSH") {
-                encode_hex_reduced(*instruction.outputs.clone().first().unwrap())
+                encode_hex_reduced(*instruction.outputs.clone().first().ok_or(Error::Generic(
+                    "failed to get output for PUSH instruction".to_string(),
+                ))?)
             } else {
                 String::from("")
             }
@@ -43,7 +52,9 @@ pub fn build_cfg(
     }
 
     // check if the map already contains the current node
-    let mut instruction_node_map = INSTRUCTION_NODE_MAP.lock().unwrap();
+    let mut instruction_node_map = INSTRUCTION_NODE_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on instruction node map".to_string()))?;
     let chunk_index = match vm_trace.operations.first() {
         Some(operation) => operation.last_instruction.instruction,
         None => 0,
@@ -54,7 +65,9 @@ pub fn build_cfg(
             // this node already exists, so we need to add an edge to it.
             if let Some(parent_node) = parent_node {
                 // check if the edge already exists
-                let mut connecting_edges = CONNECTING_EDGES.lock().unwrap();
+                let mut connecting_edges = CONNECTING_EDGES.lock().map_err(|_| {
+                    Error::Generic("failed to obtain lock on connecting edges".to_string())
+                })?;
                 let edge = format!("{} -> {}", parent_node.index(), node_index.index());
                 if !connecting_edges.contains(&edge) {
                     contract_cfg.add_edge(parent_node, *node_index, jump_taken.to_string());
@@ -69,7 +82,9 @@ pub fn build_cfg(
 
             if let Some(parent_node) = parent_node {
                 // check if the edge already exists
-                let mut connecting_edges = CONNECTING_EDGES.lock().unwrap();
+                let mut connecting_edges = CONNECTING_EDGES.lock().map_err(|_| {
+                    Error::Generic("failed to obtain lock on connecting edges".to_string())
+                })?;
                 let edge = format!("{} -> {}", parent_node.index(), node_index.index());
                 if !connecting_edges.contains(&edge) {
                     contract_cfg.add_edge(parent_node, node_index, jump_taken.to_string());
@@ -91,8 +106,18 @@ pub fn build_cfg(
             child,
             contract_cfg,
             parent_node,
-            child.operations.first().unwrap().last_instruction.opcode_details.clone().unwrap().name ==
+            child
+                .operations
+                .first()
+                .ok_or(Error::Generic("failed to get first operation of child".to_string()))?
+                .last_instruction
+                .opcode_details
+                .clone()
+                .ok_or(Error::Generic("failed to get opcode details for instruction".to_string()))?
+                .name ==
                 "JUMPDEST",
-        );
+        )?;
     }
+
+    Ok(())
 }

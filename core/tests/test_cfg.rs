@@ -63,7 +63,7 @@ mod integration_tests {
             timeout: 10000,
         })
         .await
-        .unwrap();
+        .expect("failed to generate cfg");
 
         let output: String = format!("{}", Dot::with_config(&result, &[]));
 
@@ -88,7 +88,7 @@ mod integration_tests {
             timeout: 10000,
         })
         .await
-        .unwrap();
+        .expect("failed to generate cfg");
 
         let output = format!("{}", Dot::with_config(&result, &[]));
 

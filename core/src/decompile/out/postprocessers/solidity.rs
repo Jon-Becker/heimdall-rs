@@ -1,18 +1,17 @@
-use super::super::super::constants::{
-    AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, DIV_BY_ONE_REGEX, MEM_ACCESS_REGEX, MUL_BY_ONE_REGEX,
-    NON_ZERO_BYTE_REGEX,
+use super::super::super::constants::MEM_ACCESS_REGEX;
+use crate::{
+    decompile::constants::{MEM_VAR_REGEX, STORAGE_ACCESS_REGEX},
+    error::Error,
 };
-use crate::decompile::constants::{ENCLOSED_EXPRESSION_REGEX, MEM_VAR_REGEX, STORAGE_ACCESS_REGEX};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
     ether::{
-        evm::core::types::{byte_size_to_type, find_cast},
+        lexers::cleanup::{
+            convert_bitmask_to_casting, simplify_arithmatic, simplify_casts, simplify_parentheses,
+        },
         signatures::{ResolvedError, ResolvedLog},
     },
-    utils::strings::{
-        base26_encode, classify_token, find_balanced_encapsulator,
-        find_balanced_encapsulator_backwards, tokenize, TokenType,
-    },
+    utils::strings::{base26_encode, find_balanced_encapsulator},
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
@@ -30,281 +29,39 @@ lazy_static! {
     static ref MEMORY_TYPE_DECLARATION_SET: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 }
 
-/// Convert bitwise operations to a variable type cast
-fn convert_bitmask_to_casting(line: &str) -> String {
-    let mut cleaned = line.to_owned();
-
-    match AND_BITMASK_REGEX.find(&cleaned).unwrap() {
-        Some(bitmask) => {
-            let cast = bitmask.as_str();
-            let cast_size = NON_ZERO_BYTE_REGEX.find_iter(cast).count();
-            let (_, cast_types) = byte_size_to_type(cast_size);
-
-            // get the cast subject
-            let mut subject = cleaned.get(bitmask.end()..).unwrap().replace(';', "");
-
-            // attempt to find matching parentheses
-            let subject_indices = find_balanced_encapsulator(&subject, ('(', ')'));
-            subject = match subject_indices.2 {
-                true => {
-                    // get the subject as hte substring between the balanced parentheses found in
-                    // unbalanced subject
-                    subject[subject_indices.0..subject_indices.1].to_string()
-                }
-                false => {
-                    // this shouldn't happen, but if it does, just return the subject.
-                    //TODO add this to verbose logs
-                    subject
-                }
-            };
-
-            // if the cast is a bool, check if the line is a conditional
-            let solidity_type = match cast_types[0].as_str() {
-                "bool" => {
-                    if cleaned.contains("if") {
-                        String::new()
-                    } else {
-                        "bytes1".to_string()
-                    }
-                }
-                _ => cast_types[0].to_owned(),
-            };
-
-            // apply the cast to the subject
-            cleaned =
-                cleaned.replace(&format!("{cast}{subject}"), &format!("{solidity_type}{subject}"));
-
-            // attempt to cast again
-            cleaned = convert_bitmask_to_casting(&cleaned);
-        }
-        None => {
-            if let Some(bitmask) = AND_BITMASK_REGEX_2.find(&cleaned).unwrap() {
-                let cast = bitmask.as_str();
-                let cast_size = NON_ZERO_BYTE_REGEX.find_iter(cast).count();
-                let (_, cast_types) = byte_size_to_type(cast_size);
-
-                // get the cast subject
-                let mut subject = match cleaned
-                    .get(0..bitmask.start())
-                    .unwrap()
-                    .replace(';', "")
-                    .split('=')
-                    .collect::<Vec<&str>>()
-                    .last()
-                {
-                    Some(subject) => subject.to_string(),
-                    None => cleaned.get(0..bitmask.start()).unwrap().replace(';', ""),
-                };
-
-                // attempt to find matching parentheses
-                let subject_indices = find_balanced_encapsulator_backwards(&subject, ('(', ')'));
-
-                subject = match subject_indices.2 {
-                    true => {
-                        // get the subject as hte substring between the balanced parentheses found
-                        // in unbalanced subject
-                        subject[subject_indices.0..subject_indices.1].to_string()
-                    }
-                    false => {
-                        // this shouldn't happen, but if it does, just return the subject.
-                        subject
-                    }
-                };
-
-                // if the cast is a bool, check if the line is a conditional
-                let solidity_type = match cast_types[0].as_str() {
-                    "bool" => {
-                        if cleaned.contains("if") {
-                            String::new()
-                        } else {
-                            "bytes1".to_string()
-                        }
-                    }
-                    _ => cast_types[0].to_owned(),
-                };
-
-                // apply the cast to the subject
-                cleaned = cleaned
-                    .replace(&format!("{subject}{cast}"), &format!("{solidity_type}{subject}"));
-
-                // attempt to cast again
-                cleaned = convert_bitmask_to_casting(&cleaned);
-            }
-        }
-    }
-
-    cleaned
-}
-
-/// Removes unnecessary casts
-fn simplify_casts(line: &str) -> String {
-    let mut cleaned = line.to_owned();
-
-    // remove unnecessary casts
-    let (cast_start, cast_end, cast_type) = find_cast(&cleaned);
-
-    if let Some(cast) = cast_type {
-        let cleaned_cast_pre = cleaned[0..cast_start].to_string();
-        let cleaned_cast_post = cleaned[cast_end..].to_string();
-        let cleaned_cast = cleaned[cast_start..cast_end].to_string().replace(&cast, "");
-
-        cleaned = format!("{cleaned_cast_pre}{cleaned_cast}{cleaned_cast_post}");
-
-        // check if there are remaining casts
-        let (_, _, remaining_cast_type) = find_cast(&cleaned_cast_post);
-        if remaining_cast_type.is_some() {
-            // a cast is remaining, simplify it
-            cleaned = format!(
-                "{}{}{}",
-                cleaned_cast_pre,
-                cleaned_cast,
-                simplify_casts(&cleaned_cast_post)
-            );
-        }
-    }
-
-    cleaned
-}
-
-/// Simplifies expressions by removing unnecessary parentheses
-// TODO: implement simplify_parentheses correctly with a tokenier
-fn simplify_parentheses(line: &str, paren_index: usize) -> String {
-    // helper function to determine if parentheses are necessary
-    fn are_parentheses_unnecessary(expression: &str) -> bool {
-        // safely grab the first and last chars
-        let first_char = expression.get(0..1).unwrap_or("");
-        let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
-
-        // if there is a negation of an expression, remove the parentheses
-        // helps with double negation
-        if first_char == "!" && last_char == ")" {
-            return true
-        }
-
-        // remove the parentheses if the expression is within brackets
-        if first_char == "[" && last_char == "]" {
-            return true
-        }
-
-        // parens required if:
-        //  - expression is a cast
-        //  - expression is a function call
-        //  - expression is the surrounding parens of a conditional
-        if first_char != "(" {
-            return false
-        } else if last_char == ")" {
-            return true
-        }
-
-        // don't include instantiations
-        if expression.contains("memory ret") {
-            return false
-        }
-
-        // handle the inside of the expression
-        let inside = match expression.get(2..expression.len() - 2) {
-            Some(x) => ENCLOSED_EXPRESSION_REGEX.replace(x, "x").to_string(),
-            None => "".to_string(),
-        };
-
-        let inner_tokens = tokenize(&inside);
-        return !inner_tokens.iter().any(|tk| classify_token(tk) == TokenType::Operator)
-    }
-
-    let mut cleaned: String = line.to_owned();
-
-    // skip lines that are defining a function
-    if cleaned.contains("function") {
-        return cleaned
-    }
-
-    // get the nth index of the first open paren
-    let nth_paren_index = match cleaned.match_indices('(').nth(paren_index) {
-        Some(x) => x.0,
-        None => return cleaned,
-    };
-
-    //find it's matching close paren
-    let (paren_start, paren_end, found_match) =
-        find_balanced_encapsulator(&cleaned[nth_paren_index..], ('(', ')'));
-
-    // add the nth open paren to the start of the paren_start
-    let paren_start = paren_start + nth_paren_index;
-    let paren_end = paren_end + nth_paren_index;
-
-    // if a match was found, check if the parens are unnecessary
-    if found_match {
-        // get the logical expression including the char before the parentheses (to detect casts)
-        let logical_expression = match paren_start {
-            0 => match cleaned.get(paren_start..paren_end + 1) {
-                Some(expression) => expression.to_string(),
-                None => cleaned[paren_start..paren_end].to_string(),
-            },
-            _ => match cleaned.get(paren_start - 1..paren_end + 1) {
-                Some(expression) => expression.to_string(),
-                None => cleaned[paren_start - 1..paren_end].to_string(),
-            },
-        };
-
-        // check if the parentheses are unnecessary and remove them if so
-        if are_parentheses_unnecessary(&logical_expression) {
-            cleaned.replace_range(
-                paren_start..paren_end,
-                match logical_expression.get(2..logical_expression.len() - 2) {
-                    Some(x) => x,
-                    None => "",
-                },
-            );
-
-            // remove double negation, if one was created
-            if cleaned.contains("!!") {
-                cleaned = cleaned.replace("!!", "");
-            }
-
-            // recurse into the next set of parentheses
-            // don't increment the paren_index because we just removed a set
-            cleaned = simplify_parentheses(&cleaned, paren_index);
-        } else {
-            // remove double negation, if one exists
-            if cleaned.contains("!!") {
-                cleaned = cleaned.replace("!!", "");
-            }
-
-            // recurse into the next set of parentheses
-            cleaned = simplify_parentheses(&cleaned, paren_index + 1);
-        }
-    }
-
-    cleaned
-}
-
 /// Converts memory and storage accesses to variables
-fn convert_access_to_variable(line: &str) -> String {
+fn convert_access_to_variable(line: &str) -> Result<String, Error> {
     let mut cleaned = line.to_owned();
 
     // reset the mem_map if the line is a function definition
     if cleaned.contains("function") {
-        let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
+        let mut mem_map = MEM_LOOKUP_MAP.lock().expect("failed to obtain lock on mem_map");
         *mem_map = HashMap::new();
         drop(mem_map);
-        let mut var_map = VARIABLE_MAP.lock().unwrap();
+        let mut var_map = VARIABLE_MAP.lock().expect("failed to obtain lock on var_map");
         *var_map = HashMap::new();
         drop(var_map);
     }
 
     // find a memory access
-    let memory_access = match MEM_ACCESS_REGEX.find(&cleaned).unwrap() {
+    let memory_access = match MEM_ACCESS_REGEX.find(&cleaned).unwrap_or(None) {
         Some(x) => x.as_str(),
         None => "",
     };
 
     // since the regex is greedy, match the memory brackets
-    let matched_loc = find_balanced_encapsulator(memory_access, ('[', ']'));
-    if matched_loc.2 {
-        let mut mem_map = MEM_LOOKUP_MAP.lock().unwrap();
+    if let Ok(memory_range) = find_balanced_encapsulator(memory_access, ('[', ']')) {
+        let mut mem_map = MEM_LOOKUP_MAP
+            .lock()
+            .map_err(|_| Error::Generic("failed to obtain lock on mem_map".to_string()))?;
 
         // safe to unwrap since we know these indices exist
-        let memloc = format!("memory{}", memory_access.get(matched_loc.0..matched_loc.1).unwrap());
+        let memloc = format!(
+            "memory[{}]",
+            memory_access
+                .get(memory_range)
+                .expect("impossible case: failed to get memory access after check")
+        );
 
         let variable_name = match mem_map.get(&memloc) {
             Some(loc) => loc.to_owned(),
@@ -328,23 +85,28 @@ fn convert_access_to_variable(line: &str) -> String {
         cleaned = cleaned.replace(memloc.as_str(), &variable_name);
 
         // recurse to replace any other memory accesses
-        cleaned = convert_access_to_variable(&cleaned);
+        cleaned = convert_access_to_variable(&cleaned)?;
     }
 
     // find a storage access
-    let storage_access = match STORAGE_ACCESS_REGEX.find(&cleaned).unwrap() {
+    let storage_access = match STORAGE_ACCESS_REGEX.find(&cleaned).unwrap_or(None) {
         Some(x) => x.as_str(),
-        None => return cleaned.to_owned(),
+        None => return Ok(cleaned.to_owned()),
     };
 
     // since the regex is greedy, match the memory brackets
-    let matched_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
-    if matched_loc.2 {
-        let mut stor_map = STORAGE_LOOKUP_MAP.lock().unwrap();
+    if let Ok(storage_range) = find_balanced_encapsulator(storage_access, ('[', ']')) {
+        let mut stor_map = STORAGE_LOOKUP_MAP
+            .lock()
+            .map_err(|_| Error::Generic("failed to obtain lock on stor_map".to_string()))?;
 
         // safe to unwrap since we know these indices exist
-        let memloc =
-            format!("storage{}", storage_access.get(matched_loc.0..matched_loc.1).unwrap());
+        let memloc = format!(
+            "storage{}",
+            storage_access
+                .get(storage_range)
+                .expect("impossible case: failed to get storage access after check")
+        );
 
         let variable_name = match stor_map.get(&memloc) {
             Some(loc) => loc.to_owned(),
@@ -354,12 +116,13 @@ fn convert_access_to_variable(line: &str) -> String {
 
                 // get the variable name
                 if memloc.contains("keccak256") {
-                    let keccak_key = find_balanced_encapsulator(&memloc, ('(', ')'));
+                    let keccak_range = find_balanced_encapsulator(&memloc, ('(', ')'))
+                        .map_err(|_| Error::Generic("failed to find keccak256 key".to_string()))?;
 
                     let variable_name = format!(
                         "stor_map_{}[{}]",
                         base26_encode(idex),
-                        memloc.get(keccak_key.0 + 1..keccak_key.1 - 1).unwrap_or("?")
+                        memloc.get(keccak_range).unwrap_or("?")
                     );
 
                     // add the variable to the map
@@ -382,7 +145,7 @@ fn convert_access_to_variable(line: &str) -> String {
         cleaned = cleaned.replace(memloc.as_str(), &variable_name);
 
         // recurse to replace any other memory accesses
-        cleaned = convert_access_to_variable(&cleaned);
+        cleaned = convert_access_to_variable(&cleaned)?;
     }
 
     // if the memory access is an instantiation, save it
@@ -390,12 +153,16 @@ fn convert_access_to_variable(line: &str) -> String {
         let instantiation: Vec<String> =
             cleaned.split(" = ").collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();
 
-        let mut var_map = VARIABLE_MAP.lock().unwrap();
+        let mut var_map = VARIABLE_MAP
+            .lock()
+            .map_err(|_| Error::Generic("failed to obtain lock on var_map".to_string()))?;
         var_map.insert(instantiation[0].clone(), instantiation[1].replace(';', ""));
         drop(var_map);
     } else {
         // if var_map doesn't contain the variable, add it
-        let mut var_map = VARIABLE_MAP.lock().unwrap();
+        let mut var_map = VARIABLE_MAP
+            .lock()
+            .map_err(|_| Error::Generic("failed to obtain lock on var_map".to_string()))?;
         if var_map.get(&cleaned).is_none() {
             var_map.insert(cleaned.to_owned(), "".to_string());
             drop(var_map);
@@ -405,17 +172,17 @@ fn convert_access_to_variable(line: &str) -> String {
     // now we need to check if we should infer types if storage is being assigned
     if line.contains("storage") {
         // infer type of storage slot & add to storage variable map
-        inherit_infer_storage_type(line);
+        inherit_infer_storage_type(line)?;
     }
 
-    cleaned.to_owned()
+    Ok(cleaned.to_owned())
 }
 
 /// Checks if the current line contains an unnecessary assignment
 fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
     // skip lines that don't contain an assignment, or contain a return or external calls
     if !line.contains(" = ") || line.contains("bool success") || line.contains("return") {
-        return false
+        return false;
     }
 
     // get var name
@@ -424,25 +191,25 @@ fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
 
     // skip lines that contain assignments to storage
     if var_name.contains("stor_") {
-        return false
+        return false;
     }
 
     //remove unused vars
     for x in lines {
         // break if the line contains a function definition
         if x.contains("function") {
-            break
+            break;
         }
 
         if x.contains(" = ") {
             let assignment = x.split(" = ").map(|x| x.trim()).collect::<Vec<&str>>();
             if assignment[1].contains(var_name) {
-                return false
+                return false;
             } else if assignment[0].contains(var_name) {
-                return true
+                return true;
             }
         } else if x.contains(var_name) {
-            return false
+            return false;
         }
     }
 
@@ -450,42 +217,46 @@ fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
 }
 
 /// Moves casts to the declaration
-fn move_casts_to_declaration(line: &str) -> String {
+fn move_casts_to_declaration(line: &str) -> Result<String, Error> {
     let cleaned = line;
-    let mut type_declaration_set = MEMORY_TYPE_DECLARATION_SET.lock().unwrap();
+    let mut type_declaration_set = MEMORY_TYPE_DECLARATION_SET
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on type_declaration_set".to_string()))?;
 
     // if line contains "function" wipe the set
     if cleaned.contains("function") {
         type_declaration_set.clear();
-        return cleaned.to_owned()
+        return Ok(cleaned.to_owned());
     }
 
     // if the line doesn't contain an instantiation, return
     if !cleaned.contains(" = ") {
-        return cleaned.to_owned()
+        return Ok(cleaned.to_owned());
     }
 
     let instantiation = cleaned.split(" = ").collect::<Vec<&str>>();
 
     // get the outermost cast
-    match TYPE_CAST_REGEX.find(instantiation[1]).unwrap() {
+    match TYPE_CAST_REGEX.find(instantiation[1]).unwrap_or(None) {
         Some(x) => {
             // the match must occur at index 0
             if x.start() != 0 {
-                return cleaned.to_owned()
+                return Ok(cleaned.to_owned());
             }
 
             // find the matching close paren
-            let (paren_start, paren_end, _) =
-                find_balanced_encapsulator(instantiation[1], ('(', ')'));
+            let cast_expr_range = find_balanced_encapsulator(instantiation[1], ('(', ')'))
+                .map_err(|_| Error::Generic("failed to find cast expression".to_string()))?;
 
             // the close paren must be at the end of the expression
-            if paren_end != instantiation[1].len() - 1 {
-                return cleaned.to_owned()
+            if cast_expr_range.end + 1 != instantiation[1].len() - 1 {
+                return Ok(cleaned.to_owned());
             }
 
             // get the inside of the parens
-            let cast_expression = instantiation[1].get(paren_start + 1..paren_end - 1).unwrap();
+            let cast_expression = instantiation[1]
+                .get(cast_expr_range)
+                .expect("impossible case: failed to get cast expression after check");
 
             // build set key
             let set_key = format!("{}.{}", instantiation[0], x.as_str().replace('(', ""));
@@ -494,41 +265,43 @@ fn move_casts_to_declaration(line: &str) -> String {
             if !type_declaration_set.contains(&set_key) {
                 // add to set
                 type_declaration_set.insert(set_key);
-                format!(
+                Ok(format!(
                     "{} {} = {};",
                     x.as_str().replace('(', ""),
                     instantiation[0],
                     cast_expression
-                )
+                ))
             } else {
-                format!("{} = {};", instantiation[0], cast_expression)
+                Ok(format!("{} = {};", instantiation[0], cast_expression))
             }
         }
-        None => cleaned.to_owned(),
+        None => Ok(cleaned.to_owned()),
     }
 }
 
 /// Replaces an expression with a variable, if the expression matches an existing variable
-fn replace_expression_with_var(line: &str) -> String {
+fn replace_expression_with_var(line: &str) -> Result<String, Error> {
     let mut cleaned = line.to_owned();
 
-    let var_map = VARIABLE_MAP.lock().unwrap();
+    let var_map = VARIABLE_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on var_map".to_string()))?;
 
     // skip function definitions
     if cleaned.contains("function") {
-        return cleaned
+        return Ok(cleaned);
     }
 
     // iterate over variable map
     for (var, expression) in var_map.iter() {
         // skip numeric expressions
         if expression.parse::<u128>().is_ok() {
-            continue
+            continue;
         }
 
         // skip expressions that are already variables. i.e, check if they contain a space
         if !expression.contains(' ') {
-            continue
+            continue;
         }
 
         // replace the expression with the variable
@@ -540,7 +313,7 @@ fn replace_expression_with_var(line: &str) -> String {
     // drop the mutex
     drop(var_map);
 
-    cleaned
+    Ok(cleaned)
 }
 
 /// Inherits or infers typings for a memory access
@@ -550,9 +323,11 @@ fn replace_expression_with_var(line: &str) -> String {
 ///
 /// # Returns
 /// String - the converted line
-fn inherit_infer_mem_type(line: &str) -> String {
+fn inherit_infer_mem_type(line: &str) -> Result<String, Error> {
     let mut cleaned = line.to_owned();
-    let mut type_map = MEMORY_TYPE_MAP.lock().unwrap();
+    let mut type_map = MEMORY_TYPE_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on type_map".to_string()))?;
 
     // if the line contains a function definition, wipe the type map and get arg types
     if line.contains("function") {
@@ -577,7 +352,7 @@ fn inherit_infer_mem_type(line: &str) -> String {
 
     // if the line does not contains an instantiation, return
     if !line.contains(" = ") || line.trim().starts_with("stor") {
-        return cleaned
+        return Ok(cleaned);
     }
 
     let instantiation = line.split(" = ").collect::<Vec<&str>>();
@@ -598,12 +373,12 @@ fn inherit_infer_mem_type(line: &str) -> String {
             if cleaned.contains(var) && !type_map.contains_key(var_name) && !var_type.is_empty() {
                 cleaned = format!("{var_type} {cleaned}");
                 type_map.insert(var_name.to_string(), var_type.to_string());
-                break
+                break;
             }
         }
     }
 
-    cleaned
+    Ok(cleaned)
 }
 
 /// Inherits or infers typings for a storage access
@@ -613,11 +388,19 @@ fn inherit_infer_mem_type(line: &str) -> String {
 ///
 /// # Returns
 /// String - the converted line
-fn inherit_infer_storage_type(line: &str) {
-    let type_map = MEMORY_TYPE_MAP.lock().unwrap();
-    let mut storage_map = STORAGE_TYPE_MAP.lock().unwrap();
-    let storage_lookup_map = STORAGE_LOOKUP_MAP.lock().unwrap();
-    let var_map = VARIABLE_MAP.lock().unwrap();
+fn inherit_infer_storage_type(line: &str) -> Result<(), Error> {
+    let type_map = MEMORY_TYPE_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on type_map".to_string()))?;
+    let mut storage_map = STORAGE_TYPE_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on storage_map".to_string()))?;
+    let storage_lookup_map = STORAGE_LOOKUP_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on storage_lookup_map".to_string()))?;
+    let var_map = VARIABLE_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on var_map".to_string()))?;
 
     let instantiation = line.split(" = ").collect::<Vec<&str>>();
     let var_name = instantiation[0].split(' ').collect::<Vec<&str>>()
@@ -629,23 +412,26 @@ fn inherit_infer_storage_type(line: &str) {
         let mut line = line.to_owned();
 
         // get the storage slot
-        let storage_access = match STORAGE_ACCESS_REGEX.find(instantiation[0]).unwrap() {
+        let storage_access = match STORAGE_ACCESS_REGEX.find(instantiation[0]).unwrap_or(None) {
             Some(x) => x.as_str(),
-            None => return,
+            None => return Ok(()),
         };
 
         // since the regex is greedy, match the memory brackets
-        let matched_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
-        if !matched_loc.2 {
-            return
-        }
-        let mut storage_slot =
-            format!("storage{}", storage_access.get(matched_loc.0..matched_loc.1).unwrap());
+        let matched_range = find_balanced_encapsulator(storage_access, ('[', ']'))
+            .map_err(|_| Error::Generic("failed to find storage access".to_string()))?;
+
+        let mut storage_slot = format!(
+            "storage[{}]",
+            storage_access
+                .get(matched_range)
+                .expect("impossible case: failed to get storage access after check")
+        );
 
         // get the storage slot name from storage_lookup_map
         let mut var_name = match storage_lookup_map.get(&storage_slot) {
             Some(var_name) => var_name.to_owned(),
-            None => return,
+            None => return Ok(()),
         };
 
         // if the storage_slot is a variable, replace it with the value
@@ -681,7 +467,7 @@ fn inherit_infer_storage_type(line: &str) {
                         lhs_type = var_type.to_string();
 
                         // continue, so we cannot use this var in rhs
-                        continue
+                        continue;
                     }
 
                     // check for vars in rhs
@@ -705,6 +491,8 @@ fn inherit_infer_storage_type(line: &str) {
             // add to type map
             storage_map.insert(var_name, rhs_type);
         }
+
+        Ok(())
     } else {
         for (access, var_name) in storage_lookup_map.iter() {
             if line.contains(access) {
@@ -753,6 +541,8 @@ fn inherit_infer_storage_type(line: &str) {
                 }
             }
         }
+
+        Ok(())
     }
 }
 
@@ -766,7 +556,7 @@ fn replace_resolved(
 
     // line must contain CustomError_ or Event_
     if !cleaned.contains("CustomError_") && !cleaned.contains("Event_") {
-        return cleaned
+        return cleaned;
     }
 
     // not the best way to do it, can perf later
@@ -787,15 +577,6 @@ fn replace_resolved(
     cleaned
 }
 
-/// Simplifies arithmatic by removing unnecessary operations
-fn simplify_arithmatic(line: &str) -> String {
-    let cleaned = DIV_BY_ONE_REGEX.replace_all(line, "");
-    let cleaned = MUL_BY_ONE_REGEX.replace_all(&cleaned, "");
-
-    // remove double negation
-    cleaned.replace("!!", "")
-}
-
 /// Cleans up a line using postprocessing techniques
 fn cleanup(
     line: &str,
@@ -806,29 +587,29 @@ fn cleanup(
 
     // skip comments
     if cleaned.starts_with('/') {
-        return cleaned
+        return cleaned;
     }
 
     // Find and convert all castings
-    cleaned = convert_bitmask_to_casting(&cleaned);
+    cleaned = convert_bitmask_to_casting(&cleaned).unwrap_or(cleaned);
 
     // Remove all repetitive casts
     cleaned = simplify_casts(&cleaned);
 
     // Remove all unnecessary parentheses
-    cleaned = simplify_parentheses(&cleaned, 0);
+    cleaned = simplify_parentheses(&cleaned, 0).unwrap_or(cleaned);
 
     // Convert all memory[] and storage[] accesses to variables, also removes unused variables
-    cleaned = convert_access_to_variable(&cleaned);
+    cleaned = convert_access_to_variable(&cleaned).unwrap_or(cleaned);
 
     // Use variable names where possible
-    cleaned = replace_expression_with_var(&cleaned);
+    cleaned = replace_expression_with_var(&cleaned).unwrap_or(cleaned);
 
     // Move all outer casts in instantiation to the variable declaration
-    cleaned = move_casts_to_declaration(&cleaned);
+    cleaned = move_casts_to_declaration(&cleaned).unwrap_or(cleaned);
 
     // Inherit or infer types from expressions
-    cleaned = inherit_infer_mem_type(&cleaned);
+    cleaned = inherit_infer_mem_type(&cleaned).unwrap_or(cleaned);
 
     // Replace resolved errors and events
     cleaned = replace_resolved(&cleaned, all_resolved_errors, all_resolved_events);
@@ -840,7 +621,7 @@ fn cleanup(
 }
 
 /// Finalizes postprocessing by removing unnecessary assignments
-fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
+fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Result<Vec<String>, Error> {
     let mut cleaned_lines: Vec<String> = Vec::new();
     let mut function_count = 0;
 
@@ -851,7 +632,14 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
             let mut storage_var_lines: Vec<String> = vec!["".to_string()];
 
             // insert storage vars
-            for (var_name, var_type) in STORAGE_TYPE_MAP.lock().unwrap().clone().iter() {
+            for (var_name, var_type) in STORAGE_TYPE_MAP
+                .lock()
+                .map_err(|_| {
+                    Error::Generic("failed to obtain lock on storage_type_map".to_string())
+                })?
+                .clone()
+                .iter()
+            {
                 storage_var_lines.push(format!(
                     "{} public {};",
                     var_type.replace(" memory", ""),
@@ -881,11 +669,11 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Vec<String> {
         ) {
             cleaned_lines.push(line.to_string());
         } else {
-            continue
+            continue;
         }
     }
 
-    cleaned_lines
+    Ok(cleaned_lines)
 }
 
 /// Indents lines
@@ -903,7 +691,14 @@ fn indent_lines(lines: Vec<String>) -> Vec<String> {
         indented_lines.push(format!("{}{}", " ".repeat(indentation * 4), line));
 
         // indent due to opening braces
-        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with('{') {
+        if line
+            .split("//")
+            .collect::<Vec<&str>>()
+            .first()
+            .expect("impossible case: failed to get line after split")
+            .trim()
+            .ends_with('{')
+        {
             indentation += 1;
         }
     }
@@ -937,7 +732,7 @@ pub fn postprocess(
     }
 
     // run finalizing postprocessing, which need to operate on cleaned lines
-    indent_lines(finalize(cleaned_lines, bar))
+    indent_lines(finalize(cleaned_lines.clone(), bar).unwrap_or(cleaned_lines))
 }
 
 #[cfg(test)]
