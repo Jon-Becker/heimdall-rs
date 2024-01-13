@@ -8,6 +8,8 @@ use heimdall_common::{
     },
 };
 
+use crate::error::Error;
+
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(about = "Disassemble EVM bytecode to Assembly",
        after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
@@ -53,7 +55,7 @@ impl DisassemblerArgsBuilder {
 }
 
 /// Disassemble the given target's bytecode to assembly.
-pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -65,19 +67,27 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
         None => "SILENT",
     });
 
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+        .await
+        .map_err(|e| Error::Generic(format!("failed to get bytecode from target: {}", e)))?;
 
     let mut program_counter = 0;
     let mut output: String = String::new();
 
     // Iterate over the bytecode, disassembling each instruction.
-    let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1))?;
+    let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1))
+        .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))?;
     while program_counter < byte_array.len() {
         let operation = Opcode::new(byte_array[program_counter]);
         let mut pushed_bytes: String = String::new();
 
         if operation.name.contains("PUSH") {
-            let byte_count_to_push: u8 = operation.name.strip_prefix("PUSH").unwrap().parse()?;
+            let byte_count_to_push: u8 = operation
+                .name
+                .strip_prefix("PUSH")
+                .expect("impossible case: failed to strip prefix after check")
+                .parse()
+                .map_err(|e| Error::Generic(format!("failed to parse PUSH byte count: {}", e)))?;
 
             pushed_bytes = match byte_array
                 .get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize)

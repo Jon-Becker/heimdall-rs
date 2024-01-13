@@ -7,7 +7,10 @@ use std::{
 use indicatif::ProgressBar;
 use tokio::task;
 
-use crate::utils::{io::logging::Logger, strings::decode_hex};
+use crate::{
+    error::Error,
+    utils::{io::logging::Logger, strings::decode_hex},
+};
 
 use super::{
     evm::core::vm::VM,
@@ -21,10 +24,7 @@ pub async fn get_resolved_selectors(
     disassembled_bytecode: &str,
     skip_resolving: &bool,
     evm: &VM,
-) -> Result<
-    (HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>),
-    Box<dyn std::error::Error>,
-> {
+) -> Result<(HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>), Error> {
     let selectors = find_function_selectors(evm, disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
@@ -32,13 +32,13 @@ pub async fn get_resolved_selectors(
         resolved_selectors =
             resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await;
 
-        debug_max!(&format!(
+        debug_max!(
             "resolved {} possible functions from {} detected selectors.",
             resolved_selectors.len(),
             selectors.len()
-        ));
+        );
     } else {
-        debug_max!(&format!("found {} possible function selectors.", selectors.len()));
+        debug_max!("found {} possible function selectors.", selectors.len());
     }
 
     Ok((selectors, resolved_selectors))

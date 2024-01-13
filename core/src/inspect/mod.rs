@@ -147,14 +147,14 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
         contracts
             .extend(decoded_trace.addresses(true, true).into_iter().collect())
             .await
-            .map_err(|e| Error::GenericError(e.to_string()))?;
+            .map_err(|e| Error::Generic(e.to_string()))?;
 
         // extend with addresses from state diff
         if let Some(state_diff) = block_trace.state_diff {
             contracts
                 .extend(state_diff.0.keys().cloned().collect())
                 .await
-                .map_err(|e| Error::GenericError(e.to_string()))?;
+                .map_err(|e| Error::Generic(e.to_string()))?;
         } else {
             logger
                 .warn("no state diff found for transaction. skipping state diff label resolution");

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::structures::snapshot::Snapshot;
+use crate::error::Error;
 use heimdall_common::{
     debug_max,
     ether::{
@@ -31,7 +32,10 @@ pub fn match_parameters(
             &function
                 .arguments
                 .values()
-                .map(|(_, types)| types.first().unwrap().clone())
+                .map(|(_, potential_types)| potential_types
+                    .first()
+                    .expect("impossible case: argument has no potential types")
+                    .clone())
                 .collect::<Vec<String>>()
                 .join(",")
         );
@@ -103,7 +107,7 @@ pub async fn resolve_signatures(
     resolved_selectors: &HashMap<String, Vec<ResolvedFunction>>,
     func_analysis_trace: u32,
     default: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Error> {
     let resolved_functions = match resolved_selectors.get(selector) {
         Some(func) => func.clone(),
         None => {
@@ -199,7 +203,7 @@ async fn resolve_function_signatures(
     default: bool,
     func_analysis_trace: &u32,
     trace: &mut TraceFactory,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Error> {
     let (logger, _) = Logger::new("");
     let mut selected_function_index: u8 = 0;
 
@@ -253,7 +257,7 @@ async fn resolve_error_signatures(
     snapshot_progress: &ProgressBar,
     resolved_counter: &mut i32,
     default: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Error> {
     let (logger, _) = Logger::new("");
 
     let resolved_errors: HashMap<String, Vec<ResolvedError>> = resolve_selectors(
@@ -311,7 +315,7 @@ async fn resolve_event_signatures(
     snapshot_progress: &ProgressBar,
     resolved_counter: &mut i32,
     default: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Error> {
     let (logger, _) = Logger::new("");
 
     let resolved_events: HashMap<String, Vec<ResolvedLog>> = resolve_selectors(

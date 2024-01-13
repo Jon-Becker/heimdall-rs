@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     ops::{Div, Rem, Shl, Shr},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use ethers::{
@@ -122,9 +122,9 @@ impl VM {
             instruction: 1,
             bytecode: bytecode.to_vec(),
             calldata: calldata.to_vec(),
-            address: address,
-            origin: origin,
-            caller: caller,
+            address,
+            origin,
+            caller,
             value,
             gas_remaining: gas_limit.max(21000) - 21000,
             gas_used: 21000,
@@ -1000,10 +1000,8 @@ impl VM {
 
             // TIMESTAMP
             0x42 => {
-                let timestamp = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or(Duration::default())
-                    .as_secs();
+                let timestamp =
+                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
 
                 self.stack.push(U256::from(timestamp), operation);
             }

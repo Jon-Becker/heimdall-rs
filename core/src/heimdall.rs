@@ -81,10 +81,11 @@ fn main() {
         // cleanup the terminal
         let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend).unwrap();
-        disable_raw_mode().unwrap();
-        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture).unwrap();
-        terminal.show_cursor().unwrap();
+        let mut terminal = Terminal::new(backend).expect("failed to initialize terminal");
+        disable_raw_mode().expect("failed to disable raw mode");
+        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)
+            .expect("failed to cleanup terminal");
+        terminal.show_cursor().expect("failed to show cursor");
 
         // print the panic message
         let backtrace = Backtrace::new();

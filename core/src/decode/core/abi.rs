@@ -376,13 +376,14 @@ mod tests {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
+                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
                 s
             })
             .collect::<Vec<&str>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words).unwrap();
+            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
+                .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
 
@@ -429,13 +430,14 @@ mod tests {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
+                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
                 s
             })
             .collect::<Vec<&str>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words).unwrap();
+            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
+                .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
 
@@ -495,13 +497,14 @@ mod tests {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
+                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
                 s
             })
             .collect::<Vec<&str>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words).unwrap();
+            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
+                .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.clone().map(|p| p.coverages).unwrap_or_default();
             let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();
@@ -549,13 +552,14 @@ mod tests {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
+                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
                 s
             })
             .collect::<Vec<&str>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words).unwrap();
+            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
+                .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.clone().map(|p| p.coverages).unwrap_or_default();
             let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();

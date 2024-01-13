@@ -10,7 +10,7 @@ lazy_static! {
     pub static ref TRANSACTION_HASH_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]{64}$").expect("failed to compile regex");
 
     /// The following regex is used to validate raw bytecode files as targets.
-    pub static ref BYTECODE_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]*$").unwrap();
+    pub static ref BYTECODE_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]*$").expect("failed to compile regex");
 
     /// The following regex is used to validate raw calldata
     pub static ref CALLDATA_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]*$").expect("failed to compile regex");

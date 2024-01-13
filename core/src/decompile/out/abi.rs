@@ -8,7 +8,10 @@ use heimdall_common::utils::io::{
 use indicatif::ProgressBar;
 use serde::{Deserialize, Serialize};
 
-use crate::decompile::{util::Function, DecompilerArgs};
+use crate::{
+    decompile::{util::Function, DecompilerArgs},
+    error::Error,
+};
 
 /// A single named ABI token.
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -75,7 +78,7 @@ pub fn build_abi(
     functions: Vec<Function>,
     trace: &mut TraceFactory,
     trace_parent: u32,
-) -> Result<Vec<ABIStructure>, Box<dyn std::error::Error>> {
+) -> Result<Vec<ABIStructure>, Error> {
     // get a new logger
     let logger = Logger::default();
 

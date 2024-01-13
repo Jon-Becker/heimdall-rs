@@ -1,6 +1,9 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::decompile::{constants::DECOMPILED_SOURCE_HEADER_YUL, util::Function, DecompilerArgs};
+use crate::{
+    decompile::{constants::DECOMPILED_SOURCE_HEADER_YUL, util::Function, DecompilerArgs},
+    error::Error,
+};
 use heimdall_common::{
     ether::signatures::ResolvedLog,
     utils::io::{
@@ -20,7 +23,7 @@ pub fn build_yul_output(
     all_resolved_events: HashMap<String, ResolvedLog>,
     trace: &mut TraceFactory,
     trace_parent: u32,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Error> {
     // get a new logger
     let logger = Logger::default();
 

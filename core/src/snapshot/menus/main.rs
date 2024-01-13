@@ -8,10 +8,13 @@ use tui::{
     Frame,
 };
 
-use crate::snapshot::{structures::state::State, util::table::build_rows};
+use crate::{
+    error::Error,
+    snapshot::{structures::state::State, util::table::build_rows},
+};
 
 /// Render the TUI main view
-pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
+pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) -> Result<(), Error> {
     // creates a new block with the given title
     // https://github.com/fdehau/tui-rs/blob/master/examples/paragraph.rs
     let create_block = |title, borders| {
@@ -75,7 +78,9 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
         .widths(&[Constraint::Length(12), Constraint::Length(14), Constraint::Percentage(100)]);
 
     // build function info
-    let snapshot = state.snapshots.get(state.function_index).unwrap();
+    let snapshot = state.snapshots.get(state.function_index).ok_or_else(|| {
+        Error::Generic("impossible case: function index out of bounds".to_owned())
+    })?;
 
     // build modifiers
     let modifiers = [
@@ -100,7 +105,13 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
             let mut sorted_arguments: Vec<_> = snapshot.arguments.clone().into_iter().collect();
             sorted_arguments.sort_by(|x, y| x.0.cmp(&y.0));
             for (index, (_, solidity_type)) in sorted_arguments {
-                arg_strings.push(format!("arg{} {}", index, solidity_type.first().unwrap()));
+                arg_strings.push(format!(
+                    "arg{} {}",
+                    index,
+                    solidity_type
+                        .first()
+                        .expect("impossible case: list of potential types is empty")
+                ));
             }
         }
     };
@@ -307,4 +318,6 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut State) {
     f.render_widget(header, main_layout[0]);
     f.render_widget(table, sub_layout[0]);
     f.render_widget(function_snapshot, detail_layout[0]);
+
+    Ok(())
 }

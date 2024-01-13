@@ -4,6 +4,7 @@ use heimdall_common::{debug_max, ether::signatures::ResolvedFunction};
 /// Given a list of potential [`ResolvedFunction`]s and a [`Function`], return a list of
 /// [`ResolvedFunction`]s (that is, resolved signatures that were found on a 4byte directory) that
 /// match the parameters found during symbolic execution for said [`Function`].
+// TODO: revisit this logic, it's not very efficient
 pub fn match_parameters(
     resolved_functions: Vec<ResolvedFunction>,
     function: &Function,
@@ -18,7 +19,10 @@ pub fn match_parameters(
             &function
                 .arguments
                 .values()
-                .map(|(_, types)| types.first().unwrap().clone())
+                .map(|(_, potential_types)| potential_types
+                    .first()
+                    .expect("impossible case: argument has no potential types")
+                    .clone())
                 .collect::<Vec<String>>()
                 .join(",")
         );
