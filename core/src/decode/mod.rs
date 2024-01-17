@@ -76,6 +76,11 @@ pub struct DecodeArgs {
     /// Whether to skip resolving selectors. Heimdall will attempt to guess types.
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
+
+    /// Pass flag categorizing target as call_data. Useful for calldata of length 64. 
+    #[clap(long = "calldata")]
+    pub iscalldata: bool,
+
 }
 
 impl DecodeArgsBuilder {
@@ -89,6 +94,7 @@ impl DecodeArgsBuilder {
             default: Some(true),
             truncate_calldata: Some(false),
             skip_resolving: Some(false),
+            iscalldata: Some(false),
         }
     }
 }
@@ -117,29 +123,33 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     let mut raw_transaction: Transaction = Transaction::default();
     let mut calldata;
 
+    if !args.iscalldata {
     // determine whether or not the target is a transaction hash
-    if TRANSACTION_HASH_REGEX
-        .is_match(&args.target)
-        .map_err(|_| Error::GenericError("failed to match transaction hash regex.".to_string()))?
-    {
-        // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
-        // provider.
-        raw_transaction = get_transaction(&args.target, &args.rpc_url).await.map_err(|_| {
-            Error::RpcError("failed to fetch transaction from RPC provider.".to_string())
-        })?;
+        if TRANSACTION_HASH_REGEX
+            .is_match(&args.target)
+            .map_err(|_| Error::GenericError("failed to match transaction hash regex.".to_string()))?
+        {
+            // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
+            // provider.
+            raw_transaction = get_transaction(&args.target, &args.rpc_url).await.map_err(|_| {
+                Error::RpcError("failed to fetch transaction from RPC provider.".to_string())
+            })?;
 
-        calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
-    } else if CALLDATA_REGEX
-        .is_match(&args.target)
-        .map_err(|_| Error::GenericError("failed to match calldata regex.".to_string()))?
-    {
-        // We are decoding raw calldata, so we can just use the provided calldata.
-        calldata = args.target.to_string().replacen("0x", "", 1);
+            calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
+        } else if CALLDATA_REGEX
+            .is_match(&args.target)
+            .map_err(|_| Error::GenericError("failed to match calldata regex.".to_string()))?
+        {
+            // We are decoding raw calldata, so we can just use the provided calldata.
+            calldata = args.target.to_string().replacen("0x", "", 1);
+        } else {
+            logger.error("invalid target. must be a transaction hash or calldata (bytes).");
+            return Err(Error::GenericError(
+                "invalid target. must be a transaction hash or calldata (bytes).".to_string(),
+            ));
+        }
     } else {
-        logger.error("invalid target. must be a transaction hash or calldata (bytes).");
-        return Err(Error::GenericError(
-            "invalid target. must be a transaction hash or calldata (bytes).".to_string(),
-        ));
+        calldata = args.target.to_string().replacen("0x", "", 1);
     }
 
     // check if the calldata length is a standard length
