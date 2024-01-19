@@ -3,17 +3,17 @@ pub mod output;
 use derive_builder::Builder;
 use heimdall_common::{
     debug_max,
-    ether::{compiler::detect_compiler, rpc::get_code, selectors::find_function_selectors},
+    ether::{
+        bytecode::get_bytecode_from_target, compiler::detect_compiler,
+        selectors::find_function_selectors,
+    },
+    utils::threading::run_with_timeout,
 };
 use indicatif::ProgressBar;
-use std::{fs, time::Duration};
+use std::time::Duration;
 
 use clap::{AppSettings, Parser};
-use heimdall_common::{
-    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::evm::core::vm::VM,
-    utils::io::logging::*,
-};
+use heimdall_common::{ether::evm::core::vm::VM, utils::io::logging::*};
 use petgraph::Graph;
 
 use crate::{
@@ -57,6 +57,10 @@ pub struct CFGArgs {
     /// The name for the output file
     #[clap(long, short, default_value = "", hide_default_value = true)]
     pub name: String,
+
+    /// Timeout for symbolic execution
+    #[clap(long, short, default_value = "10000", hide_default_value = true)]
+    pub timeout: u64,
 }
 
 impl CFGArgsBuilder {
@@ -69,6 +73,7 @@ impl CFGArgsBuilder {
             color_edges: Some(false),
             output: Some(String::new()),
             name: Some(String::new()),
+            timeout: Some(10000),
         }
     }
 }
@@ -79,16 +84,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     use std::time::Instant;
     let now = Instant::now();
 
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
@@ -113,36 +109,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         "()".to_string(),
     );
 
-    // fetch bytecode
-    let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target).unwrap() {
-        // We are working with a contract address, so we need to fetch the bytecode from the RPC
-        // provider
-        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
-    } else if BYTECODE_REGEX.is_match(&args.target).unwrap() {
-        debug_max!("using provided bytecode for cfg generation");
-        contract_bytecode = args.target.replacen("0x", "", 1);
-    } else {
-        debug_max!("using provided file for cfg generation.");
-
-        // We are analyzing a file, so we need to read the bytecode from the file.
-        contract_bytecode = match fs::read_to_string(&args.target) {
-            Ok(contents) => {
-                let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents).unwrap() && _contents.len() % 2 == 0 {
-                    _contents.replacen("0x", "", 1)
-                } else {
-                    logger
-                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
-                    std::process::exit(1)
-                }
-            }
-            Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &args.target));
-                std::process::exit(1)
-            }
-        };
-    }
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
@@ -233,7 +200,14 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     );
 
     // get a map of possible jump destinations
-    let (map, jumpdest_count) = &evm.symbolic_exec();
+    let (map, jumpdest_count) =
+        match run_with_timeout(move || evm.symbolic_exec(), Duration::from_millis(args.timeout)) {
+            Some(map) => map,
+            None => {
+                logger.error("symbolic execution timed out.");
+                return Err("symbolic execution timed out.".into())
+            }
+        };
 
     // add jumpdests to the trace
     trace.add_info(
@@ -243,7 +217,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     );
 
     debug_max!("building control flow graph from symbolic execution trace");
-    build_cfg(map, &mut contract_cfg, None, false);
+    build_cfg(&map, &mut contract_cfg, None, false);
 
     progress.finish_and_clear();
     logger.info("symbolic execution completed.");

@@ -137,16 +137,13 @@ pub fn analyze_sol(
                 }
             };
 
+            let event_selector = logged_event.topics.first().unwrap_or(&U256::zero()).to_owned();
+            let anonymous = event_selector == U256::zero();
+
             // check to see if the event is a duplicate
-            if !function
-                .events
-                .iter()
-                .any(|(selector, _)| selector == logged_event.topics.first().unwrap())
-            {
+            if !function.events.iter().any(|(selector, _)| selector == &event_selector) {
                 // add the event to the function
-                function
-                    .events
-                    .insert(*logged_event.topics.first().unwrap(), (None, logged_event.clone()));
+                function.events.insert(event_selector, (None, logged_event.clone()));
 
                 // decode the data field
                 let data_mem_ops =
@@ -160,7 +157,7 @@ pub fn analyze_sol(
                 // add the event emission to the function's logic
                 // will be decoded during post-processing
                 function.logic.push(format!(
-                    "emit Event_{}({}{});",
+                    "emit Event_{}({}{});{}",
                     &logged_event
                         .topics
                         .first()
@@ -188,7 +185,8 @@ pub fn analyze_sol(
                         },
                         None => "".to_string(),
                     },
-                    data_mem_ops_solidified
+                    data_mem_ops_solidified,
+                    if anonymous { " // anonymous event" } else { "" }
                 ));
             }
         } else if opcode_name == "JUMPI" {

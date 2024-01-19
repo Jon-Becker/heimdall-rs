@@ -14,7 +14,7 @@ use heimdall_common::{
     utils::{
         env::set_env,
         hex::ToLowerHex,
-        io::logging::{Logger, TraceFactory},
+        io::logging::{set_logger_env, Logger, TraceFactory},
     },
 };
 
@@ -87,16 +87,7 @@ pub struct InspectResult {
 /// visualization, and more.
 #[allow(deprecated)]
 pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     // set skip_resolving env variable
     // TODO: create a trait that can be added to a struct to set env variables

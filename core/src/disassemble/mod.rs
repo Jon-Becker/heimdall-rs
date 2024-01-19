@@ -1,12 +1,9 @@
-use std::fs;
-
 use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use heimdall_common::{
-    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    ether::{evm::core::opcodes::Opcode, rpc::get_code},
+    ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
     utils::{
-        io::logging::Logger,
+        io::logging::{set_logger_env, Logger},
         strings::{decode_hex, encode_hex},
     },
 };
@@ -60,16 +57,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
     use std::time::Instant;
     let now = Instant::now();
 
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     // get a new logger
     let (logger, _) = Logger::new(match args.verbose.log_level() {
@@ -77,39 +65,13 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
         None => "SILENT",
     });
 
-    let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target)? {
-        // We are disassembling a contract address, so we need to fetch the bytecode from the RPC
-        // provider.
-        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
-    } else if BYTECODE_REGEX.is_match(&args.target)? {
-        contract_bytecode = args.target;
-    } else {
-        // We are disassembling a file, so we need to read the bytecode from the file.
-        contract_bytecode = match fs::read_to_string(&args.target) {
-            Ok(contents) => {
-                let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents)? && _contents.len() % 2 == 0 {
-                    _contents
-                } else {
-                    logger
-                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
-                    std::process::exit(1)
-                }
-            }
-            Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &args.target));
-                std::process::exit(1)
-            }
-        };
-    }
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
 
     let mut program_counter = 0;
     let mut output: String = String::new();
 
     // Iterate over the bytecode, disassembling each instruction.
     let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1))?;
-
     while program_counter < byte_array.len() {
         let operation = Opcode::new(byte_array[program_counter]);
         let mut pushed_bytes: String = String::new();

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ethers::types::U256;
 
 use crate::{
@@ -6,6 +8,8 @@ use crate::{
     ether::evm::core::stack::{Stack, StackFrame},
     utils::io::logging::Logger,
 };
+
+use super::jump_frame::JumpFrame;
 
 /// Given two stacks A and B, return A - B, i.e. the items in A that are not in B.
 /// This operation takes order into account, so if A = [1, 2, 3] and B = [1, 3, 2], then A - B =
@@ -22,6 +26,48 @@ pub fn stack_diff(a: &Stack, b: &Stack) -> Vec<StackFrame> {
     diff
 }
 
+/// Check if the given stack contains too many items to feasibly
+/// reach the bottom of the stack without being a loop.
+pub fn stack_contains_too_many_items(stack: &Stack) -> bool {
+    if stack.size() > 320 {
+        // 320 is an arbitrary number, i picked it randomly :D
+        debug_max!("jump matches loop-detection heuristic: 'stack_contains_too_many_items'",);
+        return true
+    }
+
+    false
+}
+
+/// Check if the current jump frame has a stack depth less than the max stack depth of all previous
+/// matching jumps. If yes, the stack is not growing and we likely have a loop.
+pub fn jump_stack_depth_less_than_max_stack_depth(
+    current_jump_frame: &JumpFrame,
+    handled_jumps: &HashMap<JumpFrame, Vec<Stack>>,
+) -> bool {
+    // (1) get all keys that match current_jump_frame.pc and current_jump_frame.jumpdest
+    let matching_keys = handled_jumps
+        .keys()
+        .filter(|key| {
+            key.pc == current_jump_frame.pc && key.jumpdest == current_jump_frame.jumpdest
+        })
+        .collect::<Vec<&JumpFrame>>();
+
+    // (a) get the max stack_depth of all matching keys
+    let max_stack_depth = matching_keys.iter().map(|key| key.stack_depth).max().unwrap_or(0);
+
+    // (b) if the current stack depth is less than the max stack depth, we don't need to
+    // continue.
+    if current_jump_frame.stack_depth < max_stack_depth {
+        debug_max!(
+            "jump matches loop-detection heuristic: 'jump_stack_depth_less_than_max_stack_depth'"
+        );
+        debug_max!("jump terminated.");
+        return true
+    }
+
+    false
+}
+
 /// Check if the given stack contains too many of the same item.
 /// If the stack contains more than 16 of the same item (with the same sources), it is considered a
 /// loop.
@@ -34,7 +80,7 @@ pub fn stack_contains_too_many_of_the_same_item(stack: &Stack) -> bool {
         debug_max!(
             "jump matches loop-detection heuristic: 'stack_contains_too_many_of_the_same_item'",
         );
-        return true;
+        return true
     }
 
     false
@@ -50,7 +96,7 @@ pub fn stack_item_source_depth_too_deep(stack: &Stack) -> bool {
 
         logger
             .debug_max("jump matches loop-detection heuristic: 'stack_item_source_depth_too_deep'");
-        return true;
+        return true
     }
 
     false
@@ -70,7 +116,7 @@ pub fn jump_condition_appears_recursive(stack_diff: &[StackFrame], jump_conditio
 
         logger
             .debug_max("jump matches loop-detection heuristic: 'jump_condition_appears_recursive'");
-        return true;
+        return true
     }
 
     false
@@ -85,7 +131,7 @@ pub fn jump_condition_contains_mutated_memory_access(
     if stack_diff.iter().any(|frame| {
         memory_accesses.any(|_match| {
             if _match.is_err() {
-                return false;
+                return false
             }
             let memory_access = _match.unwrap();
             let slice = &jump_condition[memory_access.start()..memory_access.end()];
@@ -93,7 +139,7 @@ pub fn jump_condition_contains_mutated_memory_access(
         })
     }) {
         debug_max!("jump matches loop-detection heuristic: 'jump_condition_contains_mutated_memory_access'");
-        return true;
+        return true
     }
 
     false
@@ -108,7 +154,7 @@ pub fn jump_condition_contains_mutated_storage_access(
     if stack_diff.iter().any(|frame| {
         storage_accesses.any(|_match| {
             if _match.is_err() {
-                return false;
+                return false
             }
             let storage_access = _match.unwrap();
             let slice = &jump_condition[storage_access.start()..storage_access.end()];
@@ -116,21 +162,18 @@ pub fn jump_condition_contains_mutated_storage_access(
         })
     }) {
         debug_max!("jump matches loop-detection heuristic: 'jump_condition_contains_mutated_storage_access'");
-        return true;
+        return true
     }
 
     false
 }
 
 /// check if all stack diffs for all historical stacks are exactly length 1, and the same
-pub fn jump_condition_historical_diffs_approximately_equal(
-    stack: &Stack,
-    historical_stacks: &[Stack],
-) -> bool {
+pub fn historical_diffs_approximately_equal(stack: &Stack, historical_stacks: &[Stack]) -> bool {
     // break if historical_stacks.len() < 4
     // this is an arbitrary number, i picked it randomly :D
     if historical_stacks.len() < 4 {
-        return false;
+        return false
     }
 
     // get the stack diffs for all historical stacks
@@ -144,14 +187,20 @@ pub fn jump_condition_historical_diffs_approximately_equal(
         );
     }
 
-    // check if all stack diffs are exactly length 1
-    if !stack_diffs.iter().all(|diff| diff.len() == 1) {
-        return false;
+    // get stack length / 10, rounded up as threshold
+    let threshold = (stack.size() as f64 / 10f64).ceil() as usize;
+
+    // check if all stack diffs are similar
+    if !stack_diffs.iter().all(|diff| diff.len() <= threshold) {
+        return false
     }
 
     // check if all stack diffs are the same
-    if !stack_diffs.iter().all(|diff| diff[0] == stack_diffs[0][0]) {
-        return false;
+    if !stack_diffs
+        .iter()
+        .all(|diff| diff.first() == stack_diffs.first().unwrap_or(&vec![]).first())
+    {
+        return false
     }
 
     debug_max!("jump matches loop-detection heuristic: 'jump_condition_historical_diffs_approximately_equal'");

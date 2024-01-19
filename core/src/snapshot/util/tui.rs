@@ -86,7 +86,7 @@ pub fn handle(
                                     match command {
                                         ":q" | ":quit" => {
                                             state.view = TUIView::Killed;
-                                            break;
+                                            break
                                         }
                                         ":h" | ":help" => {
                                             state.view = TUIView::Help;
@@ -106,7 +106,7 @@ pub fn handle(
                             }
 
                             drop(state);
-                            continue;
+                            continue
                         }
 
                         match key.code {

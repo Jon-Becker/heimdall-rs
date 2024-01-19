@@ -31,7 +31,7 @@ pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamTy
     // remove the function name from the signature, only keep the parameters
     let (start, end, valid) = find_balanced_encapsulator(function_signature, ('(', ')'));
     if !valid {
-        return None;
+        return None
     }
 
     let function_inputs = function_signature[start + 1..end - 1].to_string();
@@ -47,7 +47,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
 
     // if string is empty, return None
     if string.is_empty() {
-        return None;
+        return None
     }
 
     // if the string contains a tuple we cant simply split on commas
@@ -57,7 +57,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
             // get balanced encapsulator
             let (tuple_start, tuple_end, valid) = find_balanced_encapsulator(string, ('(', ')'));
             if !valid {
-                return None;
+                return None
             }
 
             // extract the tuple
@@ -78,7 +78,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
                 if is_array {
                     let (start, end, valid) = find_balanced_encapsulator(split, ('[', ']'));
                     if !valid {
-                        return None;
+                        return None
                     }
 
                     let size = split[start + 1..end - 1].to_string();
@@ -156,7 +156,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
         // iterate over the split string and convert each type to a ParamType
         for string_type in split {
             if string_type.is_empty() {
-                continue;
+                continue
             }
 
             let param_type = to_type(string_type);
@@ -191,7 +191,7 @@ pub fn to_type(string: &str) -> ParamType {
     while string.ends_with(']') {
         let (start, end, valid) = find_balanced_encapsulator(&string, ('[', ']'));
         if !valid {
-            return ParamType::Bytes; // default to bytes if invalid
+            return ParamType::Bytes // default to bytes if invalid
         }
 
         let size = string[start + 1..end - 1].to_string();
@@ -239,7 +239,7 @@ pub fn to_type(string: &str) -> ParamType {
             }
         }
 
-        return arg_type;
+        return arg_type
     }
 
     arg_type
@@ -343,17 +343,17 @@ pub fn get_padding(bytes: &str) -> Padding {
     if null_byte_indices.is_empty() ||
         null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
     {
-        return Padding::None;
+        return Padding::None
     }
 
     // the first byte is a null byte AND the last byte is not a null byte, it is left padded
     if null_byte_indices[0] == 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1 {
-        return Padding::Left;
+        return Padding::Left
     }
 
     // the first byte is not a null byte AND the last byte is a null byte, it is right padded
     if null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] == size - 1 {
-        return Padding::Right;
+        return Padding::Right
     }
 
     // get non-null byte indices
@@ -365,7 +365,7 @@ pub fn get_padding(bytes: &str) -> Padding {
         .collect::<Vec<usize>>();
 
     if non_null_byte_indices.is_empty() {
-        return Padding::None;
+        return Padding::None
     }
 
     // check if the there are more null-bytes before the first non-null byte than after the last

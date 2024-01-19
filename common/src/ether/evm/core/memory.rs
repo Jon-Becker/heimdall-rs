@@ -1,8 +1,17 @@
+use crate::utils::range_map::RangeMap;
+
+use super::opcodes::WrappedOpcode;
+
+pub type ByteTracker = RangeMap;
+
 /// The [`Memory`] struct represents the memory of an EVM.
 #[derive(Clone, Debug)]
 pub struct Memory {
+    /// Vector storing memory data
     pub memory: Vec<u8>,
-    // TODO: add bit-tracking for memory
+    /// Byte-tracking facility, allowing bytes to be associated with the opcodes that last modified
+    /// them
+    pub bytes: ByteTracker,
 }
 
 impl Default for Memory {
@@ -12,9 +21,9 @@ impl Default for Memory {
 }
 
 impl Memory {
-    /// Creates a new [`Memory`] with an empty memory vector.
+    /// Creates a new [`Memory`] with an empty memory vector and empty byte tracker
     pub fn new() -> Memory {
-        Memory { memory: Vec::new() }
+        Memory { memory: Vec::new(), bytes: ByteTracker::new() }
     }
 
     /// Gets the current size of the memory in bytes.
@@ -89,6 +98,17 @@ impl Memory {
         self.memory.splice(offset..offset + size, value);
     }
 
+    pub fn store_with_opcode(
+        &mut self,
+        offset: usize,
+        size: usize,
+        value: &[u8],
+        opcode: WrappedOpcode,
+    ) {
+        self.store(offset, size, value);
+        self.bytes.write(offset, size, opcode);
+    }
+
     /// Read the given number of bytes from the memory at the given offset.
     /// If the offset + size is greater than the current size of the memory, null bytes will be
     /// appended to the value.
@@ -154,6 +174,14 @@ impl Memory {
         } else {
             new_memory_cost - self.memory_cost()
         }
+    }
+
+    /// Given an offset into memory, returns the opcode that last modified it (if it has been
+    /// modified at all)
+    ///
+    /// Due to the nature of `WrappedOpcode`, this allows the entire CFG branch to be traversed.
+    pub fn origin(&self, byte: usize) -> Option<WrappedOpcode> {
+        self.bytes.get_by_offset(byte)
     }
 }
 

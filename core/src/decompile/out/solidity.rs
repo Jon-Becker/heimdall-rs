@@ -78,14 +78,15 @@ pub fn build_solidity_output(
     for event in abi.iter().filter(|x| matches!(x, ABIStructure::Event(_))) {
         if let ABIStructure::Event(event) = event {
             decompiled_output.push(format!(
-                "event {}({});",
+                "event {}({}){};",
                 event.name,
                 event
                     .inputs
                     .iter()
                     .map(|x| format!("{} {}", x.type_, x.name))
                     .collect::<Vec<String>>()
-                    .join(", ")
+                    .join(", "),
+                if event.anonymous { " anonymous" } else { "" }
             ));
         }
     }

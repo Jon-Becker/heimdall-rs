@@ -21,7 +21,10 @@ use heimdall_common::{
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
     utils::{
-        io::{logging::Logger, types::display},
+        io::{
+            logging::{set_logger_env, Logger},
+            types::display,
+        },
         strings::decode_hex,
     },
 };
@@ -30,7 +33,7 @@ use indicatif::ProgressBar;
 use strsim::normalized_damerau_levenshtein as similarity;
 
 use crate::{
-    decode::{core::abi::is_parameter_abi_encoded, util::get_explanation},
+    decode::{core::abi::try_decode_dynamic_parameter, util::get_explanation},
     error::Error,
 };
 
@@ -94,16 +97,7 @@ impl DecodeArgsBuilder {
 /// calldata, without the ABI of the target contract.
 #[allow(deprecated)]
 pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     // get a new logger and trace
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
@@ -124,7 +118,10 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     let mut calldata;
 
     // determine whether or not the target is a transaction hash
-    if TRANSACTION_HASH_REGEX.is_match(&args.target).unwrap() {
+    if TRANSACTION_HASH_REGEX
+        .is_match(&args.target)
+        .map_err(|_| Error::GenericError("failed to match transaction hash regex.".to_string()))?
+    {
         // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
         // provider.
         raw_transaction = get_transaction(&args.target, &args.rpc_url).await.map_err(|_| {
@@ -132,7 +129,10 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         })?;
 
         calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
-    } else if CALLDATA_REGEX.is_match(&args.target).unwrap() {
+    } else if CALLDATA_REGEX
+        .is_match(&args.target)
+        .map_err(|_| Error::GenericError("failed to match calldata regex.".to_string()))?
+    {
         // We are decoding raw calldata, so we can just use the provided calldata.
         calldata = args.target.to_string().replacen("0x", "", 1);
     } else {
@@ -174,8 +174,8 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     // get the function signature possibilities
     let potential_matches = if !args.skip_resolving {
         match ResolvedFunction::resolve(&function_selector).await {
-            Some(signatures) => signatures,
-            None => Vec::new(),
+            Ok(Some(signatures)) => signatures,
+            _ => Vec::new(),
         }
     } else {
         Vec::new()
@@ -274,7 +274,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         logger.warn("couldn't find any matches for the given function selector.");
         // attempt to decode calldata regardless
 
-        // we're going to build a Vec<Kind> of all possible types for each
+        // we're going to build a Vec<ParamType> of all possible types for each
         let mut potential_inputs: Vec<ParamType> = Vec::new();
 
         // chunk in blocks of 32 bytes (64 hex chars)
@@ -282,23 +282,19 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
+                let s = std::str::from_utf8(chunk).map_err(|_| Error::DecodeError);
                 s
             })
-            .collect::<Vec<&str>>();
+            .collect::<Result<Vec<&str>, Error>>()?;
 
         // while calldata_words is not empty, iterate over it
         let mut i = 0;
         let mut covered_words = HashSet::new();
         while covered_words.len() != calldata_words.len() {
-            // sort covered_words and print
-            let mut tmp = covered_words.iter().collect::<Vec<&usize>>();
-            tmp.sort();
-
             let word = calldata_words[i];
 
             // check if the first word is abiencoded
-            if let Some(abi_encoded) = is_parameter_abi_encoded(i, &calldata_words)? {
+            if let Some(abi_encoded) = try_decode_dynamic_parameter(i, &calldata_words)? {
                 let potential_type = to_type(&abi_encoded.ty);
                 potential_inputs.push(potential_type);
                 covered_words.extend(abi_encoded.coverages);
@@ -411,7 +407,9 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     );
 
     // build inputs
-    for (i, input) in selected_match.decoded_inputs.as_ref().unwrap().iter().enumerate() {
+    for (i, input) in
+        selected_match.decoded_inputs.as_ref().ok_or(Error::DecodeError)?.iter().enumerate()
+    {
         let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
         if decoded_inputs_as_message.is_empty() {
             break;

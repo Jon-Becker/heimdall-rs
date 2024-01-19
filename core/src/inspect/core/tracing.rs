@@ -138,7 +138,7 @@ impl TryFrom<Vec<TransactionTrace>> for DecodedTransactionTrace {
             if let Some(last_index) = trace_address.last() {
                 current_trace.subtraces.insert(*last_index, decoded_trace);
             } else {
-                return Err(Error::DecodeError); // Trace address cannot be empty here
+                return Err(Error::DecodeError) // Trace address cannot be empty here
             }
         }
 
