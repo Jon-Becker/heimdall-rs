@@ -7,7 +7,7 @@ use heimdall_common::{
         bytecode::get_bytecode_from_target, compiler::detect_compiler,
         selectors::find_function_selectors,
     },
-    utils::threading::run_with_timeout,
+    utils::threading::run_with_timeout, info, error, debug, warn
 };
 use indicatif::ProgressBar;
 use std::time::Duration;
@@ -144,10 +144,9 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     );
 
     if compiler == "solc" {
-        logger.debug(&format!("detected compiler {compiler} {version}."));
+        debug!("detected compiler {} {}", compiler, version);
     } else {
-        logger
-            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+        warn!("detected compiler {} {} is not supported by heimdall", compiler, version);
     }
 
     // create a new EVM instance
@@ -178,8 +177,8 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
 
     // find all selectors in the bytecode
     let selectors = find_function_selectors(&evm, &disassembled_bytecode);
-    logger.info(&format!("found {} possible function selectors.", selectors.len()));
-    logger.info(&format!("performing symbolic execution on '{}' .", &shortened_target));
+    info!(&format!("found {} possible function selectors.", selectors.len()));
+    info!(&format!("performing symbolic execution on '{}' .", &shortened_target));
 
     // create a new progress bar
     let progress = ProgressBar::new_spinner();
@@ -204,7 +203,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         match run_with_timeout(move || evm.symbolic_exec(), Duration::from_millis(args.timeout)) {
             Some(map) => map,
             None => {
-                logger.error("symbolic execution timed out.");
+                error!("symbolic execution timed out.");
                 return Err("symbolic execution timed out.".into())
             }
         };
@@ -220,8 +219,8 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     build_cfg(&map, &mut contract_cfg, None, false);
 
     progress.finish_and_clear();
-    logger.info("symbolic execution completed.");
-    logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()));
+    info!("symbolic execution completed.");
+    debug!(&format!("Control flow graph generated in {:?}.", now.elapsed()));
     trace.display();
 
     Ok(contract_cfg)

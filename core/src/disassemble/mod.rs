@@ -3,9 +3,9 @@ use derive_builder::Builder;
 use heimdall_common::{
     ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
     utils::{
-        io::logging::{set_logger_env, Logger},
+        io::logging::set_logger_env,
         strings::{decode_hex, encode_hex},
-    },
+    }, info, debug,
 };
 
 #[derive(Debug, Clone, Parser, Builder)]
@@ -59,12 +59,6 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
 
     set_logger_env(&args.verbose);
 
-    // get a new logger
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
     let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
 
     let mut program_counter = 0;
@@ -104,8 +98,8 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
         program_counter += 1;
     }
 
-    logger.info(&format!("disassembled {program_counter} bytes successfully."));
-    logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
+    info!("disassembled {} bytes successfully.", program_counter);
+    debug!("disassembly completed in {} ms.", now.elapsed().as_millis());
 
     Ok(output)
 }

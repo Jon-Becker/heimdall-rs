@@ -80,3 +80,13 @@ macro_rules! trace {
     };
 }
 
+#[macro_export]
+macro_rules! fatal {
+    ($message:expr) => {
+        $crate::log_helper!(fatal, $message);
+    };
+    ($message:expr, $($arg:tt)*) => {
+        $crate::log_helper!(fatal, $message, $($arg)*)
+    };
+}
+
