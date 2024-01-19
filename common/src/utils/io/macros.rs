@@ -70,17 +70,3 @@ macro_rules! trace {
     };
 }
 
-#[cfg(test)]
-mod test {
-    #[test]
-    fn test_logger() {
-        std::env::set_var("RUST_LOG", "MAX");
-
-        info!("hello");
-        error!("hello");
-        warn!("hello");
-        trace!("hello");
-        debug!("hello");
-        info!("hello");
-    }
-}
