@@ -41,6 +41,16 @@ macro_rules! info {
 }
 
 #[macro_export]
+macro_rules! success {
+    ($message:expr) => {
+        $crate::log_helper!(success, $message);
+    };
+    ($message:expr, $($arg:tt)*) => {
+        $crate::log_helper!(success, $message, $($arg)*)
+    };
+}
+
+#[macro_export]
 macro_rules! error {
     ($message:expr) => {
         $crate::log_helper!(error, $message);
