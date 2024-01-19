@@ -45,7 +45,7 @@ async fn _get_json_from_url(
         Err(e) => {
             debug_max!("GET {}: {:?}", &url, &e);
             if retries_remaining == 0 {
-                return Ok(None);
+                return Ok(None)
             }
 
             // exponential backoff
@@ -53,7 +53,7 @@ async fn _get_json_from_url(
             let retries_remaining = retries_remaining - 1;
             let sleep_time = 2u64.pow(retry_count as u32) * 250;
             async_sleep(Duration::from_millis(sleep_time)).await;
-            return _get_json_from_url(url, retry_count, retries_remaining, timeout).await;
+            return _get_json_from_url(url, retry_count, retries_remaining, timeout).await
         }
     };
     let body = res.text().await?;

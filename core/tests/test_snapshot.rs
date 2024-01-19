@@ -17,6 +17,7 @@ mod benchmark {
                 no_tui: true,
                 name: String::from(""),
                 output: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::snapshot::snapshot(args).await.unwrap();
         }
@@ -36,6 +37,7 @@ mod benchmark {
                 no_tui: true,
                 name: String::from(""),
                 output: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::snapshot::snapshot(args).await.unwrap();
         }
@@ -61,6 +63,7 @@ mod integration_tests {
             no_tui: true,
             name: String::from(""),
             output: String::from(""),
+            timeout: 10000,
         };
 
         let _ = heimdall_core::snapshot::snapshot(args).await.unwrap();
@@ -77,6 +80,7 @@ mod integration_tests {
             no_tui: true,
             name: String::from(""),
             output: String::from(""),
+            timeout: 10000,
         };
 
         let _ = heimdall_core::snapshot::snapshot(args).await.unwrap();
@@ -167,6 +171,7 @@ mod integration_tests {
                 no_tui: true,
                 name: String::from(""),
                 output: String::from(""),
+                timeout: 10000,
             };
             let _ = heimdall_core::snapshot::snapshot(args).await.unwrap();
         }

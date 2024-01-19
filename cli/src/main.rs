@@ -1,6 +1,8 @@
+pub(crate) mod error;
 pub(crate) mod output;
 
 use backtrace::Backtrace;
+use error::Error;
 use output::{build_output_path, print_with_less};
 use std::{io, panic};
 
@@ -82,7 +84,7 @@ pub enum Subcommands {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Error> {
     let args = Arguments::parse();
     // handle catching panics with
     panic::set_hook(Box::new(|panic_info| {
@@ -90,10 +92,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // cursor)
         let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend).unwrap();
-        disable_raw_mode().unwrap();
-        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture).unwrap();
-        terminal.show_cursor().unwrap();
+        let mut terminal =
+            Terminal::new(backend).expect("failed to initialize terminal for panic handler");
+        disable_raw_mode().expect("failed to disable raw mode for panic handler");
+        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)
+            .expect("failed to cleanup terminal for panic handler");
+        terminal.show_cursor().expect("failed to show cursor for panic handler");
 
         // print the panic message
         let backtrace = Backtrace::new();
@@ -121,13 +125,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 filename = format!("{}-{}", given_name, filename);
             }
 
-            let assembly = disassemble(cmd.clone()).await?;
+            let assembly = disassemble(cmd.clone())
+                .await
+                .map_err(|e| Error::Generic(format!("failed to disassemble bytecode: {}", e)))?;
 
             if cmd.output == "print" {
-                print_with_less(&assembly).await?;
+                print_with_less(&assembly)
+                    .await
+                    .map_err(|e| Error::Generic(format!("failed to print assembly: {}", e)))?;
             } else {
                 let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?;
 
                 write_file(&output_path, &assembly);
             }
@@ -151,28 +163,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     format!("{}-{}", given_name, decompiled_output_filename);
             }
 
-            let result = decompile(cmd.clone()).await?;
+            let result = decompile(cmd.clone())
+                .await
+                .map_err(|e| Error::Generic(format!("failed to decompile bytecode: {}", e)))?;
 
             if cmd.output == "print" {
                 let mut output_str = String::new();
 
                 if let Some(abi) = &result.abi {
-                    output_str.push_str(&format!(
-                        "ABI:\n\n{}\n",
-                        serde_json::to_string_pretty(abi).unwrap()
-                    ));
+                    output_str
+                        .push_str(&format!("ABI:\n\n{}\n", serde_json::to_string_pretty(abi)?));
                 }
                 if let Some(source) = &result.source {
                     output_str.push_str(&format!("Source:\n\n{}\n", source));
                 }
 
-                print_with_less(&output_str).await?;
+                print_with_less(&output_str).await.map_err(|e| {
+                    Error::Generic(format!("failed to print decompiled bytecode: {}", e))
+                })?;
             } else {
                 // write the contract ABI
                 if let Some(abi) = result.abi {
                     let output_path =
                         build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &abi_filename)
-                            .await?;
+                            .await
+                            .map_err(|e| {
+                                Error::Generic(format!("failed to build output path: {}", e))
+                            })?;
 
                     write_file(
                         &output_path,
@@ -182,17 +199,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .map(|x| {
                                     match x {
                                         ABIStructure::Function(x) => {
-                                            serde_json::to_string_pretty(x).unwrap()
+                                            serde_json::to_string_pretty(x)
+                                                .map_err(Error::SerdeError)
                                         }
-                                        ABIStructure::Error(x) => {
-                                            serde_json::to_string_pretty(x).unwrap()
-                                        }
-                                        ABIStructure::Event(x) => {
-                                            serde_json::to_string_pretty(x).unwrap()
-                                        }
+                                        ABIStructure::Error(x) => serde_json::to_string_pretty(x)
+                                            .map_err(Error::SerdeError),
+                                        ABIStructure::Event(x) => serde_json::to_string_pretty(x)
+                                            .map_err(Error::SerdeError),
                                     }
                                 })
-                                .collect::<Vec<String>>()
+                                .collect::<Result<Vec<String>, Error>>()?
                                 .join(",\n")
                         ),
                     );
@@ -207,7 +223,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             &cmd.rpc_url,
                             &format!("{}.sol", &decompiled_output_filename),
                         )
-                        .await?
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?
                     } else {
                         build_output_path(
                             &cmd.output,
@@ -215,7 +234,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             &cmd.rpc_url,
                             &format!("{}.yul", &decompiled_output_filename,),
                         )
-                        .await?
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?
                     };
                     write_file(&output_path, source);
                 }
@@ -236,7 +258,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // set cmd.verbose to 5
             cmd.verbose = clap_verbosity_flag::Verbosity::new(5, 0);
 
-            let _ = decode(cmd).await;
+            let _ = decode(cmd)
+                .await
+                .map_err(|e| Error::Generic(format!("failed to decode calldata: {}", e)))?;
         }
 
         Subcommands::CFG(mut cmd) => {
@@ -252,14 +276,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !given_name.is_empty() {
                 filename = format!("{}-{}", given_name, filename);
             }
-            let cfg = cfg(cmd.clone()).await?;
+            let cfg = cfg(cmd.clone())
+                .await
+                .map_err(|e| Error::Generic(format!("failed to generate cfg: {}", e)))?;
             let stringified_dot = build_cfg(&cfg, &cmd);
 
             if cmd.output == "print" {
-                print_with_less(&stringified_dot).await?;
+                print_with_less(&stringified_dot)
+                    .await
+                    .map_err(|e| Error::Generic(format!("failed to print cfg: {}", e)))?;
             } else {
                 let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?;
                 write_file(&output_path, &stringified_dot);
             }
         }
@@ -283,7 +315,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cmd.transpose_api_key = configuration.transpose_api_key;
             }
 
-            let result = dump(cmd.clone()).await?;
+            let result = dump(cmd.clone())
+                .await
+                .map_err(|e| Error::Generic(format!("failed to dump storage: {}", e)))?;
             let mut lines = Vec::new();
 
             // add header
@@ -298,10 +332,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if cmd.output == "print" {
-                print_with_less(&lines.join("\n")).await?;
+                print_with_less(&lines.join("\n"))
+                    .await
+                    .map_err(|e| Error::Generic(format!("failed to print dump: {}", e)))?;
             } else {
                 let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?;
 
                 write_lines_to_file(&output_path, lines);
             }
@@ -321,7 +361,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 filename = format!("{}-{}", given_name, filename);
             }
 
-            let snapshot_result = snapshot(cmd.clone()).await?;
+            let snapshot_result = snapshot(cmd.clone())
+                .await
+                .map_err(|e| Error::Generic(format!("failed to snapshot contract: {}", e)))?;
             let csv_lines = generate_csv(
                 &snapshot_result.snapshots,
                 &snapshot_result.resolved_errors,
@@ -329,10 +371,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             if cmd.output == "print" {
-                print_with_less(&csv_lines.join("\n")).await?;
+                print_with_less(&csv_lines.join("\n"))
+                    .await
+                    .map_err(|e| Error::Generic(format!("failed to print snapshot: {}", e)))?;
             } else {
                 let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?;
 
                 write_lines_to_file(&output_path, csv_lines);
             }
@@ -360,7 +408,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // set cmd.verbose to 5
             cmd.verbose = clap_verbosity_flag::Verbosity::new(5, 0);
 
-            let inspect_result = inspect(cmd.clone()).await?;
+            let inspect_result = inspect(cmd.clone())
+                .await
+                .map_err(|e| Error::Generic(format!("failed to inspect transaction: {}", e)))?;
 
             if cmd.output == "print" {
                 let mut output_str = String::new();
@@ -368,17 +418,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(decoded_trace) = inspect_result.decoded_trace {
                     output_str.push_str(&format!(
                         "Decoded Trace:\n\n{}\n",
-                        serde_json::to_string_pretty(&decoded_trace).unwrap()
+                        serde_json::to_string_pretty(&decoded_trace)?
                     ));
                 }
 
-                print_with_less(&output_str).await?;
+                print_with_less(&output_str)
+                    .await
+                    .map_err(|e| Error::Generic(format!("failed to print decoded trace: {}", e)))?;
             } else if let Some(decoded_trace) = inspect_result.decoded_trace {
                 // write decoded trace with serde
                 let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename).await?;
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?;
 
-                write_file(&output_path, &serde_json::to_string_pretty(&decoded_trace).unwrap());
+                write_file(&output_path, &serde_json::to_string_pretty(&decoded_trace)?);
             }
         }
 

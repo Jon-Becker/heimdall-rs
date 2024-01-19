@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use ethers::abi::AbiEncode;
+use ethers::{abi::AbiEncode, types::U256};
 use heimdall_common::utils::io::{
     file::short_path,
     logging::{Logger, TraceFactory},
@@ -49,6 +49,7 @@ pub struct EventABI {
     pub type_: String,
     pub name: String,
     pub inputs: Vec<ABIToken>,
+    pub anonymous: bool,
 }
 
 /// An [`ABIStructure`] may be a function, error, or event
@@ -213,7 +214,7 @@ pub fn build_abi(
                         ABIStructure::Error(x) => x.name == resolved_error.name,
                         _ => false,
                     }) {
-                        continue;
+                        continue
                     }
 
                     abi.push(ABIStructure::Error(ErrorABI {
@@ -234,7 +235,7 @@ pub fn build_abi(
                         }
                         _ => false,
                     }) {
-                        continue;
+                        continue
                     }
 
                     abi.push(ABIStructure::Error(ErrorABI {
@@ -272,13 +273,14 @@ pub fn build_abi(
                         ABIStructure::Event(x) => x.name == resolved_event.name,
                         _ => false,
                     }) {
-                        continue;
+                        continue
                     }
 
                     abi.push(ABIStructure::Event(EventABI {
                         type_: "event".to_string(),
                         name: resolved_event.name.clone(),
                         inputs,
+                        anonymous: false,
                     }));
                 }
                 None => {
@@ -293,7 +295,7 @@ pub fn build_abi(
                         }
                         _ => false,
                     }) {
-                        continue;
+                        continue
                     }
 
                     abi.push(ABIStructure::Event(EventABI {
@@ -303,6 +305,7 @@ pub fn build_abi(
                             &event_selector.encode_hex().replacen("0x", "", 1)[0..8]
                         ),
                         inputs: Vec::new(),
+                        anonymous: event_selector == &U256::zero(),
                     }));
                 }
             }

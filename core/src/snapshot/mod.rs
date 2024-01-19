@@ -4,7 +4,7 @@ pub mod menus;
 pub mod resolve;
 pub mod structures;
 pub mod util;
-use heimdall_common::debug_max;
+use heimdall_common::{debug_max, utils::threading::run_with_timeout};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -76,6 +76,10 @@ pub struct SnapshotArgs {
     /// The output directory to write the output to, or 'print' to print to the console.
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
+
+    /// The timeout for each function's symbolic execution in milliseconds.
+    #[clap(long, short, default_value = "10000", hide_default_value = true)]
+    pub timeout: u64,
 }
 
 impl SnapshotArgsBuilder {
@@ -89,6 +93,7 @@ impl SnapshotArgsBuilder {
             no_tui: Some(true),
             name: Some(String::new()),
             output: Some(String::new()),
+            timeout: Some(10000),
         }
     }
 }
@@ -257,8 +262,22 @@ async fn get_snapshots(
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdest_count) =
-            evm.clone().symbolic_exec_selector(&selector, function_entry_point);
+        let mut evm_clone = evm.clone();
+        let selector_clone = selector.clone();
+        let (map, jumpdest_count) = match run_with_timeout(
+            move || evm_clone.symbolic_exec_selector(&selector_clone, function_entry_point),
+            Duration::from_millis(args.timeout),
+        ) {
+            Some(map) => map,
+            None => {
+                trace.add_error(
+                    func_analysis_trace,
+                    line!(),
+                    "symbolic execution timed out, skipping snapshotting.",
+                );
+                continue
+            }
+        };
 
         trace.add_debug(
             func_analysis_trace,

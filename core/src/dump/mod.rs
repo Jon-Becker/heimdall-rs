@@ -94,16 +94,7 @@ impl DumpArgsBuilder {
 /// entry point for the dump module. Will fetch all storage slots accessed by the target contract,
 /// and dump them to a CSV file or the TUI.
 pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Error>> {
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     let (logger, _) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),

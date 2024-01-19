@@ -13,6 +13,10 @@ pub struct Version {
 pub fn current_version() -> Version {
     // get the current version from the cargo package
     let version_string = env!("CARGO_PKG_VERSION");
+
+    // remove +<channel>... from the version string
+    let version_string = version_string.split('+').collect::<Vec<&str>>()[0];
+
     let version_parts: Vec<&str> = version_string.split('.').collect();
 
     Version {

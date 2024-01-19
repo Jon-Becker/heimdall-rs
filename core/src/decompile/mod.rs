@@ -4,7 +4,11 @@ pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
-use heimdall_common::debug_max;
+use heimdall_common::{
+    debug_max,
+    ether::{bytecode::get_bytecode_from_target, evm::ext::exec::VMTrace},
+    utils::{strings::get_shortned_target, threading::run_with_timeout},
+};
 
 use crate::{
     decompile::{
@@ -20,17 +24,15 @@ use derive_builder::Builder;
 use heimdall_common::{
     ether::{
         compiler::detect_compiler,
-        rpc::get_code,
         selectors::{find_function_selectors, resolve_selectors},
     },
     utils::strings::encode_hex_reduced,
 };
 use indicatif::ProgressBar;
-use std::{collections::HashMap, fs, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use clap::{AppSettings, Parser};
 use heimdall_common::{
-    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     ether::{evm::core::vm::VM, signatures::*},
     utils::io::logging::*,
 };
@@ -80,6 +82,10 @@ pub struct DecompilerArgs {
     /// The name for the output file
     #[clap(long, short, default_value = "", hide_default_value = true)]
     pub name: String,
+
+    /// The timeout for each function's symbolic execution in milliseconds.
+    #[clap(long, short, default_value = "10000", hide_default_value = true)]
+    pub timeout: u64,
 }
 
 impl DecompilerArgsBuilder {
@@ -94,6 +100,7 @@ impl DecompilerArgsBuilder {
             include_yul: Some(false),
             output: Some(String::new()),
             name: Some(String::new()),
+            timeout: Some(10000),
         }
     }
 }
@@ -110,16 +117,7 @@ pub async fn decompile(
     use std::time::Instant;
     let now = Instant::now();
 
-    // set logger environment variable if not already set
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            match args.verbose.log_level() {
-                Some(level) => level.as_str(),
-                None => "SILENT",
-            },
-        );
-    }
+    set_logger_env(&args.verbose);
 
     // get a new logger
     let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
@@ -136,13 +134,7 @@ pub async fn decompile(
         std::process::exit(1);
     }
 
-    // truncate target for prettier display
-    let mut shortened_target = args.target.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
+    let shortened_target = get_shortned_target(&args.target);
     let decompile_call = trace.add_call(
         0,
         line!(),
@@ -152,37 +144,7 @@ pub async fn decompile(
         "()".to_string(),
     );
 
-    // parse the various formats that are accepted as targets
-    // i.e, file, bytecode, contract address
-    let contract_bytecode: String;
-    if ADDRESS_REGEX.is_match(&args.target)? {
-        // We are decompiling a contract address, so we need to fetch the bytecode from the RPC
-        // provider
-        contract_bytecode = get_code(&args.target, &args.rpc_url).await?;
-    } else if BYTECODE_REGEX.is_match(&args.target)? {
-        debug_max!("using provided bytecode for decompilation");
-        contract_bytecode = args.target.clone().replacen("0x", "", 1);
-    } else {
-        debug_max!("using provided file for decompilation.");
-
-        // We are decompiling a file, so we need to read the bytecode from the file.
-        contract_bytecode = match fs::read_to_string(&args.target) {
-            Ok(contents) => {
-                let _contents = contents.replace('\n', "");
-                if BYTECODE_REGEX.is_match(&_contents)? && _contents.len() % 2 == 0 {
-                    _contents.replacen("0x", "", 1)
-                } else {
-                    logger
-                        .error(&format!("file '{}' doesn't contain valid bytecode.", &args.target));
-                    std::process::exit(1)
-                }
-            }
-            Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &args.target));
-                std::process::exit(1)
-            }
-        };
-    }
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
@@ -297,8 +259,18 @@ pub async fn decompile(
         );
 
         // get a map of possible jump destinations
-        let (map, jumpdest_count) =
-            &evm.clone().symbolic_exec_selector(&selector, function_entry_point);
+        let mut evm_clone = evm.clone();
+        let selector_clone = selector.clone();
+        let (map, jumpdest_count) = match run_with_timeout(
+            move || evm_clone.symbolic_exec_selector(&selector_clone, function_entry_point),
+            Duration::from_millis(args.timeout),
+        ) {
+            Some(map) => map,
+            None => {
+                trace.add_error(func_analysis_trace, line!(), "symbolic execution timed out!");
+                (VMTrace::default(), 0)
+            }
+        };
 
         trace.add_debug(
             func_analysis_trace,
@@ -321,7 +293,7 @@ pub async fn decompile(
         if args.include_yul {
             debug_max!("analyzing symbolic execution trace '0x{}' with yul analyzer", selector);
             analyzed_function = analyze_yul(
-                map,
+                &map,
                 Function {
                     selector: selector.clone(),
                     entry_point: function_entry_point,
@@ -346,7 +318,7 @@ pub async fn decompile(
         } else {
             debug_max!("analyzing symbolic execution trace '0x{}' with sol analyzer", selector);
             analyzed_function = analyze_sol(
-                map,
+                &map,
                 Function {
                     selector: selector.clone(),
                     entry_point: function_entry_point,
@@ -369,6 +341,14 @@ pub async fn decompile(
                 &mut Vec::new(),
                 (0, 0),
             );
+        }
+
+        // add notice to analyzed_function if jumpdest_count == 0, indicating that
+        // symbolic execution timed out
+        if jumpdest_count == 0 {
+            analyzed_function
+                .notices
+                .push("symbolic execution timed out. please report this!".to_string());
         }
 
         let argument_count = analyzed_function.arguments.len();

@@ -27,12 +27,12 @@ impl Contracts {
         // if skip resolving, just add the address
         if self.skip_resolving {
             self.contracts.insert(address, address.to_lower_hex());
-            return Ok(());
+            return Ok(())
         }
 
         // if alias already exists, don't overwrite
         if self.contracts.contains_key(&address) {
-            return Ok(());
+            return Ok(())
         }
 
         if !self.transpose_api_key.is_empty() {
@@ -54,7 +54,7 @@ impl Contracts {
         if self.skip_resolving {
             self.contracts
                 .extend(addresses.into_iter().map(|address| (address, address.to_lower_hex())));
-            return Ok(());
+            return Ok(())
         }
 
         // for each address, get the label
