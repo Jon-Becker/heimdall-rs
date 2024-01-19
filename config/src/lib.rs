@@ -1,8 +1,8 @@
 use clap::{AppSettings, Parser};
-use heimdall_common::{utils::io::{
-    file::{delete_path, read_file, write_file},
-    logging::*,
-}, error, info, success};
+use heimdall_common::{
+    utils::io::file::{delete_path, read_file, write_file},
+    error, info, success
+};
 use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
