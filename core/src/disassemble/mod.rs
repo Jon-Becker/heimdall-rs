@@ -4,7 +4,7 @@ use heimdall_common::{
     ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
     utils::{
         io::logging::{set_logger_env, Logger},
-        strings::{decode_hex, encode_hex},
+        strings::encode_hex,
     },
 };
 
@@ -65,13 +65,11 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
         None => "SILENT",
     });
 
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
-
     let mut program_counter = 0;
     let mut output: String = String::new();
 
     // Iterate over the bytecode, disassembling each instruction.
-    let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1))?;
+    let byte_array = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
     while program_counter < byte_array.len() {
         let operation = Opcode::new(byte_array[program_counter]);
         let mut pushed_bytes: String = String::new();

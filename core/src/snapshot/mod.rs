@@ -23,7 +23,7 @@ use heimdall_common::{
     },
     utils::{
         io::logging::*,
-        strings::{decode_hex, get_shortned_target},
+        strings::{encode_hex, get_shortned_target},
     },
 };
 use indicatif::ProgressBar;
@@ -131,13 +131,13 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
 
     // perform versioning and compiler heuristics
-    let (compiler, version) = detect_compiler(&contract_bytecode);
+    let (compiler, version) = detect_compiler(&encode_hex(contract_bytecode.clone()));
     trace.add_call(
         snapshot_call,
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         format!("({compiler}, {version})"),
     );
 
@@ -157,13 +157,13 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         0,
         u128::max_value(),
     );
-    let shortened_target = get_shortned_target(&contract_bytecode);
+    let shortened_target = get_shortned_target(&encode_hex(contract_bytecode.clone()));
     let vm_trace = trace.add_creation(
         snapshot_call,
         line!(),
         "contract".to_string(),
         shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into()?,
+        (contract_bytecode.len()).try_into()?,
     );
 
     trace.add_call(
@@ -171,7 +171,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         "()".to_string(),
     );
 
@@ -225,7 +225,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
 async fn get_snapshots(
     selectors: HashMap<String, u128>,
     resolved_selectors: HashMap<String, Vec<ResolvedFunction>>,
-    contract_bytecode: &str,
+    contract_bytecode: &[u8],
     logger: &Logger,
     trace: &mut TraceFactory,
     vm_trace: u32,
@@ -298,7 +298,7 @@ async fn get_snapshots(
             &map,
             Snapshot {
                 selector: selector.clone(),
-                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1))?,
+                bytecode: contract_bytecode.to_owned(),
                 entry_point: function_entry_point,
                 arguments: HashMap::new(),
                 storage: HashSet::new(),

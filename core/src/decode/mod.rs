@@ -231,8 +231,8 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
 
                     // if the decoded function call matches (95%) the function signature, add it
                     // to the list of matches
-                    if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs() >=
-                        0.90
+                    if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs()
+                        >= 0.90
                     {
                         let mut found_match = potential_match.clone();
                         found_match.decoded_inputs = Some(result);
@@ -265,9 +265,9 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     // truncate target for prettier display
     let mut shortened_target = args.target;
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     if matches.is_empty() {

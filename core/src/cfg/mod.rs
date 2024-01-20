@@ -7,7 +7,7 @@ use heimdall_common::{
         bytecode::get_bytecode_from_target, compiler::detect_compiler,
         selectors::find_function_selectors,
     },
-    utils::threading::run_with_timeout,
+    utils::{strings::encode_hex, threading::run_with_timeout},
 };
 use indicatif::ProgressBar;
 use std::time::Duration;
@@ -113,7 +113,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
-        target: contract_bytecode.clone(),
+        target: encode_hex(contract_bytecode.clone()),
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
@@ -128,18 +128,18 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         "()".to_string(),
     );
 
     // perform versioning and compiler heuristics
-    let (compiler, version) = detect_compiler(&contract_bytecode);
+    let (compiler, version) = detect_compiler(&encode_hex(contract_bytecode.clone()));
     trace.add_call(
         cfg_call,
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         format!("({compiler}, {version})"),
     );
 
@@ -160,7 +160,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         0,
         u128::max_value(),
     );
-    let mut shortened_target = contract_bytecode.clone();
+    let mut shortened_target = encode_hex(contract_bytecode.clone());
     if shortened_target.len() > 66 {
         shortened_target = shortened_target.chars().take(66).collect::<String>() +
             "..." +
@@ -173,7 +173,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         line!(),
         "contract".to_string(),
         shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into().unwrap(),
+        (contract_bytecode.len()).try_into().unwrap(),
     );
 
     // find all selectors in the bytecode
@@ -195,7 +195,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
         line!(),
         "heimdall".to_string(),
         "cfg".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         "()".to_string(),
     );
 

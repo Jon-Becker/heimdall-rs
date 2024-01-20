@@ -2,11 +2,11 @@ use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     error::Error,
-    utils::io::logging::Logger,
+    utils::{io::logging::Logger, strings::decode_hex},
 };
 use std::fs;
 
-pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<String, Error> {
+pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
     let (logger, _) = Logger::new("");
 
     if ADDRESS_REGEX
@@ -14,15 +14,22 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
         .map_err(|e| Error::Generic(format!("failed to match address regex: {}", e)))?
     {
         // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
-        get_code(target, rpc_url).await.map_err(|e| {
-            Error::Generic(format!("failed to fetch bytecode from RPC provider: {}", e))
-        })
+        get_code(target, rpc_url)
+            .await
+            .map_err(|e| {
+                Error::Generic(format!("failed to fetch bytecode from RPC provider: {}", e))
+            })
+            .and_then(|code| {
+                decode_hex(code.as_str())
+                    .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))
+            })
     } else if BYTECODE_REGEX
         .is_match(target)
         .map_err(|e| Error::Generic(format!("failed to match bytecode regex: {}", e)))?
     {
         // Target is already a bytecode, so we just need to remove 0x from the begining
-        Ok(target.replacen("0x", "", 1))
+        decode_hex(target.replacen("0x", "", 1).as_str())
+            .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))
     } else {
         // Target is a file path, so we need to read the bytecode from the file.
         match fs::read_to_string(target) {
@@ -35,7 +42,8 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
                     .map_err(|e| Error::Generic(format!("failed to match bytecode regex: {}", e)))? &&
                     _contents.len() % 2 == 0
                 {
-                    Ok(_contents.replacen("0x", "", 1))
+                    decode_hex(_contents.replacen("0x", "", 1).as_str())
+                        .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))
                 } else {
                     logger.error(&format!("file '{}' doesn't contain valid bytecode.", &target));
                     std::process::exit(1)
@@ -50,6 +58,8 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
 }
 #[cfg(test)]
 mod tests {
+    use crate::utils::strings::encode_hex;
+
     use super::*;
     use std::fs;
 
@@ -62,7 +72,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
+        assert!(BYTECODE_REGEX.is_match(&encode_hex(bytecode)).unwrap());
     }
 
     #[tokio::test]
@@ -74,7 +84,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
+        assert!(BYTECODE_REGEX.is_match(&encode_hex(bytecode)).unwrap());
     }
 
     #[tokio::test]
@@ -87,7 +97,7 @@ mod tests {
         let bytecode =
             get_bytecode_from_target(file_path, "https://rpc.ankr.com/eth").await.unwrap();
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).unwrap());
+        assert!(BYTECODE_REGEX.is_match(&encode_hex(bytecode)).unwrap());
 
         fs::remove_file(file_path).unwrap();
     }

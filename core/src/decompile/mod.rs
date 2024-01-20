@@ -7,7 +7,10 @@ pub mod util;
 use heimdall_common::{
     debug_max,
     ether::{bytecode::get_bytecode_from_target, evm::ext::exec::VMTrace},
-    utils::{strings::get_shortned_target, threading::run_with_timeout},
+    utils::{
+        strings::{encode_hex, get_shortned_target},
+        threading::run_with_timeout,
+    },
 };
 
 use crate::{
@@ -148,7 +151,7 @@ pub async fn decompile(
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
-        target: contract_bytecode.clone(),
+        target: encode_hex(contract_bytecode.clone()),
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
@@ -161,18 +164,18 @@ pub async fn decompile(
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         "()".to_string(),
     );
 
     // perform versioning and compiler heuristics
-    let (compiler, version) = detect_compiler(&contract_bytecode);
+    let (compiler, version) = detect_compiler(&encode_hex(contract_bytecode.clone()));
     trace.add_call(
         decompile_call,
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         format!("({compiler}, {version})"),
     );
 
@@ -193,10 +196,10 @@ pub async fn decompile(
         0,
         u128::max_value(),
     );
-    let mut shortened_target = contract_bytecode.clone();
+    let mut shortened_target = encode_hex(contract_bytecode.clone());
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
+        shortened_target = shortened_target.chars().take(66).collect::<String>() + 
+            "..." + 
             &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
     let vm_trace = trace.add_creation(
@@ -204,7 +207,7 @@ pub async fn decompile(
         line!(),
         "contract".to_string(),
         shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into()?,
+        (contract_bytecode.len()).try_into()?,
     );
 
     // find and resolve all selectors in the bytecode
