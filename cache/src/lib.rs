@@ -1,5 +1,7 @@
 use clap::{AppSettings, Parser};
+use std::fs;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::collections::HashMap;
 #[allow(deprecated)]
 use std::env::home_dir;
 
@@ -250,6 +252,36 @@ where
     }
 
     Ok(Some(*Box::new(cache.value)))
+}
+
+pub fn load_all_cache<T>() -> Result<HashMap<String, T>, Error>
+where
+    T: DeserializeOwned,
+{
+    let home = home_dir().ok_or(Error::Generic(
+        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
+    ))?;
+    let cache_dir = home.join(".bifrost").join("cache");
+
+    let mut cache_map: HashMap<String, T> = HashMap::new();
+
+    for entry in fs::read_dir(cache_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let key = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
+
+        // Read the file into a string (assuming it's stored in hex format)
+        let binary_string = fs::read_to_string(&path)?;
+        let binary_vec = decode_hex(&binary_string)
+            .map_err(|e| Error::Generic(format!("failed to decode hex: {:?}", e)))?;
+
+        let cache: Cache<T> = bincode::deserialize::<Cache<T>>(&binary_vec)
+            .map_err(|e| Error::Generic(format!("failed to deserialize cache object: {:?}", e)))?;
+
+        cache_map.insert(key, cache.value);
+    }
+
+    Ok(cache_map)
 }
 
 /// Store a value in the cache, with an optional expiry time \
