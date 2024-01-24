@@ -7,8 +7,9 @@ use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use ethers::types::H160;
 use heimdall_common::{
+    error, info,
     resources::transpose::{get_contract_creation, get_transaction_list},
-    utils::io::logging::*, info, error,
+    utils::io::logging::*,
 };
 use std::{collections::HashMap, env, str::FromStr, time::Instant};
 
@@ -222,10 +223,6 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
     let csv = build_csv(&state);
-    info!(&format!(
-        "Dumped {} storage values from '{}' .",
-        state.storage.len(),
-        &_args.target
-    ));
+    info!(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &_args.target));
     Ok(csv)
 }

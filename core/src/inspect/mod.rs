@@ -15,7 +15,8 @@ use heimdall_common::{
         env::set_env,
         hex::ToLowerHex,
         io::logging::{set_logger_env, TraceFactory},
-    }, warn,
+    },
+    warn,
 };
 
 use crate::error::Error;

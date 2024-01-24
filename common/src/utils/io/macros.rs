@@ -89,4 +89,3 @@ macro_rules! fatal {
         $crate::log_helper!(fatal, $message, $($arg)*)
     };
 }
-

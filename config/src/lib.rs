@@ -1,7 +1,7 @@
 use clap::{AppSettings, Parser};
 use heimdall_common::{
+    error, info, success,
     utils::io::file::{delete_path, read_file, write_file},
-    error, info, success
 };
 use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
@@ -53,9 +53,7 @@ pub fn write_config(contents: &str) {
             let _ = write_file(home.into_os_string().to_str().unwrap(), contents);
         }
         None => {
-            error!(
-                "couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",
-            );
+            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
             std::process::exit(1)
         }
     }
@@ -72,9 +70,7 @@ pub fn delete_config() {
             let _ = delete_path(home.into_os_string().to_str().unwrap());
         }
         None => {
-            error!(
-                "couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",
-            );
+            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
             std::process::exit(1)
         }
     }
@@ -98,9 +94,7 @@ pub fn read_config() -> String {
             }
         }
         None => {
-            error!(
-                "couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",
-            );
+            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
             std::process::exit(1)
         }
     }
@@ -162,10 +156,7 @@ pub fn config(args: ConfigArgs) {
         if !args.value.is_empty() {
             // read the config file and update the key/value pair
             update_config(&args.key, &args.value);
-            success!(
-                "updated configuration! Set \'{}\' = \'{}\' .",
-                &args.key, &args.value
-            );
+            success!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value);
         } else {
             // key is set, but no value is set
             error!("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");

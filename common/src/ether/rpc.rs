@@ -1,4 +1,4 @@
-use crate::{debug_max, error::Error, debug, error};
+use crate::{debug, debug_max, error, error::Error};
 use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,

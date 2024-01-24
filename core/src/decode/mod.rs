@@ -12,7 +12,7 @@ use ethers::{
 
 use heimdall_common::{
     constants::{CALLDATA_REGEX, TRANSACTION_HASH_REGEX},
-    debug_max,
+    debug, debug_max, error,
     ether::{
         evm::core::types::{
             get_padding, get_potential_types_for_word, parse_function_parameters, to_type, Padding,
@@ -20,13 +20,15 @@ use heimdall_common::{
         rpc::get_transaction,
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
+    success,
     utils::{
         io::{
             logging::{set_logger_env, Logger},
             types::display,
         },
         strings::decode_hex,
-    }, warn, error, debug, success
+    },
+    warn,
 };
 
 use indicatif::ProgressBar;
@@ -242,11 +244,17 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
                     }
                 }
                 Err(_) => {
-                    debug!("potential match '{}' ignored. type checking failed", &potential_match.signature);
+                    debug!(
+                        "potential match '{}' ignored. type checking failed",
+                        &potential_match.signature
+                    );
                 }
             }
         } else {
-            debug!("potential match '{}' ignored. decoding types failed", &potential_match.signature);
+            debug!(
+                "potential match '{}' ignored. decoding types failed",
+                &potential_match.signature
+            );
         }
     }
 

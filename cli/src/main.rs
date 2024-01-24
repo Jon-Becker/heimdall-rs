@@ -15,10 +15,13 @@ use crossterm::{
 };
 
 use heimdall_cache::{cache, CacheArgs};
-use heimdall_common::{utils::{
-    io::file::{write_file, write_lines_to_file},
-    version::{current_version, remote_version},
-}, info, fatal};
+use heimdall_common::{
+    fatal, info,
+    utils::{
+        io::file::{write_file, write_lines_to_file},
+        version::{current_version, remote_version},
+    },
+};
 use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_core::{
     cfg::{cfg, output::build_cfg, CFGArgs},

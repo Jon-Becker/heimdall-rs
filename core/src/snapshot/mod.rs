@@ -4,7 +4,7 @@ pub mod menus;
 pub mod resolve;
 pub mod structures;
 pub mod util;
-use heimdall_common::{debug_max, utils::threading::run_with_timeout, debug, warn, info};
+use heimdall_common::{debug, debug_max, info, utils::threading::run_with_timeout, warn};
 
 use std::{
     collections::{HashMap, HashSet},

@@ -1,11 +1,13 @@
 use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use heimdall_common::{
+    debug,
     ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
+    info,
     utils::{
         io::logging::set_logger_env,
         strings::{decode_hex, encode_hex},
-    }, info, debug,
+    },
 };
 
 #[derive(Debug, Clone, Parser, Builder)]

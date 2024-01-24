@@ -1,7 +1,6 @@
 use crate::error;
 use async_openai::{types::CreateCompletionRequestArgs, Client};
 
-
 /// Complete the given prompt using the OpenAI API.
 ///
 /// ```

@@ -4,7 +4,7 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::{debug_max, utils::io::logging::Logger, error, debug};
+use crate::{debug, debug_max, error, utils::io::logging::Logger};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

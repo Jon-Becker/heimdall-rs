@@ -5,9 +5,11 @@ pub mod precompile;
 pub mod resolve;
 pub mod util;
 use heimdall_common::{
-    debug_max,
+    debug, debug_max, error,
     ether::{bytecode::get_bytecode_from_target, evm::ext::exec::VMTrace},
-    utils::{strings::get_shortned_target, threading::run_with_timeout}, debug, warn, error, info
+    info,
+    utils::{strings::get_shortned_target, threading::run_with_timeout},
+    warn,
 };
 
 use crate::{
@@ -215,10 +217,7 @@ pub async fn decompile(
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
-            error!(
-                "failed to resolve any function selectors from '{}' .",
-                shortened_target
-            );
+            error!("failed to resolve any function selectors from '{}' .", shortened_target);
         }
 
         info!(

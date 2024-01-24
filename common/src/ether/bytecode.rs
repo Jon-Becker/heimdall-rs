@@ -1,9 +1,8 @@
 use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
+    debug, error,
     error::Error,
-    debug,
-    error,
 };
 use std::fs;
 

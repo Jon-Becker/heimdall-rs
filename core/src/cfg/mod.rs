@@ -2,12 +2,14 @@ pub mod graph;
 pub mod output;
 use derive_builder::Builder;
 use heimdall_common::{
-    debug_max,
+    debug, debug_max, error,
     ether::{
         bytecode::get_bytecode_from_target, compiler::detect_compiler,
         selectors::find_function_selectors,
     },
-    utils::threading::run_with_timeout, info, error, debug, warn
+    info,
+    utils::threading::run_with_timeout,
+    warn,
 };
 use indicatif::ProgressBar;
 use std::time::Duration;
