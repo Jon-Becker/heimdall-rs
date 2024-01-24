@@ -504,6 +504,8 @@ pub struct DecodeArgsFast {
     pub skip_resolving: bool,
 
     pub use_similarity_check: bool,
+
+    pub cache: HashMap<String, Vec<ResolvedFunction>>
 }
 
 //This endpoint only takes calldata !
@@ -516,6 +518,7 @@ impl DecodeArgsFastBuilder {
             truncate_calldata: Some(false),
             skip_resolving: Some(false),
             use_similarity_check: Some(false),
+            cache: Some(HashMap::new())
         }
     }
 }
@@ -569,7 +572,7 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
 
     // get the function signature possibilities
     let potential_matches = if !args.skip_resolving {
-        match ResolvedFunction::resolve(&function_selector).await {
+        match ResolvedFunction::resolve_fast(&function_selector, cache).await {
             Ok(Some(signatures)) => signatures,
             _ => Vec::new(),
         }
@@ -661,7 +664,6 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
     }
 
     // truncate target for prettier display
-
     if matches.is_empty() {
         logger.warn("couldn't find any matches for the given function selector.");
         // attempt to decode calldata regardless
