@@ -2,13 +2,12 @@ use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     error::Error,
-    utils::io::logging::Logger,
+    debug,
+    error,
 };
 use std::fs;
 
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<String, Error> {
-    let (logger, _) = Logger::new("");
-
     if ADDRESS_REGEX
         .is_match(target)
         .map_err(|e| Error::Generic(format!("failed to match address regex: {}", e)))?
@@ -27,7 +26,7 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
         // Target is a file path, so we need to read the bytecode from the file.
         match fs::read_to_string(target) {
             Ok(contents) => {
-                logger.debug(&format!("reading bytecode from '{}'", &target));
+                debug!(&format!("reading bytecode from '{}'", &target));
 
                 let _contents = contents.replace('\n', "");
                 if BYTECODE_REGEX
@@ -37,12 +36,12 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
                 {
                     Ok(_contents.replacen("0x", "", 1))
                 } else {
-                    logger.error(&format!("file '{}' doesn't contain valid bytecode.", &target));
+                    error!("file '{}' doesn't contain valid bytecode.", &target);
                     std::process::exit(1)
                 }
             }
             Err(_) => {
-                logger.error(&format!("failed to open file '{}' .", &target));
+                error!("failed to open file '{}' .", &target);
                 std::process::exit(1)
             }
         }

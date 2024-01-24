@@ -4,7 +4,7 @@ pub mod menus;
 pub mod resolve;
 pub mod structures;
 pub mod util;
-use heimdall_common::{debug_max, utils::threading::run_with_timeout};
+use heimdall_common::{debug_max, utils::threading::run_with_timeout, debug, warn, info};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -142,10 +142,9 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     );
 
     if compiler == "solc" {
-        logger.debug(&format!("detected compiler {compiler} {version}."));
+        debug!("detected compiler {} {}.", compiler, version);
     } else {
-        logger
-            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+        warn!("detected compiler {} {} is not supported by heimdall.", compiler, version);
     }
 
     let evm = VM::new(
@@ -200,8 +199,8 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
     )
     .await?;
 
-    logger.info("symbolic execution completed.");
-    logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
+    info!("symbolic execution completed.");
+    debug!("snapshot completed in {:?}.", now.elapsed());
 
     // open the tui
     if !args.no_tui {

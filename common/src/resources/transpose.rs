@@ -4,7 +4,7 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::{debug_max, utils::io::logging::Logger};
+use crate::{debug_max, utils::io::logging::Logger, error, debug};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,9 +29,6 @@ async fn call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse>
             ..ExponentialBackoff::default()
         },
         || async {
-            // get a new logger
-            let logger = Logger::default();
-
             // build the headers
             let mut headers = HeaderMap::new();
             headers.insert("Content-Type", "application/json".parse().unwrap());
@@ -56,8 +53,8 @@ async fn call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse>
             {
                 Ok(res) => res,
                 Err(e) => {
-                    logger.error("failed to call Transpose .");
-                    logger.error(&format!("error: {e}"));
+                    error!("failed to call Transpose .");
+                    error!("error: {}", e);
                     return Err(backoff::Error::Permanent(()))
                 }
             };
@@ -67,16 +64,16 @@ async fn call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse>
                 Ok(body) => Ok(match serde_json::from_str(&body) {
                     Ok(json) => json,
                     Err(e) => {
-                        logger.error("Transpose request unsucessful.");
-                        logger.debug(&format!("curl: curl -X GET \"https://api.transpose.io/sql\" -H \"accept: application/json\" -H \"Content-Type: application/json\" -H \"X-API-KEY: {api_key}\" -d {query}"));
-                        logger.error(&format!("error: {e}"));
-                        logger.debug(&format!("response body: {body:?}"));
+                        error!("Transpose request unsucessful.");
+                        debug!("curl: curl -X GET \"https://api.transpose.io/sql\" -H \"accept: application/json\" -H \"Content-Type: application/json\" -H \"X-API-KEY: {}\" -d {}", api_key, query);
+                        error!("error: {}", e);
+                        debug!("response body: {:?}", body);
                         return Err(backoff::Error::Permanent(()))
                     }
                 }),
                 Err(e) => {
-                    logger.error("failed to parse Transpose response body.");
-                    logger.error(&format!("error: {e}"));
+                    error!("failed to parse Transpose response body.");
+                    error!("error: {}", e);
                     Err(backoff::Error::Permanent(()))
                 }
             }
@@ -128,13 +125,13 @@ pub async fn get_transaction_list(
     let response = match call_transpose(&query, api_key).await {
         Some(response) => response,
         None => {
-            logger.error("failed to get transaction list from Transpose");
+            error!("failed to get transaction list from Transpose");
             std::process::exit(1)
         }
     };
 
     transaction_list_progress.finish_and_clear();
-    logger.debug(&format!("fetching transactions took {:?}", start_time.elapsed()));
+    debug!("fetching transactions took {:?}", start_time.elapsed());
 
     let mut transactions = Vec::new();
 
@@ -144,12 +141,12 @@ pub async fn get_transaction_list(
             Some(block_number) => match block_number.as_u64() {
                 Some(block_number) => block_number as u128,
                 None => {
-                    logger.error("failed to parse block_number from Transpose");
+                    error!("failed to parse block_number from Transpose");
                     std::process::exit(1)
                 }
             },
             None => {
-                logger.error("failed to fetch block_number from Transpose response");
+                error!("failed to fetch block_number from Transpose response");
                 std::process::exit(1)
             }
         };
@@ -157,12 +154,12 @@ pub async fn get_transaction_list(
             Some(transaction_hash) => match transaction_hash.as_str() {
                 Some(transaction_hash) => transaction_hash.to_string(),
                 None => {
-                    logger.error("failed to parse transaction_hash from Transpose");
+                    error!("failed to parse transaction_hash from Transpose");
                     std::process::exit(1)
                 }
             },
             None => {
-                logger.error("failed to fetch transaction_hash from Transpose response");
+                error!("failed to fetch transaction_hash from Transpose response");
                 std::process::exit(1)
             }
         };
@@ -210,13 +207,13 @@ pub async fn get_contract_creation(
     let response = match call_transpose(&query, api_key).await {
         Some(response) => response,
         None => {
-            logger.error("failed to get creation tx from Transpose");
+            error!("failed to get creation tx from Transpose");
             std::process::exit(1)
         }
     };
 
     transaction_list_progress.finish_and_clear();
-    logger.debug(&format!("fetching contract creation took {:?}", start_time.elapsed()));
+    debug!("fetching contract creation took {:?}", start_time.elapsed());
 
     // parse the results
     if let Some(result) = response.results.into_iter().next() {
@@ -224,12 +221,12 @@ pub async fn get_contract_creation(
             Some(block_number) => match block_number.as_u64() {
                 Some(block_number) => block_number as u128,
                 None => {
-                    logger.error("failed to parse block_number from Transpose");
+                    error!("failed to parse block_number from Transpose");
                     std::process::exit(1)
                 }
             },
             None => {
-                logger.error("failed to fetch block_number from Transpose response");
+                error!("failed to fetch block_number from Transpose response");
                 std::process::exit(1)
             }
         };
@@ -237,12 +234,12 @@ pub async fn get_contract_creation(
             Some(transaction_hash) => match transaction_hash.as_str() {
                 Some(transaction_hash) => transaction_hash.to_string(),
                 None => {
-                    logger.error("failed to parse transaction_hash from Transpose");
+                    error!("failed to parse transaction_hash from Transpose");
                     std::process::exit(1)
                 }
             },
             None => {
-                logger.error("failed to fetch transaction_hash from Transpose response");
+                error!("failed to fetch transaction_hash from Transpose response");
                 std::process::exit(1)
             }
         };

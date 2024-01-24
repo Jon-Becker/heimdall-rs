@@ -96,18 +96,13 @@ impl DumpArgsBuilder {
 pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Error>> {
     set_logger_env(&args.verbose);
 
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
     // parse the output directory
     let mut output_dir = args.output.clone();
     if args.output.is_empty() {
         output_dir = match env::current_dir() {
             Ok(dir) => dir.into_os_string().into_string().unwrap(),
             Err(_) => {
-                logger.error("failed to get current directory.");
+                error!("failed to get current directory.");
                 std::process::exit(1);
             }
         };
