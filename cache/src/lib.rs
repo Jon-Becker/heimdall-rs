@@ -1,7 +1,5 @@
 use clap::{AppSettings, Parser};
-use std::fs;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::collections::HashMap;
 #[allow(deprecated)]
 use std::env::home_dir;
 

@@ -18,7 +18,7 @@ use heimdall_common::{
             get_padding, get_potential_types_for_word, parse_function_parameters, to_type, Padding,
         },
         rpc::get_transaction,
-        signatures::{score_signature, ResolveSelector, ResolvedFunction},
+        signatures::{score_signature, ResolveSelector, ResolvedFunction, ResolvedCache},
     },
     utils::{
         io::{
@@ -77,7 +77,7 @@ pub struct DecodeArgs {
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
 
-    /// Pass flag categorizing target as call_data. Useful for calldata of length 64. 
+    /// Pass flag categorizing target as call_data. Useful for calldata of length 64.
     #[clap(long = "calldata")]
     pub iscalldata: bool,
 }
@@ -123,11 +123,10 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     let mut calldata;
 
     if !args.iscalldata {
-    // determine whether or not the target is a transaction hash
-        if TRANSACTION_HASH_REGEX
-            .is_match(&args.target)
-            .map_err(|_| Error::GenericError("failed to match transaction hash regex.".to_string()))?
-        {
+        // determine whether or not the target is a transaction hash
+        if TRANSACTION_HASH_REGEX.is_match(&args.target).map_err(|_| {
+            Error::GenericError("failed to match transaction hash regex.".to_string())
+        })? {
             // We are decoding a transaction hash, so we need to fetch the calldata from the RPC
             // provider.
             raw_transaction = get_transaction(&args.target, &args.rpc_url).await.map_err(|_| {
@@ -240,8 +239,8 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
 
                     // if the decoded function call matches (95%) the function signature, add it
                     // to the list of matches
-                    if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs() >=
-                        0.90
+                    if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs()
+                        >= 0.90
                     {
                         let mut found_match = potential_match.clone();
                         found_match.decoded_inputs = Some(result);
@@ -274,9 +273,9 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     // truncate target for prettier display
     let mut shortened_target = args.target;
     if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
+        shortened_target = shortened_target.chars().take(66).collect::<String>()
+            + "..."
+            + &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     if matches.is_empty() {
@@ -505,7 +504,7 @@ pub struct DecodeArgsFast {
 
     pub use_similarity_check: bool,
 
-    pub cache: HashMap<String, Vec<ResolvedFunction>>
+    pub cache: ResolvedCache,
 }
 
 //This endpoint only takes calldata !
@@ -518,7 +517,7 @@ impl DecodeArgsFastBuilder {
             truncate_calldata: Some(false),
             skip_resolving: Some(false),
             use_similarity_check: Some(false),
-            cache: Some(HashMap::new())
+            cache: Some(ResolvedCache::new()),
         }
     }
 }
@@ -537,9 +536,11 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
 
     // init variables
     let mut calldata;
+    let mut cache;
 
     // We are decoding raw calldata, so we can just use the provided calldata.
     calldata = args.target.to_string().replacen("0x", "", 1);
+    cache = args.cache;
 
     // check if the calldata length is a standard length
     if calldata.len() % 2 != 0 || calldata.len() < 8 {
@@ -572,7 +573,7 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
 
     // get the function signature possibilities
     let potential_matches = if !args.skip_resolving {
-        match ResolvedFunction::resolve_fast(&function_selector, cache).await {
+        match cache.resolve(&function_selector).await {
             Ok(Some(signatures)) => signatures,
             _ => Vec::new(),
         }
@@ -631,8 +632,8 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
                     // if the decoded function call matches (95%) the function signature, add it
                     // to the list of matches
                     if args.truncate_calldata {
-                        if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs() >=
-                            0.90
+                        if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs()
+                            >= 0.90
                         {
                             let mut found_match = potential_match.clone();
                             found_match.decoded_inputs = Some(result);
@@ -750,4 +751,3 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
 
     Ok(matches)
 }
-
