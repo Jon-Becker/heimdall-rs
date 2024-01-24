@@ -527,13 +527,12 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
     set_logger_env(&args.verbose);
 
     // get a new logger and trace
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
+    let (logger, _) = Logger::new(match args.verbose.log_level() {
         Some(level) => level.as_str(),
         None => "SILENT",
     });
 
     // init variables
-    let mut raw_transaction: Transaction = Transaction::default();
     let mut calldata;
 
     // We are decoding raw calldata, so we can just use the provided calldata.
@@ -662,12 +661,6 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
     }
 
     // truncate target for prettier display
-    let mut shortened_target = args.target;
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
 
     if matches.is_empty() {
         logger.warn("couldn't find any matches for the given function selector.");

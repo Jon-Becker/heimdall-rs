@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::RwLock;
+
 use async_trait::async_trait;
 use ethers::abi::Token;
 use heimdall_cache::{read_cache, store_cache};
@@ -34,6 +37,13 @@ pub struct ResolvedLog {
 #[async_trait]
 pub trait ResolveSelector {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error>
+    where
+        Self: Sized;
+}
+
+#[async_trait]
+pub trait ResolveSelectorFast {
+    async fn resolve(selector: &str, cache: &RwLock<HashMap<String, Vec<Self>>>) -> Result<Option<Vec<Self>>, Error>
     where
         Self: Sized;
 }
@@ -212,7 +222,6 @@ impl ResolveSelector for ResolvedLog {
     }
 }
 
-#[async_trait]
 impl ResolveSelector for ResolvedFunction {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
         // normalize selector
@@ -293,6 +302,93 @@ impl ResolveSelector for ResolvedFunction {
         let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
             .map_err(|e| debug_max!("error storing signatures in cache: {}", e));
 
+        Ok(match signature_list.len() {
+            0 => None,
+            _ => Some(signature_list),
+        })
+    }
+}
+
+#[async_trait]
+impl ResolveSelectorFast for ResolvedFunction {
+    async fn resolve(selector: &str, cache: &RwLock<HashMap<String, Vec<Self>>>) -> Result<Option<Vec<Self>>, Error> {
+        // normalize selector
+        let selector = match selector.strip_prefix("0x") {
+            Some(selector) => selector,
+            None => selector,
+        };
+
+        debug_max!("resolving event selector {}", &selector);
+
+        // Attempt to read from the cache first
+        {
+            let read_cache = cache.read().unwrap(); // Acquire read lock
+            if let Some(cached_results) = read_cache.get(&format!("selector.{}", selector)) {
+                if !cached_results.is_empty() {
+                    debug_max!("found cached results for selector: {}", &selector);
+                    return Ok(Some(cached_results.clone()));
+                }
+                // If the cache is empty, we drop the read lock and proceed to resolve and write
+            }
+        } // Read lock is automatically dropped here
+
+        
+        // get function possibilities from openchain
+        let signatures = match get_json_from_url(
+            &format!(
+                "https://api.openchain.xyz/signature-database/v1/lookup?filter=true&function=0x{}",
+                &selector
+            ),
+            10,
+        )
+        .await
+        .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
+        {
+            Some(signatures) => signatures,
+            None => return Ok(None),
+        };
+
+        // convert the serde value into a vec of possible functions
+        let results = signatures
+            .get("result")
+            .and_then(|result| result.get("function"))
+            .and_then(|function| function.get(format!("0x{selector}")))
+            .and_then(|item| item.as_array())
+            .map(|array| array.to_vec())
+            .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
+
+        debug_max!("found {} possible functions for selector: {}", &results.len(), &selector);
+
+        let mut signature_list: Vec<ResolvedFunction> = Vec::new();
+
+        for signature in results {
+            // get the function text signature and unwrap it into a string
+            let text_signature = match signature.get("name") {
+                Some(text_signature) => text_signature.to_string().replace('"', ""),
+                None => continue,
+            };
+
+            // safely split the text signature into name and inputs
+            let function_parts = match text_signature.split_once('(') {
+                Some(function_parts) => function_parts,
+                None => continue,
+            };
+
+            signature_list.push(ResolvedFunction {
+                name: function_parts.0.to_string(),
+                signature: text_signature.to_string(),
+                inputs: replace_last(function_parts.1, ")", "")
+                    .split(',')
+                    .map(|input| input.to_string())
+                    .collect(),
+                decoded_inputs: None,
+            });
+        }
+
+        // Now we acquire a write lock to update the cache
+        let mut write_cache = cache.write().unwrap();
+        write_cache.insert(format!("selector.{}", selector), signature_list.clone());
+        
         Ok(match signature_list.len() {
             0 => None,
             _ => Some(signature_list),
