@@ -631,7 +631,7 @@ pub async fn decode_fast(args: DecodeArgsFast) -> Result<Vec<ResolvedFunction>, 
 
                     // if the decoded function call matches (95%) the function signature, add it
                     // to the list of matches
-                    if args.truncate_calldata {
+                    if args.use_similarity_check {
                         if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs()
                             >= 0.90
                         {
