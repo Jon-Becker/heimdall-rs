@@ -14,7 +14,7 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 lazy_static! {
     static ref HTTP_CLIENT: Arc<Mutex<Client>> = Arc::new(Mutex::new(Client::builder()
         .user_agent(APP_USER_AGENT)
-        // .danger_accept_invalid_certs(true) // Be cautious with this setting
+        .danger_accept_invalid_certs(true) // Be cautious with this setting
         .timeout(Duration::from_secs(10))
         .build()
         .unwrap()));
