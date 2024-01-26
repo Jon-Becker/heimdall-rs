@@ -278,6 +278,30 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
     None
 }
 
+pub trait StringExt {
+    fn truncate(&self, max_length: usize) -> String;
+}
+
+/// Truncates a string to a maximum length, adding an ellipsis ("...") if the string is truncated.
+/// Note: the ellipsis *is* counted towards the maximum length.
+///
+/// ```
+/// use heimdall_common::utils::strings::StringExt;
+///
+/// let s = "Hello, world!";
+/// let result = s.to_string().truncate(11);
+/// assert_eq!(result, "Hell...rld!");
+/// ```
+impl StringExt for String {
+    fn truncate(&self, max_length: usize) -> String {
+        if self.len() > max_length {
+            self.chars().take(max_length - 7).collect::<String>() + "..." + &self[self.len() - 4..]
+        } else {
+            self.to_string()
+        }
+    }
+}
+
 /// Tokenizes an expression into a vector of tokens
 ///
 /// ```
@@ -388,26 +412,6 @@ pub fn classify_token(token: &str) -> TokenType {
 
     // this token must be a function call
     TokenType::Function
-}
-
-/// Returns a collapsed version of a string if this string is greater than 66 characters in length.
-/// The collapsed string consists of the first 66 characters, followed by an ellipsis ("..."), and
-/// then the last 16 characters of the original string. ```
-/// use heimdall_common::utils::strings::get_shortned_target;
-///
-/// let long_target = "0".repeat(80);
-/// let shortened_target = get_shortned_target(&long_target);
-/// ```
-pub fn get_shortned_target(target: &str) -> String {
-    let mut shortened_target = target.to_string();
-
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
-
-    shortened_target
 }
 
 #[cfg(test)]
@@ -745,18 +749,18 @@ mod tests {
     }
 
     #[test]
-    fn test_shorten_long_target() {
-        let long_target = "0".repeat(80);
-        let shortened_target = get_shortned_target(&long_target);
+    fn test_truncate_simple() {
+        let s = "Hello, world!";
+        let result = s.to_string().truncate(10);
 
-        assert_eq!(shortened_target.len(), 85);
+        assert_eq!(result, "Hel...rld!");
     }
 
     #[test]
-    fn test_shorten_short_target() {
-        let short_target = "0".repeat(66);
-        let shortened_target = get_shortned_target(&short_target);
+    fn test_truncate_no_truncation() {
+        let s = "Hello, world!";
+        let result = s.to_string().truncate(20);
 
-        assert_eq!(shortened_target.len(), 66);
+        assert_eq!(result, "Hello, world!");
     }
 }

@@ -245,7 +245,7 @@ mod tests {
         let line = "and(0xffffffffffffffffffffffffffffffffffffffff, calldataload(0x04))";
 
         let cleaned = convert_bitmask_to_casting(line);
-        assert_eq!(cleaned, "castToAddress(calldataload(0x04))");
+        assert_eq!(cleaned, "bytes20(calldataload(0x04))");
     }
 
     #[test]
@@ -261,7 +261,7 @@ mod tests {
         let line = "bytes32(0x00)";
 
         let cleaned = remove_replace_casts(line).expect("failed to remove replace casts");
-        assert_eq!(cleaned, "0x00");
+        assert_eq!(cleaned, "(0x00)");
     }
 
     // TODO : more coverage after i get core to compile lol

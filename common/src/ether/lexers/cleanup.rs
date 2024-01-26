@@ -42,9 +42,6 @@ pub fn convert_bitmask_to_casting(line: &str) -> Result<String, Error> {
 
             subject = subject[subject_range.start - 1..subject_range.end + 1].to_string();
 
-            println!("SOME: subject: {}", subject);
-            println!("cast types: {:?}", cast_types);
-
             // if the cast is a bool, check if the line is a conditional
             let solidity_type = match cast_types[0].as_str() {
                 "bool" => {
@@ -102,9 +99,6 @@ pub fn convert_bitmask_to_casting(line: &str) -> Result<String, Error> {
 
                 subject = subject[subject_range.start - 1..subject_range.end + 1].to_string();
 
-                println!("NONE: subject: {}", subject);
-                println!("cast types: {:?}", cast_types);
-
                 // if the cast is a bool, check if the line is a conditional
                 let solidity_type = match cast_types[0].as_str() {
                     "bool" => {
@@ -142,7 +136,8 @@ pub fn simplify_casts(line: &str) -> String {
 
     let cleaned_cast_pre = cleaned[0..cast_range.start - 1].to_string();
     let cleaned_cast_post = cleaned[cast_range.end + 1..].to_string();
-    let cleaned_cast = cleaned[cast_range.start..cast_range.end].to_string().replace(&cast, "");
+    let cleaned_cast =
+        cleaned[cast_range.start - 1..cast_range.end + 1].to_string().replace(&cast, "");
 
     cleaned = format!("{cleaned_cast_pre}{cleaned_cast}{cleaned_cast_post}");
 
@@ -339,6 +334,13 @@ mod tests {
     }
 
     #[test]
+    fn test_simplify_casts_unnecessary() {
+        let line = String::from("uint256(arg0);");
+
+        assert_eq!(simplify_casts(&line), String::from("uint256(arg0);"));
+    }
+
+    #[test]
     fn test_simplify_casts_complex() {
         let line = String::from("ecrecover(uint256(uint256(arg0)), uint256(uint256(arg0)), uint256(uint256(uint256(arg0))));");
 
@@ -376,6 +378,16 @@ mod tests {
         assert_eq!(
             simplify_parentheses(&line, 0).expect("failed to simplify parentheses"),
             String::from("arg0")
+        );
+    }
+
+    #[test]
+    fn test_simplify_parentheses_unnecessary() {
+        let line = String::from("uint256(arg0);");
+
+        assert_eq!(
+            simplify_parentheses(&line, 0).expect("failed to simplify parentheses"),
+            String::from("uint256(arg0);")
         );
     }
 

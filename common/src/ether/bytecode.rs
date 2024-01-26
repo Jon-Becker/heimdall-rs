@@ -2,15 +2,13 @@ use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
     error::Error,
-    utils::io::logging::Logger,
+    utils::{io::logging::Logger, strings::decode_hex},
 };
 use std::fs;
 
-// TODO: this should return Vec<u8> instead of String
-// TODO: we dont need to pass rpc_url here, we should be able to use Configuration::load().
 /// Get the bytecode from the target, which can be a contract address, a bytecode or a file path.
-pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<String, Error> {
-    let (logger, _) = Logger::new("");
+pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
+    let logger = Logger::default();
 
     if ADDRESS_REGEX.is_match(target).unwrap_or(false) {
         // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
@@ -19,7 +17,7 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
         })
     } else if BYTECODE_REGEX.is_match(target).unwrap_or(false) {
         // Target is already a bytecode, so we just need to remove 0x from the begining
-        Ok(target.replacen("0x", "", 1))
+        Ok(decode_hex(target)?)
     } else {
         // Target is a file path, so we need to read the bytecode from the file.
         let contents = fs::read_to_string(target).map_err(|e| {
@@ -29,10 +27,13 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Str
 
         let contents = contents.replace('\n', "");
         if BYTECODE_REGEX.is_match(&contents).unwrap_or(false) && contents.len() % 2 == 0 {
-            Ok(contents.replacen("0x", "", 1))
+            Ok(decode_hex(&contents)?)
         } else {
             logger.error(&format!("file '{}' doesn't contain valid bytecode.", &target));
-            return Err(Error::ParseError("file doesn't contain valid bytecode.".to_string()));
+            return Err(Error::ParseError(format!(
+                "file '{}' doesn't contain valid bytecode.",
+                &target
+            )));
         }
     }
 }
@@ -50,7 +51,7 @@ mod tests {
         .await
         .expect("failed to get bytecode from target");
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).expect("failed to match bytecode regex"));
+        assert!(!bytecode.is_empty());
     }
 
     #[tokio::test]
@@ -62,7 +63,7 @@ mod tests {
         .await
         .expect("failed to get bytecode from target");
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).expect("failed to match bytecode regex"));
+        assert!(!bytecode.is_empty());
     }
 
     #[tokio::test]
@@ -76,7 +77,7 @@ mod tests {
             .await
             .expect("failed to get bytecode from target");
 
-        assert!(BYTECODE_REGEX.is_match(&bytecode).expect("failed to match bytecode regex"));
+        assert_eq!(bytecode.len(), 52);
 
         fs::remove_file(file_path).expect("failed to remove mock file");
     }

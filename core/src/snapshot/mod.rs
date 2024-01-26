@@ -5,7 +5,14 @@ pub mod resolve;
 pub mod structures;
 pub mod util;
 use ethers::types::H160;
-use heimdall_common::{debug_max, utils::threading::run_with_timeout};
+use heimdall_common::{
+    debug_max,
+    ether::compiler::Compiler,
+    utils::{
+        strings::{encode_hex, StringExt},
+        threading::run_with_timeout,
+    },
+};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -22,10 +29,7 @@ use heimdall_common::{
         selectors::get_resolved_selectors,
         signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
     },
-    utils::{
-        io::logging::*,
-        strings::{decode_hex, get_shortned_target},
-    },
+    utils::io::logging::*,
 };
 use indicatif::ProgressBar;
 
@@ -120,13 +124,12 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
         Some(level) => level.as_str(),
         None => "SILENT",
     });
-    let shortened_target = get_shortned_target(&args.target);
     let snapshot_call = trace.add_call(
         0,
         line!(),
         "heimdall".to_string(),
         "snapshot".to_string(),
-        vec![shortened_target],
+        vec![args.target.truncate(64)],
         "()".to_string(),
     );
 
@@ -141,11 +144,11 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         format!("({compiler}, {version})"),
     );
 
-    if compiler == "solc" {
+    if compiler == Compiler::Solc {
         logger.debug(&format!("detected compiler {compiler} {version}."));
     } else {
         logger
@@ -153,8 +156,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
     }
 
     let evm = VM::new(
-        &decode_hex(&contract_bytecode)
-            .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))?,
+        &contract_bytecode,
         &[],
         H160::zero(),
         H160::zero(),
@@ -162,15 +164,15 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
         0,
         u128::max_value(),
     );
-    let shortened_target = get_shortned_target(&contract_bytecode);
     let vm_trace = trace.add_creation(
         snapshot_call,
         line!(),
         "contract".to_string(),
-        shortened_target.clone(),
-        (contract_bytecode.len() / 2usize)
+        encode_hex(contract_bytecode.clone()).truncate(64),
+        contract_bytecode
+            .len()
             .try_into()
-            .expect("failed to convert bytecode length to u32"),
+            .map_err(|e| Error::ParseError(format!("failed to parse bytecode length: {}", e)))?,
     );
 
     trace.add_call(
@@ -178,7 +180,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         "()".to_string(),
     );
 
@@ -219,7 +221,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
             snapshots.clone(),
             &all_resolved_errors,
             &all_resolved_events,
-            if args.target.len() > 64 { &shortened_target } else { args.target.as_str() },
+            &args.target.truncate(64),
             (compiler, &version),
         )?
     }
@@ -235,7 +237,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
 async fn get_snapshots(
     selectors: HashMap<String, u128>,
     resolved_selectors: HashMap<String, Vec<ResolvedFunction>>,
-    contract_bytecode: &str,
+    contract_bytecode: &[u8],
     logger: &Logger,
     trace: &mut TraceFactory,
     vm_trace: u32,
@@ -284,7 +286,7 @@ async fn get_snapshots(
                     line!(),
                     "symbolic execution timed out, skipping snapshotting.",
                 );
-                continue
+                continue;
             }
         };
 
@@ -307,8 +309,7 @@ async fn get_snapshots(
             &map,
             Snapshot {
                 selector: selector.clone(),
-                bytecode: decode_hex(&contract_bytecode.replacen("0x", "", 1))
-                    .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))?,
+                bytecode: contract_bytecode.to_vec(),
                 entry_point: function_entry_point,
                 arguments: HashMap::new(),
                 storage: HashSet::new(),

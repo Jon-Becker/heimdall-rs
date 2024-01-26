@@ -4,7 +4,7 @@ use heimdall_common::{
     ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
     utils::{
         io::logging::{set_logger_env, Logger},
-        strings::{decode_hex, encode_hex},
+        strings::encode_hex,
     },
 };
 
@@ -75,10 +75,8 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     let mut output: String = String::new();
 
     // Iterate over the bytecode, disassembling each instruction.
-    let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1))
-        .map_err(|e| Error::Generic(format!("failed to decode bytecode: {}", e)))?;
-    while program_counter < byte_array.len() {
-        let operation = Opcode::new(byte_array[program_counter]);
+    while program_counter < contract_bytecode.len() {
+        let operation = Opcode::new(contract_bytecode[program_counter]);
         let mut pushed_bytes: String = String::new();
 
         if operation.name.contains("PUSH") {
@@ -89,7 +87,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
                 .parse()
                 .map_err(|e| Error::Generic(format!("failed to parse PUSH byte count: {}", e)))?;
 
-            pushed_bytes = match byte_array
+            pushed_bytes = match contract_bytecode
                 .get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize)
             {
                 Some(bytes) => encode_hex(bytes.to_vec()),

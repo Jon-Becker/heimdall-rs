@@ -6,7 +6,7 @@ use std::{collections::HashSet, time::Duration};
 use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use ethers::{
-    abi::{decode as decode_abi, AbiEncode, Function, Param, ParamType, StateMutability, Token},
+    abi::{decode as decode_abi, Param, ParamType, Token},
     types::Transaction,
 };
 
@@ -25,12 +25,11 @@ use heimdall_common::{
             logging::{set_logger_env, Logger},
             types::display,
         },
-        strings::decode_hex,
+        strings::{encode_hex, StringExt},
     },
 };
 
 use indicatif::ProgressBar;
-use strsim::normalized_damerau_levenshtein as similarity;
 
 use crate::{
     decode::{core::abi::try_decode_dynamic_parameter, util::get_explanation},
@@ -125,10 +124,13 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
             Error::RpcError("failed to fetch transaction from RPC provider.".to_string())
         })?;
 
-        calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
+        calldata = raw_transaction.input.clone();
     } else if CALLDATA_REGEX.is_match(&args.target).unwrap_or(false) {
         // We are decoding raw calldata, so we can just use the provided calldata.
-        calldata = args.target.to_string().replacen("0x", "", 1);
+        calldata = args
+            .target
+            .parse()
+            .map_err(|_| Error::Generic("failed to parse calldata from target.".to_string()))?;
     } else {
         logger.error("invalid target. must be a transaction hash or calldata (bytes).");
         return Err(Error::Generic(
@@ -136,34 +138,22 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         ));
     }
 
-    // check if the calldata length is a standard length
-    if calldata.len() % 2 != 0 || calldata.len() < 8 {
-        logger.error("calldata is not a valid hex string.");
-        return Err(Error::Generic("calldata is not a valid hex string.".to_string()));
-    }
-
-    // if calldata isn't a multiple of 64, it may be harder to decode.
-    if (calldata[8..].len() % 64 != 0) && !args.truncate_calldata {
+    // if calldata isn't a multiple of 32, it may be harder to decode.
+    if (calldata[4..].len() % 32 != 0) && !args.truncate_calldata {
         logger.warn("calldata is not a standard size. decoding may fail since each word is not exactly 32 bytes long.");
         logger.warn("if decoding fails, try using the --truncate-calldata flag to truncate the calldata to a standard size.");
     } else if args.truncate_calldata {
         logger.warn("calldata is not a standard size. truncating the calldata to a standard size.");
 
         // truncate calldata to a standard size
-        let selector = calldata[0..8].to_owned();
-        calldata = calldata[8..][..calldata[8..].len() - (calldata[8..].len() % 64)].to_owned();
-        calldata = selector + &calldata;
+        let selector = calldata[0..4].to_owned();
+        let args = calldata[4..][..calldata[4..].len() - (calldata[4..].len() % 32)].to_owned();
+        calldata = [selector, args].concat().into();
     }
 
     // parse the two parts of calldata, inputs and selector
-    let function_selector = calldata[0..8].to_owned();
-    let byte_args = match decode_hex(&calldata[8..]) {
-        Ok(byte_args) => byte_args,
-        Err(_) => {
-            logger.error("failed to parse bytearray from calldata.");
-            return Err(Error::DecodeError);
-        }
-    };
+    let function_selector = encode_hex(calldata[0..4].to_owned());
+    let byte_args = &calldata[4..];
 
     // get the function signature possibilities
     let potential_matches = if !args.skip_resolving {
@@ -184,7 +174,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         let inputs: Vec<ParamType> = parse_function_parameters(&potential_match.signature)
             .map_err(|e| Error::Generic(format!("failed to parse function parameters: {}", e)))?;
 
-        if let Ok(result) = decode_abi(&inputs, &byte_args) {
+        if let Ok(result) = decode_abi(&inputs, byte_args) {
             // convert tokens to params
             let mut params: Vec<Param> = Vec::new();
             for (i, input) in inputs.iter().enumerate() {
@@ -194,53 +184,10 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
                     internal_type: None,
                 });
             }
-            // build the decoded function to verify it's a match
-            let decoded_function_call = Function {
-                name: potential_match.name.to_string(),
-                inputs: params,
-                outputs: Vec::new(),
-                constant: None,
-                state_mutability: StateMutability::NonPayable,
-            }
-            .encode_input(&result);
-            match decoded_function_call {
-                Ok(decoded_function_call) => {
-                    // decode the function call in trimmed bytes, removing 0s, because contracts
-                    // can use nonstandard sized words and padding is
-                    // hard
-                    let cleaned_bytes = decoded_function_call.encode_hex().replace('0', "");
-                    let decoded_function_call = match cleaned_bytes
-                        .split_once(&function_selector.replace('0', ""))
-                    {
-                        Some(decoded_function_call) => decoded_function_call.1,
-                        None => {
-                            logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
-                            continue;
-                        }
-                    };
 
-                    // if the decoded function call matches (95%) the function signature, add it
-                    // to the list of matches
-                    if similarity(decoded_function_call, &calldata[8..].replace('0', "")).abs() >=
-                        0.90
-                    {
-                        let mut found_match = potential_match.clone();
-                        found_match.decoded_inputs = Some(result);
-                        matches.push(found_match);
-                    } else {
-                        logger.debug(&format!("potential match '{}' ignored. decoded inputs differed from provided calldata.", &potential_match.signature).to_string());
-                    }
-                }
-                Err(_) => {
-                    logger.debug(
-                        &format!(
-                            "potential match '{}' ignored. type checking failed",
-                            &potential_match.signature
-                        )
-                        .to_string(),
-                    );
-                }
-            }
+            let mut found_match = potential_match.clone();
+            found_match.decoded_inputs = Some(result);
+            matches.push(found_match);
         } else {
             logger.debug(
                 &format!(
@@ -252,14 +199,6 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         }
     }
 
-    // truncate target for prettier display
-    let mut shortened_target = args.target;
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
-
     if matches.is_empty() {
         logger.warn("couldn't find any matches for the given function selector.");
         // attempt to decode calldata regardless
@@ -267,21 +206,14 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         // we're going to build a Vec<ParamType> of all possible types for each
         let mut potential_inputs: Vec<ParamType> = Vec::new();
 
-        // chunk in blocks of 32 bytes (64 hex chars)
-        let calldata_words = calldata[8..]
-            .as_bytes()
-            .chunks(64)
-            .map(|chunk| {
-                let s = std::str::from_utf8(chunk).map_err(|_| Error::DecodeError);
-                s
-            })
-            .collect::<Result<Vec<&str>, Error>>()?;
+        // chunk in blocks of 32 bytes
+        let calldata_words = calldata.chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
 
         // while calldata_words is not empty, iterate over it
         let mut i = 0;
         let mut covered_words = HashSet::new();
         while covered_words.len() != calldata_words.len() {
-            let word = calldata_words[i];
+            let word = calldata_words[i].to_owned();
 
             // check if the first word is abiencoded
             if let Some(abi_encoded) = try_decode_dynamic_parameter(i, &calldata_words)? {
@@ -289,13 +221,13 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
                 potential_inputs.push(potential_type);
                 covered_words.extend(abi_encoded.coverages);
             } else {
-                let (_, mut potential_types) = get_potential_types_for_word(word);
+                let (_, mut potential_types) = get_potential_types_for_word(&word);
 
                 // perform heuristics
                 // - if we use right-padding, this is probably bytesN
                 // - if we use left-padding, this is probably uintN or intN
                 // - if we use no padding, this is probably bytes32
-                match get_padding(word) {
+                match get_padding(&word) {
                     Padding::Left => potential_types
                         .retain(|t| t.starts_with("uint") || t.starts_with("address")),
                     _ => potential_types
@@ -317,7 +249,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
             potential_inputs.iter().map(|x| x.to_string()).collect::<Vec<String>>()
         );
 
-        if let Ok((decoded_inputs, params)) = try_decode(&potential_inputs, &byte_args) {
+        if let Ok((decoded_inputs, params)) = try_decode(&potential_inputs, byte_args) {
             // build a ResolvedFunction to add to matches
             let resolved_function = ResolvedFunction {
                 name: format!("Unresolved_{}", function_selector),
@@ -369,7 +301,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         line!(),
         "heimdall".to_string(),
         "decode".to_string(),
-        vec![shortened_target],
+        vec![args.target.truncate(64)],
         "()".to_string(),
     );
     trace.br(decode_call);
@@ -380,11 +312,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         vec![format!("signature: {}", selected_match.signature)],
     );
     trace.add_message(decode_call, line!(), vec![format!("selector:  0x{function_selector}")]);
-    trace.add_message(
-        decode_call,
-        line!(),
-        vec![format!("calldata:  {} bytes", calldata.len() / 2usize)],
-    );
+    trace.add_message(decode_call, line!(), vec![format!("calldata:  {} bytes", calldata.len())]);
     trace.br(decode_call);
 
     // build decoded string for --explain
@@ -393,7 +321,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         format!("name: {}", selected_match.name),
         format!("signature: {}", selected_match.signature),
         format!("selector: 0x{function_selector}"),
-        format!("calldata: {} bytes", calldata.len() / 2usize)
+        format!("calldata: {} bytes", calldata.len())
     );
 
     // build inputs
