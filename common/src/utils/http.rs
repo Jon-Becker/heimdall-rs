@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use lazy_static::lazy_static;
 use crate::debug_max;
 use async_recursion::async_recursion;
@@ -6,23 +5,17 @@ use reqwest::Client;
 use serde_json::Value;
 use std::time::Duration;
 use tokio::time::sleep as async_sleep;
-use tokio::sync::Mutex;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 //Use a single client in case Heimdall is used across threads
 lazy_static! {
-    static ref HTTP_CLIENT: Arc<Mutex<Client>> = Arc::new(Mutex::new(Client::builder()
+    static ref HTTP_CLIENT: Client = Client::builder()
         .user_agent(APP_USER_AGENT)
         .danger_accept_invalid_certs(true) // Be cautious with this setting
         .timeout(Duration::from_secs(10))
         .build()
-        .unwrap()));
-}
-
-async fn get_client() -> Client {
-    let lock = HTTP_CLIENT.lock().await;
-    lock.clone()
+        .unwrap();
 }
 
 /// Make a GET request to the target URL and return the response body as JSON
@@ -35,7 +28,7 @@ async fn get_client() -> Client {
 /// // get_json_from_url(url, timeout).await;
 /// ```
 pub async fn get_json_from_url(url: &str, timeout: u64) -> Result<Option<Value>, reqwest::Error> {
-    let client = get_client().await;
+    let client = HTTP_CLIENT.clone();
     _get_json_from_url(&client, url, 0, 5, timeout).await
 }
 
