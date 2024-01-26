@@ -7,7 +7,7 @@ use error::Error;
 use util::*;
 
 pub mod error;
-pub mod util;
+pub(crate) mod util;
 
 /// Clap argument parser for the cache subcommand
 #[derive(Debug, Clone, Parser)]

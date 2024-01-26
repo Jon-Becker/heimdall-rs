@@ -5,11 +5,13 @@ pub mod precompile;
 pub mod resolve;
 pub mod util;
 use ethers::types::H160;
-use heimdall_cache::util::decode_hex;
 use heimdall_common::{
     debug_max,
-    ether::{bytecode::get_bytecode_from_target, evm::ext::exec::VMTrace},
-    utils::{strings::get_shortned_target, threading::run_with_timeout},
+    ether::{bytecode::get_bytecode_from_target, compiler::Compiler, evm::ext::exec::VMTrace},
+    utils::{
+        strings::{encode_hex, StringExt},
+        threading::run_with_timeout,
+    },
 };
 
 use crate::{
@@ -137,13 +139,12 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         ));
     }
 
-    let shortened_target = get_shortned_target(&args.target);
     let decompile_call = trace.add_call(
         0,
         line!(),
         "heimdall".to_string(),
         "decompile".to_string(),
-        vec![shortened_target],
+        vec![args.target.truncate(64)],
         "()".to_string(),
     );
 
@@ -153,7 +154,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
-        target: contract_bytecode.clone(),
+        target: encode_hex(contract_bytecode.clone()),
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
@@ -166,7 +167,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         "()".to_string(),
     );
 
@@ -177,11 +178,11 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         format!("({compiler}, {version})"),
     );
 
-    if compiler == "solc" {
+    if compiler == Compiler::Solc {
         logger.debug(&format!("detected compiler {compiler} {version}."));
     } else {
         logger
@@ -190,8 +191,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // create a new EVM instance
     let evm = VM::new(
-        &decode_hex(&contract_bytecode)
-            .map_err(|e| Error::ParseError(format!("failed to decode bytecode: {}", e)))?,
+        &contract_bytecode,
         &[],
         H160::default(),
         H160::default(),
@@ -199,18 +199,12 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         0,
         u128::max_value(),
     );
-    let mut shortened_target = contract_bytecode.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
     let vm_trace = trace.add_creation(
         decompile_call,
         line!(),
         "contract".to_string(),
-        shortened_target.clone(),
-        (contract_bytecode.len() / 2usize)
+        encode_hex(contract_bytecode.clone()).truncate(64),
+        contract_bytecode.len()
             .try_into()
             .map_err(|e| Error::ParseError(format!("failed to parse bytecode length: {}", e)))?,
     );
@@ -225,8 +219,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
             logger.error(&format!(
-                "failed to resolve any function selectors from '{shortened_target}' .",
-                shortened_target = shortened_target
+                "failed to resolve any function selectors from '{}' .",
+                args.target.truncate(64)
             ));
         }
 
@@ -239,7 +233,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         logger.info(&format!("found {} possible function selectors.", selectors.len()));
     }
 
-    logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
+    logger.info(&format!("performing symbolic execution on '{}' .", args.target.truncate(64)));
 
     // get a new progress bar
     let mut decompilation_progress = ProgressBar::new_spinner();

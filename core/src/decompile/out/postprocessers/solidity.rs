@@ -789,6 +789,16 @@ mod tests {
             vec![String::from("uint256(arg0);")]
         );
     }
+ 
+    #[test]
+    fn test_simplify_casts_unnecessary() {
+        let lines = vec![String::from("uint256(arg0);")];
+
+        assert_eq!(
+            postprocess(lines, HashMap::new(), HashMap::new(), &ProgressBar::new(128)),
+            vec![String::from("uint256(arg0);")]
+        );
+    }
 
     #[test]
     fn test_simplify_casts_complex() {

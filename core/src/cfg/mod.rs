@@ -2,14 +2,17 @@ pub mod graph;
 pub mod output;
 use derive_builder::Builder;
 use ethers::types::H160;
-use heimdall_cache::util::decode_hex;
 use heimdall_common::{
     debug_max,
     ether::{
-        bytecode::get_bytecode_from_target, compiler::detect_compiler,
+        bytecode::get_bytecode_from_target,
+        compiler::{detect_compiler, Compiler},
         selectors::find_function_selectors,
     },
-    utils::threading::run_with_timeout,
+    utils::{
+        strings::{encode_hex, StringExt},
+        threading::run_with_timeout,
+    },
 };
 use indicatif::ProgressBar;
 use std::time::Duration;
@@ -118,7 +121,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
-        target: contract_bytecode.clone(),
+        target: encode_hex(contract_bytecode.clone()),
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
@@ -133,7 +136,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         "()".to_string(),
     );
 
@@ -144,11 +147,11 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         format!("({compiler}, {version})"),
     );
 
-    if compiler == "solc" {
+    if compiler == Compiler::Solc {
         logger.debug(&format!("detected compiler {compiler} {version}."));
     } else {
         logger
@@ -157,8 +160,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
 
     // create a new EVM instance
     let evm = VM::new(
-        &decode_hex(&contract_bytecode)
-            .map_err(|e| Error::ParseError(format!("failed to decode bytecode: {}", e)))?,
+        &contract_bytecode,
         &[],
         H160::default(),
         H160::default(),
@@ -166,20 +168,14 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
         0,
         u128::max_value(),
     );
-    let mut shortened_target = contract_bytecode.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
 
     // add the creation to the trace
     let vm_trace = trace.add_creation(
         cfg_call,
         line!(),
         "contract".to_string(),
-        shortened_target.clone(),
-        (contract_bytecode.len() / 2usize)
+        encode_hex(contract_bytecode.clone()).truncate(64),
+        contract_bytecode.len()
             .try_into()
             .map_err(|_| Error::ParseError("failed to parse bytecode length".to_string()))?,
     );
@@ -187,7 +183,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
     // find all selectors in the bytecode
     let selectors = find_function_selectors(&evm, &disassembled_bytecode);
     logger.info(&format!("found {} possible function selectors.", selectors.len()));
-    logger.info(&format!("performing symbolic execution on '{}' .", &shortened_target));
+    logger.info(&format!("performing symbolic execution on '{}' .", args.target.truncate(64)));
 
     // create a new progress bar
     let progress = ProgressBar::new_spinner();

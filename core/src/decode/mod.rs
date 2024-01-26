@@ -25,7 +25,7 @@ use heimdall_common::{
             logging::{set_logger_env, Logger},
             types::display,
         },
-        strings::decode_hex,
+        strings::{decode_hex, StringExt},
     },
 };
 
@@ -125,10 +125,12 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
             Error::RpcError("failed to fetch transaction from RPC provider.".to_string())
         })?;
 
-        calldata = raw_transaction.input.to_string().replacen("0x", "", 1);
+        calldata = raw_transaction.input;
     } else if CALLDATA_REGEX.is_match(&args.target).unwrap_or(false) {
         // We are decoding raw calldata, so we can just use the provided calldata.
-        calldata = args.target.to_string().replacen("0x", "", 1);
+        calldata = args.target.parse().map_err(|_| {
+            Error::Generic("failed to parse calldata from target.".to_string())
+        })?;
     } else {
         logger.error("invalid target. must be a transaction hash or calldata (bytes).");
         return Err(Error::Generic(
@@ -136,14 +138,8 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         ));
     }
 
-    // check if the calldata length is a standard length
-    if calldata.len() % 2 != 0 || calldata.len() < 8 {
-        logger.error("calldata is not a valid hex string.");
-        return Err(Error::Generic("calldata is not a valid hex string.".to_string()));
-    }
-
-    // if calldata isn't a multiple of 64, it may be harder to decode.
-    if (calldata[8..].len() % 64 != 0) && !args.truncate_calldata {
+    // if calldata isn't a multiple of 32, it may be harder to decode.
+    if (calldata[4..].len() % 32 != 0) && !args.truncate_calldata {
         logger.warn("calldata is not a standard size. decoding may fail since each word is not exactly 32 bytes long.");
         logger.warn("if decoding fails, try using the --truncate-calldata flag to truncate the calldata to a standard size.");
     } else if args.truncate_calldata {
@@ -250,14 +246,6 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
                 .to_string(),
             );
         }
-    }
-
-    // truncate target for prettier display
-    let mut shortened_target = args.target;
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
     }
 
     if matches.is_empty() {
@@ -369,7 +357,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         line!(),
         "heimdall".to_string(),
         "decode".to_string(),
-        vec![shortened_target],
+        vec![args.target.truncate(64)],
         "()".to_string(),
     );
     trace.br(decode_call);
@@ -384,6 +372,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         decode_call,
         line!(),
         vec![format!("calldata:  {} bytes", calldata.len() / 2usize)],
+        // TODO: calldata should be Vec<u8> instead of String
     );
     trace.br(decode_call);
 

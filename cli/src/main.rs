@@ -173,8 +173,25 @@ async fn main() -> Result<(), Error> {
                 let mut output_str = String::new();
 
                 if let Some(abi) = &result.abi {
-                    output_str
-                        .push_str(&format!("ABI:\n\n{}\n", serde_json::to_string_pretty(abi)?));
+                    output_str.push_str(&format!(
+                        "ABI:\n\n[{}]\n",
+                        abi.iter()
+                            .map(|x| {
+                                match x {
+                                    ABIStructure::Function(x) => {
+                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
+                                    }
+                                    ABIStructure::Error(x) => {
+                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
+                                    }
+                                    ABIStructure::Event(x) => {
+                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
+                                    }
+                                }
+                            })
+                            .collect::<Result<Vec<String>, Error>>()?
+                            .join(",\n")
+                    ));
                 }
                 if let Some(source) = &result.source {
                     output_str.push_str(&format!("Source:\n\n{}\n", source));

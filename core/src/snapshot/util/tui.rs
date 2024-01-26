@@ -5,7 +5,10 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use heimdall_common::ether::signatures::{ResolvedError, ResolvedLog};
+use heimdall_common::ether::{
+    compiler::Compiler,
+    signatures::{ResolvedError, ResolvedLog},
+};
 use tui::{backend::CrosstermBackend, Terminal};
 
 use crate::{
@@ -37,7 +40,7 @@ pub fn handle(
     resolved_errors: &HashMap<String, ResolvedError>,
     resolved_events: &HashMap<String, ResolvedLog>,
     target: &str,
-    compiler: (&str, &str),
+    compiler: (Compiler, &str),
 ) -> Result<(), Error> {
     // create new TUI terminal
     enable_raw_mode().map_err(|_| Error::Generic("failed to enable raw mode".to_string()))?;
