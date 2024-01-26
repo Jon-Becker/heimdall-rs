@@ -390,7 +390,7 @@ pub fn get_potential_types_for_word(word: &[u8]) -> (usize, Vec<String>) {
     let padding_size = get_padding_size(word);
 
     // get number of bytes padded
-    let data_size = (word.len() / 2) - padding_size;
+    let data_size = word.len() - padding_size;
     byte_size_to_type(data_size)
 }
 

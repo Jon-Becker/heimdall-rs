@@ -167,8 +167,9 @@ mod integration_tests {
                         println!("decoding txid: {} ... succeeded", txid);
                         1
                     }
-                    Err(_) => {
+                    Err(e) => {
                         println!("decoding txid: {} ... failed", txid);
+                        println!("  \\- error: {:?}", e);
                         0
                     }
                 }

@@ -6,6 +6,7 @@ use heimdall_common::{
     ether::evm::core::types::{
         get_padding, get_padding_size, get_potential_types_for_word, Padding,
     },
+    utils::strings::encode_hex,
 };
 
 use crate::error::Error;
@@ -21,7 +22,10 @@ pub fn try_decode_dynamic_parameter(
     parameter_index: usize,
     calldata_words: &[Vec<u8>],
 ) -> Result<Option<AbiEncoded>, Error> {
-    debug_max!("calldata_words: {:#?}", calldata_words);
+    debug_max!(
+        "calldata_words: {:#?}",
+        calldata_words.iter().map(|w| encode_hex(w.clone())).collect::<Vec<String>>()
+    );
 
     // initialize a [`HashSet<usize>`] called `word_coverages` with `parameter_index`
     // this works similarly to `covered_words`, but is used to keep track of which
@@ -129,7 +133,7 @@ fn try_decode_dynamic_parameter_bytes(
     // (3) calculate how many words are needed to store the encoded data with size `size`.
     let word_count_for_size = U256::from((size.as_u32() as f32 / 32f32).ceil() as u32); // wont panic unless calldata is huge
     let data_end_word_offset = data_start_word_offset + word_count_for_size;
-    debug_max!("with data: {:#?}", data_words.concat());
+    debug_max!("with data: {:#?}", encode_hex(data_words.concat()));
 
     // (4) get the last word in `data_words`, so we can perform a size check. There should be
     // `size % 32` bytes in this word, and the rest should be null bytes.
@@ -249,7 +253,10 @@ fn try_decode_dynamic_parameter_string(
     let data_end_word_offset = data_start_word_offset + word_count_for_size;
     debug_max!(
         "with data: {:#?}",
-        calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()].concat()
+        encode_hex(
+            calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()]
+                .concat()
+        )
     );
 
     // (4) get the last word in `data_words`, so we can perform a size check. There should be
