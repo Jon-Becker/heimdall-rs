@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use crate::debug_max;
 use async_recursion::async_recursion;
 use reqwest::Client;
@@ -6,6 +7,16 @@ use std::time::Duration;
 use tokio::time::sleep as async_sleep;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
+//Use a single client in case Heimdall is used across threads
+lazy_static! {
+    static ref HTTP_CLIENT: Client = Client::builder()
+        .user_agent(APP_USER_AGENT)
+        .danger_accept_invalid_certs(true) // Be cautious with this setting
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+}
 
 /// Make a GET request to the target URL and return the response body as JSON
 ///
@@ -17,25 +28,21 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 /// // get_json_from_url(url, timeout).await;
 /// ```
 pub async fn get_json_from_url(url: &str, timeout: u64) -> Result<Option<Value>, reqwest::Error> {
-    _get_json_from_url(url, 0, 5, timeout).await
+    let client = HTTP_CLIENT.clone();
+    _get_json_from_url(&client, url, 0, 5, timeout).await
 }
 
 #[async_recursion]
 /// Internal function for making a GET request to the target URL and returning the response body as
 /// JSON
 async fn _get_json_from_url(
+    client: &Client,
     url: &str,
     retry_count: u8,
     retries_remaining: u8,
     timeout: u64,
 ) -> Result<Option<Value>, reqwest::Error> {
     debug_max!("GET {}", &url);
-
-    let client = Client::builder()
-        .danger_accept_invalid_certs(true)
-        .user_agent(APP_USER_AGENT)
-        .timeout(Duration::from_secs(timeout))
-        .build()?;
 
     let res = match client.get(url).send().await {
         Ok(res) => {
@@ -53,7 +60,7 @@ async fn _get_json_from_url(
             let retries_remaining = retries_remaining - 1;
             let sleep_time = 2u64.pow(retry_count as u32) * 250;
             async_sleep(Duration::from_millis(sleep_time)).await;
-            return _get_json_from_url(url, retry_count, retries_remaining, timeout).await
+            return _get_json_from_url(client, url, retry_count, retries_remaining, timeout).await
         }
     };
     let body = res.text().await?;

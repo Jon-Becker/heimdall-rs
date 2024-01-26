@@ -4,5 +4,6 @@ members = [
     "config",
     "core",
     "cli",
+    "cache"
 ]
 version = "0.7.3"
