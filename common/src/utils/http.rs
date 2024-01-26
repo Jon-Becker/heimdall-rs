@@ -19,6 +19,12 @@ lazy_static! {
         .build()
         .unwrap()));
 }
+
+async fn get_client() -> Client {
+    let lock = HTTP_CLIENT.lock().await;
+    lock.clone()
+}
+
 /// Make a GET request to the target URL and return the response body as JSON
 ///
 /// ```no_run
@@ -29,10 +35,7 @@ lazy_static! {
 /// // get_json_from_url(url, timeout).await;
 /// ```
 pub async fn get_json_from_url(url: &str, timeout: u64) -> Result<Option<Value>, reqwest::Error> {
-    let client = {
-        let lock = HTTP_CLIENT.lock().await;
-        lock.clone() // Clone the client here
-    }; // Mut
+    let client = get_client().await;
     _get_json_from_url(&client, url, 0, 5, timeout).await
 }
 
