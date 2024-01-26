@@ -15,12 +15,12 @@ use crossterm::{
 };
 
 use heimdall_cache::{cache, CacheArgs};
-use heimdall_common::utils::{
-    io::{
-        file::{write_file, write_lines_to_file},
-        logging::Logger,
+use heimdall_common::{
+    fatal, info,
+    utils::{
+        io::file::{write_file, write_lines_to_file},
+        version::{current_version, remote_version},
     },
-    version::{current_version, remote_version},
 };
 use heimdall_config::{config, get_config, ConfigArgs};
 use heimdall_core::{
@@ -101,12 +101,11 @@ async fn main() -> Result<(), Error> {
 
         // print the panic message
         let backtrace = Backtrace::new();
-        let (logger, _) = Logger::new("TRACE");
-        logger.fatal(&format!(
+        fatal!(
             "thread 'main' encountered a fatal error: '{}'!",
             panic_info.to_string().bright_white().on_bright_red().bold(),
-        ));
-        logger.fatal(&format!("Stack Trace:\n\n{backtrace:#?}"));
+        );
+        fatal!("Stack Trace:\n\n{:?}", backtrace);
     }));
 
     let configuration = get_config();
@@ -452,11 +451,8 @@ async fn main() -> Result<(), Error> {
     let current_version = current_version();
 
     if remote_version.gt(&current_version) {
-        let (logger, _) = Logger::new("TRACE");
-        println!();
-        logger.info("great news! An update is available!");
-        logger
-            .info(&format!("you can update now by running: `bifrost --version {remote_version}`"));
+        info!("great news! An update is available!");
+        info!("you can update now by running: `bifrost --version {}`", remote_version);
     }
 
     Ok(())

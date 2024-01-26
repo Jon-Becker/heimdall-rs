@@ -1,4 +1,4 @@
-use crate::utils::io::logging::Logger;
+use crate::error;
 use async_openai::{types::CreateCompletionRequestArgs, Client};
 
 /// Complete the given prompt using the OpenAI API.
@@ -12,8 +12,6 @@ use async_openai::{types::CreateCompletionRequestArgs, Client};
 pub async fn complete(prompt: &str, api_key: &str) -> Option<String> {
     let client = Client::new().with_api_key(api_key);
 
-    // get a new logger
-    let logger = Logger::default();
     let request = match CreateCompletionRequestArgs::default()
         .model("text-davinci-003")
         .prompt(prompt)
@@ -25,7 +23,7 @@ pub async fn complete(prompt: &str, api_key: &str) -> Option<String> {
     {
         Ok(request) => request,
         Err(e) => {
-            logger.error(&format!("failed to create completion request: {e}"));
+            error!("failed to create completion request: {}", e);
             return None
         }
     };
@@ -39,7 +37,7 @@ pub async fn complete(prompt: &str, api_key: &str) -> Option<String> {
             }
         }
         Err(e) => {
-            logger.error(&format!("failed to create completion request: {e}"));
+            error!("failed to create completion request: {}", e);
             None
         }
     }

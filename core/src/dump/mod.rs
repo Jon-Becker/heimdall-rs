@@ -7,6 +7,7 @@ use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use ethers::types::H160;
 use heimdall_common::{
+    error, info,
     resources::transpose::{get_contract_creation, get_transaction_list},
     utils::io::logging::*,
 };
@@ -96,18 +97,13 @@ impl DumpArgsBuilder {
 pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Error>> {
     set_logger_env(&args.verbose);
 
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
     // parse the output directory
     let mut output_dir = args.output.clone();
     if args.output.is_empty() {
         output_dir = match env::current_dir() {
             Ok(dir) => dir.into_os_string().into_string().unwrap(),
             Err(_) => {
-                logger.error("failed to get current directory.");
+                error!("failed to get current directory.");
                 std::process::exit(1);
             }
         };
@@ -116,8 +112,8 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
 
     // check if transpose api key is set
     if args.transpose_api_key.is_empty() {
-        logger.error("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
-        logger.info("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
+        error!("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
+        info!("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
         std::process::exit(1);
     }
 
@@ -126,7 +122,7 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
         match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key).await {
             Some(tx) => tx,
             None => {
-                logger.error(
+                error!(
                 "failed to get contract creation transaction. Is the target a contract address?",
             );
                 std::process::exit(1);
@@ -145,7 +141,7 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
     let addr_hash = match H160::from_str(&args.target) {
         Ok(addr) => addr,
         Err(_) => {
-            logger.error(&format!("failed to parse target '{}' .", &args.target));
+            error!("failed to parse target '{}' .", &args.target);
             std::process::exit(1);
         }
     };
@@ -207,8 +203,8 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
         match dump_thread.join() {
             Ok(_) => {}
             Err(e) => {
-                logger.error("failed to join indexer thread.");
-                logger.error(&format!("{e:?}"));
+                error!("failed to join indexer thread.");
+                error!(&format!("{e:?}"));
                 std::process::exit(1);
             }
         }
@@ -217,8 +213,8 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
         match tui_thread.join() {
             Ok(_) => {}
             Err(e) => {
-                logger.error("failed to join TUI thread.");
-                logger.error(&format!("{e:?}"));
+                error!("failed to join TUI thread.");
+                error!("{:?}", e);
                 std::process::exit(1);
             }
         }
@@ -227,10 +223,6 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
     // write storage slots to csv
     let state = DUMP_STATE.lock().unwrap();
     let csv = build_csv(&state);
-    logger.info(&format!(
-        "Dumped {} storage values from '{}' .",
-        state.storage.len(),
-        &_args.target
-    ));
+    info!(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &_args.target));
     Ok(csv)
 }

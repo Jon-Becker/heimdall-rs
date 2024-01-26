@@ -1,4 +1,4 @@
-use crate::{debug_max, error::Error, utils::io::logging::Logger};
+use crate::{debug, debug_max, error, error::Error};
 use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,
@@ -26,23 +26,20 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
             ..ExponentialBackoff::default()
         },
     || async {
-        // get a new logger
-        let logger = Logger::default();
-
         debug_max!(&format!("checking chain id for rpc url: '{}'", &rpc_url));
 
         // check the cache for a matching rpc url
         let cache_key = format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-"));
         if let Some(chain_id) = read_cache(&cache_key)
-            .map_err(|_| logger.error(&format!("failed to read cache for rpc url: {:?}", &rpc_url)))?
+            .map_err(|_| error!("failed to read cache for rpc url: {:?}", &rpc_url))?
         {
-            logger.debug(&format!("found cached chain id for rpc url: {:?}", &rpc_url));
+            debug!("found cached chain id for rpc url: {:?}", &rpc_url);
             return Ok(chain_id)
         }
 
         // make sure the RPC provider isn't empty
         if rpc_url.is_empty() {
-            logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
+            error!("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
             return Err(backoff::Error::Permanent(()))
         }
 
@@ -50,7 +47,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
         let provider = match Provider::<Http>::try_from(rpc_url) {
             Ok(provider) => provider,
             Err(_) => {
-                logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                error!("failed to connect to RPC provider '{}' .", &rpc_url);
                 return Err(backoff::Error::Permanent(()))
             }
         };
@@ -59,14 +56,14 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
         let chain_id = match provider.get_chainid().await {
             Ok(chain_id) => chain_id,
             Err(_) => {
-                logger.error(&format!("failed to fetch chain id from '{}' .", &rpc_url));
+                error!("failed to fetch chain id from '{}' .", &rpc_url);
                 return Err(backoff::Error::Transient { err: (), retry_after: None })
             }
         };
 
         // cache the results
         store_cache(&cache_key, chain_id.as_u64(), None)
-            .map_err(|_| logger.error(&format!("failed to cache chain id for rpc url: {:?}", &rpc_url)))?;
+            .map_err(|_| error!("failed to cache chain id for rpc url: {:?}", &rpc_url))?;
 
         debug_max!(&format!("chain_id is '{}'", &chain_id));
 
@@ -91,17 +88,14 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
             ..ExponentialBackoff::default()
         },
     || async {
-        // get a new logger
-        let logger = Logger::default();
-
         // get chain_id
         let chain_id = chain_id(rpc_url).await.unwrap_or(1);
 
         // check the cache for a matching address
         if let Some(bytecode) = read_cache(&format!("contract.{}.{}", &chain_id, &contract_address))
-            .map_err(|_| logger.error(&format!("failed to read cache for contract: {:?}", &contract_address)))?
+            .map_err(|_| error!("failed to read cache for contract: {:?}", &contract_address))?
         {
-            logger.debug(&format!("found cached bytecode for '{}' .", &contract_address));
+            debug!("found cached bytecode for '{}' .", &contract_address);
             return Ok(bytecode)
         }
 
@@ -109,7 +103,7 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
 
         // make sure the RPC provider isn't empty
         if rpc_url.is_empty() {
-            logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
+            error!("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
             return Err(backoff::Error::Permanent(()))
         }
 
@@ -117,7 +111,7 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
         let provider = match Provider::<Http>::try_from(rpc_url) {
             Ok(provider) => provider,
             Err(_) => {
-                logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                error!("failed to connect to RPC provider '{}' .", &rpc_url);
                 return Err(backoff::Error::Permanent(()))
             }
         };
@@ -126,7 +120,7 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
         let address = match contract_address.parse::<Address>() {
             Ok(address) => address,
             Err(_) => {
-                logger.error(&format!("failed to parse address '{}' .", &contract_address));
+                error!("failed to parse address '{}' .", &contract_address);
                 return Err(backoff::Error::Permanent(()))
             }
         };
@@ -135,7 +129,7 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
         let bytecode_as_bytes = match provider.get_code(address, None).await {
             Ok(bytecode) => bytecode,
             Err(_) => {
-                logger.error(&format!("failed to fetch bytecode from '{}' .", &contract_address));
+                error!("failed to fetch bytecode from '{}' .", &contract_address);
                 return Err(backoff::Error::Transient { err: (), retry_after: None })
             }
         };
@@ -146,7 +140,7 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
             bytecode_as_bytes.to_string().replacen("0x", "", 1),
             None,
         )
-        .map_err(|_| logger.error(&format!("failed to cache bytecode for contract: {:?}", &contract_address)))?;
+        .map_err(|_| error!("failed to cache bytecode for contract: {:?}", &contract_address))?;
 
         Ok(bytecode_as_bytes.to_string().replacen("0x", "", 1))
     })
@@ -170,9 +164,6 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
             ..ExponentialBackoff::default()
         },
     || async {
-        // get a new logger
-        let logger = Logger::default();
-
         debug_max!(&format!(
             "fetching calldata from node for transaction: '{}' .",
             &transaction_hash
@@ -180,7 +171,7 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
 
         // make sure the RPC provider isn't empty
         if rpc_url.is_empty() {
-            logger.error("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
+            error!("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
             return Err(backoff::Error::Permanent(()));
         }
 
@@ -188,7 +179,7 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
         let provider = match Provider::<Http>::try_from(rpc_url) {
             Ok(provider) => provider,
             Err(_) => {
-                logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                error!("failed to connect to RPC provider '{}' .", &rpc_url);
                 return Err(backoff::Error::Permanent(()))
             }
         };
@@ -197,7 +188,7 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
         let transaction_hash_hex = match H256::from_str(transaction_hash) {
             Ok(transaction_hash) => transaction_hash,
             Err(_) => {
-                logger.error(&format!("failed to parse transaction hash '{}' .", &transaction_hash));
+                error!("failed to parse transaction hash '{}' .", &transaction_hash);
                 return Err(backoff::Error::Permanent(()))
             }
         };
@@ -207,12 +198,12 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
             Ok(tx) => match tx {
                 Some(tx) => tx,
                 None => {
-                    logger.error(&format!("transaction '{}' doesn't exist.", &transaction_hash));
+                    error!("transaction '{}' doesn't exist.", &transaction_hash);
                     return Err(backoff::Error::Permanent(()))
                 }
             },
             Err(_) => {
-                logger.error(&format!("failed to fetch calldata from '{}' .", &transaction_hash));
+                error!("failed to fetch calldata from '{}' .", &transaction_hash);
                 return Err(backoff::Error::Transient { err: (), retry_after: None })
             }
         };
@@ -241,17 +232,14 @@ pub async fn get_storage_diff(
             ..ExponentialBackoff::default()
         },
         || async {
-            // create new logger
-            let logger = Logger::default();
-
             // get chain_id
             let chain_id = chain_id(rpc_url).await
-                .map_err(|_| logger.error(&format!("failed to get chain id for rpc url: {:?}", &rpc_url)))?;
+                .map_err(|_| error!("failed to get chain id for rpc url: {:?}", &rpc_url))?;
 
             // check the cache for a matching address
             if let Some(state_diff) =
                 read_cache(&format!("diff.{}.{}", &chain_id, &transaction_hash))
-                .map_err(|_| logger.error(&format!("failed to read cache for transaction: {:?}", &transaction_hash)))?
+                .map_err(|_| error!("failed to read cache for transaction: {:?}", &transaction_hash))?
             {
                 debug_max!("found cached state diff for transaction '{}' .", &transaction_hash);
                 return Ok(state_diff)
@@ -266,7 +254,7 @@ pub async fn get_storage_diff(
             let provider = match Provider::<Http>::try_from(rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                    error!("failed to connect to RPC provider '{}' .", &rpc_url);
                     return Err(backoff::Error::Permanent(()))
                 }
             };
@@ -275,10 +263,10 @@ pub async fn get_storage_diff(
             let transaction_hash_hex = match H256::from_str(transaction_hash) {
                 Ok(transaction_hash) => transaction_hash,
                 Err(_) => {
-                    logger.error(&format!(
+                    error!(
                         "failed to parse transaction hash '{}' .",
                         &transaction_hash
-                    ));
+                    );
                     return Err(backoff::Error::Permanent(()))
                 }
             };
@@ -289,10 +277,10 @@ pub async fn get_storage_diff(
                 .await {
                 Ok(traces) => traces.state_diff,
                 Err(_) => {
-                    logger.error(&format!(
+                    error!(
                         "failed to replay and trace transaction '{}' . does your RPC provider support it?",
                         &transaction_hash
-                    ));
+                    );
                     return Err(backoff::Error::Transient { err: (), retry_after: None })
                 }
             };
@@ -304,10 +292,10 @@ pub async fn get_storage_diff(
                 None,
             )
             .map_err(|_| {
-                logger.error(&format!(
+                error!(
                     "failed to cache state diff for transaction: {:?}",
                     &transaction_hash
-                ))
+                )
             })?;
 
             debug_max!("fetched state diff for transaction '{}' .", &transaction_hash);
@@ -335,9 +323,6 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
             ..ExponentialBackoff::default()
         },
         || async {
-            // create new logger
-            let logger = Logger::default();
-
             debug_max!(&format!(
                 "fetching trace from node for transaction: '{}' .",
                 &transaction_hash
@@ -347,7 +332,7 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
             let provider = match Provider::<Http>::try_from(rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                    error!("failed to connect to RPC provider '{}' .", &rpc_url);
                     return Err(backoff::Error::Permanent(()))
                 }
             };
@@ -356,10 +341,10 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
             let transaction_hash_hex = match H256::from_str(transaction_hash) {
                 Ok(transaction_hash) => transaction_hash,
                 Err(_) => {
-                    logger.error(&format!(
+                    error!(
                         "failed to parse transaction hash '{}' .",
                         &transaction_hash
-                    ));
+                    );
                     return Err(backoff::Error::Permanent(()))
                 }
             };
@@ -374,11 +359,11 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
             {
                 Ok(traces) => traces,
                 Err(e) => {
-                    logger.error(&format!(
+                    error!(
                         "failed to replay and trace transaction '{}' . does your RPC provider support it?",
                         &transaction_hash
-                    ));
-                    logger.error(&format!("error: '{e}' ."));
+                    );
+                    error!("error: '{}' .", e);
                     return Err(backoff::Error::Transient { err: (), retry_after: None })
                 }
             };
@@ -410,16 +395,13 @@ pub async fn get_block_logs(
             ..ExponentialBackoff::default()
         },
         || async {
-            // create new logger
-            let logger = Logger::default();
-
             debug_max!(&format!("fetching logs from node for block: '{}' .", &block_number));
 
             // create new provider
             let provider = match Provider::<Http>::try_from(rpc_url) {
                 Ok(provider) => provider,
                 Err(_) => {
-                    logger.error(&format!("failed to connect to RPC provider '{}' .", &rpc_url));
+                    error!("failed to connect to RPC provider '{}' .", &rpc_url);
                     return Err(backoff::Error::Permanent(()));
                 }
             };
@@ -438,10 +420,10 @@ pub async fn get_block_logs(
             {
                 Ok(logs) => logs,
                 Err(_) => {
-                    logger.error(&format!(
+                    error!(
                         "failed to fetch logs for block '{}' . does your RPC provider support it?",
                         &block_number
-                    ));
+                    );
                     return Err(backoff::Error::Transient { err: (), retry_after: None });
                 }
             };

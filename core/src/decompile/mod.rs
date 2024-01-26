@@ -5,9 +5,11 @@ pub mod precompile;
 pub mod resolve;
 pub mod util;
 use heimdall_common::{
-    debug_max,
+    debug, debug_max, error,
     ether::{bytecode::get_bytecode_from_target, evm::ext::exec::VMTrace},
+    info,
     utils::{strings::get_shortned_target, threading::run_with_timeout},
+    warn,
 };
 
 use crate::{
@@ -130,7 +132,7 @@ pub async fn decompile(
 
     // ensure both --include-sol and --include-yul aren't set
     if args.include_solidity && args.include_yul {
-        logger.error("arguments '--include-sol' and '--include-yul' are mutually exclusive.");
+        error!("arguments '--include-sol' and '--include-yul' are mutually exclusive.");
         std::process::exit(1);
     }
 
@@ -177,10 +179,9 @@ pub async fn decompile(
     );
 
     if compiler == "solc" {
-        logger.debug(&format!("detected compiler {compiler} {version}."));
+        debug!("detected compiler {} {}.", compiler, version);
     } else {
-        logger
-            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+        warn!("detected compiler {} {} is not supported by heimdall.", compiler, version);
     }
 
     // create a new EVM instance
@@ -216,22 +217,19 @@ pub async fn decompile(
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
-            logger.error(&format!(
-                "failed to resolve any function selectors from '{shortened_target}' .",
-                shortened_target = shortened_target
-            ));
+            error!("failed to resolve any function selectors from '{}' .", shortened_target);
         }
 
-        logger.info(&format!(
+        info!(
             "resolved {} possible functions from {} detected selectors.",
             resolved_selectors.len(),
             selectors.len()
-        ));
+        );
     } else {
-        logger.info(&format!("found {} possible function selectors.", selectors.len()));
+        info!("found {} possible function selectors.", selectors.len());
     }
 
-    logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
+    info!("performing symbolic execution on '{shortened_target}' .");
 
     // get a new progress bar
     let mut decompilation_progress = ProgressBar::new_spinner();
@@ -602,12 +600,12 @@ pub async fn decompile(
         analyzed_functions.push(analyzed_function.clone());
     }
     decompilation_progress.finish_and_clear();
-    logger.info("symbolic execution completed.");
-    logger.info("building decompilation output.");
+    info!("symbolic execution completed.");
+    info!("building decompilation output.");
 
     let abi = build_abi(&args, analyzed_functions.clone(), &mut trace, decompile_call)?;
     trace.display();
-    logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
+    debug!(&format!("decompilation completed in {:?}.", now.elapsed()));
 
     Ok(DecompileResult {
         source: if args.include_solidity {

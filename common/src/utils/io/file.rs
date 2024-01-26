@@ -1,4 +1,4 @@
-use super::logging::Logger;
+use crate::error;
 
 use std::{
     env,
@@ -40,16 +40,14 @@ pub fn write_file(_path: &str, contents: &str) -> String {
     let mut file = match File::create(path) {
         Ok(file) => file,
         Err(_) => {
-            let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to create file \"{_path}\" ."));
+            error!("failed to create file \"{}\" .", _path);
             std::process::exit(1)
         }
     };
     match file.write_all(contents.as_bytes()) {
         Ok(_) => {}
         Err(_) => {
-            let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to write to file \"{_path}\" ."));
+            error!("failed to write to file \"{}\" .", _path);
             std::process::exit(1)
         }
     }
@@ -83,8 +81,7 @@ pub fn read_file(_path: &str) -> String {
     let mut file = match File::open(path) {
         Ok(file) => file,
         Err(_) => {
-            let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to open file \"{_path}\" ."));
+            error!("failed to open file \"{}\" .", _path);
             std::process::exit(1)
         }
     };
@@ -92,8 +89,7 @@ pub fn read_file(_path: &str) -> String {
     match file.read_to_string(&mut contents) {
         Ok(_) => {}
         Err(_) => {
-            let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to read file \"{_path}\" ."));
+            error!("failed to read file \"{}\" .", _path);
             std::process::exit(1)
         }
     }

@@ -1,7 +1,7 @@
 use clap::{AppSettings, Parser};
-use heimdall_common::utils::io::{
-    file::{delete_path, read_file, write_file},
-    logging::*,
+use heimdall_common::{
+    error, info, success,
+    utils::io::file::{delete_path, read_file, write_file},
 };
 use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
@@ -53,10 +53,7 @@ pub fn write_config(contents: &str) {
             let _ = write_file(home.into_os_string().to_str().unwrap(), contents);
         }
         None => {
-            let (logger, _) = Logger::new("");
-            logger.error(
-                "couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",
-            );
+            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
             std::process::exit(1)
         }
     }
@@ -73,10 +70,7 @@ pub fn delete_config() {
             let _ = delete_path(home.into_os_string().to_str().unwrap());
         }
         None => {
-            let (logger, _) = Logger::new("");
-            logger.error(
-                "couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",
-            );
+            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
             std::process::exit(1)
         }
     }
@@ -100,10 +94,7 @@ pub fn read_config() -> String {
             }
         }
         None => {
-            let (logger, _) = Logger::new("");
-            logger.error(
-                "couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",
-            );
+            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
             std::process::exit(1)
         }
     }
@@ -118,9 +109,8 @@ pub fn get_config() -> Configuration {
     let config: Configuration = match toml::from_str(&contents) {
         Ok(config) => config,
         Err(e) => {
-            let (logger, _) = Logger::new("");
-            logger.error(&format!("failed to parse config file: {e}"));
-            logger.info("regenerating config file...");
+            error!("failed to parse config file: {}", e);
+            info!("regenerating config file...");
             delete_config();
             return get_config()
         }
@@ -150,8 +140,7 @@ pub fn update_config(key: &str, value: &str) {
             contents.openai_api_key = value.to_string();
         }
         _ => {
-            let (logger, _) = Logger::new("");
-            logger.error(&format!("unknown configuration key \'{key}\' ."));
+            error!("unknown configuration key \'{}\' .", key);
             std::process::exit(1)
         }
     }
@@ -163,23 +152,19 @@ pub fn update_config(key: &str, value: &str) {
 
 /// The `config` command is used to display and edit the current configuration.
 pub fn config(args: ConfigArgs) {
-    let (logger, _) = Logger::new("");
     if !args.key.is_empty() {
         if !args.value.is_empty() {
             // read the config file and update the key/value pair
             update_config(&args.key, &args.value);
-            logger.success(&format!(
-                "updated configuration! Set \'{}\' = \'{}\' .",
-                &args.key, &args.value
-            ));
+            success!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value);
         } else {
             // key is set, but no value is set
-            logger.error("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
+            error!("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
             std::process::exit(1);
         }
     } else {
         // no key is set, print the config file
         println!("{:#?}", get_config());
-        logger.info("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
+        info!("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
     }
 }
