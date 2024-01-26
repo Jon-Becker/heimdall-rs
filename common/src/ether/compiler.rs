@@ -69,7 +69,7 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
         if compiler_version.len() > 1 {
             if let Some(encoded_version) = compiler_version.get(1).and_then(|last| last.get(0..3)) {
                 version = encoded_version
-                    .into_iter()
+                    .iter()
                     .map(|v| v.to_string())
                     .collect::<Vec<String>>()
                     .join(".");
@@ -86,7 +86,7 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
         if compiler_version.len() > 1 {
             if let Some(encoded_version) = compiler_version.get(1).and_then(|last| last.get(0..3)) {
                 version = encoded_version
-                    .into_iter()
+                    .iter()
                     .map(|v| v.to_string())
                     .collect::<Vec<String>>()
                     .join(".");

@@ -290,12 +290,12 @@ pub trait StringExt {
 ///
 /// let s = "Hello, world!";
 /// let result = s.to_string().truncate(11);
-/// assert_eq!(result, "Hello...ld!");
+/// assert_eq!(result, "Hell...rld!");
 /// ```
 impl StringExt for String {
     fn truncate(&self, max_length: usize) -> String {
         if self.len() > max_length {
-            self.chars().take(max_length - 6).collect::<String>() + "..." + &self[self.len() - 3..]
+            self.chars().take(max_length - 7).collect::<String>() + "..." + &self[self.len() - 4..]
         } else {
             self.to_string()
         }
@@ -753,7 +753,7 @@ mod tests {
         let s = "Hello, world!";
         let result = s.to_string().truncate(10);
 
-        assert_eq!(result, "Hell...ld!");
+        assert_eq!(result, "Hel...rld!");
     }
 
     #[test]

@@ -204,7 +204,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         line!(),
         "contract".to_string(),
         encode_hex(contract_bytecode.clone()).truncate(64),
-        contract_bytecode.len()
+        contract_bytecode
+            .len()
             .try_into()
             .map_err(|e| Error::ParseError(format!("failed to parse bytecode length: {}", e)))?,
     );

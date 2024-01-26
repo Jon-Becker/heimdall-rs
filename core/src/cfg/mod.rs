@@ -175,7 +175,8 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
         line!(),
         "contract".to_string(),
         encode_hex(contract_bytecode.clone()).truncate(64),
-        contract_bytecode.len()
+        contract_bytecode
+            .len()
             .try_into()
             .map_err(|_| Error::ParseError("failed to parse bytecode length".to_string()))?,
     );

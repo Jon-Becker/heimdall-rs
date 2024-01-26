@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_contains_with_vec() {
-        let data = vec![1, 2, 3, 4, 5];
+        let data = [1, 2, 3, 4, 5];
         let sequence = &[3, 4];
         assert!(data.contains_slice(sequence));
     }

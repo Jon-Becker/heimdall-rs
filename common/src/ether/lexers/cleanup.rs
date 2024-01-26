@@ -136,7 +136,8 @@ pub fn simplify_casts(line: &str) -> String {
 
     let cleaned_cast_pre = cleaned[0..cast_range.start - 1].to_string();
     let cleaned_cast_post = cleaned[cast_range.end + 1..].to_string();
-    let cleaned_cast = cleaned[cast_range.start - 1..cast_range.end + 1].to_string().replace(&cast, "");
+    let cleaned_cast =
+        cleaned[cast_range.start - 1..cast_range.end + 1].to_string().replace(&cast, "");
 
     cleaned = format!("{cleaned_cast_pre}{cleaned_cast}{cleaned_cast_post}");
 

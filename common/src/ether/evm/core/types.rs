@@ -2,11 +2,7 @@ use std::{collections::VecDeque, ops::Range};
 
 use ethers::abi::{AbiEncode, ParamType};
 
-use crate::{
-    constants::TYPE_CAST_REGEX,
-    error::Error,
-    utils::strings::{decode_hex, find_balanced_encapsulator},
-};
+use crate::{constants::TYPE_CAST_REGEX, error::Error, utils::strings::find_balanced_encapsulator};
 
 use super::vm::Instruction;
 
@@ -315,16 +311,11 @@ pub fn find_cast(line: &str) -> Result<(Range<usize>, String), Error> {
 }
 
 /// Given a string of bytes, determine if it is left or right padded.
-pub fn get_padding(bytes: &str) -> Padding {
-    let decoded = match decode_hex(bytes) {
-        Ok(decoded) => decoded,
-        Err(_) => return Padding::None,
-    };
-
-    let size = decoded.len();
+pub fn get_padding(bytes: &[u8]) -> Padding {
+    let size = bytes.len();
 
     // get indices of null bytes in the decoded bytes
-    let null_byte_indices = decoded
+    let null_byte_indices = bytes
         .iter()
         .enumerate()
         .filter(|(_, byte)| **byte == 0)
@@ -351,7 +342,7 @@ pub fn get_padding(bytes: &str) -> Padding {
     }
 
     // get non-null byte indices
-    let non_null_byte_indices = decoded
+    let non_null_byte_indices = bytes
         .iter()
         .enumerate()
         .filter(|(_, byte)| **byte != 0)
@@ -379,35 +370,22 @@ pub fn get_padding(bytes: &str) -> Padding {
 }
 
 /// Given a string of bytes, get the max padding size for the data
-pub fn get_padding_size(bytes: &str) -> usize {
+pub fn get_padding_size(bytes: &[u8]) -> usize {
     match get_padding(bytes) {
         Padding::Left => {
             // count number of null-bytes at the start of the data
-            bytes
-                .chars()
-                .collect::<Vec<char>>()
-                .chunks(2)
-                .map(|c| c.iter().collect::<String>())
-                .take_while(|c| c == "00")
-                .count()
+            bytes.iter().take_while(|byte| **byte == 0).count()
         }
         Padding::Right => {
             // count number of null-bytes at the end of the data
-            bytes
-                .chars()
-                .collect::<Vec<char>>()
-                .chunks(2)
-                .map(|c| c.iter().collect::<String>())
-                .rev()
-                .take_while(|c| c == "00")
-                .count()
+            bytes.iter().rev().take_while(|byte| **byte == 0).count()
         }
         _ => 0,
     }
 }
 
 // Get minimum size needed to store the given word
-pub fn get_potential_types_for_word(word: &str) -> (usize, Vec<String>) {
+pub fn get_potential_types_for_word(word: &[u8]) -> (usize, Vec<String>) {
     // get padding of the word, note this is a maximum
     let padding_size = get_padding_size(word);
 
@@ -420,7 +398,10 @@ pub fn get_potential_types_for_word(word: &str) -> (usize, Vec<String>) {
 mod tests {
     use ethers::abi::ParamType;
 
-    use crate::ether::evm::core::types::{get_padding, parse_function_parameters, Padding};
+    use crate::{
+        ether::evm::core::types::{get_padding, parse_function_parameters, Padding},
+        utils::strings::decode_hex,
+    };
 
     #[test]
     fn test_simple_signature() {
@@ -638,98 +619,91 @@ mod tests {
     fn test_get_padding_no_padding() {
         // No padding, input contains no null bytes
         let input = "11".repeat(32);
-        assert_eq!(get_padding(&input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_left_padding() {
         // Left padded, first byte is null
         let input = "00".repeat(31) + "11";
-        assert_eq!(get_padding(&input), Padding::Left);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Left);
     }
 
     #[test]
     fn test_get_padding_right_padding() {
         // Right padding, last byte is null
         let input = "11".to_owned() + &"00".repeat(31);
-        assert_eq!(get_padding(&input), Padding::Right);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Right);
     }
 
     #[test]
     fn test_get_padding_skewed_left_padding() {
         // Both left and right null-bytes, but still left padded
         let input = "00".repeat(30) + "1100";
-        assert_eq!(get_padding(&input), Padding::Left);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Left);
     }
 
     #[test]
     fn test_get_padding_skewed_right_padding() {
         // Both left and right null-bytes, but still right padded
         let input = "0011".to_owned() + &"00".repeat(30);
-        assert_eq!(get_padding(&input), Padding::Right);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Right);
     }
 
     #[test]
     fn test_get_padding_empty_input() {
         // Empty input should result in no padding
         let input = "";
-        assert_eq!(get_padding(input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_single_byte() {
         // Single-byte input with null byte
         let input = "00";
-        assert_eq!(get_padding(input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_single_byte_left_padding() {
         // Single-byte input with left padding
         let input = "0011";
-        assert_eq!(get_padding(input), Padding::Left);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::Left);
     }
 
     #[test]
     fn test_get_padding_single_byte_right_padding() {
         // Single-byte input with right padding
         let input = "1100";
-        assert_eq!(get_padding(input), Padding::Right);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::Right);
     }
 
     #[test]
     fn test_get_padding_single_byte_both_padding() {
         // Single-byte input with both left and right padding
         let input = "001100";
-        assert_eq!(get_padding(input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_mixed_padding() {
         // Mixed padding, some null bytes in the middle
         let input = "00".repeat(10) + "1122330000332211" + &"00".repeat(10);
-        assert_eq!(get_padding(&input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_mixed_padding_skewed_left() {
         // Mixed padding, some null bytes in the middle
         let input = "00".repeat(10) + "001122330000332211" + &"00".repeat(10);
-        assert_eq!(get_padding(&input), Padding::Left);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Left);
     }
 
     #[test]
     fn test_get_padding_mixed_padding_skewed_right() {
         // Mixed padding, some null bytes in the middle
         let input = "00".repeat(10) + "112233000033221100" + &"00".repeat(10);
-        assert_eq!(get_padding(&input), Padding::Right);
-    }
-
-    #[test]
-    fn test_get_padding_invalid_hex_input() {
-        // Invalid hex input, should result in no padding
-        let input = "XYZ";
-        assert_eq!(get_padding(input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Right);
     }
 
     #[test]
