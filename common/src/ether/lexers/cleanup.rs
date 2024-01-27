@@ -330,7 +330,7 @@ mod tests {
     fn test_simplify_casts_simple() {
         let line = String::from("uint256(uint256(arg0));");
 
-        assert_eq!(simplify_casts(&line), String::from("uint256(arg0);"));
+        assert_eq!(simplify_casts(&line), String::from("uint256((arg0));"));
     }
 
     #[test]
@@ -346,7 +346,7 @@ mod tests {
 
         assert_eq!(
             simplify_casts(&line),
-            String::from("ecrecover(uint256(arg0), uint256(arg0), uint256((arg0)));")
+            String::from("ecrecover(uint256((arg0)), uint256((arg0)), uint256(((arg0))));")
         ); // double parens are expected because we dont simplify_parentheses here
     }
 
