@@ -207,7 +207,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         let mut potential_inputs: Vec<ParamType> = Vec::new();
 
         // chunk in blocks of 32 bytes
-        let calldata_words = calldata.chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
+        let calldata_words = calldata[4..].chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
 
         // while calldata_words is not empty, iterate over it
         let mut i = 0;
