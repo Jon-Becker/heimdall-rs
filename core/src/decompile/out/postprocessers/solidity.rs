@@ -102,7 +102,7 @@ fn convert_access_to_variable(line: &str) -> Result<String, Error> {
 
         // safe to unwrap since we know these indices exist
         let memloc = format!(
-            "storage{}",
+            "storage[{}]",
             storage_access
                 .get(storage_range)
                 .expect("impossible case: failed to get storage access after check")
@@ -591,30 +591,39 @@ fn cleanup(
     }
 
     // Find and convert all castings
+
     cleaned = convert_bitmask_to_casting(&cleaned).unwrap_or(cleaned);
 
     // Remove all repetitive casts
+
     cleaned = simplify_casts(&cleaned);
 
     // Remove all unnecessary parentheses
+
     cleaned = simplify_parentheses(&cleaned, 0).unwrap_or(cleaned);
 
     // Convert all memory[] and storage[] accesses to variables, also removes unused variables
+
     cleaned = convert_access_to_variable(&cleaned).unwrap_or(cleaned);
 
     // Use variable names where possible
+
     cleaned = replace_expression_with_var(&cleaned).unwrap_or(cleaned);
 
     // Move all outer casts in instantiation to the variable declaration
+
     cleaned = move_casts_to_declaration(&cleaned).unwrap_or(cleaned);
 
     // Inherit or infer types from expressions
+
     cleaned = inherit_infer_mem_type(&cleaned).unwrap_or(cleaned);
 
     // Replace resolved errors and events
+
     cleaned = replace_resolved(&cleaned, all_resolved_errors, all_resolved_events);
 
     // Simplify arithmatic
+
     cleaned = simplify_arithmatic(&cleaned);
 
     cleaned
