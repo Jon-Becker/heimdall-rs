@@ -4,7 +4,7 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::{debug, error, utils::io::logging::Logger, Error};
+use crate::{debug, error, info_spinner, Error};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,13 +101,10 @@ pub async fn get_transaction_list(
     api_key: &str,
     bounds: (&u128, &u128),
 ) -> Result<Vec<(u128, String)>, Error> {
-    // get a new logger
-    let logger = Logger::default();
-
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
     transaction_list_progress.enable_steady_tick(Duration::from_millis(100));
-    transaction_list_progress.set_style(logger.info_spinner());
+    transaction_list_progress.set_style(info_spinner!());
     transaction_list_progress.set_message(format!("fetching transactions from '{address}' ."));
     let start_time = Instant::now();
 
@@ -172,13 +169,10 @@ pub async fn get_contract_creation(
     address: &str,
     api_key: &str,
 ) -> Option<(u128, String)> {
-    // get a new logger
-    let logger = Logger::default();
-
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
     transaction_list_progress.enable_steady_tick(Duration::from_millis(100));
-    transaction_list_progress.set_style(logger.info_spinner());
+    transaction_list_progress.set_style(info_spinner!());
     transaction_list_progress.set_message(format!("fetching '{address}''s creation tx ."));
     let start_time = Instant::now();
 

@@ -2,11 +2,9 @@ use std::{collections::HashMap, time::Duration};
 
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
+    info_spinner,
     utils::{
-        io::{
-            file::short_path,
-            logging::{Logger, TraceFactory},
-        },
+        io::{file::short_path, logging::TraceFactory},
         strings::find_balanced_encapsulator,
     },
 };
@@ -36,16 +34,13 @@ pub fn build_solidity_output(
     trace: &mut TraceFactory,
     trace_parent: u32,
 ) -> Result<String, Error> {
-    // get a new logger
-    let logger = Logger::default();
-
     // clone functions mutably
     let mut functions = functions;
 
     // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
-    progress_bar.set_style(logger.info_spinner());
+    progress_bar.set_style(info_spinner!());
 
     // write the decompiled source to file
     let mut decompiled_output: Vec<String> = Vec::new();
