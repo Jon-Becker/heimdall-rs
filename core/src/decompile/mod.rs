@@ -11,6 +11,7 @@ use heimdall_common::{
     utils::{strings::get_shortned_target, threading::run_with_timeout},
     warn,
 };
+use heimdall_config::parse_url_arg;
 
 use crate::{
     decompile::{
@@ -58,7 +59,8 @@ pub struct DecompilerArgs {
     pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The RPC provider to use for fetching target bytecode.
-    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
+    /// This can be an explicit URL or a reference to a MESC endpoint.
+    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// When prompted, always select the default value.

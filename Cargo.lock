@@ -1707,6 +1707,7 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "heimdall-common",
+ "mesc",
  "serde",
  "toml 0.7.8",
 ]
@@ -2188,6 +2189,17 @@ name = "memchr"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "523dc4f511e55ab87b694dc30d0f820d60906ef06413f93d4d7a1385599cc149"
+
+[[package]]
+name = "mesc"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1d331141e3f69ef0c0c4eb64a8f9de72a545a34805a1615011bed9887942897"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "mime"
