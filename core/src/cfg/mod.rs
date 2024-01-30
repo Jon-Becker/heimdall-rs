@@ -3,16 +3,18 @@ pub mod output;
 use derive_builder::Builder;
 use ethers::types::H160;
 use heimdall_common::{
-    debug_max,
+    debug, debug_max,
     ether::{
         bytecode::get_bytecode_from_target,
         compiler::{detect_compiler, Compiler},
         selectors::find_function_selectors,
     },
+    info,
     utils::{
         strings::{encode_hex, StringExt},
         threading::run_with_timeout,
     },
+    warn,
 };
 use indicatif::ProgressBar;
 use std::time::Duration;
@@ -97,21 +99,13 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
         None => "SILENT",
     });
 
-    // truncate target for prettier display
-    let mut shortened_target = args.target.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
-
     // add the call to the trace
     let cfg_call = trace.add_call(
         0,
         line!(),
         "heimdall".to_string(),
         "cfg".to_string(),
-        vec![shortened_target],
+        vec![args.target.truncate(64)],
         "()".to_string(),
     );
 
@@ -152,10 +146,9 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
     );
 
     if compiler == Compiler::Solc {
-        logger.debug(&format!("detected compiler {compiler} {version}."));
+        debug!("detected compiler {} {}", compiler, version);
     } else {
-        logger
-            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+        warn!("detected compiler {} {} is not supported by heimdall", compiler, version);
     }
 
     // create a new EVM instance
@@ -183,8 +176,8 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
 
     // find all selectors in the bytecode
     let selectors = find_function_selectors(&evm, &disassembled_bytecode);
-    logger.info(&format!("found {} possible function selectors.", selectors.len()));
-    logger.info(&format!("performing symbolic execution on '{}' .", args.target.truncate(64)));
+    info!("found {} possible function selectors.", selectors.len());
+    info!("performing symbolic execution on '{}' .", args.target.truncate(64));
 
     // create a new progress bar
     let progress = ProgressBar::new_spinner();
@@ -226,8 +219,8 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
     build_cfg(&map, &mut contract_cfg, None, false)?;
 
     progress.finish_and_clear();
-    logger.info("symbolic execution completed.");
-    logger.debug(&format!("Control flow graph generated in {:?}.", now.elapsed()));
+    info!("symbolic execution completed.");
+    debug!(&format!("Control flow graph generated in {:?}.", now.elapsed()));
     trace.display();
 
     Ok(contract_cfg)

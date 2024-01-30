@@ -2,9 +2,9 @@ pub mod error;
 
 use crate::error::Error;
 use clap::{AppSettings, Parser};
-use heimdall_common::utils::io::{
-    file::{delete_path, read_file, write_file},
-    logging::*,
+use heimdall_common::{
+    error, info, success,
+    utils::io::file::{delete_path, read_file, write_file},
 };
 use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
@@ -150,24 +150,20 @@ impl Configuration {
 
 /// The `config` command is used to display and edit the current configuration.
 pub fn config(args: ConfigArgs) -> Result<(), Error> {
-    let (logger, _) = Logger::new("");
     if !args.key.is_empty() {
         if !args.value.is_empty() {
             // read the config file and update the key/value pair
             let mut config = Configuration::load()?;
             config.update(&args.key, &args.value)?;
-            logger.success(&format!(
-                "updated configuration! Set \'{}\' = \'{}\' .",
-                &args.key, &args.value
-            ));
+            success!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value);
         } else {
             // key is set, but no value is set
-            logger.error("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
+            error!("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
         }
     } else {
         // no key is set, print the config file
         println!("{:#?}", Configuration::load()?);
-        logger.info("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
+        info!("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
     }
 
     Ok(())

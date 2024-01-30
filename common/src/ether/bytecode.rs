@@ -1,27 +1,24 @@
 use super::rpc::get_code;
 use crate::{
     constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    error::Error,
-    utils::{io::logging::Logger, strings::decode_hex},
+    error,
+    utils::strings::decode_hex,
+    Error,
 };
 use std::fs;
 
-/// Get the bytecode from the target, which can be a contract address, a bytecode or a file path.
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
-    let logger = Logger::default();
-
     if ADDRESS_REGEX.is_match(target).unwrap_or(false) {
         // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
         get_code(target, rpc_url).await.map_err(|e| {
             Error::Generic(format!("failed to fetch bytecode from RPC provider: {}", e))
         })
     } else if BYTECODE_REGEX.is_match(target).unwrap_or(false) {
-        // Target is already a bytecode, so we just need to remove 0x from the begining
         Ok(decode_hex(target)?)
     } else {
         // Target is a file path, so we need to read the bytecode from the file.
         let contents = fs::read_to_string(target).map_err(|e| {
-            logger.error(&format!("failed to open file '{}' .", &target));
+            error!("failed to open file '{}' .", &target);
             Error::FilesystemError(e)
         })?;
 
@@ -29,7 +26,7 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec
         if BYTECODE_REGEX.is_match(&contents).unwrap_or(false) && contents.len() % 2 == 0 {
             Ok(decode_hex(&contents)?)
         } else {
-            logger.error(&format!("file '{}' doesn't contain valid bytecode.", &target));
+            error!("file '{}' doesn't contain valid bytecode.", &target);
             return Err(Error::ParseError(format!(
                 "file '{}' doesn't contain valid bytecode.",
                 &target

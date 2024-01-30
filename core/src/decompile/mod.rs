@@ -6,12 +6,14 @@ pub mod resolve;
 pub mod util;
 use ethers::types::H160;
 use heimdall_common::{
-    debug_max,
+    debug, debug_max, error,
     ether::{bytecode::get_bytecode_from_target, compiler::Compiler, evm::ext::exec::VMTrace},
+    info,
     utils::{
         strings::{encode_hex, StringExt},
         threading::run_with_timeout,
     },
+    warn,
 };
 
 use crate::{
@@ -183,10 +185,9 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     );
 
     if compiler == Compiler::Solc {
-        logger.debug(&format!("detected compiler {compiler} {version}."));
+        debug!("detected compiler {compiler} {version}.");
     } else {
-        logger
-            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+        warn!("detected compiler {} {} is not supported by heimdall.", compiler, version);
     }
 
     // create a new EVM instance
@@ -219,22 +220,22 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
-            logger.error(&format!(
+            error!(
                 "failed to resolve any function selectors from '{}' .",
                 args.target.truncate(64)
-            ));
+            );
         }
 
-        logger.info(&format!(
+        info!(
             "resolved {} possible functions from {} detected selectors.",
             resolved_selectors.len(),
             selectors.len()
-        ));
+        );
     } else {
-        logger.info(&format!("found {} possible function selectors.", selectors.len()));
+        info!("found {} possible function selectors.", selectors.len());
     }
 
-    logger.info(&format!("performing symbolic execution on '{}' .", args.target.truncate(64)));
+    info!("performing symbolic execution on '{}' .", args.target.truncate(64));
 
     // get a new progress bar
     let mut decompilation_progress = ProgressBar::new_spinner();
@@ -607,13 +608,13 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         analyzed_functions.push(analyzed_function.clone());
     }
     decompilation_progress.finish_and_clear();
-    logger.info("symbolic execution completed.");
-    logger.info("building decompilation output.");
+    info!("symbolic execution completed.");
+    info!("building decompilation output.");
 
     let abi = build_abi(&args, analyzed_functions.clone(), &mut trace, decompile_call)
         .map_err(|e| Error::Generic(format!("failed to build abi: {}", e)))?;
     trace.display();
-    logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
+    debug!(&format!("decompilation completed in {:?}.", now.elapsed()));
 
     Ok(DecompileResult {
         source: if args.include_solidity {

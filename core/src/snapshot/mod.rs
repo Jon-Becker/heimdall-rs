@@ -6,12 +6,14 @@ pub mod structures;
 pub mod util;
 use ethers::types::H160;
 use heimdall_common::{
-    debug_max,
+    debug, debug_max,
     ether::compiler::Compiler,
+    info,
     utils::{
         strings::{encode_hex, StringExt},
         threading::run_with_timeout,
     },
+    warn,
 };
 
 use std::{
@@ -149,10 +151,9 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
     );
 
     if compiler == Compiler::Solc {
-        logger.debug(&format!("detected compiler {compiler} {version}."));
+        debug!("detected compiler {} {}.", compiler, version);
     } else {
-        logger
-            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+        warn!("detected compiler {} {} is not supported by heimdall.", compiler, version);
     }
 
     let evm = VM::new(
@@ -212,8 +213,8 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
     .await
     .map_err(|e| Error::Generic(format!("failed to get snapshots: {}", e)))?;
 
-    logger.info("symbolic execution completed.");
-    logger.debug(&format!("snapshot completed in {:?}.", now.elapsed()));
+    info!("symbolic execution completed.");
+    debug!("snapshot completed in {:?}.", now.elapsed());
 
     // open the tui
     if !args.no_tui {

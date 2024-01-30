@@ -7,6 +7,7 @@ use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use ethers::types::H160;
 use heimdall_common::{
+    error, info,
     resources::transpose::{get_contract_creation, get_transaction_list},
     utils::io::logging::*,
 };
@@ -98,11 +99,6 @@ impl DumpArgsBuilder {
 pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Error> {
     set_logger_env(&args.verbose);
 
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
     // parse the output directory
     let mut output_dir = args.output.clone();
     if args.output.is_empty() {
@@ -118,8 +114,8 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Error> {
 
     // check if transpose api key is set
     if args.transpose_api_key.is_empty() {
-        logger.error("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
-        logger.info("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
+        error!("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
+        info!("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
         return Err(Error::Generic("failed to get Transpose API key".to_string()));
     }
 
@@ -216,10 +212,6 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Error> {
         .lock()
         .map_err(|e| Error::Generic(format!("failed to obtain lock on DUMP_STATE: {}", e)))?;
     let csv = build_csv(&state);
-    logger.info(&format!(
-        "Dumped {} storage values from '{}' .",
-        state.storage.len(),
-        &_args.target
-    ));
+    info!(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &_args.target));
     Ok(csv)
 }

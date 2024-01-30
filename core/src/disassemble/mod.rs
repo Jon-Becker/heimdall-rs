@@ -1,11 +1,10 @@
 use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use heimdall_common::{
+    debug,
     ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
-    utils::{
-        io::logging::{set_logger_env, Logger},
-        strings::encode_hex,
-    },
+    info,
+    utils::{io::logging::set_logger_env, strings::encode_hex},
 };
 
 use crate::error::Error;
@@ -61,12 +60,6 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
 
     set_logger_env(&args.verbose);
 
-    // get a new logger
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
     let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
         .await
         .map_err(|e| Error::Generic(format!("failed to get bytecode from target: {}", e)))?;
@@ -112,8 +105,8 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
         program_counter += 1;
     }
 
-    logger.info(&format!("disassembled {program_counter} bytes successfully."));
-    logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
+    info!("disassembled {} bytes successfully.", program_counter);
+    debug!("disassembly completed in {} ms.", now.elapsed().as_millis());
 
     Ok(output)
 }
