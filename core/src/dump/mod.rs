@@ -11,6 +11,7 @@ use heimdall_common::{
     resources::transpose::{get_contract_creation, get_transaction_list},
     utils::io::logging::*,
 };
+use heimdall_config::parse_url_arg;
 use std::{collections::HashMap, env, str::FromStr, time::Instant};
 
 use self::{
@@ -42,7 +43,8 @@ pub struct DumpArgs {
     pub output: String,
 
     /// The RPC URL to use for fetching data.
-    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
+    /// This can be an explicit URL or a reference to a MESC endpoint.
+    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// Your Transpose.io API Key

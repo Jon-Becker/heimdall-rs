@@ -115,6 +115,20 @@ pub fn get_config() -> Configuration {
             return get_config()
         }
     };
+
+    // if MESC is enabled, use MESC config data
+    let config = if mesc::is_mesc_enabled() {
+        match load_mesc_config(&config) {
+            Ok(new_config) => new_config,
+            Err(e) => {
+                error!("MESC configured improperly ({})", e);
+                config
+            }
+        }
+    } else {
+        config
+    };
+
     config
 }
 
@@ -167,4 +181,42 @@ pub fn config(args: ConfigArgs) {
         println!("{:#?}", get_config());
         info!("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
     }
+}
+
+/// load mesc config
+fn load_mesc_config(config: &Configuration) -> Result<Configuration, mesc::MescError> {
+    // create copy of config
+    let mut config = Configuration {
+        rpc_url: config.rpc_url.clone(),
+        local_rpc_url: config.local_rpc_url.clone(),
+        etherscan_api_key: config.etherscan_api_key.clone(),
+        transpose_api_key: config.transpose_api_key.clone(),
+        openai_api_key: config.openai_api_key.clone(),
+    };
+
+    // load relevant config data
+    if let Some(endpoint) = mesc::get_default_endpoint(Some("heimdall"))? {
+        config.rpc_url = endpoint.url;
+    }
+    if let Some(key) = mesc::metadata::get_api_key("etherscan", Some("heimdall"))? {
+        config.etherscan_api_key = key;
+    }
+    if let Some(key) = mesc::metadata::get_api_key("transpose", Some("heimdall"))? {
+        config.transpose_api_key = key;
+    }
+    if let Some(key) = mesc::metadata::get_api_key("openai", Some("heimdall"))? {
+        config.openai_api_key = key;
+    }
+
+    Ok(config)
+}
+
+/// Parse user input --rpc-url into a full url
+pub fn parse_url_arg(url: &str) -> Result<String, String> {
+    if mesc::is_mesc_enabled() {
+        if let Ok(Some(endpoint)) = mesc::get_endpoint_by_query(url, Some("heimdall")) {
+            return Ok(endpoint.url)
+        }
+    }
+    Ok(url.to_string())
 }
