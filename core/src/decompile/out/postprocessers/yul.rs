@@ -1,12 +1,16 @@
 use heimdall_common::{
-    ether::{evm::core::types::find_cast, signatures::ResolvedLog},
+    ether::{
+        evm::core::types::find_cast,
+        lexers::cleanup::{simplify_casts, simplify_parentheses},
+        signatures::ResolvedLog,
+    },
     utils::strings::{find_balanced_encapsulator, split_string_by_regex},
 };
 use indicatif::ProgressBar;
 use lazy_static::lazy_static;
 use std::{collections::HashMap, sync::Mutex};
 
-use crate::decompile::constants::{ARGS_SPLIT_REGEX, ENCLOSED_EXPRESSION_REGEX};
+use crate::{decompile::constants::ARGS_SPLIT_REGEX, error::Error};
 
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
@@ -20,27 +24,31 @@ fn remove_double_negation(line: &str) -> String {
 
     if cleaned.contains("iszero(iszero(") {
         // find the indices of the subject
-        let subject_indices = cleaned.find("iszero(iszero(").unwrap();
+        let subject_indices = cleaned
+            .find("iszero(iszero(")
+            .expect("impossible case: failed to find double negation after check");
         let subject = cleaned[subject_indices..].to_string();
 
         // get the indices of the subject's first iszero encapsulator
-        let first_subject_indices = find_balanced_encapsulator(&subject, ('(', ')'));
-        if first_subject_indices.2 {
-            // the subject to search is now the subject without the first iszero encapsulator
-            let second_subject = subject[first_subject_indices.0 + 1..].to_string();
+        let iszero_range = match find_balanced_encapsulator(&subject, ('(', ')')) {
+            Ok(range) => range,
+            Err(_) => return cleaned,
+        };
 
-            // get the indices of the subject's second iszero encapsulator
-            let second_subject_indices = find_balanced_encapsulator(&second_subject, ('(', ')'));
-            if second_subject_indices.2 {
-                // the subject is now the subject without the first and second iszero encapsulators
-                let subject = second_subject
-                    [second_subject_indices.0 + 1..second_subject_indices.1 - 1]
-                    .to_string();
+        // the subject to search is now the subject without the first iszero encapsulator
+        let second_subject = subject[iszero_range.start..].to_string();
 
-                // replace the double negation with the subject
-                cleaned = cleaned.replace(&format!("iszero(iszero({subject}))"), &subject);
-            }
-        }
+        // get the indices of the subject's second iszero encapsulator
+        let second_subject_range = match find_balanced_encapsulator(&second_subject, ('(', ')')) {
+            Ok(range) => range,
+            Err(_) => return cleaned,
+        };
+
+        // the subject is now the subject without the first and second iszero encapsulators
+        let subject = second_subject[second_subject_range].to_string();
+
+        // replace the double negation with the subject
+        cleaned = cleaned.replace(&format!("iszero(iszero({subject}))"), &subject);
     }
 
     cleaned
@@ -56,8 +64,9 @@ fn convert_bitmask_to_casting(line: &str) -> String {
         index += found_index;
 
         // get indices of arguments
-        let (start_index, end_index, _) = find_balanced_encapsulator(&cleaned[index..], ('(', ')'));
-        let args = &cleaned[start_index + index + 1..end_index + index - 1];
+        let arg_range = find_balanced_encapsulator(&cleaned[index..], ('(', ')'))
+            .expect("impossible case: unbalanced parentheses found in balanced expression. please report this bug.");
+        let args = &cleaned[arg_range.start + index..arg_range.end + index];
         let args_vec: Vec<&str> = args.split(", ").collect();
         let arg1 = args_vec[0];
         let arg2 = args_vec[1..].join(", ");
@@ -66,8 +75,8 @@ fn convert_bitmask_to_casting(line: &str) -> String {
         let is_lhs_all_ones = arg1.replacen("0x", "", 1).chars().all(|c| c == 'f' || c == 'F');
         let is_rhs_all_ones = arg2.replacen("0x", "", 1).chars().all(|c| c == 'f' || c == 'F');
         if !is_lhs_all_ones && !is_rhs_all_ones {
-            index += end_index + 1;
-            continue // skip if LHS and RHS are not bitwise masks
+            index += arg_range.end + 2;
+            continue; // skip if LHS and RHS are not bitwise masks
         }
 
         // determine size of bytes based on argument 1
@@ -81,7 +90,7 @@ fn convert_bitmask_to_casting(line: &str) -> String {
         let new_str = format!("bytes{size_bytes}({arg2})");
 
         // replace old string with new string
-        cleaned.replace_range(index..end_index + index, &new_str);
+        cleaned.replace_range(index..arg_range.end + 1 + index, &new_str);
 
         // set index for next iteration of loop
         index += format!("bytes{size_bytes}(").len();
@@ -90,38 +99,8 @@ fn convert_bitmask_to_casting(line: &str) -> String {
     cleaned
 }
 
-/// Removes unnecessary casts
-fn simplify_casts(line: &str) -> String {
-    let mut cleaned = line.to_owned();
-
-    // remove unnecessary casts
-    let (cast_start, cast_end, cast_type) = find_cast(&cleaned);
-
-    if let Some(cast) = cast_type {
-        let cleaned_cast_pre = cleaned[0..cast_start].to_string();
-        let cleaned_cast_post = cleaned[cast_end..].to_string();
-        let cleaned_cast = cleaned[cast_start..cast_end].to_string().replace(&cast, "");
-
-        cleaned = format!("{cleaned_cast_pre}{cleaned_cast}{cleaned_cast_post}");
-
-        // check if there are remaining casts
-        let (_, _, remaining_cast_type) = find_cast(&cleaned_cast_post);
-        if remaining_cast_type.is_some() {
-            // a cast is remaining, simplify it
-            cleaned = format!(
-                "{}{}{}",
-                cleaned_cast_pre,
-                cleaned_cast,
-                simplify_casts(&cleaned_cast_post)
-            );
-        }
-    }
-
-    cleaned
-}
-
 /// Removes or replaces casts with helper functions
-fn remove_replace_casts(line: &str) -> String {
+fn remove_replace_casts(line: &str) -> Result<String, Error> {
     let mut cleaned = line.to_owned();
 
     // remove casts to bytes32
@@ -132,127 +111,18 @@ fn remove_replace_casts(line: &str) -> String {
 
     // convert casts to their yul reprs, for example, bytes1(x) -> (x):bytes1
     loop {
-        let (cast_start, cast_end, cast_type) = find_cast(&cleaned);
-        if let Some(cast_type) = cast_type {
-            let cast_arg = &cleaned[cast_start + 1..cast_end - 1];
-            let yul_cast = format!("({cast_arg}) : {cast_type}");
-
-            cleaned.replace_range(cast_start - cast_type.len()..=cast_end - 1, &yul_cast);
-        } else {
-            break
-        }
-    }
-
-    cleaned
-}
-
-/// Removes unnecessary parentheses
-fn simplify_parentheses(line: &str, paren_index: usize) -> String {
-    // helper function to determine if parentheses are necessary
-    fn are_parentheses_unnecessary(expression: &str) -> bool {
-        // safely grab the first and last chars
-        let first_char = expression.get(0..1).unwrap_or("");
-        let last_char = expression.get(expression.len() - 1..expression.len()).unwrap_or("");
-
-        // if there is a negation of an expression, remove the parentheses
-        // helps with double negation
-        if first_char == "iszero" && last_char == ")" {
-            return true
-        }
-
-        // parens required if:
-        //  - expression is a cast
-        //  - expression is a function call
-        //  - expression is the surrounding parens of a conditional
-        if first_char != "(" {
-            return false
-        } else if last_char == ")" {
-            return true
-        }
-
-        // don't include instantiations
-        if expression.contains(":=") {
-            return false
-        }
-
-        // handle the inside of the expression
-        let inside = match expression.get(2..expression.len() - 2) {
-            Some(x) => ENCLOSED_EXPRESSION_REGEX.replace(x, "x").to_string(),
-            None => "".to_string(),
+        let (cast_start, cast_end, cast_type) = match find_cast(&cleaned) {
+            Ok((range, cast)) => (range.start, range.end, cast),
+            Err(_) => break,
         };
 
-        if !inside.is_empty() {
-            let expression_parts = inside
-                .split(|x| ['*', '/', '=', '>', '<', '|', '&', '!'].contains(&x))
-                .filter(|x| !x.is_empty())
-                .collect::<Vec<&str>>();
+        let cast_arg = &cleaned[cast_start + 1..cast_end - 1];
+        let yul_cast = format!("({cast_arg}) : {cast_type}");
 
-            expression_parts.len() == 1
-        } else {
-            false
-        }
+        cleaned.replace_range(cast_start - cast_type.len()..=cast_end - 1, &yul_cast);
     }
 
-    let mut cleaned = line.to_owned();
-
-    // skip lines that are defining a function
-    if cleaned.contains("case") {
-        return cleaned
-    }
-
-    // get the nth index of the first open paren
-    let nth_paren_index = match cleaned.match_indices('(').nth(paren_index) {
-        Some(x) => x.0,
-        None => return cleaned,
-    };
-
-    //find it's matching close paren
-    let (paren_start, paren_end, found_match) =
-        find_balanced_encapsulator(&cleaned[nth_paren_index..], ('(', ')'));
-
-    // add the nth open paren to the start of the paren_start
-    let paren_start = paren_start + nth_paren_index;
-    let paren_end = paren_end + nth_paren_index;
-
-    // if a match was found, check if the parens are unnecessary
-    if found_match {
-        // get the logical expression including the char before the parentheses (to detect casts)
-        let logical_expression = match paren_start {
-            0 => match cleaned.get(paren_start..paren_end + 1) {
-                Some(expression) => expression.to_string(),
-                None => cleaned[paren_start..paren_end].to_string(),
-            },
-            _ => match cleaned.get(paren_start - 1..paren_end + 1) {
-                Some(expression) => expression.to_string(),
-                None => cleaned[paren_start - 1..paren_end].to_string(),
-            },
-        };
-
-        // check if the parentheses are unnecessary and remove them if so
-        if are_parentheses_unnecessary(&logical_expression) {
-            cleaned.replace_range(
-                paren_start..paren_end,
-                match logical_expression.get(2..logical_expression.len() - 2) {
-                    Some(x) => x,
-                    None => "",
-                },
-            );
-
-            // recurse into the next set of parentheses
-            // don't increment the paren_index because we just removed a set
-            cleaned = simplify_parentheses(&cleaned, paren_index);
-        } else {
-            // remove double negation, if one exists
-            if cleaned.contains("!!") {
-                cleaned = cleaned.replace("!!", "");
-            }
-
-            // recurse into the next set of parentheses
-            cleaned = simplify_parentheses(&cleaned, paren_index + 1);
-        }
-    }
-
-    cleaned
+    Ok(cleaned)
 }
 
 /// Add resolved events as comments
@@ -261,22 +131,15 @@ fn add_resolved_events(line: &str, all_resolved_events: HashMap<String, Resolved
 
     // skip lines that not logs
     if !cleaned.contains("log") {
-        return cleaned
+        return cleaned;
     }
 
-    // get the inside of the log statement
-    let log_statement = find_balanced_encapsulator(&cleaned, ('(', ')'));
-
-    // no balance found, break
-    if !log_statement.2 {
-        return cleaned
-    }
-
-    // use ARGS_SPLIT_REGEX to split the log into its arguments
-    let log_args = split_string_by_regex(
-        &cleaned[log_statement.0 + 1..log_statement.1 - 1],
-        ARGS_SPLIT_REGEX.clone(),
-    );
+    // get the inside of the log statement, then use ARGS_SPLIT_REGEX to split the log into its
+    // arguments
+    let log_args = match find_balanced_encapsulator(&cleaned, ('(', ')')) {
+        Ok(range) => split_string_by_regex(&cleaned[range], ARGS_SPLIT_REGEX.clone()),
+        Err(_) => return cleaned,
+    };
 
     // get the event matching the log's selector
     for (selector, resolved_event) in all_resolved_events.iter() {
@@ -299,7 +162,7 @@ fn cleanup(line: &str, all_resolved_events: HashMap<String, ResolvedLog>) -> Str
 
     // skip comments
     if cleaned.starts_with('/') {
-        return cleaned
+        return cleaned;
     }
 
     // remove double negations
@@ -312,10 +175,10 @@ fn cleanup(line: &str, all_resolved_events: HashMap<String, ResolvedLog>) -> Str
     cleaned = simplify_casts(&cleaned);
 
     // remove or replace casts with helper functions
-    cleaned = remove_replace_casts(&cleaned);
+    cleaned = remove_replace_casts(&cleaned).unwrap_or(cleaned);
 
     // remove unnecessary parentheses
-    cleaned = simplify_parentheses(&cleaned, 0);
+    cleaned = simplify_parentheses(&cleaned, 0).unwrap_or(cleaned);
 
     // add resolved events as comments
     cleaned = add_resolved_events(&cleaned, all_resolved_events);
@@ -357,10 +220,49 @@ pub fn postprocess(
         );
 
         // indent due to opening braces
-        if line.split("//").collect::<Vec<&str>>().first().unwrap().trim().ends_with('{') {
+        if line.split("//").collect::<Vec<&str>>().first().unwrap_or(&"").trim().ends_with('{') {
             indentation += 1;
         }
     }
 
     cleaned_lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remove_double_negation() {
+        let line = "iszero(iszero(add(0x00, 0x01)))";
+
+        let cleaned = remove_double_negation(line);
+        assert_eq!(cleaned, "add(0x00, 0x01)");
+    }
+
+    #[test]
+    fn test_convert_bitmask_to_casting_address() {
+        let line = "and(0xffffffffffffffffffffffffffffffffffffffff, calldataload(0x04))";
+
+        let cleaned = convert_bitmask_to_casting(line);
+        assert_eq!(cleaned, "bytes20(calldataload(0x04))");
+    }
+
+    #[test]
+    fn test_convert_bitmask_to_casting_bytes32() {
+        let line = "and(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff, calldataload(0x04))";
+
+        let cleaned = convert_bitmask_to_casting(line);
+        assert_eq!(cleaned, "bytes32(calldataload(0x04))");
+    }
+
+    #[test]
+    fn test_remove_replace_casts() {
+        let line = "bytes32(0x00)";
+
+        let cleaned = remove_replace_casts(line).expect("failed to remove replace casts");
+        assert_eq!(cleaned, "(0x00)");
+    }
+
+    // TODO : more coverage after i get core to compile lol
 }

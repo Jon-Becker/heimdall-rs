@@ -7,42 +7,53 @@ use crossterm::{
 };
 use tui::{backend::CrosstermBackend, Terminal};
 
-use crate::dump::{
-    constants::{DECODE_AS_TYPES, DUMP_STATE},
-    menus::{render_ui, TUIView},
-    util::{cleanup_terminal, csv::write_storage_to_csv},
-    DumpArgs,
+use crate::{
+    dump::{
+        constants::{DECODE_AS_TYPES, DUMP_STATE},
+        menus::{render_ui, TUIView},
+        util::{cleanup_terminal, csv::write_storage_to_csv},
+        DumpArgs,
+    },
+    error::Error,
 };
 
 /// The main function for the TUI. Will render the TUI and handle user input.
-pub fn handle(args: &DumpArgs, output_dir: &str) {
+pub fn handle(args: &DumpArgs, output_dir: &str) -> Result<(), Error> {
     // if no TUI is requested, just run the dump
     if args.no_tui {
-        return
+        return Ok(())
     }
 
     // create new TUI terminal
-    enable_raw_mode().unwrap();
+    enable_raw_mode().map_err(|_| Error::Generic("failed to enable raw mode".to_string()))?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
+        .map_err(|_| Error::Generic("failed to enter alternate screen".to_string()))?;
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).unwrap();
+    let mut terminal = Terminal::new(backend)
+        .map_err(|_| Error::Generic("failed to create terminal".to_string()))?;
 
     loop {
-        let mut state = DUMP_STATE.lock().unwrap();
+        let mut state = DUMP_STATE
+            .lock()
+            .map_err(|_| Error::Generic("could not obtain lock on state".to_string()))?;
         terminal
             .draw(|f| {
                 render_ui(f, &mut state);
             })
-            .unwrap();
+            .map_err(|_| Error::Generic("failed to draw terminal".to_string()))?;
         drop(state);
 
         // check for user input
-        if crossterm::event::poll(Duration::from_millis(10)).unwrap() {
+        if crossterm::event::poll(Duration::from_millis(10))
+            .map_err(|_| Error::Generic("failed to poll for events".to_string()))?
+        {
             if let Ok(event) = crossterm::event::read() {
                 match event {
                     crossterm::event::Event::Key(key) => {
-                        let mut state = DUMP_STATE.lock().unwrap();
+                        let mut state = DUMP_STATE.lock().map_err(|_| {
+                            Error::Generic("could not obtain lock on state".to_string())
+                        })?;
 
                         // ignore key events if command palette is open
                         if state.view == TUIView::CommandPalette {
@@ -61,7 +72,7 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
                                 crossterm::event::KeyCode::Enter => {
                                     state.filter = String::new();
                                     let mut split = state.input_buffer.split(' ');
-                                    let command = split.next().unwrap();
+                                    let command = split.next().unwrap_or("");
                                     let args = split.collect::<Vec<&str>>();
 
                                     match command {
@@ -80,7 +91,13 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
                                         }
                                         ":e" | ":export" => {
                                             if !args.is_empty() {
-                                                write_storage_to_csv(output_dir, args[0], &state);
+                                                write_storage_to_csv(output_dir, args[0], &state)
+                                                    .map_err(|e| {
+                                                    Error::Generic(format!(
+                                                        "failed to write to file: {}",
+                                                        e
+                                                    ))
+                                                })?;
                                             }
                                             state.view = TUIView::Main;
                                         }
@@ -211,7 +228,9 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
                         drop(state)
                     }
                     crossterm::event::Event::Mouse(mouse) => {
-                        let mut state = DUMP_STATE.lock().unwrap();
+                        let mut state = DUMP_STATE.lock().map_err(|_| {
+                            Error::Generic("could not obtain lock on state".to_string())
+                        })?;
                         match mouse.kind {
                             // scroll down
                             crossterm::event::MouseEventKind::ScrollDown => {
@@ -246,5 +265,7 @@ pub fn handle(args: &DumpArgs, output_dir: &str) {
         }
     }
 
-    cleanup_terminal();
+    cleanup_terminal()?;
+
+    Ok(())
 }

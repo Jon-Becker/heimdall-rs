@@ -1,9 +1,10 @@
-use crate::error;
+use crate::error::Error;
 
 use std::{
     env,
     fs::File,
     io::{Read, Write},
+    path::Path,
     process::Command,
 };
 
@@ -18,7 +19,7 @@ use std::{
 /// ```
 pub fn short_path(path: &str) -> String {
     match env::current_dir() {
-        Ok(dir) => path.replace(&dir.into_os_string().into_string().unwrap(), "."),
+        Ok(dir) => path.replace(&dir.into_os_string().into_string().unwrap_or(String::new()), "."),
         Err(_) => path.to_owned(),
     }
 }
@@ -32,27 +33,22 @@ pub fn short_path(path: &str) -> String {
 /// let contents = "Hello, World!";
 /// let result = write_file(path, contents);
 /// ```
-pub fn write_file(_path: &str, contents: &str) -> String {
-    let path = std::path::Path::new(_path);
-    let prefix = path.parent().unwrap();
-    std::fs::create_dir_all(prefix).unwrap();
+pub fn write_file(path_str: &str, contents: &str) -> Result<(), Error> {
+    let path = Path::new(path_str);
 
-    let mut file = match File::create(path) {
-        Ok(file) => file,
-        Err(_) => {
-            error!("failed to create file \"{}\" .", _path);
-            std::process::exit(1)
-        }
-    };
-    match file.write_all(contents.as_bytes()) {
-        Ok(_) => {}
-        Err(_) => {
-            error!("failed to write to file \"{}\" .", _path);
-            std::process::exit(1)
-        }
+    if let Some(prefix) = path.parent() {
+        std::fs::create_dir_all(prefix)?;
+    } else {
+        return Err(Error::FilesystemError(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Unable to create directory",
+        )));
     }
 
-    _path.to_string()
+    let mut file = File::create(path)?;
+    file.write_all(contents.as_bytes())?;
+
+    Ok(())
 }
 
 /// Write contents to a file on the disc
@@ -64,8 +60,9 @@ pub fn write_file(_path: &str, contents: &str) -> String {
 /// let contents = vec![String::from("Hello"), String::from("World!")];
 /// let result = write_lines_to_file(path, contents);
 /// ```
-pub fn write_lines_to_file(_path: &str, contents: Vec<String>) {
-    write_file(_path, &contents.join("\n"));
+pub fn write_lines_to_file(_path: &str, contents: Vec<String>) -> Result<(), Error> {
+    write_file(_path, &contents.join("\n"))?;
+    Ok(())
 }
 
 /// Read contents from a file on the disc
@@ -76,24 +73,13 @@ pub fn write_lines_to_file(_path: &str, contents: Vec<String>) {
 /// let path = "/tmp/test.txt";
 /// let contents = read_file(path);
 /// ```
-pub fn read_file(_path: &str) -> String {
-    let path = std::path::Path::new(_path);
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(_) => {
-            error!("failed to open file \"{}\" .", _path);
-            std::process::exit(1)
-        }
-    };
+pub fn read_file(path: &str) -> Result<String, Error> {
+    let path = Path::new(path);
+    let mut file = File::open(path)
+        .map_err(|e| Error::FilesystemError(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
     let mut contents = String::new();
-    match file.read_to_string(&mut contents) {
-        Ok(_) => {}
-        Err(_) => {
-            error!("failed to read file \"{}\" .", _path);
-            std::process::exit(1)
-        }
-    }
-    contents
+    file.read_to_string(&mut contents)?;
+    Ok(contents)
 }
 
 /// Delete a file from the disc
@@ -105,6 +91,65 @@ pub fn read_file(_path: &str) -> String {
 /// let result = delete_path(path);
 /// ```
 pub fn delete_path(_path: &str) -> bool {
-    let path = std::path::Path::new(_path);
-    Command::new("rm").args(["-rf", path.to_str().unwrap()]).output().is_ok()
+    let path = match std::path::Path::new(_path).to_str() {
+        Some(path) => path,
+        None => return false,
+    };
+
+    Command::new("rm").args(["-rf", path]).output().is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_write_file_successful() {
+        let path = "/tmp/test2.txt";
+        let contents = "Hello, World!";
+        let result = write_file(path, contents);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_write_file_failure() {
+        // Assuming the path is read-only or permission denied
+        let path = "/root/test2.txt";
+        let contents = "Hello, World!";
+        let result = write_file(path, contents);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_file_successful() {
+        let path = "/tmp/test2.txt";
+        let contents = "Hello, World!";
+        write_file(path, contents).expect("unable to write file");
+
+        let result = read_file(path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_read_file_failure() {
+        let path = "/nonexistent/test2.txt";
+        let result = read_file(path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_path_successful() {
+        let path = "/tmp/test_dir2";
+        std::fs::create_dir(path).expect("unable to create directory");
+
+        let result = delete_path(path);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_delete_path_failure() {
+        let path = "/nonexistent/test_dir2";
+        let result = delete_path(path);
+        assert!(result);
+    }
 }

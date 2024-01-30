@@ -18,10 +18,18 @@ pub fn render_tui_view_main<B: Backend>(f: &mut Frame<B>, state: &mut DumpState)
         .constraints([Constraint::Length(3), Constraint::Percentage(100)].as_ref())
         .split(f.size());
 
-    let min_block_number =
-        state.transactions.iter().min_by_key(|t| t.block_number).unwrap().block_number;
-    let max_block_number =
-        state.transactions.iter().max_by_key(|t| t.block_number).unwrap().block_number;
+    let min_block_number = state
+        .transactions
+        .iter()
+        .min_by_key(|t| t.block_number)
+        .map(|t| t.block_number)
+        .unwrap_or(0);
+    let max_block_number = state
+        .transactions
+        .iter()
+        .max_by_key(|t| t.block_number)
+        .map(|t| t.block_number)
+        .unwrap_or(0);
     let max_indexed_block_number =
         match state.transactions.iter().filter(|t| t.indexed).max_by_key(|t| t.block_number) {
             Some(t) => t.block_number,

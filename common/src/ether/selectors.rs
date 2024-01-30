@@ -7,7 +7,10 @@ use std::{
 use indicatif::ProgressBar;
 use tokio::task;
 
-use crate::utils::{io::logging::Logger, strings::decode_hex};
+use crate::{
+    error::Error,
+    utils::{io::logging::Logger, strings::decode_hex},
+};
 
 use super::{
     evm::core::vm::VM,
@@ -21,10 +24,7 @@ pub async fn get_resolved_selectors(
     disassembled_bytecode: &str,
     skip_resolving: &bool,
     evm: &VM,
-) -> Result<
-    (HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>),
-    Box<dyn std::error::Error>,
-> {
+) -> Result<(HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>), Error> {
     let selectors = find_function_selectors(evm, disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();
@@ -32,19 +32,20 @@ pub async fn get_resolved_selectors(
         resolved_selectors =
             resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await;
 
-        debug_max!(&format!(
+        debug_max!(
             "resolved {} possible functions from {} detected selectors.",
             resolved_selectors.len(),
             selectors.len()
-        ));
+        );
     } else {
-        debug_max!(&format!("found {} possible function selectors.", selectors.len()));
+        debug_max!("found {} possible function selectors.", selectors.len());
     }
 
     Ok((selectors, resolved_selectors))
 }
 
 /// find all function selectors in the given EVM assembly.
+// TODO: update get_resolved_selectors logic to support vyper, huff
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
     let mut function_selectors = HashMap::new();
     let mut handled_selectors = HashSet::new();
@@ -97,6 +98,7 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
 }
 
 /// resolve a selector's function entry point from the EVM bytecode
+// TODO: update resolve_entry_point logic to support vyper
 pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     let mut vm = evm.clone();
     let mut handled_jumps = HashSet::new();
@@ -104,7 +106,10 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
     // execute the EVM call to find the entry point for the given selector
     vm.calldata = decode_hex(selector).expect("Failed to decode selector.");
     while vm.bytecode.len() >= vm.instruction as usize {
-        let call = vm.step();
+        let call = match vm.step() {
+            Ok(call) => call,
+            Err(_) => break, // the call failed, so we can't resolve the selector
+        };
 
         // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
         if call.last_instruction.opcode == 0x57 {
@@ -191,7 +196,7 @@ where
         }
     }
 
-    resolve_progress.lock().unwrap().finish_and_clear();
+    resolve_progress.lock().expect("failed to acquire lock on resolve_progress").finish_and_clear();
 
     let x =
         resolved_functions.lock().expect("Could not obtain lock on resolved_functions.").clone();

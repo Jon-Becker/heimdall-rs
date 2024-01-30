@@ -27,12 +27,8 @@ pub async fn build_output_path(
             .into_string()
             .map_err(|_| Error::Generic("Unable to get current working directory".to_string()))?;
 
-        if ADDRESS_REGEX
-            .is_match(target)
-            .map_err(|_| Error::Generic("Unable to parse target with ADDRESS_REGEX".to_string()))? ||
-            TRANSACTION_HASH_REGEX.is_match(target).map_err(|_| {
-                Error::Generic("Unable to parse target with TRANSACTION_HASH_REGEX".to_string())
-            })?
+        if ADDRESS_REGEX.is_match(target).unwrap_or(false) ||
+            TRANSACTION_HASH_REGEX.is_match(target).unwrap_or(false)
         {
             let chain_id = rpc::chain_id(rpc_url)
                 .await
@@ -74,9 +70,8 @@ mod tests {
         let filename = "cfg.dot";
 
         let path = build_output_path(output, target, rpc_url, filename).await;
-        assert!(path.is_ok());
         assert!(path
-            .unwrap()
+            .expect("failed to build output path")
             .ends_with("/output/1/0x0000000000000000000000000000000000000001/cfg.dot"));
     }
 
@@ -89,8 +84,7 @@ mod tests {
         let filename = "cfg.dot";
 
         let path = build_output_path(output, target, rpc_url, filename).await;
-        assert!(path.is_ok());
-        assert!(path.unwrap().ends_with("/output/local/cfg.dot"));
+        assert!(path.expect("failed to build output path").ends_with("/output/local/cfg.dot"));
     }
 
     #[tokio::test]
@@ -101,7 +95,6 @@ mod tests {
         let filename = "cfg.dot";
 
         let path = build_output_path(output, target, rpc_url, filename).await;
-        assert!(path.is_ok());
-        assert_eq!(path.unwrap(), "/some_dir/cfg.dot".to_string());
+        assert_eq!(path.expect("failed to build output path"), "/some_dir/cfg.dot".to_string());
     }
 }

@@ -326,18 +326,22 @@ mod tests {
     async fn resolve_function_signature_nominal() {
         let signature = String::from("095ea7b3");
         let _ = delete_cache(&format!("selector.{}", &signature));
-        let result = ResolvedFunction::resolve(&signature).await.unwrap();
-        assert!(result.is_some());
-        assert!(!result.unwrap().is_empty());
+        let result = ResolvedFunction::resolve(&signature)
+            .await
+            .expect("failed to resolve signature")
+            .expect("failed to resolve signature");
+        assert!(!result.is_empty());
     }
 
     #[tokio::test]
     async fn resolve_error_signature_nominal() {
         let signature = String::from("30cd7471");
         let _ = delete_cache(&format!("selector.{}", &signature));
-        let result = ResolvedError::resolve(&signature).await.unwrap();
-        assert!(result.is_some());
-        assert!(!result.unwrap().is_empty());
+        let result = ResolvedError::resolve(&signature)
+            .await
+            .expect("failed to resolve signature")
+            .expect("failed to resolve signature");
+        assert!(!result.is_empty());
     }
 
     #[tokio::test]
@@ -345,9 +349,11 @@ mod tests {
         let signature =
             String::from("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
         let _ = delete_cache(&format!("selector.{}", &signature));
-        let result = ResolvedLog::resolve(&signature).await.unwrap();
-        assert!(result.is_some());
-        assert!(!result.unwrap().is_empty());
+        let result = ResolvedLog::resolve(&signature)
+            .await
+            .expect("failed to resolve signature")
+            .expect("failed to resolve signature");
+        assert!(!result.is_empty());
     }
 
     #[tokio::test]

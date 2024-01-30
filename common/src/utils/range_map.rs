@@ -58,7 +58,7 @@ impl RangeMap {
                     // Case 3: splitting
                     else if range.start > incumbent.start && range.end < incumbent.end {
                         let left: Range<usize> =
-                            Range { start: incumbent.start, end: range.start - 1 };
+                            Range { start: incumbent.start, end: range.start.saturating_sub(1) };
                         let right: Range<usize> =
                             Range { start: range.end + 1, end: incumbent.end };
                         let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();

@@ -12,6 +12,8 @@ use heimdall_common::{
 };
 use indicatif::ProgressBar;
 
+use crate::error::Error;
+
 use super::{
     super::{
         constants::{DECOMPILED_SOURCE_HEADER_SOL, STORAGE_ACCESS_REGEX},
@@ -33,7 +35,7 @@ pub fn build_solidity_output(
     all_resolved_events: HashMap<String, ResolvedLog>,
     trace: &mut TraceFactory,
     trace_parent: u32,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, Error> {
     // get a new logger
     let logger = Logger::default();
 
@@ -125,16 +127,19 @@ pub fn build_solidity_output(
         {
             // find any storage accesses
             let joined = function.logic.join(" ");
-            let storage_access = match STORAGE_ACCESS_REGEX.find(&joined).unwrap() {
+            let storage_access = match STORAGE_ACCESS_REGEX.find(&joined).unwrap_or(None) {
                 Some(x) => x.as_str(),
                 None => continue,
             };
 
-            let storage_access_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
+            let access_range =
+                find_balanced_encapsulator(storage_access, ('[', ']')).map_err(|e| {
+                    Error::Generic(format!("failed to find balanced encapsulator: {}", e))
+                })?;
 
             function.logic = vec![format!(
                 "return string(rlp.encodePacked(storage[{}]));",
-                storage_access[storage_access_loc.0 + 1..storage_access_loc.1 - 1].to_string()
+                storage_access[access_range].to_string()
             )]
         }
     }
@@ -154,14 +159,8 @@ pub fn build_solidity_output(
             },
             if function.payable { "payable " } else { "" },
         );
-        let function_returns = format!(
-            "returns ({}) {{",
-            if function.returns.is_some() {
-                function.returns.clone().unwrap()
-            } else {
-                String::from("")
-            }
-        );
+        let function_returns =
+            format!("returns ({}) {{", function.returns.clone().unwrap_or(String::new()));
 
         let function_header = match function.resolved_function {
             Some(resolved_function) => {
@@ -232,7 +231,11 @@ pub fn build_solidity_output(
             format!("/// @custom:selector    0x{}", function.selector),
             format!(
                 "/// @custom:name        {}",
-                function_header.replace("function ", "").split('(').next().unwrap()
+                function_header
+                    .replace("function ", "")
+                    .split('(')
+                    .next()
+                    .expect("impossible case: function header has no name")
             ),
         ]);
 

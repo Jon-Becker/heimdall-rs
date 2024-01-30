@@ -22,7 +22,7 @@ use heimdall_common::{
         version::{current_version, remote_version},
     },
 };
-use heimdall_config::{config, get_config, ConfigArgs};
+use heimdall_config::{config, ConfigArgs, Configuration};
 use heimdall_core::{
     cfg::{cfg, output::build_cfg, CFGArgs},
     decode::{decode, DecodeArgs},
@@ -108,7 +108,8 @@ async fn main() -> Result<(), Error> {
         fatal!("Stack Trace:\n\n{:?}", backtrace);
     }));
 
-    let configuration = get_config();
+    let configuration = Configuration::load()
+        .map_err(|e| Error::Generic(format!("failed to load configuration: {}", e)))?;
     match args.sub {
         Subcommands::Disassemble(mut cmd) => {
             // if the user has not specified a rpc url, use the default
@@ -140,7 +141,8 @@ async fn main() -> Result<(), Error> {
                             Error::Generic(format!("failed to build output path: {}", e))
                         })?;
 
-                write_file(&output_path, &assembly);
+                write_file(&output_path, &assembly)
+                    .map_err(|e| Error::Generic(format!("failed to write assembly: {}", e)))?;
             }
         }
 
@@ -170,8 +172,25 @@ async fn main() -> Result<(), Error> {
                 let mut output_str = String::new();
 
                 if let Some(abi) = &result.abi {
-                    output_str
-                        .push_str(&format!("ABI:\n\n{}\n", serde_json::to_string_pretty(abi)?));
+                    output_str.push_str(&format!(
+                        "ABI:\n\n[{}]\n",
+                        abi.iter()
+                            .map(|x| {
+                                match x {
+                                    ABIStructure::Function(x) => {
+                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
+                                    }
+                                    ABIStructure::Error(x) => {
+                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
+                                    }
+                                    ABIStructure::Event(x) => {
+                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
+                                    }
+                                }
+                            })
+                            .collect::<Result<Vec<String>, Error>>()?
+                            .join(",\n")
+                    ));
                 }
                 if let Some(source) = &result.source {
                     output_str.push_str(&format!("Source:\n\n{}\n", source));
@@ -210,7 +229,8 @@ async fn main() -> Result<(), Error> {
                                 .collect::<Result<Vec<String>, Error>>()?
                                 .join(",\n")
                         ),
-                    );
+                    )
+                    .map_err(|e| Error::Generic(format!("failed to write ABI: {}", e)))?;
                 }
 
                 // write the contract source
@@ -238,7 +258,8 @@ async fn main() -> Result<(), Error> {
                             Error::Generic(format!("failed to build output path: {}", e))
                         })?
                     };
-                    write_file(&output_path, source);
+                    write_file(&output_path, source)
+                        .map_err(|e| Error::Generic(format!("failed to write source: {}", e)))?;
                 }
             }
         }
@@ -291,7 +312,8 @@ async fn main() -> Result<(), Error> {
                         .map_err(|e| {
                             Error::Generic(format!("failed to build output path: {}", e))
                         })?;
-                write_file(&output_path, &stringified_dot);
+                write_file(&output_path, &stringified_dot)
+                    .map_err(|e| Error::Generic(format!("failed to write cfg: {}", e)))?;
             }
         }
 
@@ -342,7 +364,8 @@ async fn main() -> Result<(), Error> {
                             Error::Generic(format!("failed to build output path: {}", e))
                         })?;
 
-                write_lines_to_file(&output_path, lines);
+                write_lines_to_file(&output_path, lines)
+                    .map_err(|e| Error::Generic(format!("failed to write dump: {}", e)))?;
             }
         }
 
@@ -381,7 +404,8 @@ async fn main() -> Result<(), Error> {
                             Error::Generic(format!("failed to build output path: {}", e))
                         })?;
 
-                write_lines_to_file(&output_path, csv_lines);
+                write_lines_to_file(&output_path, csv_lines)
+                    .map_err(|e| Error::Generic(format!("failed to write snapshot: {}", e)))?;
             }
         }
 
@@ -433,21 +457,24 @@ async fn main() -> Result<(), Error> {
                             Error::Generic(format!("failed to build output path: {}", e))
                         })?;
 
-                write_file(&output_path, &serde_json::to_string_pretty(&decoded_trace)?);
+                write_file(&output_path, &serde_json::to_string_pretty(&decoded_trace)?)
+                    .map_err(|e| Error::Generic(format!("failed to write decoded trace: {}", e)))?;
             }
         }
 
         Subcommands::Config(cmd) => {
-            config(cmd);
+            config(cmd).map_err(|e| Error::Generic(format!("failed to configure: {}", e)))?;
         }
 
         Subcommands::Cache(cmd) => {
-            _ = cache(cmd);
+            cache(cmd).map_err(|e| Error::Generic(format!("failed to manage cache: {}", e)))?;
         }
     }
 
     // check if the version is up to date
-    let remote_version = remote_version().await;
+    let remote_version = remote_version()
+        .await
+        .map_err(|e| Error::Generic(format!("failed to get remote version: {}", e)))?;
     let current_version = current_version();
 
     if remote_version.gt(&current_version) {

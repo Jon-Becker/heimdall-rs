@@ -81,7 +81,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
 /// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(bytecode.is_ok());
 /// ```
-pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, Error> {
+pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
     backoff::future::retry(
         ExponentialBackoff {
             max_elapsed_time: Some(Duration::from_secs(10)),
@@ -137,12 +137,12 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
         // cache the results
         store_cache(
             &format!("contract.{}.{}", &chain_id, &contract_address),
-            bytecode_as_bytes.to_string().replacen("0x", "", 1),
+            bytecode_as_bytes.clone().to_vec(),
             None,
         )
         .map_err(|_| error!("failed to cache bytecode for contract: {:?}", &contract_address))?;
 
-        Ok(bytecode_as_bytes.to_string().replacen("0x", "", 1))
+        Ok(bytecode_as_bytes.to_vec())
     })
     .await
     .map_err(|_| Error::Generic(format!("failed to get bytecode for contract: {:?}", &contract_address)))
@@ -156,7 +156,6 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<String, E
 /// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(bytecode.is_ok());
 /// ```
-/// TODO: check for caching
 pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Transaction, Error> {
     backoff::future::retry(
         ExponentialBackoff {
@@ -315,7 +314,6 @@ pub async fn get_storage_diff(
 /// // let trace = get_trace("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(trace.is_ok());
 /// ```
-/// TODO: check for caching
 pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTrace, Error> {
     backoff::future::retry(
         ExponentialBackoff {
@@ -437,7 +435,6 @@ pub async fn get_block_logs(
     .map_err(|_| Error::Generic(format!("failed to get logs for block: {:?}", &block_number)))
 }
 
-// TODO: add tests
 #[cfg(test)]
 pub mod tests {
     use crate::{ether::rpc::*, utils::hex::ToLowerHex};

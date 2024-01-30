@@ -4,7 +4,7 @@ use reqwest::header::HeaderMap;
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
-use crate::{debug, debug_max, error, utils::io::logging::Logger};
+use crate::{debug, error, utils::io::logging::Logger, Error};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,8 +31,8 @@ async fn call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse>
         || async {
             // build the headers
             let mut headers = HeaderMap::new();
-            headers.insert("Content-Type", "application/json".parse().unwrap());
-            headers.insert("X-API-KEY", api_key.parse().unwrap());
+            headers.insert("Content-Type", "application/json".parse().expect("failed to parse Content-Type header"));
+            headers.insert("X-API-KEY", api_key.parse().expect("failed to parse API key header"));
 
             // clone the query
             let query = query.to_owned();
@@ -42,7 +42,7 @@ async fn call_transpose(query: &str, api_key: &str) -> Option<TransposeResponse>
                 .redirect(reqwest::redirect::Policy::none())
                 .timeout(Duration::from_secs(999999999))
                 .build()
-                .unwrap();
+                .expect("failed to build reqwest client");
 
             let response = match client
                 .post("https://api.transpose.io/sql")
@@ -100,7 +100,7 @@ pub async fn get_transaction_list(
     address: &str,
     api_key: &str,
     bounds: (&u128, &u128),
-) -> Vec<(u128, String)> {
+) -> Result<Vec<(u128, String)>, Error> {
     // get a new logger
     let logger = Logger::default();
 
@@ -122,13 +122,9 @@ pub async fn get_transaction_list(
         bounds.1
     );
 
-    let response = match call_transpose(&query, api_key).await {
-        Some(response) => response,
-        None => {
-            error!("failed to get transaction list from Transpose");
-            std::process::exit(1)
-        }
-    };
+    let response = call_transpose(&query, api_key)
+        .await
+        .ok_or(Error::Generic("failed to get transaction list from Transpose".to_string()))?;
 
     transaction_list_progress.finish_and_clear();
     debug!("fetching transactions took {:?}", start_time.elapsed());
@@ -137,32 +133,19 @@ pub async fn get_transaction_list(
 
     // parse the results
     for result in response.results {
-        let block_number: u128 = match result.get("block_number") {
-            Some(block_number) => match block_number.as_u64() {
-                Some(block_number) => block_number as u128,
-                None => {
-                    error!("failed to parse block_number from Transpose");
-                    std::process::exit(1)
-                }
-            },
-            None => {
-                error!("failed to fetch block_number from Transpose response");
-                std::process::exit(1)
-            }
-        };
-        let transaction_hash: String = match result.get("transaction_hash") {
-            Some(transaction_hash) => match transaction_hash.as_str() {
-                Some(transaction_hash) => transaction_hash.to_string(),
-                None => {
-                    error!("failed to parse transaction_hash from Transpose");
-                    std::process::exit(1)
-                }
-            },
-            None => {
-                error!("failed to fetch transaction_hash from Transpose response");
-                std::process::exit(1)
-            }
-        };
+        let block_number = result
+            .get("block_number")
+            .ok_or(Error::Generic("failed to parse block_number from Transpose".to_string()))?
+            .as_u64()
+            .ok_or(Error::Generic("failed to parse block_number from Transpose".to_string()))?
+            as u128;
+
+        let transaction_hash = result
+            .get("transaction_hash")
+            .ok_or(Error::Generic("failed to parse transaction_hash from Transpose".to_string()))?
+            .as_str()
+            .ok_or(Error::Generic("failed to parse transaction_hash from Transpose".to_string()))?
+            .to_string();
 
         transactions.push((block_number, transaction_hash));
     }
@@ -170,7 +153,7 @@ pub async fn get_transaction_list(
     // sort the transactions by block number
     transactions.sort_by(|a, b| a.0.cmp(&b.0));
 
-    transactions
+    Ok(transactions)
 }
 
 /// Get the contrct creation block and transaction hash for the given address.
@@ -204,45 +187,22 @@ pub async fn get_contract_creation(
         "{{\"sql\":\"SELECT block_number, transaction_hash FROM {chain}.transactions WHERE TIMESTAMP = ( SELECT created_timestamp FROM {chain}.accounts WHERE address = '{address}' ) AND contract_address = '{address}'\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
     );
 
-    let response = match call_transpose(&query, api_key).await {
-        Some(response) => response,
-        None => {
-            error!("failed to get creation tx from Transpose");
-            std::process::exit(1)
-        }
-    };
+    let response = call_transpose(&query, api_key).await?;
 
     transaction_list_progress.finish_and_clear();
     debug!("fetching contract creation took {:?}", start_time.elapsed());
 
     // parse the results
     if let Some(result) = response.results.into_iter().next() {
-        let block_number: u128 = match result.get("block_number") {
-            Some(block_number) => match block_number.as_u64() {
-                Some(block_number) => block_number as u128,
-                None => {
-                    error!("failed to parse block_number from Transpose");
-                    std::process::exit(1)
-                }
-            },
-            None => {
-                error!("failed to fetch block_number from Transpose response");
-                std::process::exit(1)
-            }
-        };
-        let transaction_hash: String = match result.get("transaction_hash") {
-            Some(transaction_hash) => match transaction_hash.as_str() {
-                Some(transaction_hash) => transaction_hash.to_string(),
-                None => {
-                    error!("failed to parse transaction_hash from Transpose");
-                    std::process::exit(1)
-                }
-            },
-            None => {
-                error!("failed to fetch transaction_hash from Transpose response");
-                std::process::exit(1)
-            }
-        };
+        let block_number = result
+            .get("block_number")
+            .and_then(|block_number| block_number.as_u64())
+            .map(|block_number| block_number as u128)?;
+
+        let transaction_hash = result
+            .get("transaction_hash")
+            .and_then(|transaction_hash| transaction_hash.as_str())
+            .map(|transaction_hash| transaction_hash.to_string())?;
 
         return Some((block_number, transaction_hash))
     };
@@ -266,36 +226,11 @@ pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
             "{{\"sql\":\"SELECT COALESCE( (SELECT name FROM ethereum.contract_labels WHERE contract_address = '{address}' ), (SELECT ens_name FROM ethereum.ens_names WHERE primary_address = '{address}' LIMIT 1), (SELECT protocol_name FROM ethereum.protocols WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.tokens WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.collections WHERE contract_address = '{address}' ) ) as label\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
         );
 
-    let response = match call_transpose(&query, api_key).await {
-        Some(response) => response,
-        None => {
-            debug_max!(&format!("failed to get label from Transpose for address: {}", address));
-            return None
-        }
-    };
+    let response = call_transpose(&query, api_key).await?;
 
     // parse the results
     if let Some(result) = response.results.into_iter().next() {
-        let label: String = match result.get("label") {
-            Some(label) => match label.as_str() {
-                Some(label) => label.to_string(),
-                None => {
-                    debug_max!(&format!(
-                        "failed to parse label from Transpose for address: {}",
-                        address
-                    ));
-                    return None
-                }
-            },
-            None => {
-                debug_max!(&format!(
-                    "failed to fetch label from Transpose response for address: {}",
-                    address
-                ));
-                return None
-            }
-        };
-        return Some(label)
+        return result.get("label").and_then(|label| label.as_str()).map(|label| label.to_string())
     };
 
     None
