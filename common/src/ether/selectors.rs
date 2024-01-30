@@ -7,10 +7,7 @@ use std::{
 use indicatif::ProgressBar;
 use tokio::task;
 
-use crate::{
-    error::Error,
-    utils::{io::logging::Logger, strings::decode_hex},
-};
+use crate::{error::Error, info_spinner, utils::strings::decode_hex};
 
 use super::{
     evm::core::vm::VM,
@@ -146,9 +143,6 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
 pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
 where
     T: ResolveSelector + Send + Clone + 'static, {
-    // get a new logger
-    let logger = Logger::default();
-
     let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
@@ -164,7 +158,7 @@ where
     resolve_progress
         .lock()
         .expect("Could not obtain lock on resolve_progress.")
-        .set_style(logger.info_spinner());
+        .set_style(info_spinner!());
     resolve_progress
         .lock()
         .expect("Could not obtain lock on resolve_progress.")

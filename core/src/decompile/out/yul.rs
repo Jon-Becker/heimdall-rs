@@ -6,10 +6,8 @@ use crate::{
 };
 use heimdall_common::{
     ether::signatures::ResolvedLog,
-    utils::io::{
-        file::short_path,
-        logging::{Logger, TraceFactory},
-    },
+    info_spinner,
+    utils::io::{file::short_path, logging::TraceFactory},
 };
 use indicatif::ProgressBar;
 
@@ -24,13 +22,10 @@ pub fn build_yul_output(
     trace: &mut TraceFactory,
     trace_parent: u32,
 ) -> Result<String, Error> {
-    // get a new logger
-    let logger = Logger::default();
-
     // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
-    progress_bar.set_style(logger.info_spinner());
+    progress_bar.set_style(info_spinner!());
 
     // build the decompiled source
     let mut decompiled_output: Vec<String> = Vec::new();

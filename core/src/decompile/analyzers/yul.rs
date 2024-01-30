@@ -425,7 +425,7 @@ pub fn analyze_yul(
     }
 
     // recurse into the children of the VMTrace map
-    for (_, child) in vm_trace.children.iter().enumerate() {
+    for child in vm_trace.children.iter() {
         function = analyze_yul(child, function, trace, trace_parent, conditional_map)?;
     }
 

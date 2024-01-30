@@ -20,10 +20,10 @@ use heimdall_common::{
         rpc::get_transaction,
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
-    success,
+    info_spinner, success,
     utils::{
         io::{
-            logging::{set_logger_env, Logger},
+            logging::{set_logger_env, Logger, TraceFactory},
             types::display,
         },
         strings::{encode_hex, StringExt},
@@ -101,10 +101,8 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     set_logger_env(&args.verbose);
 
     // get a new logger and trace
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
+    let logger = Logger::default();
+    let mut trace = TraceFactory::default();
 
     // check if we require an OpenAI API key
     if args.explain && args.openai_api_key.is_empty() {
@@ -357,7 +355,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         // get a new progress bar
         let explain_progress = ProgressBar::new_spinner();
         explain_progress.enable_steady_tick(Duration::from_millis(100));
-        explain_progress.set_style(logger.info_spinner());
+        explain_progress.set_style(info_spinner!());
         explain_progress.set_message("attempting to explain calldata...");
 
         match get_explanation(decoded_string.to_string(), raw_transaction, &args.openai_api_key)

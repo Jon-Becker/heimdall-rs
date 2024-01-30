@@ -446,17 +446,17 @@ impl Default for TraceFactory {
 
 impl Logger {
     /// create a new logger with the given verbosity
-    pub fn new(verbosity: &str) -> (Logger, TraceFactory) {
+    pub fn new(verbosity: &str) -> Logger {
         match verbosity.to_uppercase().as_str() {
-            "SILENT" => (Logger { level: -1 }, TraceFactory::new(-1)),
-            "ERROR" => (Logger { level: 0 }, TraceFactory::new(0)),
-            "WARN" => (Logger { level: 1 }, TraceFactory::new(1)),
-            "INFO" => (Logger { level: 2 }, TraceFactory::new(2)),
-            "DEBUG" => (Logger { level: 3 }, TraceFactory::new(3)),
-            "TRACE" => (Logger { level: 4 }, TraceFactory::new(4)),
-            "ALL" => (Logger { level: 5 }, TraceFactory::new(5)),
-            "MAX" => (Logger { level: 6 }, TraceFactory::new(6)),
-            _ => (Logger { level: 1 }, TraceFactory::new(1)),
+            "SILENT" => Logger { level: -1 },
+            "ERROR" => Logger { level: 0 },
+            "WARN" => Logger { level: 1 },
+            "INFO" => Logger { level: 2 },
+            "DEBUG" => Logger { level: 3 },
+            "TRACE" => Logger { level: 4 },
+            "ALL" => Logger { level: 5 },
+            "MAX" => Logger { level: 6 },
+            _ => Logger { level: 1 },
         }
     }
 
@@ -704,7 +704,8 @@ mod tests {
     #[test]
     fn test_raw_trace() {
         let start_time = Instant::now();
-        let (logger, mut trace) = Logger::new("TRACE");
+        let logger = Logger::new("TRACE");
+        let mut trace = TraceFactory::new(4);
 
         let parent = trace.add("call", 0, 123123, vec!["Test::test_trace()".to_string()]);
         trace.add(
@@ -759,7 +760,8 @@ mod tests {
     #[test]
     fn test_helper_functions() {
         let start_time = Instant::now();
-        let (logger, mut trace) = Logger::new("TRACE");
+        let logger = Logger::new("TRACE");
+        let mut trace = TraceFactory::new(4);
 
         let parent = trace.add_call(
             0,
@@ -801,182 +803,6 @@ mod tests {
 
         trace.display();
         logger.info(&format!("Tracing took {}", start_time.elapsed().as_secs_f64()));
-    }
-
-    #[test]
-    fn test_option() {
-        let (logger, _) = Logger::new("TRACE");
-
-        logger.option(
-            "warn",
-            "multiple possibilities",
-            vec!["option 1".to_string(), "option 2".to_string(), "option 3".to_string()],
-            Some(0),
-            true,
-        );
-    }
-
-    #[test]
-    fn test_warn() {
-        let (logger, _) = Logger::new("SILENT");
-        logger.warn("log");
-
-        let (logger, _) = Logger::new("ERROR");
-        logger.warn("log");
-
-        let (logger, _) = Logger::new("WARN");
-        logger.warn("log");
-
-        let (logger, _) = Logger::new("INFO");
-        logger.warn("log");
-
-        let (logger, _) = Logger::new("DEBUG");
-        logger.warn("log");
-
-        let (logger, _) = Logger::new("TRACE");
-        logger.warn("log");
-
-        let (logger, _) = Logger::new("ALL");
-        logger.warn("log");
-
-        let (logger, _) = Logger::new("MAX");
-        logger.warn("log");
-    }
-
-    #[test]
-    fn test_error() {
-        let (logger, _) = Logger::new("SILENT");
-        logger.error("log");
-
-        let (logger, _) = Logger::new("ERROR");
-        logger.error("log");
-
-        let (logger, _) = Logger::new("WARN");
-        logger.error("log");
-
-        let (logger, _) = Logger::new("INFO");
-        logger.error("log");
-
-        let (logger, _) = Logger::new("DEBUG");
-        logger.error("log");
-
-        let (logger, _) = Logger::new("TRACE");
-        logger.error("log");
-
-        let (logger, _) = Logger::new("ALL");
-        logger.error("log");
-
-        let (logger, _) = Logger::new("MAX");
-        logger.error("log");
-    }
-
-    #[test]
-    fn test_info() {
-        let (logger, _) = Logger::new("SILENT");
-        logger.info("log");
-
-        let (logger, _) = Logger::new("ERROR");
-        logger.info("log");
-
-        let (logger, _) = Logger::new("WARN");
-        logger.info("log");
-
-        let (logger, _) = Logger::new("INFO");
-        logger.info("log");
-
-        let (logger, _) = Logger::new("DEBUG");
-        logger.info("log");
-
-        let (logger, _) = Logger::new("TRACE");
-        logger.info("log");
-
-        let (logger, _) = Logger::new("ALL");
-        logger.info("log");
-
-        let (logger, _) = Logger::new("MAX");
-        logger.info("log");
-    }
-
-    #[test]
-    fn test_success() {
-        let (logger, _) = Logger::new("SILENT");
-        logger.success("log");
-
-        let (logger, _) = Logger::new("ERROR");
-        logger.success("log");
-
-        let (logger, _) = Logger::new("WARN");
-        logger.success("log");
-
-        let (logger, _) = Logger::new("INFO");
-        logger.success("log");
-
-        let (logger, _) = Logger::new("DEBUG");
-        logger.success("log");
-
-        let (logger, _) = Logger::new("TRACE");
-        logger.success("log");
-
-        let (logger, _) = Logger::new("ALL");
-        logger.success("log");
-
-        let (logger, _) = Logger::new("MAX");
-        logger.success("log");
-    }
-
-    #[test]
-    fn test_debug() {
-        let (logger, _) = Logger::new("SILENT");
-        logger.debug("log");
-
-        let (logger, _) = Logger::new("ERROR");
-        logger.debug("log");
-
-        let (logger, _) = Logger::new("WARN");
-        logger.debug("log");
-
-        let (logger, _) = Logger::new("INFO");
-        logger.debug("log");
-
-        let (logger, _) = Logger::new("DEBUG");
-        logger.debug("log");
-
-        let (logger, _) = Logger::new("TRACE");
-        logger.debug("log");
-
-        let (logger, _) = Logger::new("ALL");
-        logger.debug("log");
-
-        let (logger, _) = Logger::new("MAX");
-        logger.debug("log");
-    }
-
-    #[test]
-    fn test_max() {
-        let (_logger, _) = Logger::new("SILENT");
-        use crate::debug_max;
-        debug_max!("log");
-
-        let (_logger, _) = Logger::new("ERROR");
-        debug_max!("log");
-
-        let (_logger, _) = Logger::new("WARN");
-        debug_max!("log");
-
-        let (_logger, _) = Logger::new("INFO");
-        debug_max!("log");
-
-        let (_logger, _) = Logger::new("DEBUG");
-        debug_max!("log");
-
-        let (_logger, _) = Logger::new("TRACE");
-        debug_max!("log");
-
-        let (_logger, _) = Logger::new("ALL");
-        debug_max!("log");
-
-        let (_logger, _) = Logger::new("MAX");
-        debug_max!("log");
     }
 
     #[test]

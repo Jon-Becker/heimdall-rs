@@ -8,7 +8,7 @@ use ethers::types::H160;
 use heimdall_common::{
     debug, debug_max,
     ether::compiler::Compiler,
-    info,
+    info, info_spinner,
     utils::{
         strings::{encode_hex, StringExt},
         threading::run_with_timeout,
@@ -122,10 +122,7 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
     set_logger_env(&args.verbose);
 
     let now = Instant::now();
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
+    let mut trace = TraceFactory::default();
     let snapshot_call = trace.add_call(
         0,
         line!(),
@@ -204,7 +201,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
         selectors,
         resolved_selectors,
         &contract_bytecode,
-        &logger,
         &mut trace,
         vm_trace,
         &evm,
@@ -239,7 +235,6 @@ async fn get_snapshots(
     selectors: HashMap<String, u128>,
     resolved_selectors: HashMap<String, Vec<ResolvedFunction>>,
     contract_bytecode: &[u8],
-    logger: &Logger,
     trace: &mut TraceFactory,
     vm_trace: u32,
     evm: &VM,
@@ -251,7 +246,7 @@ async fn get_snapshots(
     let mut snapshot_progress = ProgressBar::new_spinner();
 
     snapshot_progress.enable_steady_tick(Duration::from_millis(100));
-    snapshot_progress.set_style(logger.info_spinner());
+    snapshot_progress.set_style(info_spinner!());
 
     for (selector, function_entry_point) in selectors {
         snapshot_progress.set_message(format!("executing '0x{selector}'"));
@@ -352,7 +347,7 @@ async fn get_snapshots(
 
         snapshot_progress = ProgressBar::new_spinner();
         snapshot_progress.enable_steady_tick(Duration::from_millis(100));
-        snapshot_progress.set_style(logger.info_spinner());
+        snapshot_progress.set_style(info_spinner!());
     }
 
     snapshot_progress.finish_and_clear();

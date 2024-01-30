@@ -8,7 +8,7 @@ use ethers::types::H160;
 use heimdall_common::{
     debug, debug_max, error,
     ether::{bytecode::get_bytecode_from_target, compiler::Compiler, evm::ext::exec::VMTrace},
-    info,
+    info, info_spinner,
     utils::{
         strings::{encode_hex, StringExt},
         threading::run_with_timeout,
@@ -125,10 +125,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     set_logger_env(&args.verbose);
 
     // get a new logger
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
+    let logger = Logger::default();
+    let mut trace = TraceFactory::default();
 
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
@@ -240,7 +238,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // get a new progress bar
     let mut decompilation_progress = ProgressBar::new_spinner();
     decompilation_progress.enable_steady_tick(Duration::from_millis(100));
-    decompilation_progress.set_style(logger.info_spinner());
+    decompilation_progress.set_style(info_spinner!());
 
     // perform EVM analysis
     let mut analyzed_functions = Vec::new();
@@ -603,7 +601,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         // get a new progress bar
         decompilation_progress = ProgressBar::new_spinner();
         decompilation_progress.enable_steady_tick(Duration::from_millis(100));
-        decompilation_progress.set_style(logger.info_spinner());
+        decompilation_progress.set_style(info_spinner!());
 
         analyzed_functions.push(analyzed_function.clone());
     }

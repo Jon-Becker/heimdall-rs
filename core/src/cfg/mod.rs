@@ -9,7 +9,7 @@ use heimdall_common::{
         compiler::{detect_compiler, Compiler},
         selectors::find_function_selectors,
     },
-    info,
+    info, info_spinner,
     utils::{
         strings::{encode_hex, StringExt},
         threading::run_with_timeout,
@@ -93,11 +93,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
     let now = Instant::now();
 
     set_logger_env(&args.verbose);
-
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
+    let mut trace = TraceFactory::default();
 
     // add the call to the trace
     let cfg_call = trace.add_call(
@@ -182,7 +178,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
     // create a new progress bar
     let progress = ProgressBar::new_spinner();
     progress.enable_steady_tick(Duration::from_millis(100));
-    progress.set_style(logger.info_spinner());
+    progress.set_style(info_spinner!());
 
     // create a new petgraph StableGraph
     let mut contract_cfg = Graph::<String, String>::new();
