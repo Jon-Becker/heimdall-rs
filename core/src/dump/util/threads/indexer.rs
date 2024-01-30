@@ -1,10 +1,7 @@
 use std::time::Duration;
 
 use ethers::types::{Diff, H160};
-use heimdall_common::{
-    ether::rpc::get_storage_diff,
-    utils::{io::logging::Logger, threading::task_pool},
-};
+use heimdall_common::{ether::rpc::get_storage_diff, info_spinner, utils::threading::task_pool};
 use indicatif::ProgressBar;
 
 use crate::dump::{constants::DUMP_STATE, structures::storage_slot::StorageSlot};
@@ -20,16 +17,10 @@ pub async fn handle(addr_hash: H160) {
     // the number of threads cannot exceed the number of transactions
     let num_indexing_threads = std::cmp::min(transactions.len(), args.threads);
 
-    // get a new logger
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
     transaction_list_progress.enable_steady_tick(Duration::from_millis(100));
-    transaction_list_progress.set_style(logger.info_spinner());
+    transaction_list_progress.set_style(info_spinner!());
 
     if !args.no_tui {
         transaction_list_progress.finish_and_clear();

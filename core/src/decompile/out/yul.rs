@@ -3,6 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use crate::decompile::{constants::DECOMPILED_SOURCE_HEADER_YUL, util::Function, DecompilerArgs};
 use heimdall_common::{
     ether::signatures::ResolvedLog,
+    info_spinner,
     utils::io::{
         file::short_path,
         logging::{Logger, TraceFactory},
@@ -22,12 +23,12 @@ pub fn build_yul_output(
     trace_parent: u32,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // get a new logger
-    let logger = Logger::default();
+    let _logger = Logger::default();
 
     // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
-    progress_bar.set_style(logger.info_spinner());
+    progress_bar.set_style(info_spinner!());
 
     // build the decompiled source
     let mut decompiled_output: Vec<String> = Vec::new();

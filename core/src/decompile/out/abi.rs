@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use ethers::{abi::AbiEncode, types::U256};
-use heimdall_common::utils::io::{
-    file::short_path,
-    logging::{Logger, TraceFactory},
+use heimdall_common::{
+    info_spinner,
+    utils::io::{file::short_path, logging::TraceFactory},
 };
 use indicatif::ProgressBar;
 use serde::{Deserialize, Serialize};
@@ -76,13 +76,10 @@ pub fn build_abi(
     trace: &mut TraceFactory,
     trace_parent: u32,
 ) -> Result<Vec<ABIStructure>, Box<dyn std::error::Error>> {
-    // get a new logger
-    let logger = Logger::default();
-
     // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
-    progress_bar.set_style(logger.info_spinner());
+    progress_bar.set_style(info_spinner!());
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();

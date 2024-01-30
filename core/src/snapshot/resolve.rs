@@ -200,7 +200,7 @@ async fn resolve_function_signatures(
     func_analysis_trace: &u32,
     trace: &mut TraceFactory,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (logger, _) = Logger::new("");
+    let logger = Logger::default();
     let mut selected_function_index: u8 = 0;
 
     // sort matches by signature using score heuristic from `score_signature`
@@ -254,8 +254,7 @@ async fn resolve_error_signatures(
     resolved_counter: &mut i32,
     default: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (logger, _) = Logger::new("");
-
+    let logger = Logger::default();
     let resolved_errors: HashMap<String, Vec<ResolvedError>> = resolve_selectors(
         snapshot
             .errors
@@ -312,8 +311,7 @@ async fn resolve_event_signatures(
     resolved_counter: &mut i32,
     default: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (logger, _) = Logger::new("");
-
+    let logger = Logger::default();
     let resolved_events: HashMap<String, Vec<ResolvedLog>> = resolve_selectors(
         snapshot
             .events

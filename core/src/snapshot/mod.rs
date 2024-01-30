@@ -4,7 +4,9 @@ pub mod menus;
 pub mod resolve;
 pub mod structures;
 pub mod util;
-use heimdall_common::{debug, debug_max, info, utils::threading::run_with_timeout, warn};
+use heimdall_common::{
+    debug, debug_max, info, info_spinner, utils::threading::run_with_timeout, warn,
+};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -113,11 +115,10 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
 
     set_logger_env(&args.verbose);
 
+    // get new trace
+    let mut trace = TraceFactory::default();
+
     let now = Instant::now();
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
     let shortened_target = get_shortned_target(&args.target);
     let snapshot_call = trace.add_call(
         0,
@@ -191,7 +192,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Box<dyn std:
         selectors,
         resolved_selectors,
         &contract_bytecode,
-        &logger,
         &mut trace,
         vm_trace,
         &evm,
@@ -225,7 +225,6 @@ async fn get_snapshots(
     selectors: HashMap<String, u128>,
     resolved_selectors: HashMap<String, Vec<ResolvedFunction>>,
     contract_bytecode: &str,
-    logger: &Logger,
     trace: &mut TraceFactory,
     vm_trace: u32,
     evm: &VM,
@@ -240,7 +239,7 @@ async fn get_snapshots(
     let mut snapshot_progress = ProgressBar::new_spinner();
 
     snapshot_progress.enable_steady_tick(Duration::from_millis(100));
-    snapshot_progress.set_style(logger.info_spinner());
+    snapshot_progress.set_style(info_spinner!());
 
     for (selector, function_entry_point) in selectors {
         snapshot_progress.set_message(format!("executing '0x{selector}'"));
@@ -339,7 +338,7 @@ async fn get_snapshots(
 
         snapshot_progress = ProgressBar::new_spinner();
         snapshot_progress.enable_steady_tick(Duration::from_millis(100));
-        snapshot_progress.set_style(logger.info_spinner());
+        snapshot_progress.set_style(info_spinner!());
     }
 
     snapshot_progress.finish_and_clear();

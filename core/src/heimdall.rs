@@ -90,7 +90,7 @@ fn main() {
 
         // print the panic message
         let backtrace = Backtrace::new();
-        let (logger, _) = Logger::new("TRACE");
+        let logger = Logger::new("TRACE");
         fatal!(
             "thread 'main' encountered a fatal error: '{}'!",
             panic_info.to_string().bright_white().on_bright_red().bold(),
@@ -177,7 +177,7 @@ fn main() {
     let current_version = current_version();
 
     if remote_version.gt(&current_version) {
-        let (logger, _) = Logger::new("TRACE");
+        let logger = Logger::new("TRACE");
         println!();
         info!("great news! An update is available!");
         info!("you can update now by running: `bifrost --version {}`", remote_version);

@@ -7,7 +7,7 @@ use heimdall_common::{
         bytecode::get_bytecode_from_target, compiler::detect_compiler,
         selectors::find_function_selectors,
     },
-    info,
+    info, info_spinner,
     utils::threading::run_with_timeout,
     warn,
 };
@@ -88,10 +88,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
 
     set_logger_env(&args.verbose);
 
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
+    let mut trace = TraceFactory::default();
 
     // truncate target for prettier display
     let mut shortened_target = args.target.clone();
@@ -185,7 +182,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Box<dyn std::er
     // create a new progress bar
     let progress = ProgressBar::new_spinner();
     progress.enable_steady_tick(Duration::from_millis(100));
-    progress.set_style(logger.info_spinner());
+    progress.set_style(info_spinner!());
 
     // create a new petgraph StableGraph
     let mut contract_cfg = Graph::<String, String>::new();
