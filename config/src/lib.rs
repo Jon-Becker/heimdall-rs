@@ -3,7 +3,7 @@ pub mod error;
 use crate::error::Error;
 use clap::{AppSettings, Parser};
 use heimdall_common::{
-    error, info, success,
+    debug, error, info, success,
     utils::io::file::{delete_path, read_file, write_file},
 };
 use serde::{Deserialize, Serialize};
@@ -74,8 +74,39 @@ impl Configuration {
         .map_err(|e| Error::Generic(format!("failed to read config file: {}", e)))?;
 
         // parse the config file
-        let config: Configuration = toml::from_str(&contents)
+        let mut config: Configuration = toml::from_str(&contents)
             .map_err(|e| Error::ParseError(format!("failed to parse config file: {}", e)))?;
+
+        // load mesc config if enabled
+        if !mesc::is_mesc_enabled() {
+            return Ok(config);
+        }
+
+        if let Some(endpoint) = mesc::get_default_endpoint(Some("heimdall"))
+            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+        {
+            debug!("overriding rpc_url with mesc endpoint");
+            config.rpc_url = endpoint.url;
+        }
+        if let Some(key) = mesc::metadata::get_api_key("etherscan", Some("heimdall"))
+            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+        {
+            debug!("overriding etherscan_api_key with mesc key");
+            config.etherscan_api_key = key;
+        }
+        if let Some(key) = mesc::metadata::get_api_key("transpose", Some("heimdall"))
+            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+        {
+            debug!("overriding transpose_api_key with mesc key");
+            config.transpose_api_key = key;
+        }
+        if let Some(key) = mesc::metadata::get_api_key("openai", Some("heimdall"))
+            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+        {
+            debug!("overriding openai_api_key with mesc key");
+            config.openai_api_key = key;
+        }
+
         Ok(config)
     }
 
@@ -167,6 +198,16 @@ pub fn config(args: ConfigArgs) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+/// Parse user input --rpc-url into a full url
+pub fn parse_url_arg(url: &str) -> Result<String, String> {
+    if mesc::is_mesc_enabled() {
+        if let Ok(Some(endpoint)) = mesc::get_endpoint_by_query(url, Some("heimdall")) {
+            return Ok(endpoint.url)
+        }
+    }
+    Ok(url.to_string())
 }
 
 #[allow(deprecated)]

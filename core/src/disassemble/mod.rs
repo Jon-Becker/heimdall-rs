@@ -6,6 +6,7 @@ use heimdall_common::{
     info,
     utils::{io::logging::set_logger_env, strings::encode_hex},
 };
+use heimdall_config::parse_url_arg;
 
 use crate::error::Error;
 
@@ -24,7 +25,8 @@ pub struct DisassemblerArgs {
     pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The RPC provider to use for fetching target bytecode.
-    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
+    /// This can be an explicit URL or a reference to a MESC endpoint.
+    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// Whether to use base-10 for the program counter.
