@@ -1,18 +1,14 @@
+pub mod error;
+
+use crate::error::Error;
 use clap::{AppSettings, Parser};
 use heimdall_common::{
-    error, info, success,
+    debug, error, info, success,
     utils::io::file::{delete_path, read_file, write_file},
 };
 use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
-
-pub static DEFAULT_CONFIG: &str = "rpc_url = \"\"
-local_rpc_url = \"http://localhost:8545\"
-etherscan_api_key = \"\"
-transpose_api_key = \"\"
-openai_api_key = \"\"
-";
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -42,173 +38,158 @@ pub struct Configuration {
     pub openai_api_key: String,
 }
 
-#[allow(deprecated)]
-/// Writes the given configuration to the disc at `$HOME/.bifrost/config.toml`.
-pub fn write_config(contents: &str) {
-    match home_dir() {
-        Some(mut home) => {
-            home.push(".bifrost");
-            home.push("config.toml");
-
-            let _ = write_file(home.into_os_string().to_str().unwrap(), contents);
-        }
-        None => {
-            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
-            std::process::exit(1)
+impl Default for Configuration {
+    fn default() -> Self {
+        Configuration {
+            rpc_url: "".to_string(),
+            local_rpc_url: "http://localhost:8545".to_string(),
+            etherscan_api_key: "".to_string(),
+            transpose_api_key: "".to_string(),
+            openai_api_key: "".to_string(),
         }
     }
 }
 
 #[allow(deprecated)]
-/// Deletes the configuration file at `$HOME/.bifrost/config.toml`.
-pub fn delete_config() {
-    match home_dir() {
-        Some(mut home) => {
-            home.push(".bifrost");
-            home.push("config.toml");
+impl Configuration {
+    /// Returns the current configuration.
+    pub fn load() -> Result<Self, Error> {
+        let mut home = home_dir().ok_or(Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        ))?;
+        home.push(".bifrost");
+        home.push("config.toml");
 
-            let _ = delete_path(home.into_os_string().to_str().unwrap());
+        // if the config file doesn't exist, create it
+        if !home.exists() {
+            let config = Configuration::default();
+            config.save()?;
         }
-        None => {
-            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
-            std::process::exit(1)
+
+        // read the config file
+        let contents = read_file(
+            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+        )
+        .map_err(|e| Error::Generic(format!("failed to read config file: {}", e)))?;
+
+        // parse the config file
+        let mut config: Configuration = toml::from_str(&contents)
+            .map_err(|e| Error::ParseError(format!("failed to parse config file: {}", e)))?;
+
+        // load mesc config if enabled
+        if !mesc::is_mesc_enabled() {
+            return Ok(config);
         }
+
+        if let Some(endpoint) = mesc::get_default_endpoint(Some("heimdall"))? {
+            debug!("overriding rpc_url with mesc endpoint");
+            config.rpc_url = endpoint.url;
+        }
+        if let Some(key) = mesc::metadata::get_api_key("etherscan", Some("heimdall"))? {
+            debug!("overriding etherscan_api_key with mesc key");
+            config.etherscan_api_key = key;
+        }
+        if let Some(key) = mesc::metadata::get_api_key("transpose", Some("heimdall"))? {
+            debug!("overriding transpose_api_key with mesc key");
+            config.transpose_api_key = key;
+        }
+        if let Some(key) = mesc::metadata::get_api_key("openai", Some("heimdall"))? {
+            debug!("overriding openai_api_key with mesc key");
+            config.openai_api_key = key;
+        }
+
+        Ok(config)
     }
-}
 
-#[allow(deprecated)]
-/// Reads the configuration file at `$HOME/.bifrost/config.toml`.
-pub fn read_config() -> String {
-    match home_dir() {
-        Some(mut home) => {
-            home.push(".bifrost");
-            home.push("config.toml");
+    /// Saves the current configuration to disk.
+    pub fn save(&self) -> Result<(), Error> {
+        let mut home = home_dir().ok_or(Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        ))?;
+        home.push(".bifrost");
+        home.push("config.toml");
 
-            if home.as_path().exists() {
-                // the file exists, read it
-                return read_file(home.into_os_string().to_str().unwrap())
-            } else {
-                // the file does not exist, create it
-                write_config(DEFAULT_CONFIG);
-                return read_file(home.into_os_string().to_str().unwrap())
+        write_file(
+            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            &toml::to_string(&self)
+                .map_err(|e| Error::ParseError(format!("failed to serialize config: {}", e)))?,
+        )
+        .map_err(|e| Error::Generic(format!("failed to write config file: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// Deletes the configuration file at `$HOME/.bifrost/config.toml`.
+    pub fn delete() -> Result<(), Error> {
+        let mut home = home_dir().ok_or(Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        ))?;
+        home.push(".bifrost");
+        home.push("config.toml");
+
+        delete_path(
+            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+        );
+
+        Ok(())
+    }
+
+    /// Update a single key/value pair in the configuration.
+    pub fn update(&mut self, key: &str, value: &str) -> Result<(), Error> {
+        // update the key in the struct and ensure it's the correct type
+        match key {
+            "rpc_url" => {
+                self.rpc_url = value.to_string();
+            }
+            "local_rpc_url" => {
+                self.local_rpc_url = value.to_string();
+            }
+            "etherscan_api_key" => {
+                self.etherscan_api_key = value.to_string();
+            }
+            "transpose_api_key" => {
+                self.transpose_api_key = value.to_string();
+            }
+            "openai_api_key" => {
+                self.openai_api_key = value.to_string();
+            }
+            _ => {
+                return Err(Error::Generic(format!(
+                    "invalid key: \'{}\' is not a valid configuration key.",
+                    key
+                )))
             }
         }
-        None => {
-            error!("couldn't resolve the bifrost directory. Is your $HOME variable set correctly?",);
-            std::process::exit(1)
-        }
+
+        // write the updated config to disk
+        self.save()?;
+
+        Ok(())
     }
-}
-
-/// Returns the [`Configuration`] struct after parsing the configuration file at
-/// `$HOME/.bifrost/config.toml`.
-pub fn get_config() -> Configuration {
-    let contents = read_config();
-
-    // toml parse from contents into Configuration
-    let config: Configuration = match toml::from_str(&contents) {
-        Ok(config) => config,
-        Err(e) => {
-            error!("failed to parse config file: {}", e);
-            info!("regenerating config file...");
-            delete_config();
-            return get_config()
-        }
-    };
-
-    // if MESC is enabled, use MESC config data
-    let config = if mesc::is_mesc_enabled() {
-        match load_mesc_config(&config) {
-            Ok(new_config) => new_config,
-            Err(e) => {
-                error!("MESC configured improperly ({})", e);
-                config
-            }
-        }
-    } else {
-        config
-    };
-
-    config
-}
-
-/// update a single key/value pair in the configuration file
-pub fn update_config(key: &str, value: &str) {
-    let mut contents = get_config();
-
-    // update the key in the struct and ensure it's the correct type
-    match key {
-        "rpc_url" => {
-            contents.rpc_url = value.to_string();
-        }
-        "local_rpc_url" => {
-            contents.local_rpc_url = value.to_string();
-        }
-        "etherscan_api_key" => {
-            contents.etherscan_api_key = value.to_string();
-        }
-        "transpose_api_key" => {
-            contents.transpose_api_key = value.to_string();
-        }
-        "openai_api_key" => {
-            contents.openai_api_key = value.to_string();
-        }
-        _ => {
-            error!("unknown configuration key \'{}\' .", key);
-            std::process::exit(1)
-        }
-    }
-
-    // write the updated config to disk
-    let serialized_config = toml::to_string(&contents).unwrap();
-    write_config(&serialized_config);
 }
 
 /// The `config` command is used to display and edit the current configuration.
-pub fn config(args: ConfigArgs) {
+pub fn config(args: ConfigArgs) -> Result<(), Error> {
     if !args.key.is_empty() {
         if !args.value.is_empty() {
             // read the config file and update the key/value pair
-            update_config(&args.key, &args.value);
+            let mut config = Configuration::load()?;
+            config.update(&args.key, &args.value)?;
             success!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value);
         } else {
             // key is set, but no value is set
             error!("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
-            std::process::exit(1);
         }
     } else {
         // no key is set, print the config file
-        println!("{:#?}", get_config());
+        println!("{:#?}", Configuration::load()?);
         info!("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
     }
-}
 
-/// load mesc config
-fn load_mesc_config(config: &Configuration) -> Result<Configuration, mesc::MescError> {
-    // create copy of config
-    let mut config = Configuration {
-        rpc_url: config.rpc_url.clone(),
-        local_rpc_url: config.local_rpc_url.clone(),
-        etherscan_api_key: config.etherscan_api_key.clone(),
-        transpose_api_key: config.transpose_api_key.clone(),
-        openai_api_key: config.openai_api_key.clone(),
-    };
-
-    // load relevant config data
-    if let Some(endpoint) = mesc::get_default_endpoint(Some("heimdall"))? {
-        config.rpc_url = endpoint.url;
-    }
-    if let Some(key) = mesc::metadata::get_api_key("etherscan", Some("heimdall"))? {
-        config.etherscan_api_key = key;
-    }
-    if let Some(key) = mesc::metadata::get_api_key("transpose", Some("heimdall"))? {
-        config.transpose_api_key = key;
-    }
-    if let Some(key) = mesc::metadata::get_api_key("openai", Some("heimdall"))? {
-        config.openai_api_key = key;
-    }
-
-    Ok(config)
+    Ok(())
 }
 
 /// Parse user input --rpc-url into a full url
@@ -219,4 +200,88 @@ pub fn parse_url_arg(url: &str) -> Result<String, String> {
         }
     }
     Ok(url.to_string())
+}
+
+#[allow(deprecated)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    // Test default configuration
+    #[test]
+    #[serial]
+    fn test_default_configuration() {
+        let config = Configuration::default();
+        assert_eq!(config.rpc_url, "");
+        assert_eq!(config.local_rpc_url, "http://localhost:8545");
+        assert_eq!(config.etherscan_api_key, "");
+        assert_eq!(config.transpose_api_key, "");
+        assert_eq!(config.openai_api_key, "");
+    }
+
+    // Test loading configuration from a file
+    #[test]
+    #[serial]
+    fn test_load_configuration() {
+        // delete config file if it exists
+        Configuration::delete().expect("failed to delete config file");
+        let config = Configuration::load().expect("failed to load config file");
+
+        assert_eq!(config.rpc_url, "");
+        assert_eq!(config.local_rpc_url, "http://localhost:8545");
+        assert_eq!(config.etherscan_api_key, "");
+        assert_eq!(config.transpose_api_key, "");
+        assert_eq!(config.openai_api_key, "");
+    }
+
+    // Test saving configuration to a file
+    #[test]
+    #[serial]
+    fn test_save_configuration() {
+        // delete config file if it exists
+        Configuration::delete().expect("failed to delete config file");
+        let mut config = Configuration::default();
+
+        // update rpc_url
+        config.update("rpc_url", "http://localhost:8545").expect("failed to update rpc_url");
+
+        // save the config file
+        config.save().expect("failed to save config file");
+
+        // load the config file
+        let loaded_config = Configuration::load().expect("failed to load config file");
+
+        // ensure the config file was saved correctly
+        assert_eq!(loaded_config.rpc_url, "http://localhost:8545");
+        assert_eq!(loaded_config.local_rpc_url, "http://localhost:8545");
+        assert_eq!(loaded_config.etherscan_api_key, "");
+        assert_eq!(loaded_config.transpose_api_key, "");
+        assert_eq!(loaded_config.openai_api_key, "");
+    }
+
+    // Test deleting configuration file
+    #[test]
+    #[serial]
+    fn test_delete_configuration() {
+        // delete config file if it exists
+        Configuration::delete().expect("failed to delete config file");
+        let mut config = Configuration::load().expect("failed to load config file");
+
+        // save some values to the config file
+        config.update("rpc_url", "http://localhost:8545").expect("failed to update rpc_url");
+        config
+            .update("etherscan_api_key", "1234567890")
+            .expect("failed to update etherscan_api_key");
+
+        // delete config file if it exists
+        Configuration::delete().expect("failed to delete config file");
+        let config = Configuration::load().expect("failed to load config file");
+
+        assert_eq!(config.rpc_url, "");
+        assert_eq!(config.local_rpc_url, "http://localhost:8545");
+        assert_eq!(config.etherscan_api_key, "");
+        assert_eq!(config.transpose_api_key, "");
+        assert_eq!(config.openai_api_key, "");
+    }
 }

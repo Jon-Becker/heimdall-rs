@@ -1,4 +1,4 @@
-use crate::decompile::constants::AND_BITMASK_REGEX;
+use crate::{decompile::constants::AND_BITMASK_REGEX, error::Error};
 
 use super::{
     constants::VARIABLE_SIZE_CHECK_REGEX,
@@ -37,7 +37,7 @@ pub fn snapshot_trace(
     snapshot: Snapshot,
     trace: &mut TraceFactory,
     trace_parent: u32,
-) -> Snapshot {
+) -> Result<Snapshot, Error> {
     // make a clone of the recursed analysis function
     let mut snapshot = snapshot;
 
@@ -56,7 +56,11 @@ pub fn snapshot_trace(
         let _storage = operation.storage.clone();
         let memory = operation.memory.clone();
 
-        let opcode_name = instruction.opcode_details.clone().unwrap().name;
+        let opcode_name = instruction
+            .opcode_details
+            .clone()
+            .ok_or(Error::Generic("failed to get opcode details".to_string()))?
+            .name;
         let opcode_number = instruction.opcode;
 
         // if the instruction is a state-accessing instruction, the function is no longer pure
@@ -92,7 +96,7 @@ pub fn snapshot_trace(
             snapshot.pure = false;
             trace.add_info(
                 trace_parent,
-                instruction.instruction.try_into().unwrap(),
+                instruction.instruction.try_into().unwrap_or(u32::MAX),
                 &format!(
                     "instruction {} ({}) indicates an non-pure snapshot.",
                     instruction.instruction, opcode_name
@@ -117,7 +121,7 @@ pub fn snapshot_trace(
             snapshot.view = false;
             trace.add_info(
                 trace_parent,
-                instruction.instruction.try_into().unwrap(),
+                instruction.instruction.try_into().unwrap_or(u32::MAX),
                 &format!(
                     "instruction {} ({}) indicates a non-view snapshot.",
                     instruction.instruction, opcode_name
@@ -133,15 +137,14 @@ pub fn snapshot_trace(
             };
 
             // check to see if the event is a duplicate
-            if !snapshot
-                .events
-                .iter()
-                .any(|(selector, _)| selector == logged_event.topics.first().unwrap())
-            {
+            if !snapshot.events.iter().any(|(selector, _)| {
+                selector == logged_event.topics.first().unwrap_or(&U256::zero())
+            }) {
                 // add the event to the function
-                snapshot
-                    .events
-                    .insert(*logged_event.topics.first().unwrap(), (None, logged_event.clone()));
+                snapshot.events.insert(
+                    *logged_event.topics.first().unwrap_or(&U256::zero()),
+                    (None, logged_event.clone()),
+                );
             }
         } else if opcode_name == "JUMPI" {
             // this is an if conditional for the children branches
@@ -152,7 +155,7 @@ pub fn snapshot_trace(
                 // this is marking the start of a non-payable function
                 trace.add_info(
                     trace_parent,
-                    instruction.instruction.try_into().unwrap(),
+                    instruction.instruction.try_into().unwrap_or(u32::MAX),
                     &format!(
                         "conditional at instruction {} indicates an non-payble function.",
                         instruction.instruction
@@ -230,7 +233,7 @@ pub fn snapshot_trace(
                             // attempt to find a return type within the return memory operations
                             let byte_size = match AND_BITMASK_REGEX
                                 .find(&return_memory_operations_solidified)
-                                .unwrap()
+                                .unwrap_or(None)
                             {
                                 Some(bitmask) => {
                                     let cast = bitmask.as_str();
@@ -532,8 +535,8 @@ pub fn snapshot_trace(
 
     // recurse into the children of the VMTrace map
     for child in vm_trace.children.iter() {
-        snapshot = snapshot_trace(child, snapshot, trace, trace_parent);
+        snapshot = snapshot_trace(child, snapshot, trace, trace_parent)?;
     }
 
-    snapshot
+    Ok(snapshot)
 }

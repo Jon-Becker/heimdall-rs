@@ -15,7 +15,8 @@ mod benchmarks {
                 decimal_counter: true,
                 name:String::from(""),
                 output: String::from(""),
-            }).await.unwrap();
+            }).await
+            .expect("failed to disassemble");
         }
 
         async_bench("benchmark_disassemble_simple", 100, bench).await;
@@ -44,7 +45,7 @@ mod integration_tests {
             output: String::from(""),
         })
         .await
-        .unwrap();
+        .expect("failed to disassemble");
 
         assert_eq!(expected, assembly);
     }
@@ -63,7 +64,7 @@ mod integration_tests {
             output: String::from(""),
         })
         .await
-        .unwrap();
+        .expect("failed to disassemble");
 
         assert_eq!(expected, assembly);
     }
@@ -82,7 +83,7 @@ mod integration_tests {
             output: String::from(""),
         })
         .await
-        .unwrap();
+        .expect("failed to disassemble");
 
         assert_eq!(expected, assembly);
     }
@@ -101,7 +102,7 @@ mod integration_tests {
             output: String::from(""),
         })
         .await
-        .unwrap();
+        .expect("failed to disassemble");
 
         assert_eq!(expected, assembly);
     }
@@ -112,8 +113,9 @@ mod integration_tests {
         let expected = String::from("0 CALLDATASIZE \n2 PUSH1 00\n4 PUSH1 00\n5 CALLDATACOPY \n8 PUSH2 1000\n10 PUSH1 00\n11 CALLDATASIZE \n13 PUSH1 00\n");
 
         // write bytecode to file at the cwd
-        let mut file = std::fs::File::create("test_disassemble_from_file").unwrap();
-        file.write_all(bytecode.as_bytes()).unwrap();
+        let mut file =
+            std::fs::File::create("test_disassemble_from_file").expect("failed to create file");
+        file.write_all(bytecode.as_bytes()).expect("failed to write file");
         let assembly = disassemble(DisassemblerArgs {
             target: String::from("test_disassemble_from_file"),
             verbose: Verbosity::new(0, 0),
@@ -123,12 +125,12 @@ mod integration_tests {
             output: String::from(""),
         })
         .await
-        .unwrap();
+        .expect("failed to disassemble");
 
         assert_eq!(expected, assembly);
 
         // delete the file
-        std::fs::remove_file("test_disassemble_from_file").unwrap();
+        std::fs::remove_file("test_disassemble_from_file").expect("failed to delete file");
     }
 
     #[tokio::test]
@@ -144,7 +146,7 @@ mod integration_tests {
             output: String::from(""),
         })
         .await
-        .unwrap();
+        .expect("failed to disassemble");
 
         assert_eq!(expected, assembly);
     }

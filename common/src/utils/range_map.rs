@@ -32,9 +32,7 @@ impl RangeMap {
             self.0.insert(range, opcode);
         } else {
             incumbents.iter().for_each(|incumbent| {
-                if incumbent.end < range.start {
-                } else if incumbent.start > range.end {
-                } else {
+                if incumbent.start <= range.end && incumbent.end >= range.start {
                     // Case 1: overlapping
                     if range.start <= incumbent.start && range.end >= incumbent.end {
                         // newInterval completely covers incumbent
@@ -58,7 +56,7 @@ impl RangeMap {
                     // Case 3: splitting
                     else if range.start > incumbent.start && range.end < incumbent.end {
                         let left: Range<usize> =
-                            Range { start: incumbent.start, end: range.start - 1 };
+                            Range { start: incumbent.start, end: range.start.saturating_sub(1) };
                         let right: Range<usize> =
                             Range { start: range.end + 1, end: incumbent.end };
                         let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
@@ -66,8 +64,7 @@ impl RangeMap {
                         self.0.insert(left, old_opcode.clone());
                         self.0.insert(right, old_opcode.clone());
                     } else {
-                        // raise an error: this should be impossible
-                        assert!(false, "range_map::write: impossible case");
+                        panic!("range_map::write: impossible case");
                     }
                 }
                 self.0.insert(range.clone(), opcode.clone());

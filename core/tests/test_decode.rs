@@ -130,15 +130,15 @@ mod integration_tests {
     fn heavy_test_decode_thorough() {
         // load ./tests/testdata/txids.json into a vector using serde
         let txids = serde_json::from_str::<Value>(
-            &std::fs::read_to_string("./tests/testdata/txids.json").unwrap(),
+            &std::fs::read_to_string("./tests/testdata/txids.json").expect("failed to read file"),
         )
-        .unwrap()
+        .expect("failed to parse json")
         .get("txids")
-        .unwrap()
+        .expect("failed to get txids")
         .as_array()
-        .unwrap()
+        .expect("failed to convert txids to array")
         .iter()
-        .map(|v| v.as_str().unwrap().to_string())
+        .map(|v| v.as_str().expect("failed to stringify json value").to_string())
         .collect::<Vec<String>>();
         let total = txids.len();
 
@@ -149,11 +149,11 @@ mod integration_tests {
                 .verbose(Verbosity::new(-1, 0))
                 .rpc_url("https://eth.llamarpc.com".to_string())
                 .build()
-                .unwrap();
+                .expect("failed to build args");
 
             blocking_await(move || {
                 // get new blocking runtime
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("failed to get runtime");
 
                 // get the storage diff for this transaction
                 println!("decoding txid: {}", txid);
@@ -167,8 +167,9 @@ mod integration_tests {
                         println!("decoding txid: {} ... succeeded", txid);
                         1
                     }
-                    Err(_) => {
+                    Err(e) => {
                         println!("decoding txid: {} ... failed", txid);
+                        println!("  \\- error: {:?}", e);
                         0
                     }
                 }

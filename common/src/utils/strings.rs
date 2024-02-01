@@ -1,4 +1,4 @@
-use std::{fmt::Write, num::ParseIntError};
+use std::{fmt::Write, ops::Range};
 
 use ethers::{
     abi::AbiEncode,
@@ -6,7 +6,7 @@ use ethers::{
 };
 use fancy_regex::Regex;
 
-use crate::constants::REDUCE_HEX_REGEX;
+use crate::{constants::REDUCE_HEX_REGEX, error::Error};
 
 /// Converts a signed integer into an unsigned integer
 pub fn sign_uint(unsigned: U256) -> I256 {
@@ -19,11 +19,24 @@ pub fn sign_uint(unsigned: U256) -> I256 {
 /// use heimdall_common::utils::strings::decode_hex;
 ///
 /// let hex = "48656c6c6f20576f726c64"; // "Hello World" in hex
-/// let result = decode_hex(hex);
-/// assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]));
+/// let result = decode_hex(hex).expect("should decode hex");
+/// assert_eq!(result, vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]);
 /// ```
-pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16)).collect()
+pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, Error> {
+    // normalize
+    s = s.trim_start_matches("0x");
+
+    if s.is_empty() {
+        return Ok(vec![]);
+    }
+
+    (0..s.len())
+        .step_by(2)
+        .map(|i| {
+            u8::from_str_radix(&s[i..i + 2], 16)
+                .map_err(|e| Error::ParseError(format!("failed to parse hex string: {}", e)))
+        })
+        .collect()
 }
 
 /// Encodes a vector of bytes into a hex string
@@ -37,7 +50,7 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 /// ```
 pub fn encode_hex(s: Vec<u8>) -> String {
     s.iter().fold(String::new(), |mut acc, b| {
-        write!(acc, "{b:02x}", b = b).unwrap();
+        write!(acc, "{b:02x}", b = b).expect("unable to write");
         acc
     })
 }
@@ -66,13 +79,14 @@ pub fn encode_hex_reduced(s: U256) -> String {
 /// use heimdall_common::utils::strings::hex_to_ascii;
 ///
 /// let hex = "48656c6c6f20576f726c64"; // "Hello World" in hex
-/// let result = hex_to_ascii(hex);
+/// let result = hex_to_ascii(hex).expect("should decode hex");
 /// assert_eq!(result, "Hello World");
 /// ```
-pub fn hex_to_ascii(s: &str) -> String {
+pub fn hex_to_ascii(s: &str) -> Result<String, Error> {
     let mut result = String::new();
     for i in 0..s.len() / 2 {
-        let byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap();
+        let byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16)
+            .map_err(|e| Error::ParseError(format!("failed to parse hex string: {}", e)))?;
         result.push(byte as char);
     }
 
@@ -80,7 +94,7 @@ pub fn hex_to_ascii(s: &str) -> String {
     result = result.replace('\r', "");
     result = result.replace('\n', "");
 
-    result
+    Ok(result)
 }
 
 /// Replaces the last occurrence of a substring in a string
@@ -105,10 +119,13 @@ pub fn replace_last(s: &str, old: &str, new: &str) -> String {
 /// use heimdall_common::utils::strings::find_balanced_encapsulator;
 ///
 /// let s = "Hello (World)";
-/// let result = find_balanced_encapsulator(s, ('(', ')'));
-/// assert_eq!(result, (6, 13, true));
+/// let result = find_balanced_encapsulator(s, ('(', ')')).expect("should find balanced encapsulator");
+/// assert_eq!(result, (7..12));
+/// // extract the condition
+/// let condition = &s[result];
+/// assert_eq!(condition, "World");
 /// ```
-pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> Result<Range<usize>, Error> {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -124,10 +141,18 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize
         }
         if open == close && open > 0 {
             end = i;
-            break
+            break;
         }
     }
-    (start, end + 1, (open == close && end > start && open > 0))
+
+    if !(open == close && end > start && open > 0) {
+        return Err(Error::ParseError(format!(
+            "string '{}' doesn't contain balanced encapsulator {}{}.",
+            s, encap.0, encap.1
+        )));
+    }
+
+    Ok(start + 1..end)
 }
 
 /// Finds balanced parentheses in a string, starting from the end
@@ -136,10 +161,14 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> (usize, usize
 /// use heimdall_common::utils::strings::find_balanced_encapsulator_backwards;
 ///
 /// let s = "Hello (World)";
-/// let result = find_balanced_encapsulator_backwards(s, ('(', ')'));
-/// assert_eq!(result, (6, 13, true));
+/// let result = find_balanced_encapsulator_backwards(s, ('(', ')')).expect("should find balanced encapsulator");
+/// assert_eq!(result, (7..12));
+/// assert_eq!(&s[result], "World");
 /// ```
-pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (usize, usize, bool) {
+pub fn find_balanced_encapsulator_backwards(
+    s: &str,
+    encap: (char, char),
+) -> Result<Range<usize>, Error> {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -155,10 +184,18 @@ pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> (us
         }
         if open == close && open > 0 {
             end = i;
-            break
+            break;
         }
     }
-    (s.len() - end - 1, s.len() - start, (open == close && end > start && open > 0))
+
+    if !(open == close && end > start && open > 0) {
+        return Err(Error::ParseError(format!(
+            "string '{}' doesn't contain balanced encapsulator {}{}.",
+            s, encap.0, encap.1
+        )));
+    }
+
+    Ok(s.len() - end..s.len() - start - 1)
 }
 
 /// Encodes a number into a base26 string
@@ -190,7 +227,10 @@ pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
     let mut substrings = vec![];
     let mut last_end = 0;
     for m in matches {
-        let m = m.unwrap();
+        let m = match m {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
         let start = m.start();
         let end = m.end();
         if start > last_end {
@@ -222,22 +262,44 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
         let sliced = s[start + keyword.len()..].to_string();
 
         // find the balanced encapsulator
-        let (start, end, is_balanced) = find_balanced_encapsulator(&sliced, ('(', ')'));
+        let encap_range = find_balanced_encapsulator(&sliced, ('(', ')')).ok()?;
 
         // extract the condition if balanced encapsulator is found
-        if is_balanced {
-            let mut condition = &sliced[start + 1..end - 1];
+        let mut condition = sliced[encap_range].to_string();
 
-            // require() statements can include revert messages or error codes
-            if condition.contains(", ") {
-                condition = condition.split(", ").collect::<Vec<&str>>()[0];
-            }
-
-            return Some(condition.trim().to_string())
+        // require() statements can include revert messages or error codes
+        if condition.contains(", ") {
+            condition = condition.split(", ").collect::<Vec<&str>>()[0].to_owned();
         }
+
+        return Some(condition.trim().to_string());
     }
 
     None
+}
+
+pub trait StringExt {
+    fn truncate(&self, max_length: usize) -> String;
+}
+
+/// Truncates a string to a maximum length, adding an ellipsis ("...") if the string is truncated.
+/// Note: the ellipsis *is* counted towards the maximum length.
+///
+/// ```
+/// use heimdall_common::utils::strings::StringExt;
+///
+/// let s = "Hello, world!";
+/// let result = s.to_string().truncate(11);
+/// assert_eq!(result, "Hell...rld!");
+/// ```
+impl StringExt for String {
+    fn truncate(&self, max_length: usize) -> String {
+        if self.len() > max_length {
+            self.chars().take(max_length - 7).collect::<String>() + "..." + &self[self.len() - 4..]
+        } else {
+            self.to_string()
+        }
+    }
 }
 
 /// Tokenizes an expression into a vector of tokens
@@ -323,18 +385,18 @@ pub enum TokenType {
 pub fn classify_token(token: &str) -> TokenType {
     // return if the token is a parenthesis
     if token == "(" || token == ")" {
-        return TokenType::Control
+        return TokenType::Control;
     }
 
     // check if the token is an operator
     let operators = ['+', '-', '*', '/', '=', '>', '<', '!', '&', '|', '%', '^'];
     if token.chars().all(|c| operators.contains(&c)) {
-        return TokenType::Operator
+        return TokenType::Operator;
     }
 
     // check if the token is a constant
     if token.starts_with("0x") || token.parse::<U256>().is_ok() {
-        return TokenType::Constant
+        return TokenType::Constant;
     }
 
     // check if the token is a variable
@@ -345,31 +407,11 @@ pub fn classify_token(token: &str) -> TokenType {
     .iter()
     .any(|keyword| token.contains(keyword))
     {
-        return TokenType::Variable
+        return TokenType::Variable;
     }
 
     // this token must be a function call
     TokenType::Function
-}
-
-/// Returns a collapsed version of a string if this string is greater than 66 characters in length.
-/// The collapsed string consists of the first 66 characters, followed by an ellipsis ("..."), and
-/// then the last 16 characters of the original string. ```
-/// use heimdall_common::utils::strings::get_shortned_target;
-///
-/// let long_target = "0".repeat(80);
-/// let shortened_target = get_shortned_target(&long_target);
-/// ```
-pub fn get_shortned_target(target: &str) -> String {
-    let mut shortened_target = target.to_string();
-
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
-
-    shortened_target
 }
 
 #[cfg(test)]
@@ -396,16 +438,16 @@ mod tests {
     #[test]
     fn test_decode_hex() {
         let hex = "48656c6c6f20776f726c64"; // "Hello world"
-        let result = decode_hex(hex);
-        assert_eq!(result, Ok(vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]));
+        let result = decode_hex(hex).expect("should decode hex");
+        assert_eq!(result, vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]);
 
         let hex = "abcdef";
-        let result = decode_hex(hex);
-        assert_eq!(result, Ok(vec![171, 205, 239]));
+        let result = decode_hex(hex).expect("should decode hex");
+        assert_eq!(result, vec![171, 205, 239]);
 
         let hex = "012345";
-        let result = decode_hex(hex);
-        assert_eq!(result, Ok(vec![1, 35, 69]));
+        let result = decode_hex(hex).expect("should decode hex");
+        assert_eq!(result, vec![1, 35, 69]);
     }
 
     #[test]
@@ -441,15 +483,15 @@ mod tests {
     #[test]
     fn test_hex_to_ascii() {
         let hex = "48656c6c6f20776f726c64"; // "Hello world"
-        let result = hex_to_ascii(hex);
+        let result = hex_to_ascii(hex).expect("should decode hex");
         assert_eq!(result, "Hello world");
 
         let hex = "616263646566"; // "abcdef"
-        let result = hex_to_ascii(hex);
+        let result = hex_to_ascii(hex).expect("should decode hex");
         assert_eq!(result, "abcdef");
 
         let hex = "303132333435"; // "012345"
-        let result = hex_to_ascii(hex);
+        let result = hex_to_ascii(hex).expect("should decode hex");
         assert_eq!(result, "012345");
     }
 
@@ -472,44 +514,38 @@ mod tests {
     fn test_find_balanced_encapsulator() {
         let s = String::from("This is (an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
-        assert_eq!(start, 8);
-        assert_eq!(end, 20);
-        assert!(is_balanced);
+        let range =
+            find_balanced_encapsulator(&s, encap).expect("should find balanced encapsulator");
+        assert_eq!(range, 9..19);
 
         let s = String::from("This is an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
-        assert_eq!(start, 0);
-        assert_eq!(end, 1);
-        assert!(!is_balanced);
+        let result = find_balanced_encapsulator(&s, encap);
+        assert!(result.is_err());
 
         let s = String::from("This is (an example string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator(&s, encap);
-        assert_eq!(start, 8);
-        assert_eq!(end, 1);
-        assert!(!is_balanced);
+        let result = find_balanced_encapsulator(&s, encap);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_find_balanced_encapsulator_backwards() {
         let s = String::from("This is (an example) string.");
         let encap = ('(', ')');
-        let (start, end, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
-        assert_eq!(start, 8);
-        assert_eq!(end, 20);
-        assert!(is_balanced);
+        let range = find_balanced_encapsulator_backwards(&s, encap)
+            .expect("should find balanced encapsulator");
+        assert_eq!(range, 9..19);
 
         let s = String::from("This is an example) string.");
         let encap = ('(', ')');
-        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
-        assert!(!is_balanced);
+        let result = find_balanced_encapsulator_backwards(&s, encap);
+        assert!(result.is_err());
 
         let s = String::from("This is (an example string.");
         let encap = ('(', ')');
-        let (_, _, is_balanced) = find_balanced_encapsulator_backwards(&s, encap);
-        assert!(!is_balanced);
+        let result = find_balanced_encapsulator_backwards(&s, encap);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -534,17 +570,17 @@ mod tests {
     #[test]
     fn test_split_string_by_regex() {
         let input = "Hello,world!";
-        let pattern = fancy_regex::Regex::new(r",").unwrap();
+        let pattern = fancy_regex::Regex::new(r",").expect("failed to compile regex");
         let result = split_string_by_regex(input, pattern);
         assert_eq!(result, vec!["Hello", "world!"]);
 
         let input = "This is a test.";
-        let pattern = fancy_regex::Regex::new(r"\s").unwrap();
+        let pattern = fancy_regex::Regex::new(r"\s").expect("failed to compile regex");
         let result = split_string_by_regex(input, pattern);
         assert_eq!(result, vec!["This", "is", "a", "test."]);
 
         let input = "The quick brown fox jumps over the lazy dog.";
-        let pattern = fancy_regex::Regex::new(r"\s+").unwrap();
+        let pattern = fancy_regex::Regex::new(r"\s+").expect("failed to compile regex");
         let result = split_string_by_regex(input, pattern);
         assert_eq!(
             result,
@@ -713,18 +749,18 @@ mod tests {
     }
 
     #[test]
-    fn test_shorten_long_target() {
-        let long_target = "0".repeat(80);
-        let shortened_target = get_shortned_target(&long_target);
+    fn test_truncate_simple() {
+        let s = "Hello, world!";
+        let result = s.to_string().truncate(10);
 
-        assert_eq!(shortened_target.len(), 85);
+        assert_eq!(result, "Hel...rld!");
     }
 
     #[test]
-    fn test_shorten_short_target() {
-        let short_target = "0".repeat(66);
-        let shortened_target = get_shortned_target(&short_target);
+    fn test_truncate_no_truncation() {
+        let s = "Hello, world!";
+        let result = s.to_string().truncate(20);
 
-        assert_eq!(shortened_target.len(), 66);
+        assert_eq!(result, "Hello, world!");
     }
 }

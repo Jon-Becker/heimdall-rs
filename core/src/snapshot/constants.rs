@@ -31,5 +31,5 @@ lazy_static! {
     ];
 
     /// used to detect compiler size checks
-    pub static ref VARIABLE_SIZE_CHECK_REGEX: Regex = Regex::new(r"!?\(?0(x01)? < [a-zA-Z0-9_\[\]]+\.length\)?").unwrap();
+    pub static ref VARIABLE_SIZE_CHECK_REGEX: Regex = Regex::new(r"!?\(?0(x01)? < [a-zA-Z0-9_\[\]]+\.length\)?").expect("failed to compile regex");
 }

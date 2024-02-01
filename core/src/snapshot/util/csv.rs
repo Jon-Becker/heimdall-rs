@@ -55,7 +55,13 @@ pub fn generate_csv(
                 let mut sorted_arguments: Vec<_> = snapshot.arguments.clone().into_iter().collect();
                 sorted_arguments.sort_by(|x, y| x.0.cmp(&y.0));
                 for (index, (_, solidity_type)) in sorted_arguments {
-                    arg_strings.push(format!("arg{} {}", index, solidity_type.first().unwrap()));
+                    arg_strings.push(format!(
+                        "arg{} {}",
+                        index,
+                        solidity_type
+                            .first()
+                            .expect("impossible case: list of potential types is empty")
+                    ));
                 }
             }
         };

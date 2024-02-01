@@ -2,15 +2,15 @@ use std::{collections::HashMap, time::Duration};
 
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
+    info_spinner,
     utils::{
-        io::{
-            file::short_path,
-            logging::{Logger, TraceFactory},
-        },
+        io::{file::short_path, logging::TraceFactory},
         strings::find_balanced_encapsulator,
     },
 };
 use indicatif::ProgressBar;
+
+use crate::error::Error;
 
 use super::{
     super::{
@@ -33,17 +33,14 @@ pub fn build_solidity_output(
     all_resolved_events: HashMap<String, ResolvedLog>,
     trace: &mut TraceFactory,
     trace_parent: u32,
-) -> Result<String, Box<dyn std::error::Error>> {
-    // get a new logger
-    let logger = Logger::default();
-
+) -> Result<String, Error> {
     // clone functions mutably
     let mut functions = functions;
 
     // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
-    progress_bar.set_style(logger.info_spinner());
+    progress_bar.set_style(info_spinner!());
 
     // write the decompiled source to file
     let mut decompiled_output: Vec<String> = Vec::new();
@@ -125,16 +122,19 @@ pub fn build_solidity_output(
         {
             // find any storage accesses
             let joined = function.logic.join(" ");
-            let storage_access = match STORAGE_ACCESS_REGEX.find(&joined).unwrap() {
+            let storage_access = match STORAGE_ACCESS_REGEX.find(&joined).unwrap_or(None) {
                 Some(x) => x.as_str(),
                 None => continue,
             };
 
-            let storage_access_loc = find_balanced_encapsulator(storage_access, ('[', ']'));
+            let access_range =
+                find_balanced_encapsulator(storage_access, ('[', ']')).map_err(|e| {
+                    Error::Generic(format!("failed to find balanced encapsulator: {}", e))
+                })?;
 
             function.logic = vec![format!(
                 "return string(rlp.encodePacked(storage[{}]));",
-                storage_access[storage_access_loc.0 + 1..storage_access_loc.1 - 1].to_string()
+                storage_access[access_range].to_string()
             )]
         }
     }
@@ -154,14 +154,8 @@ pub fn build_solidity_output(
             },
             if function.payable { "payable " } else { "" },
         );
-        let function_returns = format!(
-            "returns ({}) {{",
-            if function.returns.is_some() {
-                function.returns.clone().unwrap()
-            } else {
-                String::from("")
-            }
-        );
+        let function_returns =
+            format!("returns ({}) {{", function.returns.clone().unwrap_or(String::new()));
 
         let function_header = match function.resolved_function {
             Some(resolved_function) => {
@@ -232,7 +226,11 @@ pub fn build_solidity_output(
             format!("/// @custom:selector    0x{}", function.selector),
             format!(
                 "/// @custom:name        {}",
-                function_header.replace("function ", "").split('(').next().unwrap()
+                function_header
+                    .replace("function ", "")
+                    .split('(')
+                    .next()
+                    .expect("impossible case: function header has no name")
             ),
         ]);
 

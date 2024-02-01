@@ -21,7 +21,11 @@ pub fn render_tui_help<B: Backend>(f: &mut Frame<B>, _: &mut State) {
         .constraints(
             [
                 Constraint::Length(6),
-                Constraint::Length((HELP_MENU_COMMANDS.len() + 2).try_into().unwrap()),
+                Constraint::Length(
+                    (HELP_MENU_COMMANDS.len() + 2)
+                        .try_into()
+                        .expect("impossible case: failed to convert fixed usize to u16"),
+                ),
                 Constraint::Percentage(100),
             ]
             .as_ref(),
