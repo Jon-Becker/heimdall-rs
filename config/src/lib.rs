@@ -82,7 +82,9 @@ impl Configuration {
             return Ok(config);
         }
 
-        if let Some(endpoint) = mesc::get_default_endpoint(Some("heimdall"))? {
+        if let Some(endpoint) = mesc::get_default_endpoint(Some("heimdall"))
+            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+        {
             debug!("overriding rpc_url with mesc endpoint");
             config.rpc_url = endpoint.url;
         }
