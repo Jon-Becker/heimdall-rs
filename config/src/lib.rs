@@ -88,7 +88,9 @@ impl Configuration {
             debug!("overriding rpc_url with mesc endpoint");
             config.rpc_url = endpoint.url;
         }
-        if let Some(key) = mesc::metadata::get_api_key("etherscan", Some("heimdall"))? {
+        if let Some(key) = mesc::metadata::get_api_key("etherscan", Some("heimdall"))
+            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+        {
             debug!("overriding etherscan_api_key with mesc key");
             config.etherscan_api_key = key;
         }
