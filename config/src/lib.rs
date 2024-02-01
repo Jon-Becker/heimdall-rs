@@ -94,7 +94,9 @@ impl Configuration {
             debug!("overriding etherscan_api_key with mesc key");
             config.etherscan_api_key = key;
         }
-        if let Some(key) = mesc::metadata::get_api_key("transpose", Some("heimdall"))? {
+        if let Some(key) = mesc::metadata::get_api_key("transpose", Some("heimdall"))
+            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+        {
             debug!("overriding transpose_api_key with mesc key");
             config.transpose_api_key = key;
         }
