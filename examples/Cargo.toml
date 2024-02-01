@@ -3,6 +3,7 @@ members = [
     "cfg",
     "dump",
     "decode",
+    "decode_offline",
     "snapshot",
     "decompile",
     "disassemble",
