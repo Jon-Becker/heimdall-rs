@@ -285,6 +285,10 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode
                     .push_str(format!("storage[{}]", self.inputs[0]._solidify()).as_str());
             }
+            "TLOAD" => {
+                solidified_wrapped_opcode
+                    .push_str(format!("storage[{}]", self.inputs[0]._solidify()).as_str());
+            }
             "MLOAD" => {
                 let memloc = self.inputs[0]._solidify();
                 if memloc.contains("memory") {

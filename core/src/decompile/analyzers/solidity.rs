@@ -57,7 +57,6 @@ pub fn analyze_sol(
     // perform analysis on the operations of the current VMTrace branch
     for operation in &vm_trace.operations {
         let instruction = operation.last_instruction.clone();
-        let _storage = operation.storage.clone();
         let memory = operation.memory.clone();
 
         let opcode_name = instruction
@@ -400,6 +399,12 @@ pub fn analyze_sol(
                 "storage[{}] = {};",
                 instruction.input_operations[0].solidify(),
                 instruction.input_operations[1].solidify(),
+            ));
+        } else if opcode_name == "TSTORE" {
+            function.logic.push(format!(
+                "assembly {{ tstore({}, {}) }}",
+                instruction.input_operations[0].solidify(),
+                instruction.input_operations[1].solidify()
             ));
         } else if opcode_name.contains("MSTORE") {
             let key = instruction.inputs[0];

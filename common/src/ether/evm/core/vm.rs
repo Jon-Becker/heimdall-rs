@@ -1162,6 +1162,19 @@ impl VM {
             // JUMPDEST
             0x5B => {}
 
+            // TLOAD
+            0x5C => {
+                let key = self.stack.pop().value;
+                self.stack.push(U256::from(self.storage.tload(key.into())), operation)
+            }
+
+            // TSTORE
+            0x5D => {
+                let key = self.stack.pop().value;
+                let value = self.stack.pop().value;
+                self.storage.tstore(key.into(), value.into());
+            }
+
             // PC
             0x58 => {
                 self.stack.push(U256::from(self.instruction), operation);
