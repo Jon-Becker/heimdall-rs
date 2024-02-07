@@ -2047,6 +2047,24 @@ mod tests {
     }
 
     #[test]
+    fn test_tload_tstore() {
+        let mut vm = new_test_vm("0x602e60005d60005c60015c");
+        vm.execute().expect("execution failed!");
+
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x2e").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+    }
+
+    #[test]
+    fn test_sstore_tstore_independence() {
+        let mut vm = new_test_vm("0x60ff60015560fe60015d60015460015c");
+        vm.execute().expect("execution failed!");
+
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xfe").expect("failed to parse hex"));
+    }
+
+    #[test]
     fn test_jump() {
         let mut vm = new_test_vm("0x60fe56");
         vm.execute().expect("execution failed!");
