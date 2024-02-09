@@ -110,6 +110,7 @@ pub fn build_solidity_output(
     }
 
     // check for any constants or storage getters
+    // TODO: this is a postprocesser, so it should be moved to the postprocessers module
     for function in functions.iter_mut() {
         if function.payable || (!function.pure && !function.view) || !function.arguments.is_empty()
         {
@@ -139,7 +140,16 @@ pub fn build_solidity_output(
         }
     }
 
-    for function in functions {
+    // write the contract's fallback function (if it exists)
+    if let Some(fallback) = functions.iter().find(|x| x.fallback) {
+        progress_bar.set_message("writing logic for fallback function");
+        decompiled_output.push(String::from("fallback() external payable {"));
+        decompiled_output.extend(fallback.logic.clone());
+        decompiled_output.push(String::from("}"));
+    }
+
+    // write the contract's functions (excluding fallback)
+    for function in functions.into_iter().filter(|x| !x.fallback) {
         progress_bar.set_message(format!("writing logic for '0x{}'", function.selector));
 
         // build the function's header and parameters

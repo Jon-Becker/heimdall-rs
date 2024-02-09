@@ -199,7 +199,7 @@ pub fn postprocess(
     // clean up each line using postprocessing techniques
     for line in cleaned_lines.iter_mut() {
         // update progress bar
-        if line.contains("function") {
+        if line.contains("function") || line.contains("default") {
             function_count += 1;
             bar.set_message(format!("postprocessed {function_count} functions"));
         }

@@ -217,24 +217,12 @@ pub fn analyze_yul(
 
             function.logic.push(format!("selfdestruct({addr})"));
         } else if opcode_name == "SSTORE" {
-            let key = instruction.inputs[0];
-            let value = instruction.inputs[1];
-            let operations = instruction.input_operations[1].clone();
-
-            // add the sstore to the function's storage map
-            function.storage.insert(key, StorageFrame { value, operations });
             function.logic.push(format!(
                 "sstore({}, {})",
                 instruction.input_operations[0].yulify(),
                 instruction.input_operations[1].yulify(),
             ));
         } else if opcode_name == "TSTORE" {
-            let key = instruction.inputs[0];
-            let value = instruction.inputs[1];
-            let operations = instruction.input_operations[1].clone();
-
-            // add the sstore to the function's storage map
-            function.storage.insert(key, StorageFrame { value, operations });
             function.logic.push(format!(
                 "tstore({}, {})",
                 instruction.input_operations[0].yulify(),

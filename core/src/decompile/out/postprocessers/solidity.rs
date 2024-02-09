@@ -829,7 +829,7 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Result<Vec<String>, Error>
         }
 
         // update progress bar
-        if line.contains("function") {
+        if line.contains("function") || line.contains("fallback") {
             function_count += 1;
             bar.set_message(format!("postprocessed {function_count} functions"));
         }
