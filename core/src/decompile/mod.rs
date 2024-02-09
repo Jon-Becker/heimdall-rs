@@ -358,7 +358,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         }
 
         let argument_count = analyzed_function.arguments.len();
-
         if argument_count != 0 {
             let parameter_trace_parent = trace.add_debug(
                 func_analysis_trace,
@@ -607,6 +606,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
         analyzed_functions.push(analyzed_function.clone());
     }
+
     decompilation_progress.finish_and_clear();
     info!("symbolic execution completed.");
     info!("building decompilation output.");

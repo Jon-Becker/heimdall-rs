@@ -9,9 +9,6 @@ lazy_static! {
     /// The following regex is used as a detector for AND bitmasks
     pub static ref AND_BITMASK_REGEX_2: Regex = Regex::new(r" & \(0x([a-fA-F0-9]{2}){1,32}\)").expect("failed to build regex");
 
-    /// used to detect constant values
-    pub static ref CONSTANT_REGEX: Regex = Regex::new(r"^(?:(?![memorystorage\[\]]).)*$").expect("failed to build regex");
-
     /// used to detect non-zero bytes within a word
     pub static ref NON_ZERO_BYTE_REGEX: Regex = Regex::new(r"[a-fA-F0-9][a-fA-F1-9]").expect("failed to build regex");
 
@@ -19,10 +16,13 @@ lazy_static! {
     pub static ref ENCLOSED_EXPRESSION_REGEX: Regex = Regex::new(r"\(.*\)").expect("failed to build regex");
 
     /// detects a memory access
-    pub static ref MEM_ACCESS_REGEX: Regex = Regex::new(r"memory\[.*\]").expect("failed to build regex");
+    pub static ref MEMORY_ACCESS_REGEX: Regex = Regex::new(r"memory\[.*\]").expect("failed to build regex");
 
     /// detects a storage access
     pub static ref STORAGE_ACCESS_REGEX: Regex = Regex::new(r"storage\[.*\]").expect("failed to build regex");
+
+    /// detects a storage access
+    pub static ref TSTORE_ACCESS_REGEX: Regex = Regex::new(r"transient\[.*\]").expect("failed to build regex");
 
     /// detects division by 1
     pub static ref DIV_BY_ONE_REGEX: Regex = Regex::new(r" \/ 0x01(?!\d)").expect("failed to build regex");
@@ -31,7 +31,7 @@ lazy_static! {
     pub static ref MUL_BY_ONE_REGEX: Regex = Regex::new(r"\b0x01\b\s*\*\s*| \*\s*\b0x01\b").expect("failed to build regex");
 
     /// memory variable regex
-    pub static ref MEM_VAR_REGEX: Regex = Regex::new(r"^var_[a-zA-Z]{1,2}$").expect("failed to build regex");
+    pub static ref MEMORY_VAR_REGEX: Regex = Regex::new(r"^var_[a-zA-Z]{1,2}$").expect("failed to build regex");
 
     /// extracts commas within a certain expression, not including commas within parentheses
     pub static ref ARGS_SPLIT_REGEX: Regex = Regex::new(r",\s*(?![^()]*\))").expect("failed to build regex");

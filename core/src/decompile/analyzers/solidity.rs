@@ -402,7 +402,7 @@ pub fn analyze_sol(
             ));
         } else if opcode_name == "TSTORE" {
             function.logic.push(format!(
-                "assembly {{ tstore({}, {}) }}",
+                "transient[{}] = {};",
                 instruction.input_operations[0].solidify(),
                 instruction.input_operations[1].solidify()
             ));
