@@ -105,8 +105,8 @@ pub fn build_abi(
     // build the decompiled contract's ABI
     let mut abi: Vec<ABIStructure> = Vec::new();
 
-    // build the ABI for each function
-    for function in &functions {
+    // build the ABI for each function (excluding the fallback function)
+    for function in functions.iter().filter(|x| !x.fallback) {
         progress_bar.set_message(format!("building ABI for '0x{}'", function.selector));
 
         // get the function's name parameters for both resolved and unresolved functions
