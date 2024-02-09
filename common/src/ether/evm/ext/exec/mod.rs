@@ -90,6 +90,7 @@ impl VM {
 
         // step through the bytecode until we find a JUMPI instruction
         while vm.bytecode.len() >= vm.instruction as usize {
+            // execute the next instruction. if the instruction panics, invalidate this path
             let state = vm.step()?;
 
             // update vm_trace
