@@ -1162,6 +1162,19 @@ impl VM {
             // JUMPDEST
             0x5B => {}
 
+            // TLOAD
+            0x5C => {
+                let key = self.stack.pop().value;
+                self.stack.push(U256::from(self.storage.tload(key.into())), operation)
+            }
+
+            // TSTORE
+            0x5D => {
+                let key = self.stack.pop().value;
+                let value = self.stack.pop().value;
+                self.storage.tstore(key.into(), value.into());
+            }
+
             // PC
             0x58 => {
                 self.stack.push(U256::from(self.instruction), operation);
@@ -2031,6 +2044,24 @@ mod tests {
 
         assert_eq!(vm.stack.peek(1).value, U256::from_str("0x2e").expect("failed to parse hex"));
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+    }
+
+    #[test]
+    fn test_tload_tstore() {
+        let mut vm = new_test_vm("0x602e60005d60005c60015c");
+        vm.execute().expect("execution failed!");
+
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x2e").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+    }
+
+    #[test]
+    fn test_sstore_tstore_independence() {
+        let mut vm = new_test_vm("0x60ff60015560fe60015d60015460015c");
+        vm.execute().expect("execution failed!");
+
+        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xfe").expect("failed to parse hex"));
     }
 
     #[test]

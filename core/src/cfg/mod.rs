@@ -218,7 +218,7 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
 
     progress.finish_and_clear();
     info!("symbolic execution completed.");
-    debug!(&format!("Control flow graph generated in {:?}.", now.elapsed()));
+    debug!(&format!("control flow graph generated in {:?}.", now.elapsed()));
     trace.display();
 
     Ok(contract_cfg)

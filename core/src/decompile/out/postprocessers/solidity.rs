@@ -1,6 +1,7 @@
-use super::super::super::constants::MEM_ACCESS_REGEX;
 use crate::{
-    decompile::constants::{MEM_VAR_REGEX, STORAGE_ACCESS_REGEX},
+    decompile::constants::{
+        MEMORY_ACCESS_REGEX, MEMORY_VAR_REGEX, STORAGE_ACCESS_REGEX, TSTORE_ACCESS_REGEX,
+    },
     error::Error,
 };
 use heimdall_common::{
@@ -23,13 +24,16 @@ use std::{
 lazy_static! {
     static ref MEM_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref STORAGE_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref TRANSIENT_LOOKUP_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref VARIABLE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref MEMORY_TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref STORAGE_TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref TRANSIENT_TYPE_MAP: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref MEMORY_TYPE_DECLARATION_SET: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 }
 
 /// Converts memory and storage accesses to variables
+/// TODO: This function is a bit of a mess, and needs to be refactored
 fn convert_access_to_variable(line: &str) -> Result<String, Error> {
     let mut cleaned = line.to_owned();
 
@@ -44,7 +48,7 @@ fn convert_access_to_variable(line: &str) -> Result<String, Error> {
     }
 
     // find a memory access
-    let memory_access = match MEM_ACCESS_REGEX.find(&cleaned).unwrap_or(None) {
+    let memory_access = match MEMORY_ACCESS_REGEX.find(&cleaned).unwrap_or(None) {
         Some(x) => x.as_str(),
         None => "",
     };
@@ -91,14 +95,14 @@ fn convert_access_to_variable(line: &str) -> Result<String, Error> {
     // find a storage access
     let storage_access = match STORAGE_ACCESS_REGEX.find(&cleaned).unwrap_or(None) {
         Some(x) => x.as_str(),
-        None => return Ok(cleaned.to_owned()),
+        None => "",
     };
 
     // since the regex is greedy, match the memory brackets
     if let Ok(storage_range) = find_balanced_encapsulator(storage_access, ('[', ']')) {
-        let mut stor_map = STORAGE_LOOKUP_MAP
+        let mut store_map = STORAGE_LOOKUP_MAP
             .lock()
-            .map_err(|_| Error::Generic("failed to obtain lock on stor_map".to_string()))?;
+            .map_err(|_| Error::Generic("failed to obtain lock on store_map".to_string()))?;
 
         // safe to unwrap since we know these indices exist
         let memloc = format!(
@@ -108,11 +112,11 @@ fn convert_access_to_variable(line: &str) -> Result<String, Error> {
                 .expect("impossible case: failed to get storage access after check")
         );
 
-        let variable_name = match stor_map.get(&memloc) {
+        let variable_name = match store_map.get(&memloc) {
             Some(loc) => loc.to_owned(),
             None => {
                 // add the memory location to the map
-                let idex = stor_map.len() + 1;
+                let idex = store_map.len() + 1;
 
                 // get the variable name
                 if memloc.contains("keccak256") {
@@ -120,26 +124,26 @@ fn convert_access_to_variable(line: &str) -> Result<String, Error> {
                         .map_err(|_| Error::Generic("failed to find keccak256 key".to_string()))?;
 
                     let variable_name = format!(
-                        "stor_map_{}[{}]",
+                        "storage_map_{}[{}]",
                         base26_encode(idex),
                         memloc.get(keccak_range).unwrap_or("?")
                     );
 
                     // add the variable to the map
-                    stor_map.insert(memloc.clone(), variable_name.clone());
+                    store_map.insert(memloc.clone(), variable_name.clone());
                     variable_name
                 } else {
-                    let variable_name = format!("stor_{}", base26_encode(idex));
+                    let variable_name = format!("store_{}", base26_encode(idex));
 
                     // add the variable to the map
-                    stor_map.insert(memloc.clone(), variable_name.clone());
+                    store_map.insert(memloc.clone(), variable_name.clone());
                     variable_name
                 }
             }
         };
 
         // unlock the map
-        drop(stor_map);
+        drop(store_map);
 
         // upadte the memory name
         cleaned = cleaned.replace(memloc.as_str(), &variable_name);
@@ -148,7 +152,67 @@ fn convert_access_to_variable(line: &str) -> Result<String, Error> {
         cleaned = convert_access_to_variable(&cleaned)?;
     }
 
-    // if the memory access is an instantiation, save it
+    // find a transient storage access
+    let tstore_access = match TSTORE_ACCESS_REGEX.find(&cleaned).unwrap_or(None) {
+        Some(x) => x.as_str(),
+        None => return Ok(cleaned.to_owned()),
+    };
+
+    // since the regex is greedy, match the memory brackets
+    if let Ok(tstore_range) = find_balanced_encapsulator(tstore_access, ('[', ']')) {
+        let mut tstore_map = TRANSIENT_LOOKUP_MAP
+            .lock()
+            .map_err(|_| Error::Generic("failed to obtain lock on tstore_map".to_string()))?;
+
+        // safe to unwrap since we know these indices exist
+        let memloc = format!(
+            "transient[{}]",
+            tstore_access
+                .get(tstore_range)
+                .expect("impossible case: failed to get storage access after check")
+        );
+
+        let variable_name = match tstore_map.get(&memloc) {
+            Some(loc) => loc.to_owned(),
+            None => {
+                // add the memory location to the map
+                let idex = tstore_map.len() + 1;
+
+                // get the variable name
+                if memloc.contains("keccak256") {
+                    let keccak_range = find_balanced_encapsulator(&memloc, ('(', ')'))
+                        .map_err(|_| Error::Generic("failed to find keccak256 key".to_string()))?;
+
+                    let variable_name = format!(
+                        "transient_map_{}[{}]",
+                        base26_encode(idex),
+                        memloc.get(keccak_range).unwrap_or("?")
+                    );
+
+                    // add the variable to the map
+                    tstore_map.insert(memloc.clone(), variable_name.clone());
+                    variable_name
+                } else {
+                    let variable_name = format!("tstore_{}", base26_encode(idex));
+
+                    // add the variable to the map
+                    tstore_map.insert(memloc.clone(), variable_name.clone());
+                    variable_name
+                }
+            }
+        };
+
+        // unlock the map
+        drop(tstore_map);
+
+        // upadte the memory name
+        cleaned = cleaned.replace(memloc.as_str(), &variable_name);
+
+        // recurse to replace any other memory accesses
+        cleaned = convert_access_to_variable(&cleaned)?;
+    }
+
+    // if the access is an instantiation, save it
     if cleaned.contains(" = ") {
         let instantiation: Vec<String> =
             cleaned.split(" = ").collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();
@@ -170,7 +234,7 @@ fn convert_access_to_variable(line: &str) -> Result<String, Error> {
     }
 
     // now we need to check if we should infer types if storage is being assigned
-    if line.contains("storage") {
+    if line.contains("storage") || line.contains("transient") {
         // infer type of storage slot & add to storage variable map
         inherit_infer_storage_type(line)?;
     }
@@ -190,7 +254,7 @@ fn contains_unnecessary_assignment(line: &str, lines: &Vec<&str>) -> bool {
         [line.split(" = ").collect::<Vec<&str>>()[0].split(' ').collect::<Vec<&str>>().len() - 1];
 
     // skip lines that contain assignments to storage
-    if var_name.contains("stor_") {
+    if var_name.contains("store_") {
         return false;
     }
 
@@ -401,6 +465,12 @@ fn inherit_infer_storage_type(line: &str) -> Result<(), Error> {
     let var_map = VARIABLE_MAP
         .lock()
         .map_err(|_| Error::Generic("failed to obtain lock on var_map".to_string()))?;
+    let mut transient_map = TRANSIENT_TYPE_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on transient_map".to_string()))?;
+    let transient_lookup_map = TRANSIENT_LOOKUP_MAP
+        .lock()
+        .map_err(|_| Error::Generic("failed to obtain lock on transient_lookup_map".to_string()))?;
 
     let instantiation = line.split(" = ").collect::<Vec<&str>>();
     let var_name = instantiation[0].split(' ').collect::<Vec<&str>>()
@@ -437,7 +507,7 @@ fn inherit_infer_storage_type(line: &str) -> Result<(), Error> {
         // if the storage_slot is a variable, replace it with the value
         // ex: storage[var_b] => storage[keccak256(var_a)]
         // helps with type inference
-        if MEM_VAR_REGEX.is_match(&storage_slot).unwrap_or(false) {
+        if MEMORY_VAR_REGEX.is_match(&storage_slot).unwrap_or(false) {
             for (var, value) in var_map.clone().iter() {
                 if storage_slot.contains(var) {
                     line = line.replace(var, value);
@@ -490,6 +560,92 @@ fn inherit_infer_storage_type(line: &str) -> Result<(), Error> {
 
             // add to type map
             storage_map.insert(var_name, rhs_type);
+        }
+
+        Ok(())
+    } else if var_name.starts_with("transient") {
+        // copy the line to a mut
+        let mut line = line.to_owned();
+
+        // get the storage slot
+        let tstore_access = match TSTORE_ACCESS_REGEX.find(instantiation[0]).unwrap_or(None) {
+            Some(x) => x.as_str(),
+            None => return Ok(()),
+        };
+
+        // since the regex is greedy, match the memory brackets
+        let matched_range = find_balanced_encapsulator(tstore_access, ('[', ']'))
+            .map_err(|_| Error::Generic("failed to find transient storage access".to_string()))?;
+
+        let mut tstore_slot = format!(
+            "transient[{}]",
+            tstore_access
+                .get(matched_range)
+                .expect("impossible case: failed to get transient storage access after check")
+        );
+
+        // get the transient storage slot name from transient_lookup_map
+        let mut var_name = match transient_lookup_map.get(&tstore_slot) {
+            Some(var_name) => var_name.to_owned(),
+            None => return Ok(()),
+        };
+
+        // if the tstore_slot is a variable, replace it with the value
+        // ex: transient[var_b] => transient[keccak256(var_a)]
+        // this helps with type inference
+        if MEMORY_VAR_REGEX.is_match(&tstore_slot).unwrap_or(false) {
+            for (var, value) in var_map.clone().iter() {
+                if tstore_slot.contains(var) {
+                    line = line.replace(var, value);
+                    tstore_slot = tstore_slot.replace(var, value);
+                }
+            }
+        }
+
+        // default type is bytes32
+        let mut lhs_type = "bytes32".to_string();
+        let mut rhs_type = "bytes32".to_string();
+
+        // if the transient storage slot contains a keccak256 call, this is a mapping and we will
+        // need to pull types from both the lhs and rhs
+        if tstore_slot.contains("keccak256") {
+            var_name = var_name.split('[').collect::<Vec<&str>>()[0].to_string();
+
+            // replace the transient storage slot in rhs with a placeholder
+            // this will prevent us from pulling bad types from the rhs
+            if instantiation.len() > 2 {
+                let rhs: String = instantiation[1].replace(&tstore_slot, "_");
+
+                // find vars in lhs or rhs
+                for (var, var_type) in type_map.clone().iter() {
+                    // check for vars in lhs
+                    if tstore_slot.contains(var) && !var_type.is_empty() {
+                        lhs_type = var_type.to_string();
+
+                        // continue, so we cannot use this var in rhs
+                        continue;
+                    }
+
+                    // check for vars in rhs
+                    if rhs.contains(var) && !var_type.is_empty() {
+                        rhs_type = var_type.to_string();
+                    }
+                }
+            }
+
+            // add to type map
+            let mapping_type = format!("mapping({lhs_type} => {rhs_type})");
+            transient_map.insert(var_name, mapping_type);
+        } else {
+            // get the type of the rhs
+            for (var, var_type) in type_map.clone().iter() {
+                if line.contains(var) && !var_type.is_empty() {
+                    rhs_type = var_type.to_string();
+                }
+            }
+
+            // add to type map
+            transient_map.insert(var_name, rhs_type);
         }
 
         Ok(())
@@ -591,39 +747,30 @@ fn cleanup(
     }
 
     // Find and convert all castings
-
     cleaned = convert_bitmask_to_casting(&cleaned).unwrap_or(cleaned);
 
     // Remove all repetitive casts
-
     cleaned = simplify_casts(&cleaned);
 
     // Remove all unnecessary parentheses
-
     cleaned = simplify_parentheses(&cleaned, 0).unwrap_or(cleaned);
 
     // Convert all memory[] and storage[] accesses to variables, also removes unused variables
-
     cleaned = convert_access_to_variable(&cleaned).unwrap_or(cleaned);
 
     // Use variable names where possible
-
     cleaned = replace_expression_with_var(&cleaned).unwrap_or(cleaned);
 
     // Move all outer casts in instantiation to the variable declaration
-
     cleaned = move_casts_to_declaration(&cleaned).unwrap_or(cleaned);
 
     // Inherit or infer types from expressions
-
     cleaned = inherit_infer_mem_type(&cleaned).unwrap_or(cleaned);
 
     // Replace resolved errors and events
-
     cleaned = replace_resolved(&cleaned, all_resolved_errors, all_resolved_events);
 
     // Simplify arithmatic
-
     cleaned = simplify_arithmatic(&cleaned);
 
     cleaned
@@ -651,6 +798,22 @@ fn finalize(lines: Vec<String>, bar: &ProgressBar) -> Result<Vec<String>, Error>
             {
                 storage_var_lines.push(format!(
                     "{} public {};",
+                    var_type.replace(" memory", ""),
+                    var_name
+                ));
+            }
+
+            // insert transient vars
+            for (var_name, var_type) in TRANSIENT_TYPE_MAP
+                .lock()
+                .map_err(|_| {
+                    Error::Generic("failed to obtain lock on transient_type_map".to_string())
+                })?
+                .clone()
+                .iter()
+            {
+                storage_var_lines.push(format!(
+                    "{} transient {};",
                     var_type.replace(" memory", ""),
                     var_name
                 ));

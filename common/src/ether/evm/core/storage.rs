@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 #[derive(Clone, Debug)]
 pub struct Storage {
     pub storage: HashMap<[u8; 32], [u8; 32]>,
+    pub transient: HashMap<[u8; 32], [u8; 32]>,
     access_set: HashSet<[u8; 32]>,
 }
 
@@ -25,7 +26,7 @@ impl Storage {
     /// let storage = Storage::new();
     /// ```
     pub fn new() -> Storage {
-        Storage { storage: HashMap::new(), access_set: HashSet::new() }
+        Storage { storage: HashMap::new(), access_set: HashSet::new(), transient: HashMap::new() }
     }
 
     /// Store a key-value pair in the storage map.
@@ -44,6 +45,22 @@ impl Storage {
         self.storage.insert(key, value);
     }
 
+    /// Store a key-value pair in the transient storage map.
+    ///
+    /// ```
+    /// use heimdall_common::ether::evm::core::storage::Storage;
+    ///
+    /// let mut storage = Storage::new();
+    /// storage.tstore([1u8; 32], [2u8; 32]);
+    ///
+    /// assert_eq!(storage.transient.get(&[1u8; 32]), Some(&[2u8; 32]));
+    /// ```
+    pub fn tstore(&mut self, key: [u8; 32], value: [u8; 32]) {
+        self.access_set.insert(key);
+
+        self.transient.insert(key, value);
+    }
+
     /// Load a value from the storage map.
     ///
     /// ```
@@ -59,6 +76,24 @@ impl Storage {
 
         // return the value associated with the key, with a null word if it doesn't exist
         match self.storage.get(&key) {
+            Some(value) => *value,
+            None => [0u8; 32],
+        }
+    }
+
+    /// Load a value from the storage map.
+    ///
+    /// ```
+    /// use heimdall_common::ether::evm::core::storage::Storage;
+    ///
+    /// let mut storage = Storage::new();
+    /// storage.tstore([1u8; 32], [2u8; 32]);
+    ///
+    /// assert_eq!(storage.tload([1u8; 32]), [2u8; 32]);
+    /// ```
+    pub fn tload(&mut self, key: [u8; 32]) -> [u8; 32] {
+        // return the value associated with the key, with a null word if it doesn't exist
+        match self.transient.get(&key) {
             Some(value) => *value,
             None => [0u8; 32],
         }
