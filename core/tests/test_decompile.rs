@@ -163,9 +163,6 @@ mod integration_tests {
             println!("{line}");
             assert!(result.source.clone().expect("decompile source is empty").contains(line));
         }
-
-        // drop path
-        delete_path(&String::from("./output/tests/decompile/test1"));
     }
 
     #[tokio::test]
@@ -200,9 +197,6 @@ mod integration_tests {
             println!("{line}");
             assert!(result.source.clone().expect("decompile source is empty").contains(line));
         }
-
-        // drop path
-        delete_path(&String::from("./output/tests/decompile/test2"));
     }
 
     #[tokio::test]
@@ -229,9 +223,59 @@ mod integration_tests {
             println!("{line}");
             assert!(result.source.clone().expect("decompile source is empty").contains(line));
         }
+    }
 
-        // drop path
-        delete_path(&String::from("./output/tests/decompile/test3"));
+    #[tokio::test]
+    async fn test_decompile_vyper() {
+        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+            target: String::from("0x5f3560e01c63fdf80bda811861005d57602436103417610061576004358060a01c610061576040525f5c6002146100615760025f5d6040515a595f5f36365f8537835f8787f1905090509050610057573d5f5f3e3d5ffd5b60035f5d005b5f5ffd5b5f80fd"),
+            verbose: Verbosity::new(0, 0),
+            rpc_url: String::from(""),
+            default: true,
+            skip_resolving: true,
+            include_solidity: false,
+            include_yul: true,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+        })
+        .await
+        .expect("failed to decompile");
+
+        // assert that the output is correct
+        for line in &[
+            "default {",
+            "if eq(0x02, tload(0)) { revert(0, 0); } else {",
+            "tstore(0, 0x02)",
+            "call(gas(), mload(0x40), 0, msize(), calldatasize(), 0, 0)",
+        ] {
+            println!("{line}");
+            assert!(result.source.clone().expect("decompile source is empty").contains(line));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_decompile_huff() {
+        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+            target: String::from("0x5f3560e01c806306fdde03146100295780632fa61cd81461004457806341161b1014610058575f5ffd5b60205f52684c61627972696e7468602952600960205260605ff35b6004355f524360205260405f205f5260205ff35b6004356024355f5f61020d565b60016100b2565b61021f57610149565b806100f9565b5f6100ca565b61012d57610278565b086101c7565b61012d57610249565b60026100e6565b526101b3565b806100f2565b82610114565b5f6100a0565b016100c4565b91610154565b906101c1565bf35b60016100ec565b6010610108565b836101a7565b9361017d565b146101f7565b01610100565b6001610234565b6003610143565b9161014f565bf35b83610159565b0261013d565b60ff61019b565b10610240565b836101cd565b1661023a565b602061026c565b6101ba576100a6565b1c610255565b1461027e565b80610099565b61024f565b61024f565b066101a1565b036100be565b16610192565b90610226565b81610272565b916101e1565b106101e8565b016101db565b6100655761016b565b61012d576100ac565b14610189565b15610090565b1c61022d565b15610134565b602061007b565b6010610171565b50610213565b15610081565b600161008a565b600261010e565b80610206565b6010610183565b61012d5761025c565b91610267565b6100d357610075565b806100e0565b60ff61011b565b82610261565b61020d565b600161015f565b6010610121565b60016100b8565b6001610165565b1461006c565b806101ad565b61012d576101f1565b91610218565b846100da565b6003610127565b61024f565b816101d4565b61024f565b5f610106565b03610200565b916100cc565b61017757"),
+            verbose: Verbosity::new(0, 0),
+            rpc_url: String::from(""),
+            default: true,
+            skip_resolving: true,
+            include_solidity: false,
+            include_yul: true,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+        })
+        .await
+        .expect("failed to decompile");
+
+        // assert that the output is correct
+        for line in &["case 0x41161b10", "case 0x06fdde03", "mstore(0, 0x01)", "return(0, 0x20)"] {
+            println!("{line}");
+            assert!(result.source.clone().expect("decompile source is empty").contains(line));
+        }
     }
 
     /// Thorough testing for decompilation across a large number of contracts

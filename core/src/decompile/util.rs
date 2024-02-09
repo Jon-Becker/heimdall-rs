@@ -23,11 +23,6 @@ pub struct Function {
     //   - value : tuple of ({slot: U256, mask: usize}, potential_types)
     pub arguments: HashMap<usize, (CalldataFrame, Vec<String>)>,
 
-    // storage structure:
-    //   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
-    //   - value : tuple of ({value: U256, operation: WrappedOpcode})
-    pub storage: HashMap<U256, StorageFrame>,
-
     // memory structure:
     //   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
     //   - value : tuple of ({value: U256, operation: WrappedOpcode})
@@ -50,10 +45,6 @@ pub struct Function {
     // stores the matched resolved function for this Functon
     pub resolved_function: Option<ResolvedFunction>,
 
-    // stores the current indent depth, used for formatting and removing unnecessary closing
-    // brackets.
-    pub indent_depth: usize,
-
     // stores decompiler notices
     pub notices: Vec<String>,
 
@@ -61,6 +52,9 @@ pub struct Function {
     pub pure: bool,
     pub view: bool,
     pub payable: bool,
+
+    // whether this is the fallback function for the contract
+    pub fallback: bool,
 }
 
 ///
