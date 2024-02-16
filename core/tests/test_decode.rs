@@ -170,7 +170,12 @@ mod integration_tests {
                     Err(e) => {
                         println!("decoding txid: {} ... failed", txid);
                         println!("  \\- error: {:?}", e);
-                        0
+
+                        // we dont want to count RPC errors as failures
+                        match e {
+                            heimdall_core::error::Error::RpcError(_) => 1,
+                            _ => 0,
+                        }
                     }
                 }
             })
