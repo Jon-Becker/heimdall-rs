@@ -814,9 +814,12 @@ impl VM {
                 let offset: usize = offset.try_into().unwrap_or(usize::MAX);
                 let size: usize = size.try_into().unwrap_or(usize::MAX);
 
-                let value_offset_safe = (offset + size).min(self.calldata.len());
+                // clamp values to calldata length
+                let end_offset_clamped = (offset + size).min(self.calldata.len());
+                let size = size.min(self.calldata.len());
+
                 let mut value =
-                    self.calldata.get(offset..value_offset_safe).unwrap_or(&[]).to_owned();
+                    self.calldata.get(offset..end_offset_clamped).unwrap_or(&[]).to_owned();
 
                 // pad value with 0x00
                 if value.len() < size {
