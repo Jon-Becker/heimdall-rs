@@ -1,12 +1,14 @@
 use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use heimdall_common::{
+    debug,
     ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
-    utils::{
-        io::logging::{set_logger_env, Logger},
-        strings::{decode_hex, encode_hex},
-    },
+    info,
+    utils::{io::logging::set_logger_env, strings::encode_hex},
 };
+use heimdall_config::parse_url_arg;
+
+use crate::error::Error;
 
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(about = "Disassemble EVM bytecode to Assembly",
@@ -23,7 +25,8 @@ pub struct DisassemblerArgs {
     pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The RPC provider to use for fetching target bytecode.
-    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
+    /// This can be an explicit URL or a reference to a MESC endpoint.
+    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// Whether to use base-10 for the program counter.
@@ -53,33 +56,33 @@ impl DisassemblerArgsBuilder {
 }
 
 /// Disassemble the given target's bytecode to assembly.
-pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     use std::time::Instant;
     let now = Instant::now();
 
     set_logger_env(&args.verbose);
 
-    // get a new logger
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+        .await
+        .map_err(|e| Error::Generic(format!("failed to get bytecode from target: {}", e)))?;
 
     let mut program_counter = 0;
     let mut output: String = String::new();
 
     // Iterate over the bytecode, disassembling each instruction.
-    let byte_array = decode_hex(&contract_bytecode.replacen("0x", "", 1))?;
-    while program_counter < byte_array.len() {
-        let operation = Opcode::new(byte_array[program_counter]);
+    while program_counter < contract_bytecode.len() {
+        let operation = Opcode::new(contract_bytecode[program_counter]);
         let mut pushed_bytes: String = String::new();
 
         if operation.name.contains("PUSH") {
-            let byte_count_to_push: u8 = operation.name.strip_prefix("PUSH").unwrap().parse()?;
+            let byte_count_to_push: u8 = operation
+                .name
+                .strip_prefix("PUSH")
+                .expect("impossible case: failed to strip prefix after check")
+                .parse()
+                .map_err(|e| Error::Generic(format!("failed to parse PUSH byte count: {}", e)))?;
 
-            pushed_bytes = match byte_array
+            pushed_bytes = match contract_bytecode
                 .get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize)
             {
                 Some(bytes) => encode_hex(bytes.to_vec()),
@@ -104,8 +107,8 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Box<dyn std::
         program_counter += 1;
     }
 
-    logger.info(&format!("disassembled {program_counter} bytes successfully."));
-    logger.debug(&format!("disassembly completed in {} ms.", now.elapsed().as_millis()));
+    info!("disassembled {} bytes successfully.", program_counter);
+    debug!("disassembly completed in {} ms.", now.elapsed().as_millis());
 
     Ok(output)
 }

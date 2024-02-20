@@ -4,12 +4,6 @@ pub mod out;
 pub mod precompile;
 pub mod resolve;
 pub mod util;
-use heimdall_common::{
-    debug_max,
-    ether::{bytecode::get_bytecode_from_target, evm::ext::exec::VMTrace},
-    utils::{strings::get_shortned_target, threading::run_with_timeout},
-};
-
 use crate::{
     decompile::{
         analyzers::{solidity::analyze_sol, yul::analyze_yul},
@@ -18,7 +12,20 @@ use crate::{
         util::*,
     },
     disassemble::{disassemble, DisassemblerArgs},
+    error::Error,
 };
+use ethers::types::H160;
+use heimdall_common::{
+    debug, debug_max, error,
+    ether::{bytecode::get_bytecode_from_target, compiler::Compiler, evm::ext::exec::VMTrace},
+    info, info_spinner,
+    utils::{
+        strings::{encode_hex, StringExt},
+        threading::run_with_timeout,
+    },
+    warn,
+};
+use heimdall_config::parse_url_arg;
 
 use derive_builder::Builder;
 use heimdall_common::{
@@ -56,7 +63,8 @@ pub struct DecompilerArgs {
     pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The RPC provider to use for fetching target bytecode.
-    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
+    /// This can be an explicit URL or a reference to a MESC endpoint.
+    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// When prompted, always select the default value.
@@ -111,44 +119,43 @@ pub struct DecompileResult {
     pub abi: Option<Vec<ABIStructure>>,
 }
 
-pub async fn decompile(
-    args: DecompilerArgs,
-) -> Result<DecompileResult, Box<dyn std::error::Error>> {
+pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     use std::time::Instant;
     let now = Instant::now();
 
     set_logger_env(&args.verbose);
 
     // get a new logger
-    let (logger, mut trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
+    let logger = Logger::default();
+    let mut trace = TraceFactory::default();
 
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
     // ensure both --include-sol and --include-yul aren't set
+    // TODO: is there any reason to not allow both `--include-sol` and `--include-yul`?
     if args.include_solidity && args.include_yul {
-        logger.error("arguments '--include-sol' and '--include-yul' are mutually exclusive.");
-        std::process::exit(1);
+        return Err(Error::Generic(
+            "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
+        ));
     }
 
-    let shortened_target = get_shortned_target(&args.target);
     let decompile_call = trace.add_call(
         0,
         line!(),
         "heimdall".to_string(),
         "decompile".to_string(),
-        vec![shortened_target],
+        vec![args.target.truncate(64)],
         "()".to_string(),
     );
 
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url).await?;
+    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+        .await
+        .map_err(|e| Error::Generic(format!("failed to get bytecode from target: {}", e)))?;
 
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
-        target: contract_bytecode.clone(),
+        target: encode_hex(contract_bytecode.clone()),
         verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
@@ -161,7 +168,7 @@ pub async fn decompile(
         line!(),
         "heimdall".to_string(),
         "disassemble".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         "()".to_string(),
     );
 
@@ -172,74 +179,320 @@ pub async fn decompile(
         line!(),
         "heimdall".to_string(),
         "detect_compiler".to_string(),
-        vec![format!("{} bytes", contract_bytecode.len() / 2usize)],
+        vec![format!("{} bytes", contract_bytecode.len())],
         format!("({compiler}, {version})"),
     );
 
-    if compiler == "solc" {
-        logger.debug(&format!("detected compiler {compiler} {version}."));
+    if compiler == Compiler::Solc {
+        debug!("detected compiler {compiler} {version}.");
     } else {
-        logger
-            .warn(&format!("detected compiler {compiler} {version} is not supported by heimdall."));
+        warn!("detected compiler {} {} is not supported by heimdall.", compiler, version);
     }
 
     // create a new EVM instance
     let evm = VM::new(
-        contract_bytecode.clone(),
-        String::from("0x"),
-        String::from("0x6865696d64616c6c000000000061646472657373"),
-        String::from("0x6865696d64616c6c0000000000006f726967696e"),
-        String::from("0x6865696d64616c6c00000000000063616c6c6572"),
+        &contract_bytecode,
+        &[],
+        H160::default(),
+        H160::default(),
+        H160::default(),
         0,
         u128::max_value(),
     );
-    let mut shortened_target = contract_bytecode.clone();
-    if shortened_target.len() > 66 {
-        shortened_target = shortened_target.chars().take(66).collect::<String>() +
-            "..." +
-            &shortened_target.chars().skip(shortened_target.len() - 16).collect::<String>();
-    }
     let vm_trace = trace.add_creation(
         decompile_call,
         line!(),
         "contract".to_string(),
-        shortened_target.clone(),
-        (contract_bytecode.len() / 2usize).try_into()?,
+        encode_hex(contract_bytecode.clone()).truncate(64),
+        contract_bytecode
+            .len()
+            .try_into()
+            .map_err(|e| Error::ParseError(format!("failed to parse bytecode length: {}", e)))?,
     );
 
     // find and resolve all selectors in the bytecode
     let selectors = find_function_selectors(&evm, &disassembled_bytecode);
-
     let mut resolved_selectors = HashMap::new();
     if !args.skip_resolving {
         resolved_selectors = resolve_selectors(selectors.keys().cloned().collect()).await;
 
         // if resolved selectors are empty, we can't perform symbolic execution
         if resolved_selectors.is_empty() {
-            logger.error(&format!(
-                "failed to resolve any function selectors from '{shortened_target}' .",
-                shortened_target = shortened_target
-            ));
+            error!(
+                "failed to resolve any function selectors from '{}' .",
+                args.target.truncate(64)
+            );
         }
 
-        logger.info(&format!(
+        info!(
             "resolved {} possible functions from {} detected selectors.",
             resolved_selectors.len(),
             selectors.len()
-        ));
+        );
     } else {
-        logger.info(&format!("found {} possible function selectors.", selectors.len()));
+        info!("found {} possible function selectors.", selectors.len());
     }
 
-    logger.info(&format!("performing symbolic execution on '{shortened_target}' ."));
+    info!("performing symbolic execution on '{}' .", args.target.truncate(64));
 
     // get a new progress bar
     let mut decompilation_progress = ProgressBar::new_spinner();
     decompilation_progress.enable_steady_tick(Duration::from_millis(100));
-    decompilation_progress.set_style(logger.info_spinner());
+    decompilation_progress.set_style(info_spinner!());
 
     // perform EVM analysis
     let mut analyzed_functions = Vec::new();
+
+    // if we have no resolved selectors, we can treat the bytecode as the fallback function
+    if resolved_selectors.is_empty() {
+        decompilation_progress.set_message("executing 'fallback'".to_string());
+
+        let func_analysis_trace = trace.add_call(
+            vm_trace,
+            line!(),
+            "heimdall".to_string(),
+            "analyze".to_string(),
+            vec![format!("fallback")],
+            "()".to_string(),
+        );
+
+        debug!("no resolved selectors found. symbolically executing entire bytecode as fallback.");
+        let evm_clone = evm.clone();
+        let (map, jumpdest_count) = match run_with_timeout(
+            move || evm_clone.symbolic_exec(),
+            Duration::from_millis(args.timeout),
+        ) {
+            Some(map) => map.map_err(|e| {
+                Error::Generic(format!("failed to perform symbolic execution: {}", e))
+            })?,
+            None => {
+                trace.add_error(func_analysis_trace, line!(), "symbolic execution timed out!");
+                (VMTrace::default(), 0)
+            }
+        };
+
+        trace.add_debug(
+            func_analysis_trace,
+            0,
+            &format!(
+                "execution tree {}",
+                match jumpdest_count {
+                    0 => {
+                        "appears to be linear".to_string()
+                    }
+                    _ => format!("has {jumpdest_count} unique branches"),
+                }
+            ),
+        );
+
+        decompilation_progress.set_message("analyzing fallback".to_string());
+
+        // analyze execution tree
+        let mut analyzed_function;
+        if args.include_yul {
+            debug_max!("analyzing symbolic execution trace with yul analyzer");
+            analyzed_function = analyze_yul(
+                &map,
+                Function {
+                    selector: "00000000".to_string(),
+                    entry_point: 0,
+                    arguments: HashMap::new(),
+                    memory: HashMap::new(),
+                    returns: None,
+                    logic: Vec::new(),
+                    events: HashMap::new(),
+                    errors: HashMap::new(),
+                    resolved_function: None,
+                    notices: Vec::new(),
+                    pure: true,
+                    view: true,
+                    payable: true,
+                    fallback: true,
+                },
+                &mut trace,
+                func_analysis_trace,
+                &mut Vec::new(),
+            )?;
+        } else {
+            debug_max!("analyzing symbolic execution trace with sol analyzer");
+            analyzed_function = analyze_sol(
+                &map,
+                Function {
+                    selector: "00000000".to_string(),
+                    entry_point: 0,
+                    arguments: HashMap::new(),
+                    memory: HashMap::new(),
+                    returns: None,
+                    logic: Vec::new(),
+                    events: HashMap::new(),
+                    errors: HashMap::new(),
+                    resolved_function: None,
+                    notices: Vec::new(),
+                    pure: true,
+                    view: true,
+                    payable: true,
+                    fallback: true,
+                },
+                &mut trace,
+                func_analysis_trace,
+                &mut Vec::new(),
+                (0, 0),
+            )?;
+        }
+
+        // add notice to analyzed_function if jumpdest_count == 0, indicating that
+        // symbolic execution timed out
+        if jumpdest_count == 0 {
+            analyzed_function
+                .notices
+                .push("symbolic execution timed out. please report this!".to_string());
+        }
+
+        // resolve signatures
+        if !args.skip_resolving {
+            decompilation_progress.finish_and_clear();
+
+            // resolve custom error signatures
+            let mut resolved_counter = 0;
+            let resolved_errors: HashMap<String, Vec<ResolvedError>> = resolve_selectors(
+                analyzed_function
+                    .errors
+                    .keys()
+                    .map(|error_selector| encode_hex_reduced(*error_selector).replacen("0x", "", 1))
+                    .collect(),
+            )
+            .await;
+            for (error_selector, _) in analyzed_function.errors.clone() {
+                let error_selector_str = encode_hex_reduced(error_selector).replacen("0x", "", 1);
+                let mut selected_error_index: u8 = 0;
+                let mut resolved_error_selectors = match resolved_errors.get(&error_selector_str) {
+                    Some(func) => func.clone(),
+                    None => Vec::new(),
+                };
+
+                // sort matches by signature using score heuristic from `score_signature`
+                resolved_error_selectors.sort_by(|a, b| {
+                    let a_score = score_signature(&a.signature);
+                    let b_score = score_signature(&b.signature);
+                    b_score.cmp(&a_score)
+                });
+
+                if resolved_error_selectors.len() > 1 {
+                    decompilation_progress.suspend(|| {
+                        selected_error_index = logger.option(
+                            "warn",
+                            "multiple possible matches found. select an option below",
+                            resolved_error_selectors.iter().map(|x| x.signature.clone()).collect(),
+                            Some(0u8),
+                            args.default,
+                        );
+                    });
+                }
+
+                let selected_match =
+                    match resolved_error_selectors.get(selected_error_index as usize) {
+                        Some(selected_match) => selected_match,
+                        None => continue,
+                    };
+
+                resolved_counter += 1;
+                analyzed_function.errors.insert(error_selector, Some(selected_match.clone()));
+                all_resolved_errors.insert(error_selector_str, selected_match.clone());
+            }
+
+            if resolved_counter > 0 {
+                trace.br(func_analysis_trace);
+                let error_trace = trace.add_info(
+                    func_analysis_trace,
+                    line!(),
+                    &format!(
+                        "resolved {} error signatures from {} selectors.",
+                        resolved_counter,
+                        analyzed_function.errors.len()
+                    )
+                    .to_string(),
+                );
+
+                for resolved_error in all_resolved_errors.values() {
+                    trace.add_message(error_trace, line!(), vec![resolved_error.signature.clone()]);
+                }
+            }
+
+            // resolve custom event signatures
+            resolved_counter = 0;
+            let resolved_events: HashMap<String, Vec<ResolvedLog>> = resolve_selectors(
+                analyzed_function
+                    .events
+                    .keys()
+                    .map(|event_selector| encode_hex_reduced(*event_selector).replacen("0x", "", 1))
+                    .collect(),
+            )
+            .await;
+            for (event_selector, (_, raw_event)) in analyzed_function.events.clone() {
+                let mut selected_event_index: u8 = 0;
+                let event_selector_str = encode_hex_reduced(event_selector).replacen("0x", "", 1);
+                let mut resolved_event_selectors = match resolved_events.get(&event_selector_str) {
+                    Some(func) => func.clone(),
+                    None => Vec::new(),
+                };
+
+                // sort matches by signature using score heuristic from `score_signature`
+                resolved_event_selectors.sort_by(|a, b| {
+                    let a_score = score_signature(&a.signature);
+                    let b_score = score_signature(&b.signature);
+                    b_score.cmp(&a_score)
+                });
+
+                if resolved_event_selectors.len() > 1 {
+                    decompilation_progress.suspend(|| {
+                        selected_event_index = logger.option(
+                            "warn",
+                            "multiple possible matches found. select an option below",
+                            resolved_event_selectors.iter().map(|x| x.signature.clone()).collect(),
+                            Some(0u8),
+                            args.default,
+                        );
+                    });
+                }
+
+                let selected_match =
+                    match resolved_event_selectors.get(selected_event_index as usize) {
+                        Some(selected_match) => selected_match,
+                        None => continue,
+                    };
+
+                resolved_counter += 1;
+                analyzed_function
+                    .events
+                    .insert(event_selector, (Some(selected_match.clone()), raw_event));
+                all_resolved_events.insert(event_selector_str, selected_match.clone());
+            }
+
+            if resolved_counter > 0 {
+                let event_trace = trace.add_info(
+                    func_analysis_trace,
+                    line!(),
+                    &format!(
+                        "resolved {} event signatures from {} selectors.",
+                        resolved_counter,
+                        analyzed_function.events.len()
+                    ),
+                );
+
+                for resolved_event in all_resolved_events.values() {
+                    trace.add_message(event_trace, line!(), vec![resolved_event.signature.clone()]);
+                }
+            }
+        }
+
+        // get a new progress bar
+        decompilation_progress = ProgressBar::new_spinner();
+        decompilation_progress.enable_steady_tick(Duration::from_millis(100));
+        decompilation_progress.set_style(info_spinner!());
+
+        analyzed_functions.push(analyzed_function.clone());
+    }
+
     for (selector, function_entry_point) in selectors {
         decompilation_progress.set_message(format!("executing '0x{selector}'"));
 
@@ -254,7 +507,7 @@ pub async fn decompile(
 
         trace.add_info(
             func_analysis_trace,
-            function_entry_point.try_into()?,
+            function_entry_point.try_into().unwrap_or(u32::MAX),
             &format!("discovered entry point: {function_entry_point}"),
         );
 
@@ -265,7 +518,9 @@ pub async fn decompile(
             move || evm_clone.symbolic_exec_selector(&selector_clone, function_entry_point),
             Duration::from_millis(args.timeout),
         ) {
-            Some(map) => map,
+            Some(map) => map.map_err(|e| {
+                Error::Generic(format!("failed to perform symbolic execution: {}", e))
+            })?,
             None => {
                 trace.add_error(func_analysis_trace, line!(), "symbolic execution timed out!");
                 (VMTrace::default(), 0)
@@ -274,7 +529,7 @@ pub async fn decompile(
 
         trace.add_debug(
             func_analysis_trace,
-            function_entry_point.try_into()?,
+            function_entry_point.try_into().unwrap_or(u32::MAX),
             &format!(
                 "execution tree {}",
                 match jumpdest_count {
@@ -298,23 +553,22 @@ pub async fn decompile(
                     selector: selector.clone(),
                     entry_point: function_entry_point,
                     arguments: HashMap::new(),
-                    storage: HashMap::new(),
                     memory: HashMap::new(),
                     returns: None,
                     logic: Vec::new(),
                     events: HashMap::new(),
                     errors: HashMap::new(),
                     resolved_function: None,
-                    indent_depth: 0,
                     notices: Vec::new(),
                     pure: true,
                     view: true,
                     payable: true,
+                    fallback: false,
                 },
                 &mut trace,
                 func_analysis_trace,
                 &mut Vec::new(),
-            );
+            )?;
         } else {
             debug_max!("analyzing symbolic execution trace '0x{}' with sol analyzer", selector);
             analyzed_function = analyze_sol(
@@ -323,24 +577,23 @@ pub async fn decompile(
                     selector: selector.clone(),
                     entry_point: function_entry_point,
                     arguments: HashMap::new(),
-                    storage: HashMap::new(),
                     memory: HashMap::new(),
                     returns: None,
                     logic: Vec::new(),
                     events: HashMap::new(),
                     errors: HashMap::new(),
                     resolved_function: None,
-                    indent_depth: 0,
                     notices: Vec::new(),
                     pure: true,
                     view: true,
                     payable: true,
+                    fallback: false,
                 },
                 &mut trace,
                 func_analysis_trace,
                 &mut Vec::new(),
                 (0, 0),
-            );
+            )?;
         }
 
         // add notice to analyzed_function if jumpdest_count == 0, indicating that
@@ -352,7 +605,6 @@ pub async fn decompile(
         }
 
         let argument_count = analyzed_function.arguments.len();
-
         if argument_count != 0 {
             let parameter_trace_parent = trace.add_debug(
                 func_analysis_trace,
@@ -597,37 +849,45 @@ pub async fn decompile(
         // get a new progress bar
         decompilation_progress = ProgressBar::new_spinner();
         decompilation_progress.enable_steady_tick(Duration::from_millis(100));
-        decompilation_progress.set_style(logger.info_spinner());
+        decompilation_progress.set_style(info_spinner!());
 
         analyzed_functions.push(analyzed_function.clone());
     }
-    decompilation_progress.finish_and_clear();
-    logger.info("symbolic execution completed.");
-    logger.info("building decompilation output.");
 
-    let abi = build_abi(&args, analyzed_functions.clone(), &mut trace, decompile_call)?;
+    decompilation_progress.finish_and_clear();
+    info!("symbolic execution completed.");
+    info!("building decompilation output.");
+
+    let abi = build_abi(&args, analyzed_functions.clone(), &mut trace, decompile_call)
+        .map_err(|e| Error::Generic(format!("failed to build abi: {}", e)))?;
     trace.display();
-    logger.debug(&format!("decompilation completed in {:?}.", now.elapsed()));
+    debug!(&format!("decompilation completed in {:?}.", now.elapsed()));
 
     Ok(DecompileResult {
         source: if args.include_solidity {
-            Some(build_solidity_output(
-                &args,
-                &abi,
-                analyzed_functions,
-                all_resolved_errors,
-                all_resolved_events,
-                &mut trace,
-                decompile_call,
-            )?)
+            Some(
+                build_solidity_output(
+                    &args,
+                    &abi,
+                    analyzed_functions,
+                    all_resolved_errors,
+                    all_resolved_events,
+                    &mut trace,
+                    decompile_call,
+                )
+                .map_err(|e| Error::Generic(format!("failed to build solidity output: {}", e)))?,
+            )
         } else if args.include_yul {
-            Some(build_yul_output(
-                &args,
-                analyzed_functions,
-                all_resolved_events,
-                &mut trace,
-                decompile_call,
-            )?)
+            Some(
+                build_yul_output(
+                    &args,
+                    analyzed_functions,
+                    all_resolved_events,
+                    &mut trace,
+                    decompile_call,
+                )
+                .map_err(|e| Error::Generic(format!("failed to build yul output: {}", e)))?,
+            )
         } else {
             None
         },

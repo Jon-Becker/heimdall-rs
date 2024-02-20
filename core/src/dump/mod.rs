@@ -7,10 +7,14 @@ use clap::{AppSettings, Parser};
 use derive_builder::Builder;
 use ethers::types::H160;
 use heimdall_common::{
+    error, info,
     resources::transpose::{get_contract_creation, get_transaction_list},
     utils::io::logging::*,
 };
+use heimdall_config::parse_url_arg;
 use std::{collections::HashMap, env, str::FromStr, time::Instant};
+
+use crate::error::Error;
 
 use self::{
     constants::DUMP_STATE,
@@ -41,7 +45,8 @@ pub struct DumpArgs {
     pub output: String,
 
     /// The RPC URL to use for fetching data.
-    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
+    /// This can be an explicit URL or a reference to a MESC endpoint.
+    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// Your Transpose.io API Key
@@ -93,45 +98,37 @@ impl DumpArgsBuilder {
 
 /// entry point for the dump module. Will fetch all storage slots accessed by the target contract,
 /// and dump them to a CSV file or the TUI.
-pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Error>> {
+pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Error> {
     set_logger_env(&args.verbose);
-
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
 
     // parse the output directory
     let mut output_dir = args.output.clone();
     if args.output.is_empty() {
-        output_dir = match env::current_dir() {
-            Ok(dir) => dir.into_os_string().into_string().unwrap(),
-            Err(_) => {
-                logger.error("failed to get current directory.");
-                std::process::exit(1);
-            }
-        };
+        output_dir = env::current_dir()
+            .map_err(|_| Error::Generic("failed to get current directory".to_string()))?
+            .into_os_string()
+            .into_string()
+            .map_err(|_| {
+                Error::Generic("failed to convert output directory to string".to_string())
+            })?;
         output_dir.push_str("/output");
     }
 
     // check if transpose api key is set
     if args.transpose_api_key.is_empty() {
-        logger.error("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
-        logger.info("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
-        std::process::exit(1);
+        error!("you must provide a Transpose API key, which is used to fetch all normal and internal transactions for your target.");
+        info!("you can get a free API key at https://app.transpose.io/?utm_medium=organic&utm_source=heimdall-rs");
+        return Err(Error::Generic("failed to get Transpose API key".to_string()));
     }
 
     // get the contract creation tx
     let contract_creation_tx =
-        match get_contract_creation(&args.chain, &args.target, &args.transpose_api_key).await {
-            Some(tx) => tx,
-            None => {
-                logger.error(
-                "failed to get contract creation transaction. Is the target a contract address?",
-            );
-                std::process::exit(1);
-            }
-        };
+        get_contract_creation(&args.chain, &args.target, &args.transpose_api_key).await.ok_or(
+            Error::Generic(
+                "failed to get contract creation transaction. Is the target a contract address?"
+                    .to_string(),
+            ),
+        )?;
 
     // add the contract creation tx to the transactions list to be indexed
     let mut transactions: Vec<Transaction> = Vec::new();
@@ -142,13 +139,8 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
     });
 
     // convert the target to an H160
-    let addr_hash = match H160::from_str(&args.target) {
-        Ok(addr) => addr,
-        Err(_) => {
-            logger.error(&format!("failed to parse target '{}' .", &args.target));
-            std::process::exit(1);
-        }
-    };
+    let addr_hash = H160::from_str(&args.target)
+        .map_err(|e| Error::Generic(format!("failed to parse target: {}", e)))?;
 
     // push the address to the output directory
     if output_dir != args.output {
@@ -162,7 +154,8 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
         &args.transpose_api_key,
         (&args.from_block, &args.to_block),
     )
-    .await;
+    .await
+    .map_err(|e| Error::Generic(format!("failed to get transaction list: {}", e)))?;
 
     // convert to vec of Transaction
     for transaction in transaction_list {
@@ -174,7 +167,9 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
     }
 
     // update state
-    let mut state = DUMP_STATE.lock().unwrap();
+    let mut state = DUMP_STATE
+        .lock()
+        .map_err(|e| Error::Generic(format!("failed to obtain lock on DUMP_STATE: {}", e)))?;
     *state = DumpState {
         args: args.clone(),
         transactions,
@@ -193,44 +188,32 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Box<dyn std::error::Er
 
     // in a new thread, start the TUI
     let tui_thread = std::thread::spawn(move || {
-        util::threads::tui::handle(&args, &output_dir);
+        let _ = util::threads::tui::handle(&args, &output_dir);
     });
 
     // index transactions in a new thread
     let dump_thread = std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
         rt.block_on(util::threads::indexer::handle(addr_hash))
     });
 
     // if no-tui flag is set, wait for the indexing thread to finish
     if _args.no_tui {
-        match dump_thread.join() {
-            Ok(_) => {}
-            Err(e) => {
-                logger.error("failed to join indexer thread.");
-                logger.error(&format!("{e:?}"));
-                std::process::exit(1);
-            }
-        }
+        let _ = dump_thread
+            .join()
+            .map_err(|e| Error::Generic(format!("failed to join dump thread: {:?}", e)))?;
     } else {
         // wait for the TUI thread to finish
-        match tui_thread.join() {
-            Ok(_) => {}
-            Err(e) => {
-                logger.error("failed to join TUI thread.");
-                logger.error(&format!("{e:?}"));
-                std::process::exit(1);
-            }
-        }
+        tui_thread
+            .join()
+            .map_err(|e| Error::Generic(format!("failed to join TUI thread: {:?}", e)))?;
     }
 
     // write storage slots to csv
-    let state = DUMP_STATE.lock().unwrap();
+    let state = DUMP_STATE
+        .lock()
+        .map_err(|e| Error::Generic(format!("failed to obtain lock on DUMP_STATE: {}", e)))?;
     let csv = build_csv(&state);
-    logger.info(&format!(
-        "Dumped {} storage values from '{}' .",
-        state.storage.len(),
-        &_args.target
-    ));
+    info!(&format!("Dumped {} storage values from '{}' .", state.storage.len(), &_args.target));
     Ok(csv)
 }

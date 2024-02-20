@@ -55,7 +55,8 @@ pub fn build_rows(state: &mut DumpState, max_row_height: usize) -> Vec<Row<'stat
             ),
             3 => match decode(&[ParamType::String], value.value.as_bytes()) {
                 Ok(decoded) => decoded[0].to_string(),
-                Err(_) => hex_to_ascii(&encode_hex(value.value.to_fixed_bytes().into())),
+                Err(_) => hex_to_ascii(&encode_hex(value.value.to_fixed_bytes().into()))
+                    .unwrap_or("decoding error".to_string()),
             },
             4 => {
                 let decoded = U256::from_big_endian(&value.value.to_fixed_bytes());
@@ -66,7 +67,14 @@ pub fn build_rows(state: &mut DumpState, max_row_height: usize) -> Vec<Row<'stat
 
         rows.push(
             Row::new(vec![
-                Cell::from(value.modifiers.iter().max_by_key(|m| m.0).unwrap().0.to_string()),
+                Cell::from(
+                    value
+                        .modifiers
+                        .iter()
+                        .max_by_key(|m| m.0)
+                        .map(|m| m.0.to_string())
+                        .unwrap_or("None".to_string()),
+                ),
                 Cell::from(format!("0x{}", encode_hex(slot.to_fixed_bytes().into()))),
                 Cell::from(DECODE_AS_TYPES[value.decode_as_type_index].clone()),
                 Cell::from(decoded_value),

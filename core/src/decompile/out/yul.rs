@@ -1,12 +1,13 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::decompile::{constants::DECOMPILED_SOURCE_HEADER_YUL, util::Function, DecompilerArgs};
+use crate::{
+    decompile::{constants::DECOMPILED_SOURCE_HEADER_YUL, util::Function, DecompilerArgs},
+    error::Error,
+};
 use heimdall_common::{
     ether::signatures::ResolvedLog,
-    utils::io::{
-        file::short_path,
-        logging::{Logger, TraceFactory},
-    },
+    info_spinner,
+    utils::io::{file::short_path, logging::TraceFactory},
 };
 use indicatif::ProgressBar;
 
@@ -20,14 +21,11 @@ pub fn build_yul_output(
     all_resolved_events: HashMap<String, ResolvedLog>,
     trace: &mut TraceFactory,
     trace_parent: u32,
-) -> Result<String, Box<dyn std::error::Error>> {
-    // get a new logger
-    let logger = Logger::default();
-
+) -> Result<String, Error> {
     // get a new progress bar
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(100));
-    progress_bar.set_style(logger.info_spinner());
+    progress_bar.set_style(info_spinner!());
 
     // build the decompiled source
     let mut decompiled_output: Vec<String> = Vec::new();
@@ -58,8 +56,8 @@ pub fn build_yul_output(
             .map(|x| x.to_string()),
     );
 
-    // build contract logic
-    for function in functions {
+    // build contract logic (excluding fallback function)
+    for function in functions.clone().into_iter().filter(|x| !x.fallback) {
         progress_bar.set_message(format!("building logic for '0x{}'", function.selector));
 
         // build the function's header and parameters
@@ -129,13 +127,18 @@ pub fn build_yul_output(
         decompiled_output.push(String::from("}"));
     }
 
-    // closing brackets
-    decompiled_output.append(&mut vec![
-        "default { revert(0, 0) }".to_string(),
-        "}".to_string(),
-        "}".to_string(),
-        "}".to_string(),
-    ]);
+    // write the contract fallback function (if it exists)
+    let mut fallback_logic: Vec<String> = Vec::new();
+    if let Some(fallback) = functions.iter().find(|x| x.fallback) {
+        fallback_logic.push("default {".to_string());
+        fallback_logic.extend(fallback.logic.clone());
+        fallback_logic.push("}".to_string());
+    } else {
+        fallback_logic.push("default { revert(0, 0) }".to_string());
+    }
+
+    decompiled_output.extend(fallback_logic);
+    decompiled_output.append(&mut vec!["}".to_string(), "}".to_string(), "}".to_string()]);
 
     progress_bar.finish_and_clear();
     Ok(postprocess(decompiled_output, all_resolved_events, &progress_bar).join("\n"))

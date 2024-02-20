@@ -6,6 +6,7 @@ use heimdall_common::{
     ether::evm::core::types::{
         get_padding, get_padding_size, get_potential_types_for_word, Padding,
     },
+    utils::strings::encode_hex,
 };
 
 use crate::error::Error;
@@ -19,9 +20,12 @@ pub struct AbiEncoded {
 /// Finds the offsets of all ABI-encoded items in the given calldata.
 pub fn try_decode_dynamic_parameter(
     parameter_index: usize,
-    calldata_words: &[&str],
+    calldata_words: &[Vec<u8>],
 ) -> Result<Option<AbiEncoded>, Error> {
-    debug_max!("calldata_words: {:#?}", calldata_words);
+    debug_max!(
+        "calldata_words: {:#?}",
+        calldata_words.iter().map(|w| encode_hex(w.clone())).collect::<Vec<String>>()
+    );
 
     // initialize a [`HashSet<usize>`] called `word_coverages` with `parameter_index`
     // this works similarly to `covered_words`, but is used to keep track of which
@@ -43,7 +47,7 @@ pub fn try_decode_dynamic_parameter(
     // item. For example, the size of a `bytes` is the number of bytes in the encoded data, while
     // for a dynamic-length array, the size is the number of elements in the array.
     let size_word = calldata_words.get(word_offset.as_usize()).ok_or(Error::BoundsError)?;
-    let size = U256::from_str_radix(size_word, 16)?.min(U256::from(usize::MAX));
+    let size = U256::from(size_word.as_slice()).min(U256::from(usize::MAX));
 
     // (3) add the size word index to `word_coverages`, since this word is part of the ABI-encoded
     // type and should not be decoded again
@@ -81,9 +85,9 @@ pub fn try_decode_dynamic_parameter(
 /// Processes a word and validates that it is could be a ptr to an ABI-encoded item.
 fn process_and_validate_word(
     parameter_index: usize,
-    calldata_words: &[&str],
+    calldata_words: &[Vec<u8>],
 ) -> Result<(U256, U256), Error> {
-    let word = U256::from_str_radix(calldata_words[parameter_index], 16)?;
+    let word = U256::from(calldata_words[parameter_index].as_slice());
 
     // if the word is a multiple of 32, it may be an offset pointing to the start of an
     // ABI-encoded item
@@ -105,7 +109,7 @@ fn process_and_validate_word(
 /// Handle ABI-encoded bytes
 fn try_decode_dynamic_parameter_bytes(
     parameter_index: usize,
-    calldata_words: &[&str],
+    calldata_words: &[Vec<u8>],
     word: U256,
     word_offset: U256,
     data_start_word_offset: U256,
@@ -121,7 +125,7 @@ fn try_decode_dynamic_parameter_bytes(
 
     // (2) perform a quick validation check to see if there are enough remaining bytes
     // to contain the ABI-encoded item. If there aren't, return an [`Error::BoundsError`].
-    if data_words.join("").len() / 2 < size.as_usize() {
+    if data_words.concat().len() < size.as_usize() {
         debug_max!("parameter {}: '{}' is out of bounds (bytes check)", parameter_index, word);
         return Ok(None)
     }
@@ -129,7 +133,7 @@ fn try_decode_dynamic_parameter_bytes(
     // (3) calculate how many words are needed to store the encoded data with size `size`.
     let word_count_for_size = U256::from((size.as_u32() as f32 / 32f32).ceil() as u32); // wont panic unless calldata is huge
     let data_end_word_offset = data_start_word_offset + word_count_for_size;
-    debug_max!("with data: {:#?}", data_words.join(""));
+    debug_max!("with data: {:#?}", encode_hex(data_words.concat()));
 
     // (4) get the last word in `data_words`, so we can perform a size check. There should be
     // `size % 32` bytes in this word, and the rest should be null bytes.
@@ -157,7 +161,7 @@ fn try_decode_dynamic_parameter_bytes(
 /// Handle ABI-encoded bytes
 fn try_decode_dynamic_parameter_array(
     parameter_index: usize,
-    calldata_words: &[&str],
+    calldata_words: &[Vec<u8>],
     word: U256,
     word_offset: U256,
     data_start_word_offset: U256,
@@ -217,9 +221,9 @@ fn try_decode_dynamic_parameter_array(
 
 /// Determine if the given word is an abi-encoded string.
 fn try_decode_dynamic_parameter_string(
-    data_words: &[&str],
+    data_words: &[Vec<u8>],
     parameter_index: usize,
-    calldata_words: &[&str],
+    calldata_words: &[Vec<u8>],
     word: U256,
     word_offset: U256,
     data_start_word_offset: U256,
@@ -237,7 +241,7 @@ fn try_decode_dynamic_parameter_string(
     if data_words
         .iter()
         .map(|word| get_padding(word))
-        .all(|padding| padding == get_padding(data_words[0]))
+        .all(|padding| padding == get_padding(&data_words[0]))
     {
         debug_max!("parameter {}: '{}' is not string (conforming padding)", parameter_index, word);
         return Ok(None)
@@ -249,7 +253,10 @@ fn try_decode_dynamic_parameter_string(
     let data_end_word_offset = data_start_word_offset + word_count_for_size;
     debug_max!(
         "with data: {:#?}",
-        calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()].join("")
+        encode_hex(
+            calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()]
+                .concat()
+        )
     );
 
     // (4) get the last word in `data_words`, so we can perform a size check. There should be
@@ -277,9 +284,9 @@ fn try_decode_dynamic_parameter_string(
 
 /// Handle determining the most potential type of an abi-encoded item.
 fn get_potential_type(
-    data_words: &[&str],
+    data_words: &[Vec<u8>],
     parameter_index: usize,
-    calldata_words: &[&str],
+    calldata_words: &[Vec<u8>],
     word: U256,
     data_start_word_offset: U256,
     coverages: &mut HashSet<usize>,
@@ -350,6 +357,8 @@ fn get_potential_type(
 
 #[cfg(test)]
 mod tests {
+    use heimdall_common::utils::strings::decode_hex;
+
     use super::*;
 
     #[test]
@@ -376,13 +385,14 @@ mod tests {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
-                s
+                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
+                decode_hex(s).expect("failed to decode hex")
             })
-            .collect::<Vec<&str>>();
+            .collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words).unwrap();
+            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
+                .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
 
@@ -429,13 +439,14 @@ mod tests {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
-                s
+                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
+                decode_hex(s).expect("failed to decode hex")
             })
-            .collect::<Vec<&str>>();
+            .collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words).unwrap();
+            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
+                .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
 
@@ -495,13 +506,14 @@ mod tests {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
-                s
+                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
+                decode_hex(s).expect("failed to decode hex")
             })
-            .collect::<Vec<&str>>();
+            .collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words).unwrap();
+            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
+                .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.clone().map(|p| p.coverages).unwrap_or_default();
             let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();
@@ -549,13 +561,14 @@ mod tests {
             .as_bytes()
             .chunks(64)
             .map(|chunk| {
-                let s = std::str::from_utf8(chunk).unwrap();
-                s
+                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
+                decode_hex(s).expect("failed to decode hex")
             })
-            .collect::<Vec<&str>>();
+            .collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words).unwrap();
+            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
+                .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.clone().map(|p| p.coverages).unwrap_or_default();
             let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();

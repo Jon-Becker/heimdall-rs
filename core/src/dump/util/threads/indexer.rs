@@ -1,18 +1,20 @@
 use std::time::Duration;
 
 use ethers::types::{Diff, H160};
-use heimdall_common::{
-    ether::rpc::get_storage_diff,
-    utils::{io::logging::Logger, threading::task_pool},
-};
+use heimdall_common::{ether::rpc::get_storage_diff, info_spinner, utils::threading::task_pool};
 use indicatif::ProgressBar;
 
-use crate::dump::{constants::DUMP_STATE, structures::storage_slot::StorageSlot};
+use crate::{
+    dump::{constants::DUMP_STATE, structures::storage_slot::StorageSlot},
+    error::Error,
+};
 
 /// The main function for indexing storage slots. Will fetch the storage diff for each transaction
 /// in a threaded task pool, updating the state accordingly.
-pub async fn handle(addr_hash: H160) {
-    let state = DUMP_STATE.lock().unwrap();
+pub async fn handle(addr_hash: H160) -> Result<(), Error> {
+    let state = DUMP_STATE
+        .lock()
+        .map_err(|_| Error::Generic("could not obtain lock on state".to_string()))?;
     let transactions = state.transactions.clone();
     let args = state.args.clone();
     drop(state);
@@ -20,16 +22,10 @@ pub async fn handle(addr_hash: H160) {
     // the number of threads cannot exceed the number of transactions
     let num_indexing_threads = std::cmp::min(transactions.len(), args.threads);
 
-    // get a new logger
-    let (logger, _) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
     // get a new progress bar
     let transaction_list_progress = ProgressBar::new_spinner();
     transaction_list_progress.enable_steady_tick(Duration::from_millis(100));
-    transaction_list_progress.set_style(logger.info_spinner());
+    transaction_list_progress.set_style(info_spinner!());
 
     if !args.no_tui {
         transaction_list_progress.finish_and_clear();
@@ -37,7 +33,7 @@ pub async fn handle(addr_hash: H160) {
 
     task_pool(transactions, num_indexing_threads, move |tx| {
         // get new blocking runtime
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
         // get the storage diff for this transaction
         let state_diff = rt
@@ -45,11 +41,15 @@ pub async fn handle(addr_hash: H160) {
             .expect("Could not get storage diff.");
 
         // unlock state
-        let mut state = DUMP_STATE.lock().unwrap();
+        let mut state = DUMP_STATE.lock().expect("could not obtain lock on state");
 
         // find the transaction in the state
         let all_txs = state.transactions.clone();
-        let txs = state.transactions.iter_mut().find(|t| t.hash == tx.hash).unwrap();
+        let txs = state
+            .transactions
+            .iter_mut()
+            .find(|t| t.hash == tx.hash)
+            .expect("impossible case: could not find transaction in state");
         let block_number = tx.block_number;
 
         if args.no_tui {
@@ -115,4 +115,6 @@ pub async fn handle(addr_hash: H160) {
         // drop state
         drop(state);
     });
+
+    Ok(())
 }

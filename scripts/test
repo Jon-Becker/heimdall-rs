@@ -41,7 +41,7 @@ elif [ "$1" = "--doc" ]; then
 
 # if --heavy is passed, then we want to run the heavy command
 elif [ "$1" = "--heavy" ]; then
-    cargo nextest r --no-fail-fast --release -- --ignored
+    cargo nextest r --no-fail-fast --release --nocapture -- --ignored
 
 # just run nextest
 else

@@ -1,3 +1,4 @@
+pub mod constants;
 pub mod log;
 pub mod memory;
 pub mod opcodes;

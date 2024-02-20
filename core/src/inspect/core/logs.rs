@@ -95,7 +95,7 @@ impl TryFrom<Log> for DecodedLog {
                     ResolvedLog::resolve(&signature)
                         .await
                         .map_err(|e| {
-                            Self::Error::GenericError(format!("failed to resolve signature: {}", e))
+                            Self::Error::Generic(format!("failed to resolve signature: {}", e))
                         })?
                         .unwrap_or(Vec::new())
                 }

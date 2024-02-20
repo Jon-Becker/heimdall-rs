@@ -1,4 +1,7 @@
-use ethers::abi::{decode, AbiEncode, ParamType};
+use ethers::{
+    abi::{decode, AbiEncode, ParamType},
+    types::U256,
+};
 use heimdall_common::{
     ether::evm::{core::types::convert_bitmask, ext::exec::VMTrace},
     utils::{
@@ -6,6 +9,8 @@ use heimdall_common::{
         strings::{decode_hex, encode_hex_reduced},
     },
 };
+
+use crate::error::Error;
 
 use super::super::util::*;
 /// Converts a VMTrace to a Function through lexical and syntactic analysis
@@ -26,7 +31,7 @@ pub fn analyze_yul(
     trace: &mut TraceFactory,
     trace_parent: u32,
     conditional_map: &mut Vec<String>,
-) -> Function {
+) -> Result<Function, Error> {
     // make a clone of the recursed analysis function
     let mut function = function;
     let mut jumped_conditional: Option<String> = None;
@@ -34,10 +39,13 @@ pub fn analyze_yul(
     // perform analysis on the operations of the current VMTrace branch
     for operation in &vm_trace.operations {
         let instruction = operation.last_instruction.clone();
-        let _storage = operation.storage.clone();
         let memory = operation.memory.clone();
 
-        let opcode_name = instruction.opcode_details.clone().unwrap().name;
+        let opcode_name = instruction
+            .opcode_details
+            .clone()
+            .ok_or(Error::Generic("failed to get opcode details for instruction".to_string()))?
+            .name;
         let opcode_number = instruction.opcode;
 
         // if the instruction is a state-accessing instruction, the function is no longer pure
@@ -73,7 +81,7 @@ pub fn analyze_yul(
             function.pure = false;
             trace.add_info(
                 trace_parent,
-                instruction.instruction.try_into().unwrap(),
+                instruction.instruction.try_into().unwrap_or(u32::MAX),
                 &format!(
                     "instruction {} ({}) indicates an non-pure function.",
                     instruction.instruction, opcode_name
@@ -98,7 +106,7 @@ pub fn analyze_yul(
             function.view = false;
             trace.add_info(
                 trace_parent,
-                instruction.instruction.try_into().unwrap(),
+                instruction.instruction.try_into().unwrap_or(u32::MAX),
                 &format!(
                     "instruction {} ({}) indicates a non-view function.",
                     instruction.instruction, opcode_name
@@ -120,15 +128,14 @@ pub fn analyze_yul(
             };
 
             // check to see if the event is a duplicate
-            if !function
-                .events
-                .iter()
-                .any(|(selector, _)| selector == logged_event.topics.first().unwrap())
-            {
+            if !function.events.iter().any(|(selector, _)| {
+                selector == logged_event.topics.first().unwrap_or(&U256::zero())
+            }) {
                 // add the event to the function
-                function
-                    .events
-                    .insert(*logged_event.topics.first().unwrap(), (None, logged_event.clone()));
+                function.events.insert(
+                    *logged_event.topics.first().unwrap_or(&U256::zero()),
+                    (None, logged_event.clone()),
+                );
 
                 // add the event emission to the function's logic
                 function.logic.push(format!(
@@ -166,7 +173,7 @@ pub fn analyze_yul(
             //       - require(true != false)
 
             // handle case with error string abiencoded
-            if revert_data.starts_with(&decode_hex("4e487b71").unwrap()) {
+            if revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
                 continue
             }
             // handle case with custom error OR empty revert
@@ -210,14 +217,14 @@ pub fn analyze_yul(
 
             function.logic.push(format!("selfdestruct({addr})"));
         } else if opcode_name == "SSTORE" {
-            let key = instruction.inputs[0];
-            let value = instruction.inputs[1];
-            let operations = instruction.input_operations[1].clone();
-
-            // add the sstore to the function's storage map
-            function.storage.insert(key, StorageFrame { value, operations });
             function.logic.push(format!(
                 "sstore({}, {})",
+                instruction.input_operations[0].yulify(),
+                instruction.input_operations[1].yulify(),
+            ));
+        } else if opcode_name == "TSTORE" {
+            function.logic.push(format!(
+                "tstore({}, {})",
                 instruction.input_operations[0].yulify(),
                 instruction.input_operations[1].yulify(),
             ));
@@ -417,29 +424,32 @@ pub fn analyze_yul(
     }
 
     // recurse into the children of the VMTrace map
-    for (_, child) in vm_trace.children.iter().enumerate() {
-        function = analyze_yul(child, function, trace, trace_parent, conditional_map);
+    for child in vm_trace.children.iter() {
+        function = analyze_yul(child, function, trace, trace_parent, conditional_map)?;
     }
 
     // check if the ending brackets are needed
     if jumped_conditional.is_some() &&
-        conditional_map.contains(&jumped_conditional.clone().unwrap())
+        conditional_map.contains(
+            &jumped_conditional
+                .clone()
+                .expect("impossible case: should have short-circuited in previous conditional"),
+        )
     {
         // remove the last matching conditional from the conditional map
         for j in (0..conditional_map.len()).rev() {
-            if conditional_map[j] == jumped_conditional.clone().unwrap() {
+            if conditional_map[j] ==
+                jumped_conditional.clone().expect(
+                    "impossible case: should have short-circuited in previous conditional",
+                )
+            {
                 conditional_map.remove(j);
                 break
             }
         }
 
-        // if the last logic is an if statement, remove it because it's empty
-        if function.logic.last().unwrap().contains("if") {
-            function.logic.pop();
-        } else {
-            function.logic.push("}".to_string());
-        }
+        function.logic.push("}".to_string());
     }
 
-    function
+    Ok(function)
 }

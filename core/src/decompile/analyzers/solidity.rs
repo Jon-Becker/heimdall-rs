@@ -17,9 +17,12 @@ use heimdall_common::{
 };
 
 use super::super::{constants::AND_BITMASK_REGEX, precompile::decode_precompile};
-use crate::decompile::{
-    constants::VARIABLE_SIZE_CHECK_REGEX,
-    util::{CalldataFrame, Function, StorageFrame},
+use crate::{
+    decompile::{
+        constants::VARIABLE_SIZE_CHECK_REGEX,
+        util::{CalldataFrame, Function, StorageFrame},
+    },
+    error::Error,
 };
 
 /// Converts a VMTrace to a Function through lexical and syntactic analysis
@@ -37,6 +40,8 @@ use crate::decompile::{
 ///
 /// ## Returns
 /// - `function` - The function updated with the analysis results
+// TODO: `analyze_sol` is too long and needs to be refactored into a series of smaller functions.
+// this will improve readability as well as test coverage
 pub fn analyze_sol(
     vm_trace: &VMTrace,
     function: Function,
@@ -44,7 +49,7 @@ pub fn analyze_sol(
     trace_parent: u32,
     conditional_map: &mut Vec<String>,
     branch: (u32, u8),
-) -> Function {
+) -> Result<Function, Error> {
     // make a clone of the recursed analysis function
     let mut function = function;
     let mut jumped_conditional: Option<String> = None;
@@ -52,10 +57,13 @@ pub fn analyze_sol(
     // perform analysis on the operations of the current VMTrace branch
     for operation in &vm_trace.operations {
         let instruction = operation.last_instruction.clone();
-        let _storage = operation.storage.clone();
         let memory = operation.memory.clone();
 
-        let opcode_name = instruction.opcode_details.clone().unwrap().name;
+        let opcode_name = instruction
+            .opcode_details
+            .clone()
+            .ok_or(Error::Generic("failed to get opcode details for instruction".to_string()))?
+            .name;
         let opcode_number = instruction.opcode;
 
         // if the instruction is a state-accessing instruction, the function is no longer pure
@@ -91,7 +99,7 @@ pub fn analyze_sol(
             function.pure = false;
             trace.add_info(
                 trace_parent,
-                instruction.instruction.try_into().unwrap(),
+                instruction.instruction.try_into().unwrap_or(u32::MAX),
                 &format!(
                     "instruction {} ({}) indicates an non-pure function.",
                     instruction.instruction, opcode_name
@@ -116,7 +124,7 @@ pub fn analyze_sol(
             function.view = false;
             trace.add_info(
                 trace_parent,
-                instruction.instruction.try_into().unwrap(),
+                instruction.instruction.try_into().unwrap_or(u32::MAX),
                 &format!(
                     "instruction {} ({}) indicates a non-view function.",
                     instruction.instruction, opcode_name
@@ -198,7 +206,7 @@ pub fn analyze_sol(
                 // this is marking the start of a non-payable function
                 trace.add_info(
                     trace_parent,
-                    instruction.instruction.try_into().unwrap(),
+                    instruction.instruction.try_into().unwrap_or(u32::MAX),
                     &format!(
                         "conditional at instruction {} indicates an non-payble function.",
                         instruction.instruction
@@ -239,7 +247,7 @@ pub fn analyze_sol(
             let revert_logic;
 
             // handle case with error string abiencoded
-            if revert_data.starts_with(&decode_hex("08c379a0").unwrap()) {
+            if revert_data.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
                 let revert_string = match revert_data.get(4..) {
                     Some(hex_data) => match decode(&[ParamType::String], hex_data) {
                         Ok(revert) => revert[0].to_string(),
@@ -269,7 +277,7 @@ pub fn analyze_sol(
                 }
             }
             // handle case with panics
-            else if revert_data.starts_with(&decode_hex("4e487b71").unwrap()) {
+            else if revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
                 continue
             }
             // handle case with custom error OR empty revert
@@ -345,7 +353,8 @@ pub fn analyze_sol(
                             // attempt to find a return type within the return memory operations
                             let byte_size = match AND_BITMASK_REGEX
                                 .find(&return_memory_operations_solidified)
-                                .unwrap()
+                                .ok()
+                                .flatten()
                             {
                                 Some(bitmask) => {
                                     let cast = bitmask.as_str();
@@ -380,16 +389,16 @@ pub fn analyze_sol(
 
             function.logic.push(format!("selfdestruct({addr});"));
         } else if opcode_name == "SSTORE" {
-            let key = instruction.inputs[0];
-            let value = instruction.inputs[1];
-            let operations = instruction.input_operations[1].clone();
-
-            // add the sstore to the function's storage map
-            function.storage.insert(key, StorageFrame { value, operations });
             function.logic.push(format!(
                 "storage[{}] = {};",
                 instruction.input_operations[0].solidify(),
                 instruction.input_operations[1].solidify(),
+            ));
+        } else if opcode_name == "TSTORE" {
+            function.logic.push(format!(
+                "transient[{}] = {};",
+                instruction.input_operations[0].solidify(),
+                instruction.input_operations[1].solidify()
             ));
         } else if opcode_name.contains("MSTORE") {
             let key = instruction.inputs[0];
@@ -735,16 +744,24 @@ pub fn analyze_sol(
             trace_parent,
             conditional_map,
             (branch.0 + 1, i as u8),
-        );
+        )?;
     }
 
     // check if the ending brackets are needed
     if jumped_conditional.is_some() &&
-        conditional_map.contains(&jumped_conditional.clone().unwrap())
+        conditional_map.contains(
+            &jumped_conditional
+                .clone()
+                .expect("impossible case: should have short-circuited in previous conditional"),
+        )
     {
         // remove the conditional
         for (i, conditional) in conditional_map.iter().enumerate() {
-            if conditional == &jumped_conditional.clone().unwrap() {
+            if conditional ==
+                &jumped_conditional.clone().expect(
+                    "impossible case: should have short-circuited in previous conditional",
+                )
+            {
                 conditional_map.remove(i);
                 break
             }
@@ -753,5 +770,5 @@ pub fn analyze_sol(
         function.logic.push("}".to_string());
     }
 
-    function
+    Ok(function)
 }

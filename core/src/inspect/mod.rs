@@ -14,9 +14,11 @@ use heimdall_common::{
     utils::{
         env::set_env,
         hex::ToLowerHex,
-        io::logging::{set_logger_env, Logger, TraceFactory},
+        io::logging::{set_logger_env, TraceFactory},
     },
+    warn,
 };
+use heimdall_config::parse_url_arg;
 
 use crate::error::Error;
 
@@ -39,7 +41,8 @@ pub struct InspectArgs {
     pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The RPC provider to use for fetching target calldata.
-    #[clap(long = "rpc-url", short, default_value = "", hide_default_value = true)]
+    /// This can be an explicit URL or a reference to a MESC endpoint.
+    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// When prompted, always select the default value.
@@ -93,12 +96,6 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     // TODO: create a trait that can be added to a struct to set env variables
     set_env("SKIP_RESOLVING", &args.skip_resolving.to_string());
 
-    // get a new logger and trace
-    let (logger, _trace) = Logger::new(match args.verbose.log_level() {
-        Some(level) => level.as_str(),
-        None => "SILENT",
-    });
-
     // get calldata from RPC
     let transaction = get_transaction(&args.target, &args.rpc_url)
         .await
@@ -147,17 +144,16 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
         contracts
             .extend(decoded_trace.addresses(true, true).into_iter().collect())
             .await
-            .map_err(|e| Error::GenericError(e.to_string()))?;
+            .map_err(|e| Error::Generic(e.to_string()))?;
 
         // extend with addresses from state diff
         if let Some(state_diff) = block_trace.state_diff {
             contracts
                 .extend(state_diff.0.keys().cloned().collect())
                 .await
-                .map_err(|e| Error::GenericError(e.to_string()))?;
+                .map_err(|e| Error::Generic(e.to_string()))?;
         } else {
-            logger
-                .warn("no state diff found for transaction. skipping state diff label resolution");
+            warn!("no state diff found for transaction. skipping state diff label resolution");
         }
 
         debug_max!(&format!("joining {} decoded logs to trace", decoded_logs.len()));
@@ -168,7 +164,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
             // build state diffs within trace
             let _ = decoded_trace.build_state_diffs(vm_trace, Vec::new()).await;
         } else {
-            logger.warn("no vm trace found for transaction. skipping joining logs");
+            warn!("no vm trace found for transaction. skipping joining logs");
         }
 
         let mut trace = TraceFactory::default();
@@ -185,7 +181,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
 
         trace.display();
     } else {
-        logger.warn("no trace found for transaction");
+        warn!("no trace found for transaction");
     }
 
     Ok(InspectResult { decoded_trace })

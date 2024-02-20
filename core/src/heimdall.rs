@@ -14,7 +14,7 @@ use colored::Colorize;
 use crossterm::{
     event::DisableMouseCapture,
     execute,
-    terminal::{disable_raw_mode, LeaveAlternateScreen},
+    terlinal::{disable_raw_mode, LeaveAlternateScreen},
 };
 
 use decode::{decode, DecodeArgs};
@@ -27,6 +27,8 @@ use heimdall_common::{
     ether::evm::ext::disassemble::*,
     io::logging::Logger,
     utils::version::{current_version, remote_version},
+    info,
+    fatal,
 };
 use heimdall_config::{config, get_config, ConfigArgs};
 use tui::{backend::CrosstermBackend, Terminal};
@@ -81,19 +83,20 @@ fn main() {
         // cleanup the terminal
         let stdout = io::stdout();
         let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend).unwrap();
-        disable_raw_mode().unwrap();
-        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture).unwrap();
-        terminal.show_cursor().unwrap();
+        let mut terminal = Terminal::new(backend).expect("failed to initialize terminal");
+        disable_raw_mode().expect("failed to disable raw mode");
+        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)
+            .expect("failed to cleanup terminal");
+        terminal.show_cursor().expect("failed to show cursor");
 
         // print the panic message
         let backtrace = Backtrace::new();
         let (logger, _) = Logger::new("TRACE");
-        logger.fatal(&format!(
+        fatal!(
             "thread 'main' encountered a fatal error: '{}'!",
             panic_info.to_string().bright_white().on_bright_red().bold(),
-        ));
-        logger.fatal(&format!("Stack Trace:\n\n{backtrace:#?}"));
+        );
+        fatal!("Stack Trace:\n\n{:#?}", backtrace);
     }));
 
     let configuration = get_config();
@@ -177,8 +180,7 @@ fn main() {
     if remote_version.gt(&current_version) {
         let (logger, _) = Logger::new("TRACE");
         println!();
-        logger.info("great news! An update is available!");
-        logger
-            .info(&format!("you can update now by running: `bifrost --version {remote_version}`"));
+        info!("great news! An update is available!");
+        info!("you can update now by running: `bifrost --version {}`", remote_version);
     }
 }

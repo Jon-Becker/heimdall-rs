@@ -1,11 +1,8 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::Range};
 
 use ethers::abi::{AbiEncode, ParamType};
 
-use crate::{
-    constants::TYPE_CAST_REGEX,
-    utils::strings::{decode_hex, find_balanced_encapsulator},
-};
+use crate::{constants::TYPE_CAST_REGEX, error::Error, utils::strings::find_balanced_encapsulator};
 
 use super::vm::Instruction;
 
@@ -23,18 +20,16 @@ pub enum Padding {
 /// use ethers::abi::ParamType;
 ///
 /// let function_signature = "foo(uint256,uint256)";
-/// let function_parameters = parse_function_parameters(function_signature).unwrap();
+/// let function_parameters = parse_function_parameters(function_signature)
+///     .expect("failed to parse function parameters");
 ///
 /// assert_eq!(function_parameters, vec![ParamType::Uint(256), ParamType::Uint(256)]);
 /// ```
-pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamType>> {
+pub fn parse_function_parameters(function_signature: &str) -> Result<Vec<ParamType>, Error> {
     // remove the function name from the signature, only keep the parameters
-    let (start, end, valid) = find_balanced_encapsulator(function_signature, ('(', ')'));
-    if !valid {
-        return None
-    }
+    let param_range = find_balanced_encapsulator(function_signature, ('(', ')'))?;
 
-    let function_inputs = function_signature[start + 1..end - 1].to_string();
+    let function_inputs = function_signature[param_range].to_string();
 
     // get inputs from the string
     extract_types_from_string(&function_inputs)
@@ -42,12 +37,10 @@ pub fn parse_function_parameters(function_signature: &str) -> Option<Vec<ParamTy
 
 /// Helper function for extracting types from a string. Used by [`parse_function_parameters`],
 /// typically after entering a nested tuple or similar.
-fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
+fn extract_types_from_string(string: &str) -> Result<Vec<ParamType>, Error> {
     let mut types = Vec::new();
-
-    // if string is empty, return None
     if string.is_empty() {
-        return None
+        return Ok(types)
     }
 
     // if the string contains a tuple we cant simply split on commas
@@ -55,16 +48,13 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
         // check if first type is a tuple
         if is_first_type_tuple(string) {
             // get balanced encapsulator
-            let (tuple_start, tuple_end, valid) = find_balanced_encapsulator(string, ('(', ')'));
-            if !valid {
-                return None
-            }
+            let tuple_range = find_balanced_encapsulator(string, ('(', ')'))?;
 
             // extract the tuple
-            let tuple_types = string[tuple_start + 1..tuple_end - 1].to_string();
+            let tuple_types = string[tuple_range.clone()].to_string();
 
             // remove the tuple from the string
-            let mut string = string[tuple_end..].to_string();
+            let mut string = string[tuple_range.end + 1..].to_string();
 
             // if string is not empty, split on commas and check if tuple is an array
             let mut is_array = false;
@@ -76,12 +66,9 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
 
                 // get array size, or none if []
                 if is_array {
-                    let (start, end, valid) = find_balanced_encapsulator(split, ('[', ']'));
-                    if !valid {
-                        return None
-                    }
+                    let array_range = find_balanced_encapsulator(split, ('[', ']'))?;
 
-                    let size = split[start + 1..end - 1].to_string();
+                    let size = split[array_range].to_string();
                     array_size = match size.parse::<usize>() {
                         Ok(size) => Some(size),
                         Err(_) => None,
@@ -102,29 +89,27 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
 
                 if let Some(array_size) = array_size {
                     // recursively call this function to extract the tuple types
-                    let inner_types = extract_types_from_string(&tuple_types);
+                    let inner_types = extract_types_from_string(&tuple_types)?;
 
                     types.push(ParamType::FixedArray(
-                        Box::new(ParamType::Tuple(inner_types.unwrap())),
+                        Box::new(ParamType::Tuple(inner_types)),
                         array_size,
                     ))
                 } else {
                     // recursively call this function to extract the tuple types
-                    let inner_types = extract_types_from_string(&tuple_types);
+                    let inner_types = extract_types_from_string(&tuple_types)?;
 
-                    types.push(ParamType::Array(Box::new(ParamType::Tuple(inner_types.unwrap()))))
+                    types.push(ParamType::Array(Box::new(ParamType::Tuple(inner_types))))
                 }
             } else {
                 // recursively call this function to extract the tuple types
-                let inner_types = extract_types_from_string(&tuple_types);
+                let inner_types = extract_types_from_string(&tuple_types)?;
 
-                types.push(ParamType::Tuple(inner_types.unwrap()));
+                types.push(ParamType::Tuple(inner_types));
             }
 
             // recursively call this function to extract the remaining types
-            if let Some(mut remaining_types) = extract_types_from_string(&string) {
-                types.append(&mut remaining_types);
-            }
+            types.append(&mut extract_types_from_string(&string)?);
         } else {
             // first type is not a tuple, so we can extract it
             let string_parts = string.splitn(2, ',').collect::<Vec<&str>>();
@@ -133,9 +118,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
             if string_parts[0].is_empty() {
                 // the first type is empty, so we can just recursively call this function to extract
                 // the remaining types
-                if let Some(mut remaining_types) = extract_types_from_string(string_parts[1]) {
-                    types.append(&mut remaining_types);
-                }
+                types.append(&mut extract_types_from_string(string_parts[1])?);
             } else {
                 let param_type = to_type(string_parts[0]);
                 types.push(param_type);
@@ -144,9 +127,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
                 let string = string[string_parts[0].len() + 1..].to_string();
 
                 // recursively call this function to extract the remaining types
-                if let Some(mut remaining_types) = extract_types_from_string(&string) {
-                    types.append(&mut remaining_types);
-                }
+                types.append(&mut extract_types_from_string(&string)?);
             }
         }
     } else {
@@ -164,10 +145,7 @@ fn extract_types_from_string(string: &str) -> Option<Vec<ParamType>> {
         }
     }
 
-    match types.len() {
-        0 => None,
-        _ => Some(types),
-    }
+    Ok(types)
 }
 
 /// A helper function used by [`extract_types_from_string`] to check if the first type in a string
@@ -189,12 +167,12 @@ pub fn to_type(string: &str) -> ParamType {
 
     // while string contains a [..]
     while string.ends_with(']') {
-        let (start, end, valid) = find_balanced_encapsulator(&string, ('[', ']'));
-        if !valid {
-            return ParamType::Bytes // default to bytes if invalid
-        }
+        let array_range = match find_balanced_encapsulator(&string, ('[', ']')) {
+            Ok(range) => range,
+            Err(_) => return ParamType::Bytes, // default to bytes if invalid
+        };
 
-        let size = string[start + 1..end - 1].to_string();
+        let size = string[array_range].to_string();
 
         array_size.push_back(match size.parse::<usize>() {
             Ok(size) => Some(size),
@@ -217,7 +195,7 @@ pub fn to_type(string: &str) -> ParamType {
                 let size = stripped.parse::<usize>().unwrap_or(256);
                 ParamType::Int(size)
             } else if let Some(stripped) = string.strip_prefix("bytes") {
-                let size = stripped.parse::<usize>().unwrap();
+                let size = stripped.parse::<usize>().unwrap_or(32);
                 ParamType::FixedBytes(size)
             } else {
                 // default to bytes if invalid
@@ -232,7 +210,9 @@ pub fn to_type(string: &str) -> ParamType {
         // while array_size is not empty
         while !array_size.is_empty() {
             // pop off first element of array_size
-            if let Some(size) = array_size.pop_front().unwrap() {
+            if let Some(size) =
+                array_size.pop_front().expect("impossible case: failed to pop from array_size")
+            {
                 arg_type = ParamType::FixedArray(Box::new(arg_type), size);
             } else {
                 arg_type = ParamType::Array(Box::new(arg_type));
@@ -304,7 +284,17 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 }
 
 /// Given a string (typically a line of decompiled source code), extract a type cast if one exists.
-pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
+// TODO: instead of returning a String, return a ParamType
+/// ```
+/// use heimdall_common::ether::evm::core::types::find_cast;
+///
+/// let line = "uint256(0x000011)";
+/// let (range, cast_type) = find_cast(line).expect("failed to find type cast");
+/// assert_eq!(range, 8..16);
+/// assert_eq!(&line[range], "0x000011");
+/// assert_eq!(cast_type, "uint256");
+/// ```
+pub fn find_cast(line: &str) -> Result<(Range<usize>, String), Error> {
     // find the start of the cast
     match TYPE_CAST_REGEX.find(line).expect("Failed to find type cast.") {
         Some(m) => {
@@ -313,24 +303,19 @@ pub fn find_cast(line: &str) -> (usize, usize, Option<String>) {
             let cast_type = line[start..].split('(').collect::<Vec<&str>>()[0].to_string();
 
             // find where the cast ends
-            let (a, b, _) = find_balanced_encapsulator(&line[end..], ('(', ')'));
-            (end + a, end + b, Some(cast_type))
+            let range = find_balanced_encapsulator(&line[end..], ('(', ')'))?;
+            Ok((end + range.start..end + range.end, cast_type))
         }
-        None => (0, 0, None),
+        None => Err(Error::ParseError("failed to find type cast".to_string())),
     }
 }
 
 /// Given a string of bytes, determine if it is left or right padded.
-pub fn get_padding(bytes: &str) -> Padding {
-    let decoded = match decode_hex(bytes) {
-        Ok(decoded) => decoded,
-        Err(_) => return Padding::None,
-    };
-
-    let size = decoded.len();
+pub fn get_padding(bytes: &[u8]) -> Padding {
+    let size = bytes.len();
 
     // get indices of null bytes in the decoded bytes
-    let null_byte_indices = decoded
+    let null_byte_indices = bytes
         .iter()
         .enumerate()
         .filter(|(_, byte)| **byte == 0)
@@ -357,7 +342,7 @@ pub fn get_padding(bytes: &str) -> Padding {
     }
 
     // get non-null byte indices
-    let non_null_byte_indices = decoded
+    let non_null_byte_indices = bytes
         .iter()
         .enumerate()
         .filter(|(_, byte)| **byte != 0)
@@ -385,40 +370,27 @@ pub fn get_padding(bytes: &str) -> Padding {
 }
 
 /// Given a string of bytes, get the max padding size for the data
-pub fn get_padding_size(bytes: &str) -> usize {
+pub fn get_padding_size(bytes: &[u8]) -> usize {
     match get_padding(bytes) {
         Padding::Left => {
             // count number of null-bytes at the start of the data
-            bytes
-                .chars()
-                .collect::<Vec<char>>()
-                .chunks(2)
-                .map(|c| c.iter().collect::<String>())
-                .take_while(|c| c == "00")
-                .count()
+            bytes.iter().take_while(|byte| **byte == 0).count()
         }
         Padding::Right => {
             // count number of null-bytes at the end of the data
-            bytes
-                .chars()
-                .collect::<Vec<char>>()
-                .chunks(2)
-                .map(|c| c.iter().collect::<String>())
-                .rev()
-                .take_while(|c| c == "00")
-                .count()
+            bytes.iter().rev().take_while(|byte| **byte == 0).count()
         }
         _ => 0,
     }
 }
 
 // Get minimum size needed to store the given word
-pub fn get_potential_types_for_word(word: &str) -> (usize, Vec<String>) {
+pub fn get_potential_types_for_word(word: &[u8]) -> (usize, Vec<String>) {
     // get padding of the word, note this is a maximum
     let padding_size = get_padding_size(word);
 
     // get number of bytes padded
-    let data_size = (word.len() / 2) - padding_size;
+    let data_size = word.len() - padding_size;
     byte_size_to_type(data_size)
 }
 
@@ -426,47 +398,54 @@ pub fn get_potential_types_for_word(word: &str) -> (usize, Vec<String>) {
 mod tests {
     use ethers::abi::ParamType;
 
-    use crate::ether::evm::core::types::{get_padding, parse_function_parameters, Padding};
+    use crate::{
+        ether::evm::core::types::{get_padding, parse_function_parameters, Padding},
+        utils::strings::decode_hex,
+    };
 
     #[test]
     fn test_simple_signature() {
         let solidity_type = "test(uint256)".to_string();
-        let param_type = parse_function_parameters(&solidity_type);
-        assert_eq!(param_type, Some(vec![ParamType::Uint(256)]));
+        let param_type =
+            parse_function_parameters(&solidity_type).expect("failed to parse function parameters");
+        assert_eq!(param_type, vec![ParamType::Uint(256)]);
     }
 
     #[test]
     fn test_multiple_signature() {
         let solidity_type = "test(uint256,string)".to_string();
-        let param_type = parse_function_parameters(&solidity_type);
-        assert_eq!(param_type, Some(vec![ParamType::Uint(256), ParamType::String]));
+        let param_type =
+            parse_function_parameters(&solidity_type).expect("failed to parse function parameters");
+        assert_eq!(param_type, vec![ParamType::Uint(256), ParamType::String]);
     }
 
     #[test]
     fn test_array_signature() {
         let solidity_type = "test(uint256,string[],uint256)";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![
+            vec![
                 ParamType::Uint(256),
                 ParamType::Array(Box::new(ParamType::String)),
                 ParamType::Uint(256)
-            ])
+            ]
         );
     }
 
     #[test]
     fn test_array_fixed_signature() {
         let solidity_type = "test(uint256,string[2],uint256)";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![
+            vec![
                 ParamType::Uint(256),
                 ParamType::FixedArray(Box::new(ParamType::String), 2),
                 ParamType::Uint(256)
-            ])
+            ]
         );
     }
 
@@ -474,10 +453,11 @@ mod tests {
     fn test_complex_signature() {
         let solidity_type =
             "test(uint256,string,(address,address,uint24,address,uint256,uint256,uint256,uint160))";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![
+            vec![
                 ParamType::Uint(256),
                 ParamType::String,
                 ParamType::Tuple(vec![
@@ -490,7 +470,7 @@ mod tests {
                     ParamType::Uint(256),
                     ParamType::Uint(160)
                 ])
-            ])
+            ]
         );
     }
 
@@ -498,10 +478,11 @@ mod tests {
     fn test_tuple_signature() {
         let solidity_type =
             "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![ParamType::Tuple(vec![
+            vec![ParamType::Tuple(vec![
                 ParamType::Address,
                 ParamType::Address,
                 ParamType::Uint(24),
@@ -510,7 +491,7 @@ mod tests {
                 ParamType::Uint(256),
                 ParamType::Uint(256),
                 ParamType::Uint(160)
-            ])])
+            ])]
         );
     }
 
@@ -518,10 +499,11 @@ mod tests {
     fn test_tuple_array_signature() {
         let solidity_type =
             "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)[])";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![ParamType::Array(Box::new(ParamType::Tuple(vec![
+            vec![ParamType::Array(Box::new(ParamType::Tuple(vec![
                 ParamType::Address,
                 ParamType::Address,
                 ParamType::Uint(24),
@@ -530,7 +512,7 @@ mod tests {
                 ParamType::Uint(256),
                 ParamType::Uint(256),
                 ParamType::Uint(160)
-            ])))])
+            ])))]
         );
     }
 
@@ -538,10 +520,11 @@ mod tests {
     fn test_tuple_fixedarray_signature() {
         let solidity_type =
             "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160)[2])";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![ParamType::FixedArray(
+            vec![ParamType::FixedArray(
                 Box::new(ParamType::Tuple(vec![
                     ParamType::Address,
                     ParamType::Address,
@@ -553,17 +536,18 @@ mod tests {
                     ParamType::Uint(160)
                 ])),
                 2
-            )])
+            )]
         );
     }
 
     #[test]
     fn test_nested_tuple_signature() {
         let solidity_type = "exactInputSingle((address,address,uint24,address,uint256,(uint256,uint256)[],uint160))";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![ParamType::Tuple(vec![
+            vec![ParamType::Tuple(vec![
                 ParamType::Address,
                 ParamType::Address,
                 ParamType::Uint(24),
@@ -574,17 +558,18 @@ mod tests {
                     ParamType::Uint(256)
                 ]))),
                 ParamType::Uint(160)
-            ])])
+            ])]
         );
     }
 
     #[test]
     fn test_seaport_fulfill_advanced_order() {
         let solidity_type = "fulfillAdvancedOrder(((address,address,(uint8,address,uint256,uint256,uint256)[],(uint8,address,uint256,uint256,uint256,address)[],uint8,uint256,uint256,bytes32,uint256,bytes32,uint256),uint120,uint120,bytes,bytes),(uint256,uint8,uint256,uint256,bytes32[])[],bytes32,address)";
-        let param_type = parse_function_parameters(solidity_type);
+        let param_type =
+            parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            Some(vec![
+            vec![
                 ParamType::Tuple(vec![
                     ParamType::Tuple(vec![
                         ParamType::Address,
@@ -626,7 +611,7 @@ mod tests {
                 ]))),
                 ParamType::FixedBytes(32),
                 ParamType::Address
-            ])
+            ]
         );
     }
 
@@ -634,98 +619,91 @@ mod tests {
     fn test_get_padding_no_padding() {
         // No padding, input contains no null bytes
         let input = "11".repeat(32);
-        assert_eq!(get_padding(&input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_left_padding() {
         // Left padded, first byte is null
         let input = "00".repeat(31) + "11";
-        assert_eq!(get_padding(&input), Padding::Left);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Left);
     }
 
     #[test]
     fn test_get_padding_right_padding() {
         // Right padding, last byte is null
         let input = "11".to_owned() + &"00".repeat(31);
-        assert_eq!(get_padding(&input), Padding::Right);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Right);
     }
 
     #[test]
     fn test_get_padding_skewed_left_padding() {
         // Both left and right null-bytes, but still left padded
         let input = "00".repeat(30) + "1100";
-        assert_eq!(get_padding(&input), Padding::Left);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Left);
     }
 
     #[test]
     fn test_get_padding_skewed_right_padding() {
         // Both left and right null-bytes, but still right padded
         let input = "0011".to_owned() + &"00".repeat(30);
-        assert_eq!(get_padding(&input), Padding::Right);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Right);
     }
 
     #[test]
     fn test_get_padding_empty_input() {
         // Empty input should result in no padding
         let input = "";
-        assert_eq!(get_padding(input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_single_byte() {
         // Single-byte input with null byte
         let input = "00";
-        assert_eq!(get_padding(input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_single_byte_left_padding() {
         // Single-byte input with left padding
         let input = "0011";
-        assert_eq!(get_padding(input), Padding::Left);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::Left);
     }
 
     #[test]
     fn test_get_padding_single_byte_right_padding() {
         // Single-byte input with right padding
         let input = "1100";
-        assert_eq!(get_padding(input), Padding::Right);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::Right);
     }
 
     #[test]
     fn test_get_padding_single_byte_both_padding() {
         // Single-byte input with both left and right padding
         let input = "001100";
-        assert_eq!(get_padding(input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_mixed_padding() {
         // Mixed padding, some null bytes in the middle
         let input = "00".repeat(10) + "1122330000332211" + &"00".repeat(10);
-        assert_eq!(get_padding(&input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::None);
     }
 
     #[test]
     fn test_get_padding_mixed_padding_skewed_left() {
         // Mixed padding, some null bytes in the middle
         let input = "00".repeat(10) + "001122330000332211" + &"00".repeat(10);
-        assert_eq!(get_padding(&input), Padding::Left);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Left);
     }
 
     #[test]
     fn test_get_padding_mixed_padding_skewed_right() {
         // Mixed padding, some null bytes in the middle
         let input = "00".repeat(10) + "112233000033221100" + &"00".repeat(10);
-        assert_eq!(get_padding(&input), Padding::Right);
-    }
-
-    #[test]
-    fn test_get_padding_invalid_hex_input() {
-        // Invalid hex input, should result in no padding
-        let input = "XYZ";
-        assert_eq!(get_padding(input), Padding::None);
+        assert_eq!(get_padding(&decode_hex(&input).expect("failed to decode hex")), Padding::Right);
     }
 
     #[test]
