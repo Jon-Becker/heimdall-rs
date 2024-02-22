@@ -123,8 +123,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     use std::time::Instant;
     let now = Instant::now();
 
-    set_logger_env(&args.verbose);
-
     // get a new logger
     let logger = Logger::default();
     let mut trace = TraceFactory::default();

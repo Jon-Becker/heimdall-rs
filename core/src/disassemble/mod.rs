@@ -4,7 +4,7 @@ use heimdall_common::{
     debug,
     ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
     info,
-    utils::{io::logging::set_logger_env, strings::encode_hex},
+    utils::strings::encode_hex,
 };
 use heimdall_config::parse_url_arg;
 
@@ -59,8 +59,6 @@ impl DisassemblerArgsBuilder {
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     use std::time::Instant;
     let now = Instant::now();
-
-    set_logger_env(&args.verbose);
 
     let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
         .await

@@ -120,9 +120,6 @@ pub struct SnapshotResult {
 /// signatures, access control, gas consumption, storage accesses, event emissions, and more.
 pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
     use std::time::Instant;
-
-    set_logger_env(&args.verbose);
-
     let now = Instant::now();
     let mut trace = TraceFactory::default();
     let snapshot_call = trace.add_call(

@@ -94,7 +94,6 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
     use std::time::Instant;
     let now = Instant::now();
 
-    set_logger_env(&args.verbose);
     let mut trace = TraceFactory::default();
 
     // add the call to the trace
