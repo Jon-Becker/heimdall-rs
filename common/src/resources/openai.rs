@@ -13,7 +13,7 @@ pub async fn complete(prompt: &str, api_key: &str) -> Option<String> {
     let client = Client::new().with_api_key(api_key);
 
     let request = match CreateCompletionRequestArgs::default()
-        .model("text-davinci-003")
+        .model("gpt-3.5-turbo-instruct")
         .prompt(prompt)
         .max_tokens(512_u16)
         .temperature(0.75)

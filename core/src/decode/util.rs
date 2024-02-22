@@ -9,8 +9,14 @@ pub async fn get_explanation(
 ) -> Option<String> {
     // create the prompt
     let prompt = format!(
-        "Using your knowledge of Ethereum ABIs, explain in human terms what this call may be doing.
-        Be detailed, yet concise.
+        "You are an expert in Ethereum, the EVM, and DeFi protocols. You will be given the following information:
+
+        - The transaction sender (From)
+        - The contract or account the transaction is interacting with (To)
+        - The value of the transaction in wei (which is the smallest unit of Ether, Ethereum's native cryptocurrency)
+        - The decoded transaction data
+
+        Use this information to explain the transaction in a way that a non-technical person can understand.
 
         Transaction From: 0x{}
         Transaction To (Interacted With): 0x{}
