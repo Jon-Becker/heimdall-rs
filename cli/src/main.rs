@@ -18,7 +18,10 @@ use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::{
     fatal, info,
     utils::{
-        io::file::{write_file, write_lines_to_file},
+        io::{
+            file::{write_file, write_lines_to_file},
+            logging::set_logger_env,
+        },
         version::{current_version, remote_version},
     },
 };
@@ -112,6 +115,9 @@ async fn main() -> Result<(), Error> {
         .map_err(|e| Error::Generic(format!("failed to load configuration: {}", e)))?;
     match args.sub {
         Subcommands::Disassemble(mut cmd) => {
+            // set logger env
+            set_logger_env(&cmd.verbose);
+
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -147,6 +153,9 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Decompile(mut cmd) => {
+            // set logger env
+            set_logger_env(&cmd.verbose);
+
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -265,6 +274,9 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Decode(mut cmd) => {
+            // set logger env
+            set_logger_env(&cmd.verbose);
+
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -284,6 +296,9 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::CFG(mut cmd) => {
+            // set logger env
+            set_logger_env(&cmd.verbose);
+
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -318,6 +333,9 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Dump(mut cmd) => {
+            // set logger env
+            set_logger_env(&cmd.verbose);
+
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -370,6 +388,9 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Snapshot(mut cmd) => {
+            // set logger env
+            set_logger_env(&cmd.verbose);
+
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -410,6 +431,9 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Inspect(mut cmd) => {
+            // set logger env
+            set_logger_env(&cmd.verbose);
+
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;

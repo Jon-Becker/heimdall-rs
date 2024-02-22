@@ -11,11 +11,7 @@ use futures::future::try_join_all;
 use heimdall_common::{
     debug_max,
     ether::rpc::{get_block_logs, get_trace, get_transaction},
-    utils::{
-        env::set_env,
-        hex::ToLowerHex,
-        io::logging::{set_logger_env, TraceFactory},
-    },
+    utils::{env::set_env, hex::ToLowerHex, io::logging::TraceFactory},
     warn,
 };
 use heimdall_config::parse_url_arg;
@@ -90,8 +86,6 @@ pub struct InspectResult {
 /// visualization, and more.
 #[allow(deprecated)]
 pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
-    set_logger_env(&args.verbose);
-
     // set skip_resolving env variable
     // TODO: create a trait that can be added to a struct to set env variables
     set_env("SKIP_RESOLVING", &args.skip_resolving.to_string());

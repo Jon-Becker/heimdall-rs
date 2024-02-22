@@ -23,7 +23,7 @@ use heimdall_common::{
     info_spinner, success,
     utils::{
         io::{
-            logging::{set_logger_env, Logger, TraceFactory},
+            logging::{Logger, TraceFactory},
             types::display,
         },
         strings::{encode_hex, StringExt},
@@ -100,8 +100,6 @@ impl DecodeArgsBuilder {
 /// calldata, without the ABI of the target contract.
 #[allow(deprecated)]
 pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
-    set_logger_env(&args.verbose);
-
     // get a new logger and trace
     let logger = Logger::default();
     let mut trace = TraceFactory::default();
@@ -351,7 +349,9 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
     }
 
     // display trace (pretty print decoded calldata)
-    trace.display();
+    if args.verbose.log_level().is_some() {
+        trace.display();
+    }
 
     if args.explain {
         // get a new progress bar

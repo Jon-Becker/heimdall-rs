@@ -9,7 +9,6 @@ use ethers::types::H160;
 use heimdall_common::{
     error, info,
     resources::transpose::{get_contract_creation, get_transaction_list},
-    utils::io::logging::*,
 };
 use heimdall_config::parse_url_arg;
 use std::{collections::HashMap, env, str::FromStr, time::Instant};
@@ -99,8 +98,6 @@ impl DumpArgsBuilder {
 /// entry point for the dump module. Will fetch all storage slots accessed by the target contract,
 /// and dump them to a CSV file or the TUI.
 pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Error> {
-    set_logger_env(&args.verbose);
-
     // parse the output directory
     let mut output_dir = args.output.clone();
     if args.output.is_empty() {
