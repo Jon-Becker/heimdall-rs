@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod benchmark {
-    use clap_verbosity_flag::Verbosity;
     use heimdall_common::utils::testing::benchmarks::async_bench;
 
     use heimdall_core::cfg::CFGArgs;
@@ -10,7 +9,6 @@ mod benchmark {
         async fn bench() {
             let args = CFGArgs {
                 target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-                verbose: Verbosity::new(0, 0),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 color_edges: false,
@@ -29,7 +27,6 @@ mod benchmark {
         async fn bench() {
             let args = CFGArgs {
                 target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
-                verbose: Verbosity::new(0, 0),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 color_edges: false,
@@ -46,7 +43,6 @@ mod benchmark {
 
 #[cfg(test)]
 mod integration_tests {
-    use clap_verbosity_flag::Verbosity;
     use heimdall_core::cfg::CFGArgs;
     use petgraph::dot::Dot;
 
@@ -54,7 +50,6 @@ mod integration_tests {
     async fn test_cfg_simple() {
         let result = heimdall_core::cfg::cfg(CFGArgs {
             target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-            verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
             color_edges: false,
@@ -79,7 +74,6 @@ mod integration_tests {
     async fn test_cfg_complex() {
         let result = heimdall_core::cfg::cfg(CFGArgs {
             target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
-            verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
             color_edges: false,

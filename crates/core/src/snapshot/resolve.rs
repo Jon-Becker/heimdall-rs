@@ -200,7 +200,7 @@ async fn resolve_function_signatures(
         warn!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
     }
 
-    let selected_match = matched_resolved_functions.get(0).expect("no resolved functions matched");
+    let selected_match = matched_resolved_functions.first().expect("no resolved functions matched");
 
     snapshot.resolved_function = Some(selected_match.clone());
 
@@ -253,7 +253,7 @@ async fn resolve_error_signatures(
             warn!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
         }
 
-        let selected_match = match resolved_error_selectors.get(0) {
+        let selected_match = match resolved_error_selectors.first() {
             Some(selected_match) => selected_match,
             None => continue,
         };
@@ -302,7 +302,7 @@ async fn resolve_event_signatures(
             });
         }
 
-        let selected_match = match resolved_event_selectors.get(0) {
+        let selected_match = match resolved_event_selectors.first() {
             Some(selected_match) => selected_match,
             None => continue,
         };

@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod integration_tests {
-    use clap_verbosity_flag::Verbosity;
     use heimdall_common::utils::{sync::blocking_await, threading::task_pool};
     use heimdall_core::inspect::{InspectArgs, InspectArgsBuilder};
     use serde_json::Value;
@@ -11,7 +10,6 @@ mod integration_tests {
             target: String::from(
                 "0xa5f676d0ee4c23cc1ccb0b802be5aaead5827a3337c06e9da8b0a85dfa3e7dd5",
             ),
-            verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
             transpose_api_key: String::from(""),
@@ -29,7 +27,6 @@ mod integration_tests {
             target: String::from(
                 "0x37321f192623002fc4b398b90ea825c37f81e29526fd355cff93ef6962fc0fba",
             ),
-            verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
             transpose_api_key: String::from(""),
@@ -63,7 +60,6 @@ mod integration_tests {
         let results = task_pool(txids, 10, |txid: String| {
             let args = InspectArgsBuilder::new()
                 .target(txid.to_string())
-                .verbose(Verbosity::new(-1, 0))
                 .rpc_url("https://eth.llamarpc.com".to_string())
                 .build()
                 .expect("failed to build args");

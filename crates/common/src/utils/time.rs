@@ -44,7 +44,10 @@ pub fn format_eta(seconds_remaining: u128) -> String {
 /// ```
 pub fn pretty_timestamp() -> String {
     let now = Local::now();
-    now.format("%d-%m-%Y %H:%M:%S.%f").to_string()
+    let mut ts = now.format("%d-%m-%Y %H:%M:%S.%f").to_string();
+    ts.truncate(ts.len() - 3);
+    ts.push('Z');
+    ts
 }
 
 #[cfg(test)]

@@ -1,8 +1,10 @@
 pub(crate) mod error;
+pub(crate) mod log_args;
 pub(crate) mod output;
 
 use backtrace::Backtrace;
 use error::Error;
+use log_args::LogArgs;
 use output::{build_output_path, print_with_less};
 use std::{io, panic};
 use tracing::info;
@@ -16,10 +18,7 @@ use crossterm::{
 
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::utils::{
-    io::{
-        file::{write_file, write_lines_to_file},
-        logging::set_logger_env,
-    },
+    io::file::{write_file, write_lines_to_file},
     version::{current_version, remote_version},
 };
 use heimdall_config::{config, ConfigArgs, Configuration};
@@ -39,6 +38,9 @@ use tui::{backend::CrosstermBackend, Terminal};
 pub struct Arguments {
     #[clap(subcommand)]
     pub sub: Subcommands,
+
+    #[clap(flatten)]
+    logs: LogArgs,
 }
 
 #[derive(Debug, Subcommand)]
@@ -85,10 +87,11 @@ pub enum Subcommands {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // install global collector configured based on RUST_LOG env var.
-    tracing_subscriber::fmt::init();
-
     let args = Arguments::parse();
+
+    // setup logging
+    let _ = args.logs.init_tracing();
+
     // handle catching panics with
     panic::set_hook(Box::new(|panic_info| {
         // cleanup the terminal (break out of alternate screen, disable mouse capture, and show the
@@ -112,9 +115,6 @@ async fn main() -> Result<(), Error> {
         .map_err(|e| Error::Generic(format!("failed to load configuration: {}", e)))?;
     match args.sub {
         Subcommands::Disassemble(mut cmd) => {
-            // set logger env
-            set_logger_env(&cmd.verbose);
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -150,9 +150,6 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Decompile(mut cmd) => {
-            // set logger env
-            set_logger_env(&cmd.verbose);
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -271,9 +268,6 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Decode(mut cmd) => {
-            // set logger env
-            set_logger_env(&cmd.verbose);
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -284,18 +278,12 @@ async fn main() -> Result<(), Error> {
                 cmd.openai_api_key = configuration.openai_api_key;
             }
 
-            // set cmd.verbose to 5
-            cmd.verbose = clap_verbosity_flag::Verbosity::new(5, 0);
-
             let _ = decode(cmd)
                 .await
                 .map_err(|e| Error::Generic(format!("failed to decode calldata: {}", e)))?;
         }
 
         Subcommands::CFG(mut cmd) => {
-            // set logger env
-            set_logger_env(&cmd.verbose);
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -330,9 +318,6 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Dump(mut cmd) => {
-            // set logger env
-            set_logger_env(&cmd.verbose);
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -385,9 +370,6 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Snapshot(mut cmd) => {
-            // set logger env
-            set_logger_env(&cmd.verbose);
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -428,9 +410,6 @@ async fn main() -> Result<(), Error> {
         }
 
         Subcommands::Inspect(mut cmd) => {
-            // set logger env
-            set_logger_env(&cmd.verbose);
-
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;
@@ -448,9 +427,6 @@ async fn main() -> Result<(), Error> {
             if !given_name.is_empty() {
                 filename = format!("{}-{}", given_name, filename);
             }
-
-            // set cmd.verbose to 5
-            cmd.verbose = clap_verbosity_flag::Verbosity::new(5, 0);
 
             let inspect_result = inspect(cmd.clone())
                 .await

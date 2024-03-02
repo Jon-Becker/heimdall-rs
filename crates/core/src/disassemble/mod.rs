@@ -19,10 +19,6 @@ pub struct DisassemblerArgs {
     #[clap(required = true)]
     pub target: String,
 
-    /// Set the output verbosity level, 1 - 5.
-    #[clap(flatten)]
-    pub verbose: clap_verbosity_flag::Verbosity,
-
     /// The RPC provider to use for fetching target bytecode.
     /// This can be an explicit URL or a reference to a MESC endpoint.
     #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
@@ -45,7 +41,6 @@ impl DisassemblerArgsBuilder {
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),
-            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             decimal_counter: Some(false),
             name: Some(String::new()),

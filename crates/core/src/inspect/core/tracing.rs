@@ -204,7 +204,6 @@ impl TryFrom<Call> for DecodedCall {
                             .parse::<bool>()
                             .unwrap_or(false),
                     )
-                    .verbose(clap_verbosity_flag::Verbosity::new(0, 1))
                     .build()
                     .map_err(|_e| Error::DecodeError)?,
             )
@@ -241,7 +240,6 @@ impl TryFrom<CallResult> for DecodedCallResult {
             DecodeArgsBuilder::new()
                 .target(output)
                 .skip_resolving(true)
-                .verbose(clap_verbosity_flag::Verbosity::new(0, 1))
                 .build()
                 .map_err(|_e| Error::DecodeError)?,
         )

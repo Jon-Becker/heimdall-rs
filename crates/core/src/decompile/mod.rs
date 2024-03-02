@@ -58,8 +58,6 @@ pub struct DecompilerArgs {
     pub target: String,
 
     /// Set the output verbosity level, 1 - 5.
-    #[clap(flatten)]
-    pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The RPC provider to use for fetching target bytecode.
     /// This can be an explicit URL or a reference to a MESC endpoint.
@@ -99,7 +97,6 @@ impl DecompilerArgsBuilder {
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),
-            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             default: Some(true),
             skip_resolving: Some(false),
@@ -151,7 +148,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // disassemble the bytecode
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         target: encode_hex(contract_bytecode.clone()),
-        verbose: args.verbose.clone(),
         rpc_url: args.rpc_url.clone(),
         decimal_counter: false,
         name: String::from(""),
@@ -375,7 +371,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                     warn!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
                 }
 
-                let selected_match = match resolved_error_selectors.get(0) {
+                let selected_match = match resolved_error_selectors.first() {
                     Some(selected_match) => selected_match,
                     None => continue,
                 };
@@ -431,7 +427,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                     warn!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
                 }
 
-                let selected_match = match resolved_event_selectors.get(0) {
+                let selected_match = match resolved_event_selectors.first() {
                     Some(selected_match) => selected_match,
                     None => continue,
                 };
@@ -649,7 +645,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                     warn!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
                 }
 
-                let selected_match = match matched_resolved_functions.get(0) {
+                let selected_match = match matched_resolved_functions.first() {
                     Some(selected_match) => selected_match,
                     None => continue,
                 };
@@ -702,7 +698,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                     warn!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
                 }
 
-                let selected_match = match resolved_error_selectors.get(0) {
+                let selected_match = match resolved_error_selectors.first() {
                     Some(selected_match) => selected_match,
                     None => continue,
                 };
@@ -758,7 +754,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                     warn!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
                 }
 
-                let selected_match = match resolved_event_selectors.get(0) {
+                let selected_match = match resolved_event_selectors.first() {
                     Some(selected_match) => selected_match,
                     None => continue,
                 };

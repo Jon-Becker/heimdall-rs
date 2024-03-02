@@ -15,14 +15,13 @@ async-recursion = "1.0.5"
 thiserror = "1.0.50"
 backtrace = "0.3"
 clap = { version = "3.1.18", features = ["derive"] }
-clap-verbosity-flag = "1.0.0"
 colored = "2"
 crossterm = "0.26.1"
 ethers = "2.0.4"
 fancy-regex = "0.11.0"
-heimdall-cache = { path = "./../cache" }
-heimdall-common = { path = "./../common" }
-heimdall-config = { path = "./../config" }
+heimdall-cache = { workspace = true }
+heimdall-common = { workspace = true }
+heimdall-config = { workspace = true }
 indicatif = "0.17.0"
 lazy_static = "1.4.0"
 petgraph = "0.6.2"

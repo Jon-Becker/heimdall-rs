@@ -48,8 +48,6 @@ pub struct DecodeArgs {
     pub target: String,
 
     /// Set the output verbosity level, 1 - 5.
-    #[clap(flatten)]
-    pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The RPC provider to use for fetching target calldata.
     /// This can be an explicit URL or a reference to a MESC endpoint.
@@ -81,7 +79,6 @@ impl DecodeArgsBuilder {
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),
-            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             openai_api_key: Some(String::new()),
             explain: Some(false),
@@ -269,7 +266,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         warn!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
     }
 
-    let selected_match = matches.get(0).expect("matches is empty").clone();
+    let selected_match = matches.first().expect("matches is empty").clone();
 
     let decode_call = trace.add_call(
         0,
@@ -329,10 +326,8 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         decoded_string.push_str(&format!("\n{}", decoded_inputs_as_message.clone().join("\n")));
     }
 
-    // display trace (pretty print decoded calldata)
-    if args.verbose.log_level().is_some() {
-        trace.display();
-    }
+    // TODO: move to cli
+    trace.display();
 
     if args.explain {
         // get a new progress bar

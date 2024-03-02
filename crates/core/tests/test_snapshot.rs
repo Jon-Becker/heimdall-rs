@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod benchmark {
-    use clap_verbosity_flag::Verbosity;
     use heimdall_common::utils::testing::benchmarks::async_bench;
 
     use heimdall_core::snapshot::SnapshotArgs;
@@ -10,7 +9,6 @@ mod benchmark {
         async fn bench() {
             let args = SnapshotArgs {
                 target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
-                verbose: Verbosity::new(0, 0),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,
@@ -30,7 +28,6 @@ mod benchmark {
         async fn bench() {
             let args = SnapshotArgs {
                 target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-                verbose: Verbosity::new(0, 0),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,
@@ -48,7 +45,6 @@ mod benchmark {
 
 #[cfg(test)]
 mod integration_tests {
-    use clap_verbosity_flag::Verbosity;
     use heimdall_common::utils::io::file::delete_path;
     use heimdall_core::snapshot::SnapshotArgs;
 
@@ -56,7 +52,6 @@ mod integration_tests {
     async fn test_snapshot_weth() {
         let args = SnapshotArgs {
             target: String::from("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
-            verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
             skip_resolving: true,
@@ -73,7 +68,6 @@ mod integration_tests {
     async fn test_snapshot_ctf() {
         let args = SnapshotArgs {
             target: String::from("0x9f00c43700bc0000Ff91bE00841F8e04c0495000"),
-            verbose: Verbosity::new(0, 0),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
             skip_resolving: true,
@@ -164,7 +158,6 @@ mod integration_tests {
 
             let args = SnapshotArgs {
                 target: String::from(contract),
-                verbose: Verbosity::new(0, 0),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,
                 skip_resolving: true,

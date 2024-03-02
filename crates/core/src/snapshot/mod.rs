@@ -58,8 +58,6 @@ pub struct SnapshotArgs {
     pub target: String,
 
     /// Set the output verbosity level, 1 - 5.
-    #[clap(flatten)]
-    pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The RPC provider to use for fetching target bytecode.
     /// This can be an explicit URL or a reference to a MESC endpoint.
@@ -95,7 +93,6 @@ impl SnapshotArgsBuilder {
     pub fn new() -> Self {
         SnapshotArgsBuilder {
             target: Some(String::new()),
-            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             rpc_url: Some(String::new()),
             default: Some(true),
             skip_resolving: Some(false),
@@ -182,7 +179,6 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
 
     let disassembled_bytecode = disassemble(DisassemblerArgs {
         rpc_url: args.rpc_url.clone(),
-        verbose: args.verbose.clone(),
         target: args.target.clone(),
         name: args.name.clone(),
         decimal_counter: false,

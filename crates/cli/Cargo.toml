@@ -13,13 +13,13 @@ exclude.workspace = true
 [dependencies]
 backtrace = "0.3"
 clap = {version = "3.1.18", features = ["derive"]}
-clap-verbosity-flag = "1.0.0"
 colored = "2"
 crossterm = "0.26.1"
-heimdall-cache = {path = "./../cache"}
-heimdall-core = {path = "./../core"}
-heimdall-common = {path = "./../common"}
-heimdall-config = {path = "./../config"}
+heimdall-tracing = { workspace = true }
+heimdall-cache = { workspace = true }
+heimdall-core = { workspace = true }
+heimdall-common = { workspace = true }
+heimdall-config = { workspace = true }
 tokio = {version = "1", features = ["full"]}
 tui = "0.19"
 serde = {version = "1.0", features = ["derive"]}
@@ -27,6 +27,7 @@ serde_json = "1.0"
 thiserror = "1.0.50"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
+eyre = "0.6.12"
 
 [[bin]]
 name = "heimdall"

@@ -13,12 +13,11 @@ exclude.workspace = true
 [dependencies]
 async-openai = "0.10.0"
 clap = { version = "3.1.18", features = ["derive"] }
-clap-verbosity-flag = "1.0.0"
 colored = "2"
 crossbeam-channel = "0.5.7"
 ethers = "2.0.4"
 fancy-regex = "0.11.0"
-heimdall-cache = { path = "./../cache" }
+heimdall-cache = { workspace = true }
 indicatif = "0.17.0"
 lazy_static = "1.4.0"
 rand = "0.8.5"

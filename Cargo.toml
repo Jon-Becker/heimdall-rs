@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/tracing",
     "crates/common",
     "crates/config",
     "crates/cache",
@@ -21,3 +22,11 @@ homepage = "https://heimdall.rs"
 repository = "https://github.com/Jon-Becker/heimdall-rs"
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 exclude = [".github/"]
+
+[workspace.dependencies]
+heimdall-core = { path = "crates/core" }
+heimdall-cache = { path = "crates/cache" }
+heimdall-cli = { path = "crates/cli" }
+heimdall-common = { path = "crates/common" }
+heimdall-config = { path = "crates/config" }
+heimdall-tracing = { path = "crates/tracing" }

@@ -410,32 +410,10 @@ impl Default for TraceFactory {
     }
 }
 
-/// Set `RUST_LOG` variable to env if does not exist
-///
-/// ```
-/// use heimdall_common::utils::io::logging::set_logger_env;
-///
-/// let verbosity = clap_verbosity_flag::Verbosity::new(-1, 0);
-/// set_logger_env(&verbosity);
-/// ```
-pub fn set_logger_env(verbosity: &clap_verbosity_flag::Verbosity) {
-    let env_not_set = std::env::var("RUST_LOG").is_err();
-
-    if env_not_set {
-        let log_level = match verbosity.log_level() {
-            Some(level) => level.as_str(),
-            None => "SILENT",
-        };
-
-        std::env::set_var("RUST_LOG", log_level);
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
     use super::*;
-    use std::env;
 
     #[test]
     fn test_raw_trace() {
@@ -533,19 +511,5 @@ mod tests {
         );
 
         trace.display();
-    }
-
-    #[test]
-    fn test_set_logger_env_default() {
-        env::remove_var("RUST_LOG");
-
-        let verbosity = clap_verbosity_flag::Verbosity::new(-1, 0);
-
-        set_logger_env(&verbosity);
-
-        assert_eq!(
-            env::var("RUST_LOG").expect("failed to get RUST_LOG environment variable"),
-            "SILENT"
-        );
     }
 }

@@ -34,8 +34,6 @@ pub struct DumpArgs {
     pub target: String,
 
     /// Set the output verbosity level, 1 - 5.
-    #[clap(flatten)]
-    pub verbose: clap_verbosity_flag::Verbosity,
 
     /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short, default_value = "output", hide_default_value = true)]
@@ -79,7 +77,6 @@ impl DumpArgsBuilder {
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),
-            verbose: Some(clap_verbosity_flag::Verbosity::new(0, 1)),
             output: Some(String::new()),
             rpc_url: Some(String::new()),
             transpose_api_key: Some(String::new()),

@@ -27,7 +27,6 @@ impl DumpState {
         Self {
             args: DumpArgs {
                 target: String::new(),
-                verbose: clap_verbosity_flag::Verbosity::new(1, 0),
                 output: String::new(),
                 rpc_url: String::new(),
                 transpose_api_key: String::new(),
