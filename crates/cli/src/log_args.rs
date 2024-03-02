@@ -148,4 +148,14 @@ impl Verbosity {
             level.into()
         }
     }
+
+    /// Get the corresponding verbosity level.
+    pub fn level(&self) -> Level {
+        match self.verbosity - 1 {
+            0 => Level::WARN,
+            1 => Level::INFO,
+            2 => Level::DEBUG,
+            _ => Level::TRACE,
+        }
+    }
 }

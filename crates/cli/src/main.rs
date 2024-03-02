@@ -7,7 +7,7 @@ use error::Error;
 use log_args::LogArgs;
 use output::{build_output_path, print_with_less};
 use std::{io, panic};
-use tracing::info;
+use tracing::{info, Level};
 
 use clap::{Parser, Subcommand};
 use crossterm::{
@@ -171,6 +171,10 @@ async fn main() -> Result<(), Error> {
                 .await
                 .map_err(|e| Error::Generic(format!("failed to decompile bytecode: {}", e)))?;
 
+            if args.logs.verbosity.level() >= Level::DEBUG {
+                result.display();
+            }
+
             if cmd.output == "print" {
                 let mut output_str = String::new();
 
@@ -278,9 +282,11 @@ async fn main() -> Result<(), Error> {
                 cmd.openai_api_key = configuration.openai_api_key;
             }
 
-            let _ = decode(cmd)
+            let result = decode(cmd)
                 .await
                 .map_err(|e| Error::Generic(format!("failed to decode calldata: {}", e)))?;
+
+            result.display()
         }
 
         Subcommands::CFG(mut cmd) => {
@@ -299,7 +305,11 @@ async fn main() -> Result<(), Error> {
             let cfg = cfg(cmd.clone())
                 .await
                 .map_err(|e| Error::Generic(format!("failed to generate cfg: {}", e)))?;
-            let stringified_dot = build_cfg(&cfg, &cmd);
+            let stringified_dot = build_cfg(&cfg.graph, &cmd);
+
+            if args.logs.verbosity.level() >= Level::DEBUG {
+                cfg.display();
+            }
 
             if cmd.output == "print" {
                 print_with_less(&stringified_dot)
@@ -392,6 +402,10 @@ async fn main() -> Result<(), Error> {
                 &snapshot_result.resolved_events,
             );
 
+            if args.logs.verbosity.level() >= Level::DEBUG {
+                snapshot_result.display();
+            }
+
             if cmd.output == "print" {
                 print_with_less(&csv_lines.join("\n"))
                     .await
@@ -431,6 +445,7 @@ async fn main() -> Result<(), Error> {
             let inspect_result = inspect(cmd.clone())
                 .await
                 .map_err(|e| Error::Generic(format!("failed to inspect transaction: {}", e)))?;
+            inspect_result.display();
 
             if cmd.output == "print" {
                 let mut output_str = String::new();

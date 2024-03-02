@@ -76,7 +76,15 @@ impl InspectArgsBuilder {
 #[derive(Debug, Clone)]
 pub struct InspectResult {
     pub decoded_trace: Option<DecodedTransactionTrace>,
+    _trace: TraceFactory,
 }
+
+impl InspectResult {
+    pub fn display(&self) {
+        self._trace.display();
+    }
+}
+
 /// The entrypoint for the inspect module. This function will analyze the given transaction and
 /// provide a detailed inspection of the transaction, including calldata & trace decoding, log
 /// visualization, and more.
@@ -85,6 +93,8 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     // set skip_resolving env variable
     // TODO: create a trait that can be added to a struct to set env variables
     set_env("SKIP_RESOLVING", &args.skip_resolving.to_string());
+
+    let mut trace = TraceFactory::default();
 
     // get calldata from RPC
     let transaction = get_transaction(&args.target, &args.rpc_url)
@@ -157,7 +167,6 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
             warn!("no vm trace found for transaction. skipping joining logs");
         }
 
-        let mut trace = TraceFactory::default();
         let inspect_call = trace.add_call(
             0,
             transaction.gas.as_u32(),
@@ -168,11 +177,9 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
         );
 
         decoded_trace.add_to_trace(&contracts, &mut trace, inspect_call);
-
-        trace.display();
     } else {
         warn!("no trace found for transaction");
     }
 
-    Ok(InspectResult { decoded_trace })
+    Ok(InspectResult { decoded_trace, _trace: trace })
 }

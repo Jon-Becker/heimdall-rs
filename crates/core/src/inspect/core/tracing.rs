@@ -209,7 +209,7 @@ impl TryFrom<Call> for DecodedCall {
             )
             .await?;
 
-            if let Some(first_result) = result.first() {
+            if let Some(first_result) = result.decoded.first() {
                 decoded_inputs = first_result.decoded_inputs.clone().unwrap_or_default();
                 resolved_function = Some(first_result.clone());
             }
@@ -246,7 +246,7 @@ impl TryFrom<CallResult> for DecodedCallResult {
         .await?;
 
         // get first result
-        let decoded_outputs = if let Some(resolved_function) = result.first() {
+        let decoded_outputs = if let Some(resolved_function) = result.decoded.first() {
             resolved_function.decoded_inputs.clone().unwrap_or_default()
         } else {
             vec![]

@@ -113,6 +113,13 @@ impl DecompilerArgsBuilder {
 pub struct DecompileResult {
     pub source: Option<String>,
     pub abi: Option<Vec<ABIStructure>>,
+    _trace: TraceFactory,
+}
+
+impl DecompileResult {
+    pub fn display(&self) {
+        self._trace.display();
+    }
 }
 
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
@@ -797,7 +804,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     let abi = build_abi(&args, analyzed_functions.clone(), &mut trace, decompile_call)
         .map_err(|e| Error::Generic(format!("failed to build abi: {}", e)))?;
-    trace.display();
     debug!("decompilation completed in {:?}.", now.elapsed());
 
     Ok(DecompileResult {
@@ -829,5 +835,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             None
         },
         abi: Some(abi),
+        _trace: trace,
     })
 }

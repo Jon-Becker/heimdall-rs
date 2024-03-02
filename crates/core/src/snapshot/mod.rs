@@ -109,6 +109,13 @@ pub struct SnapshotResult {
     pub snapshots: Vec<Snapshot>,
     pub resolved_errors: HashMap<String, ResolvedError>,
     pub resolved_events: HashMap<String, ResolvedLog>,
+    _trace: TraceFactory,
+}
+
+impl SnapshotResult {
+    pub fn display(&self) {
+        self._trace.display();
+    }
 }
 
 /// The main snapshot function, which will be called from the main thread. This module is
@@ -217,11 +224,11 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
         )?
     }
 
-    trace.display();
     Ok(SnapshotResult {
         snapshots,
         resolved_errors: all_resolved_errors,
         resolved_events: all_resolved_events,
+        _trace: trace,
     })
 }
 

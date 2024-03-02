@@ -84,9 +84,21 @@ impl CFGArgsBuilder {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CFGResult {
+    pub graph: Graph<String, String>,
+    _trace: TraceFactory,
+}
+
+impl CFGResult {
+    pub fn display(&self) {
+        self._trace.display();
+    }
+}
+
 /// The main entry point for the CFG module. Will generate a control flow graph of the target
 /// bytecode, after performing symbolic execution and discovering all possible execution paths.
-pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
+pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
     use std::time::Instant;
     let now = Instant::now();
 
@@ -215,5 +227,5 @@ pub async fn cfg(args: CFGArgs) -> Result<Graph<String, String>, Error> {
     debug!("control flow graph generated in {:?}.", now.elapsed());
     trace.display();
 
-    Ok(contract_cfg)
+    Ok(CFGResult { graph: contract_cfg, _trace: trace })
 }

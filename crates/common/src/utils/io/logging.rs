@@ -68,16 +68,13 @@ impl TraceFactory {
 
     /// display the trace to the console if the verbosity is high enough
     pub fn display(&self) {
-        if self.level >= 3 {
-            println!("{}:", "trace".bright_blue().bold());
-            for index in 0..self.traces.len() {
-                // safe to unwrap because we just iterated over the traces
-                let trace = self.traces.get(index).expect("Failed to build trace.");
+        for index in 0..self.traces.len() {
+            // safe to unwrap because we just iterated over the traces
+            let trace = self.traces.get(index).expect("Failed to build trace.");
 
-                // match only root traces and print them
-                if trace.parent == 0 {
-                    self.print_trace(" ", index);
-                }
+            // match only root traces and print them
+            if trace.parent == 0 {
+                self.print_trace(" ", index);
             }
         }
     }

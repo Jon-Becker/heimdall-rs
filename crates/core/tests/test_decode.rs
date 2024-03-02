@@ -148,9 +148,9 @@ mod integration_tests {
                 // get the storage diff for this transaction
                 println!("decoding txid: {}", txid);
                 match rt.block_on(heimdall_core::decode::decode(args)) {
-                    Ok(resolved_functions) => {
+                    Ok(result) => {
                         // check if any resolved_function is named Unresolved_{}
-                        if resolved_functions.iter().any(|rf| rf.name.starts_with("Unresolved_")) {
+                        if result.decoded.iter().any(|rf| rf.name.starts_with("Unresolved_")) {
                             println!("decoding txid: {} ... unresolved succeeded", txid);
                         }
 

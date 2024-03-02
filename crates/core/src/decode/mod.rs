@@ -89,10 +89,22 @@ impl DecodeArgsBuilder {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct DecodeResult {
+    pub decoded: Vec<ResolvedFunction>,
+    _trace: TraceFactory,
+}
+
+impl DecodeResult {
+    pub fn display(&self) {
+        self._trace.display();
+    }
+}
+
 /// The entrypoint for the decode module. This will attempt to decode the arguments of the target
 /// calldata, without the ABI of the target contract.
 #[allow(deprecated)]
-pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
+pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
     let mut trace = TraceFactory::default();
 
     // check if we require an OpenAI API key
@@ -326,9 +338,6 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         decoded_string.push_str(&format!("\n{}", decoded_inputs_as_message.clone().join("\n")));
     }
 
-    // TODO: move to cli
-    trace.display();
-
     if args.explain {
         // get a new progress bar
         let explain_progress = ProgressBar::new_spinner();
@@ -350,7 +359,7 @@ pub async fn decode(args: DecodeArgs) -> Result<Vec<ResolvedFunction>, Error> {
         };
     }
 
-    Ok(matches)
+    Ok(DecodeResult { decoded: matches, _trace: trace })
 }
 
 // Attempt to decode the given calldata with the given types.
