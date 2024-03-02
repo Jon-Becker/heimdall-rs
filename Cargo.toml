@@ -1,8 +1,23 @@
 [workspace]
 members = [
-    "common",
-    "config",
-    "core",
-    "cli",
+    "crates/common",
+    "crates/config",
+    "crates/cache",
+    "crates/core",
+    "crates/cli",
 ]
 version = "0.7.3"
+
+# Explicitly set the resolver to version 2, which is the default for packages with edition >= 2021
+# https://doc.rust-lang.org/edition-guide/rust-2021/default-cargo-resolver.html
+resolver = "2"
+
+[workspace.package]
+version = "0.7.3"
+edition = "2021"
+license = "MIT"
+rust-version = "1.75"
+homepage = "https://heimdall.rs"
+repository = "https://github.com/Jon-Becker/heimdall-rs"
+keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
+exclude = [".github/"]
