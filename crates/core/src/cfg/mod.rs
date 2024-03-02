@@ -41,8 +41,6 @@ pub struct CFGArgs {
     #[clap(required = true)]
     pub target: String,
 
-    /// Set the output verbosity level, 1 - 5.
-
     /// The RPC provider to use for fetching target bytecode.
     /// This can be an explicit URL or a reference to a MESC endpoint.
     #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]

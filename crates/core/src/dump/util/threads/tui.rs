@@ -26,7 +26,7 @@ pub fn handle(args: &DumpArgs, output_dir: &str) -> Result<(), Error> {
 
     // create new TUI terminal
     enable_raw_mode().map_err(|_| Error::Generic("failed to enable raw mode".to_string()))?;
-    let mut stdout = io::stdout();
+    let mut stdout = io::stderr();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
         .map_err(|_| Error::Generic("failed to enter alternate screen".to_string()))?;
     let backend = CrosstermBackend::new(stdout);

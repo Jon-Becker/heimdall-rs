@@ -2,19 +2,12 @@ pub(crate) mod error;
 pub(crate) mod log_args;
 pub(crate) mod output;
 
-use backtrace::Backtrace;
 use error::Error;
 use log_args::LogArgs;
 use output::{build_output_path, print_with_less};
-use std::{io, panic};
 use tracing::{info, Level};
 
 use clap::{Parser, Subcommand};
-use crossterm::{
-    event::DisableMouseCapture,
-    execute,
-    terminal::{disable_raw_mode, LeaveAlternateScreen},
-};
 
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::utils::{
@@ -31,7 +24,6 @@ use heimdall_core::{
     inspect::{inspect, InspectArgs},
     snapshot::{snapshot, util::csv::generate_csv, SnapshotArgs},
 };
-use tui::{backend::CrosstermBackend, Terminal};
 
 #[derive(Debug, Parser)]
 #[clap(name = "heimdall", author = "Jonathan Becker <jonathan@jbecker.dev>", version)]
@@ -91,25 +83,6 @@ async fn main() -> Result<(), Error> {
 
     // setup logging
     let _ = args.logs.init_tracing();
-
-    // handle catching panics with
-    panic::set_hook(Box::new(|panic_info| {
-        // cleanup the terminal (break out of alternate screen, disable mouse capture, and show the
-        // cursor)
-        let stdout = io::stdout();
-        let backend = CrosstermBackend::new(stdout);
-        let mut terminal =
-            Terminal::new(backend).expect("failed to initialize terminal for panic handler");
-        disable_raw_mode().expect("failed to disable raw mode for panic handler");
-        execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)
-            .expect("failed to cleanup terminal for panic handler");
-        terminal.show_cursor().expect("failed to show cursor for panic handler");
-
-        // print the panic message
-        let backtrace = Backtrace::new();
-        tracing::error!("thread 'main' encountered a fatal error: '{}'!", panic_info.to_string(),);
-        tracing::error!("Stack Trace:\n\n{:?}", backtrace);
-    }));
 
     let configuration = Configuration::load()
         .map_err(|e| Error::Generic(format!("failed to load configuration: {}", e)))?;

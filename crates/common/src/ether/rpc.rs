@@ -34,7 +34,6 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
         if let Some(chain_id) = read_cache(&cache_key)
             .map_err(|_| error!("failed to read cache for rpc url: {:?}", &rpc_url))?
         {
-            debug!("found cached chain id for rpc url: {:?}", &rpc_url);
             return Ok(chain_id)
         }
 

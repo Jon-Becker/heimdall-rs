@@ -33,8 +33,6 @@ pub struct DumpArgs {
     #[clap(required = true)]
     pub target: String,
 
-    /// Set the output verbosity level, 1 - 5.
-
     /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short, default_value = "output", hide_default_value = true)]
     pub output: String,
@@ -180,7 +178,13 @@ pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Error> {
 
     // in a new thread, start the TUI
     let tui_thread = std::thread::spawn(move || {
+        // disable stdout while TUI is running
+        let stdout_gag = gag::Hold::stdout().unwrap();
+
         let _ = util::threads::tui::handle(&args, &output_dir);
+
+        // re-enable stdout
+        drop(stdout_gag);
     });
 
     // index transactions in a new thread

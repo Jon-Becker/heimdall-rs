@@ -3,6 +3,7 @@ use std::time::Duration;
 use ethers::types::{Diff, H160};
 use heimdall_common::{ether::rpc::get_storage_diff, info_spinner, utils::threading::task_pool};
 use indicatif::ProgressBar;
+use tracing::error;
 
 use crate::{
     dump::{constants::DUMP_STATE, structures::storage_slot::StorageSlot},
@@ -36,9 +37,14 @@ pub async fn handle(addr_hash: H160) -> Result<(), Error> {
         let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
         // get the storage diff for this transaction
-        let state_diff = rt
-            .block_on(get_storage_diff(&tx.hash, &args.rpc_url))
-            .expect("Could not get storage diff.");
+        let state_diff = match rt.block_on(get_storage_diff(&tx.hash, &args.rpc_url)) {
+            Ok(diff) => Some(diff),
+            Err(e) => {
+                error!("failed to get storage diff for transaction {}: {}", tx.hash, e);
+                None
+            }
+        }
+        .flatten();
 
         // unlock state
         let mut state = DUMP_STATE.lock().expect("could not obtain lock on state");
