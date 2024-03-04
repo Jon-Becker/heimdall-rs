@@ -195,6 +195,12 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
         get_resolved_selectors(&disassembled_bytecode, &args.skip_resolving, &evm)
             .await
             .map_err(|e| Error::Generic(format!("failed to get resolved selectors: {}", e)))?;
+    info!("found {} possible function selectors.", selectors.len());
+
+    // if we have no selectors, return early
+    if selectors.is_empty() {
+        return Err(Error::Generic("no function selectors were found".to_string()));
+    }
 
     let (snapshots, all_resolved_errors, all_resolved_events) = get_snapshots(
         selectors,
@@ -208,7 +214,11 @@ pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
     .await
     .map_err(|e| Error::Generic(format!("failed to get snapshots: {}", e)))?;
 
-    info!("symbolic execution completed.");
+    // if snapshots are empty, return early
+    if snapshots.is_empty() {
+        return Err(Error::Generic("no snapshots were generated".to_string()));
+    }
+
     debug!("snapshot completed in {:?}.", now.elapsed());
 
     // open the tui
