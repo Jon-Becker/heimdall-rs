@@ -32,4 +32,7 @@ lazy_static! {
 
     /// used to detect compiler size checks
     pub static ref VARIABLE_SIZE_CHECK_REGEX: Regex = Regex::new(r"!?\(?0(x01)? < [a-zA-Z0-9_\[\]]+\.length\)?").expect("failed to compile regex");
+
+    /// The following regex is used as a detector for AND bitmasks
+    pub static ref AND_BITMASK_REGEX: Regex = Regex::new(r"\(0x([a-fA-F0-9]{2}){1,32}\) & ").expect("failed to build regex");
 }

@@ -2,7 +2,7 @@
 mod benchmark {
     use heimdall_common::utils::testing::benchmarks::async_bench;
 
-    use heimdall_core::decode::DecodeArgs;
+    use heimdall_decoder::DecodeArgs;
 
     #[tokio::test]
     async fn benchmark_decode_transfer() {
@@ -16,7 +16,7 @@ mod benchmark {
                 truncate_calldata: false,
                 skip_resolving: false,
             };
-            let _ = heimdall_core::decode::decode(args).await;
+            let _ = heimdall_decoder::decode(args).await;
         }
 
         async_bench("benchmark_decode_transfer", 100, bench).await;
@@ -34,7 +34,7 @@ mod benchmark {
                 truncate_calldata: false,
                 skip_resolving: false,
             };
-            let _ = heimdall_core::decode::decode(args).await;
+            let _ = heimdall_decoder::decode(args).await;
         }
 
         async_bench("benchmark_decode_uniswap_simple", 100, bench).await;
@@ -52,7 +52,7 @@ mod benchmark {
                 truncate_calldata: false,
                 skip_resolving: false,
             };
-            let _ = heimdall_core::decode::decode(args).await;
+            let _ = heimdall_decoder::decode(args).await;
         }
 
         async_bench("benchmark_decode_seaport_simple", 100, bench).await;
@@ -70,7 +70,7 @@ mod benchmark {
                 truncate_calldata: false,
                 skip_resolving: false,
             };
-            let _ = heimdall_core::decode::decode(args).await;
+            let _ = heimdall_decoder::decode(args).await;
         }
 
         async_bench("benchmark_decode_seaport_complex", 100, bench).await;
@@ -79,7 +79,7 @@ mod benchmark {
 
 #[cfg(test)]
 mod tests {
-    use heimdall_core::decode::DecodeArgs;
+    use heimdall_decoder::DecodeArgs;
 
     #[tokio::test]
     async fn test_decode_transfer() {
@@ -92,7 +92,7 @@ mod tests {
             truncate_calldata: false,
             skip_resolving: false,
         };
-        let _ = heimdall_core::decode::decode(args).await;
+        let _ = heimdall_decoder::decode(args).await;
     }
 
     #[tokio::test]
@@ -106,13 +106,13 @@ mod tests {
             truncate_calldata: false,
             skip_resolving: false,
         };
-        let _ = heimdall_core::decode::decode(args).await;
+        let _ = heimdall_decoder::decode(args).await;
     }
 }
 
 mod integration_tests {
     use heimdall_common::utils::{sync::blocking_await, threading::task_pool};
-    use heimdall_core::decode::DecodeArgsBuilder;
+    use heimdall_decoder::DecodeArgsBuilder;
     use serde_json::Value;
 
     /// Thorough testing for decode across a large number of transactions.
@@ -147,7 +147,7 @@ mod integration_tests {
 
                 // get the storage diff for this transaction
                 println!("decoding txid: {}", txid);
-                match rt.block_on(heimdall_core::decode::decode(args)) {
+                match rt.block_on(heimdall_decoder::decode(args)) {
                     Ok(result) => {
                         // check if any resolved_function is named Unresolved_{}
                         if result.decoded.iter().any(|rf| rf.name.starts_with("Unresolved_")) {
@@ -163,7 +163,8 @@ mod integration_tests {
 
                         // we dont want to count RPC errors as failures
                         match e {
-                            heimdall_core::error::Error::RpcError(_) => 1,
+                            // heimdall_decoder::error::Error::RpcError(_) => 1,
+                            // TODO: fix this
                             _ => 0,
                         }
                     }

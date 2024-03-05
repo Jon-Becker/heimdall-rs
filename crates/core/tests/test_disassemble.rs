@@ -2,7 +2,7 @@
 mod benchmarks {
 
     use heimdall_common::utils::testing::benchmarks::async_bench;
-    use heimdall_core::disassemble::{disassemble, DisassemblerArgs};
+    use heimdall_disassembler::{disassemble, DisassemblerArgs};
 
     #[tokio::test]
     async fn benchmark_disassemble_simple() {
@@ -25,7 +25,7 @@ mod benchmarks {
 mod integration_tests {
     use std::io::Write;
 
-    use heimdall_core::disassemble::{disassemble, DisassemblerArgs};
+    use heimdall_disassembler::{disassemble, DisassemblerArgs};
 
     #[tokio::test]
     async fn test_disassemble_nominal() {

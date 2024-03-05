@@ -1,8 +1,9 @@
-pub mod cfg;
-pub mod decode;
-pub mod decompile;
-pub mod disassemble;
-pub mod dump;
 pub mod error;
-pub mod inspect;
-pub mod snapshot;
+
+pub use heimdall_cfg;
+pub use heimdall_decoder;
+pub use heimdall_decompiler;
+pub use heimdall_disassembler;
+pub use heimdall_dump;
+pub use heimdall_inspect;
+pub use heimdall_snapshot;

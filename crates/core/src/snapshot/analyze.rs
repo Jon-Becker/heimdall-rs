@@ -1,7 +1,7 @@
-use crate::{decompile::constants::AND_BITMASK_REGEX, error::Error};
+use crate::{error::Error};
 
 use super::{
-    constants::VARIABLE_SIZE_CHECK_REGEX,
+    constants::{VARIABLE_SIZE_CHECK_REGEX, AND_BITMASK_REGEX},
     structures::snapshot::{CalldataFrame, Snapshot, StorageFrame},
 };
 use ethers::{

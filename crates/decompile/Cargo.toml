@@ -1,0 +1,20 @@
+[package]
+name = "heimdall-decompiler"
+description = "Decompiles EVM bytecode to human-readable representations"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+exclude.workspace = true
+
+[dependencies]
+heimdall-config = { workspace = true }
+heimdall-common = { workspace = true }
+heimdall-cache = { workspace = true }
+thiserror = "1.0.50"
+clap = { version = "3.1.18", features = ["derive"] }
+derive_builder = "0.12.0"
+alloy-json-abi = "0.6.4"

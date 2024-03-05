@@ -1,0 +1,19 @@
+[package]
+name = "heimdall-inspect"
+description = "Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+exclude.workspace = true
+
+[dependencies]
+heimdall-config = { workspace = true }
+heimdall-common = { workspace = true }
+heimdall-cache = { workspace = true }
+thiserror = "1.0.50"
+clap = { version = "3.1.18", features = ["derive"] }
+derive_builder = "0.12.0"

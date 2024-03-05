@@ -2,7 +2,7 @@
 mod benchmark {
     use heimdall_common::utils::testing::benchmarks::async_bench;
 
-    use heimdall_core::snapshot::SnapshotArgs;
+    use heimdall_snapshot::SnapshotArgs;
 
     #[tokio::test]
     async fn benchmark_snapshot_complex() {
@@ -17,7 +17,7 @@ mod benchmark {
                 output: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::snapshot::snapshot(args).await.expect("failed to snapshot");
+            let _ = heimdall_snapshot::snapshot(args).await.expect("failed to snapshot");
         }
 
         async_bench("benchmark_snapshot_complex", 100, bench).await;
@@ -36,7 +36,7 @@ mod benchmark {
                 output: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::snapshot::snapshot(args).await.expect("failed to snapshot");
+            let _ = heimdall_snapshot::snapshot(args).await.expect("failed to snapshot");
         }
 
         async_bench("benchmark_snapshot_complex", 100, bench).await;
@@ -46,7 +46,7 @@ mod benchmark {
 #[cfg(test)]
 mod integration_tests {
     use heimdall_common::utils::io::file::delete_path;
-    use heimdall_core::snapshot::SnapshotArgs;
+    use heimdall_snapshot::SnapshotArgs;
 
     #[tokio::test]
     async fn test_snapshot_weth() {
@@ -61,7 +61,7 @@ mod integration_tests {
             timeout: 10000,
         };
 
-        let _ = heimdall_core::snapshot::snapshot(args).await.expect("failed to snapshot");
+        let _ = heimdall_snapshot::snapshot(args).await.expect("failed to snapshot");
     }
 
     #[tokio::test]
@@ -77,7 +77,7 @@ mod integration_tests {
             timeout: 10000,
         };
 
-        let _ = heimdall_core::snapshot::snapshot(args).await.expect("failed to snapshot");
+        let _ = heimdall_snapshot::snapshot(args).await.expect("failed to snapshot");
     }
 
     /// Thorough testing for snapshot across a large number of contracts
@@ -166,7 +166,7 @@ mod integration_tests {
                 output: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::snapshot::snapshot(args).await.expect("failed to snapshot");
+            let _ = heimdall_snapshot::snapshot(args).await.expect("failed to snapshot");
         }
 
         delete_path(&String::from("./output/tests/snapshot/integration"));

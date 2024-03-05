@@ -16,13 +16,13 @@ use heimdall_common::utils::{
 };
 use heimdall_config::{config, ConfigArgs, Configuration};
 use heimdall_core::{
-    cfg::{cfg, output::build_cfg, CFGArgs},
-    decode::{decode, DecodeArgs},
-    decompile::{decompile, out::abi::ABIStructure, DecompilerArgs},
-    disassemble::{disassemble, DisassemblerArgs},
-    dump::{dump, DumpArgs},
-    inspect::{inspect, InspectArgs},
-    snapshot::{snapshot, util::csv::generate_csv, SnapshotArgs},
+    heimdall_cfg::{cfg, CFGArgs},
+    heimdall_decoder::{decode, DecodeArgs},
+    heimdall_disassembler::{disassemble, DisassemblerArgs},
+    heimdall_dump::{dump, DumpArgs},
+    heimdall_decompiler::{decompile, DecompilerArgs},
+    heimdall_inspect::{inspect, InspectArgs},
+    heimdall_snapshot::{snapshot, SnapshotArgs},
 };
 
 #[derive(Debug, Parser)]
@@ -150,28 +150,11 @@ async fn main() -> Result<(), Error> {
 
             if cmd.output == "print" {
                 let mut output_str = String::new();
+                output_str.push_str(&format!(
+                    "ABI:\n\n[{}]\n",
+                    serde_json::to_string_pretty(&result.abi).map_err(Error::SerdeError)?
+                ));
 
-                if let Some(abi) = &result.abi {
-                    output_str.push_str(&format!(
-                        "ABI:\n\n[{}]\n",
-                        abi.iter()
-                            .map(|x| {
-                                match x {
-                                    ABIStructure::Function(x) => {
-                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
-                                    }
-                                    ABIStructure::Error(x) => {
-                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
-                                    }
-                                    ABIStructure::Event(x) => {
-                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
-                                    }
-                                }
-                            })
-                            .collect::<Result<Vec<String>, Error>>()?
-                            .join(",\n")
-                    ));
-                }
                 if let Some(source) = &result.source {
                     output_str.push_str(&format!("Source:\n\n{}\n", source));
                 }
@@ -181,37 +164,18 @@ async fn main() -> Result<(), Error> {
                 })?;
             } else {
                 // write the contract ABI
-                if let Some(abi) = result.abi {
-                    let output_path =
-                        build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &abi_filename)
-                            .await
-                            .map_err(|e| {
-                                Error::Generic(format!("failed to build output path: {}", e))
-                            })?;
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &abi_filename)
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?;
 
-                    write_file(
-                        &output_path,
-                        &format!(
-                            "[{}]",
-                            abi.iter()
-                                .map(|x| {
-                                    match x {
-                                        ABIStructure::Function(x) => {
-                                            serde_json::to_string_pretty(x)
-                                                .map_err(Error::SerdeError)
-                                        }
-                                        ABIStructure::Error(x) => serde_json::to_string_pretty(x)
-                                            .map_err(Error::SerdeError),
-                                        ABIStructure::Event(x) => serde_json::to_string_pretty(x)
-                                            .map_err(Error::SerdeError),
-                                    }
-                                })
-                                .collect::<Result<Vec<String>, Error>>()?
-                                .join(",\n")
-                        ),
-                    )
-                    .map_err(|e| Error::Generic(format!("failed to write ABI: {}", e)))?;
-                }
+                write_file(
+                    &output_path,
+                    &serde_json::to_string_pretty(&result.abi).map_err(Error::SerdeError)?,
+                )
+                .map_err(|e| Error::Generic(format!("failed to write ABI: {}", e)))?;
 
                 // write the contract source
                 if let Some(source) = &result.source {
@@ -278,7 +242,7 @@ async fn main() -> Result<(), Error> {
             let cfg = cfg(cmd.clone())
                 .await
                 .map_err(|e| Error::Generic(format!("failed to generate cfg: {}", e)))?;
-            let stringified_dot = build_cfg(&cfg.graph, &cmd);
+            let stringified_dot = cfg.as_dot();
 
             if args.logs.verbosity.level() >= Level::DEBUG {
                 cfg.display();
@@ -369,11 +333,7 @@ async fn main() -> Result<(), Error> {
             let snapshot_result = snapshot(cmd.clone())
                 .await
                 .map_err(|e| Error::Generic(format!("failed to snapshot contract: {}", e)))?;
-            let csv_lines = generate_csv(
-                &snapshot_result.snapshots,
-                &snapshot_result.resolved_errors,
-                &snapshot_result.resolved_events,
-            );
+            let csv_lines = snapshot_result.generate_csv();
 
             if args.logs.verbosity.level() >= Level::DEBUG {
                 snapshot_result.display();
