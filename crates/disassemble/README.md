@@ -1,3 +1,3 @@
-# heimdall-decompiler
+# heimdall-disassembler
 
-Decompiles EVM bytecode to human-readable representations
+Disassembles EVM bytecode to EVM assembly
