@@ -1,6 +1,6 @@
 [package]
 name = "heimdall-decoder"
-description = "Decode calldata into readable types"
+description = "Decodes raw/arbitrary calldata into readable types"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,3 +17,6 @@ heimdall-cache = { workspace = true }
 thiserror = "1.0.50"
 clap = { version = "3.1.18", features = ["derive"] }
 derive_builder = "0.12.0"
+tracing = "0.1.40"
+eyre = "0.6.12"
+ethers = "2.0.4"

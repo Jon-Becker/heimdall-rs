@@ -1,3 +1,3 @@
-# heimdall-decompiler
+# heimdall-decoder
 
-Decompiles EVM bytecode to human-readable representations
+Decodes raw/arbitrary calldata into readable types

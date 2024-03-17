@@ -4,7 +4,7 @@ use heimdall_config::parse_url_arg;
 
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(
-    about = "Decode calldata into readable types",
+    about = "Decodes raw/arbitrary calldata into readable types",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
     global_setting = AppSettings::DeriveDisplayOrder,
     override_usage = "heimdall decode <TARGET> [OPTIONS]"

@@ -1,10 +1,18 @@
-use heimdall_common::{ether::signatures::ResolvedFunction, utils::io::logging::TraceFactory};
+use std::{collections::HashSet, fmt::format, time::Instant};
 
-use crate::{error::Error, interfaces::DecodeArgs};
+use eyre::eyre;
+use heimdall_common::{ether::{calldata::get_calldata_from_target, evm::core::types::{get_padding, get_potential_types_for_word, parse_function_parameters, to_type, Padding}, signatures::{score_signature, ResolveSelector, ResolvedFunction}}, utils::{io::{logging::TraceFactory, types::display}, strings::{encode_hex, StringExt}}};
+use tracing::{debug, info, trace, warn};
+use ethers::{
+    abi::{decode as decode_abi, Param, ParamType, Token},
+    types::Transaction,
+};
+
+use crate::{error::Error, interfaces::DecodeArgs, utils::{try_decode, try_decode_dynamic_parameter}};
 
 #[derive(Debug, Clone)]
 pub struct DecodeResult {
-    pub decoded: Vec<ResolvedFunction>,
+    pub decoded: ResolvedFunction,
     _trace: TraceFactory,
 }
 
@@ -15,5 +23,228 @@ impl DecodeResult {
 }
 
 pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
-    todo!()
+    // init
+    let start_time = Instant::now();
+
+    // check if we require an OpenAI API key
+    if args.explain && args.openai_api_key.is_empty() {
+        return Err(Error::Eyre(
+            eyre!("OpenAI API key is required for explaining calldata. Use `heimdall decode --help` for more information.".to_string()),
+        ));
+    }
+
+    // get the bytecode from the target
+    let start_fetch_time = Instant::now();
+    let mut calldata = get_calldata_from_target(&args.target, &args.rpc_url)
+        .await
+        .map_err(|e| Error::FetchError(format!("fetching target calldata failed: {}", e)))?;
+    debug!("fetching target calldata took {:?}", start_fetch_time.elapsed());
+
+    if calldata.is_empty() {
+        return Err(Error::Eyre(eyre!("calldata is empty. is this a value transfer?")));
+    }
+
+    // if the calldata isnt a standard size, i.e. (len - 4) % 32 != 0, we should warn the user and/or truncate it
+    if (calldata[4..].len() % 32 != 0) && !args.truncate_calldata {
+        warn!("calldata is not a standard size. if decoding fails, consider using the `--truncate-calldata` flag.");
+    } else if args.truncate_calldata {
+        warn!("calldata is not a standard size. truncating the calldata to a standard size.");
+
+        // truncate calldata to a standard size
+        let selector = calldata[0..4].to_owned();
+        let args = calldata[4..][..calldata[4..].len() - (calldata[4..].len() % 32)].to_owned();
+        calldata = [selector, args].concat().into();
+    }
+
+    // parse the two parts of calldata, inputs and selector
+    let function_selector = encode_hex(calldata[0..4].to_owned());
+    let byte_args = &calldata[4..];
+
+    // get the function signature possibilities
+    let start_resolve_time = Instant::now();
+    let potential_matches = if !args.skip_resolving {
+        match ResolvedFunction::resolve(&function_selector).await {
+            Ok(Some(signatures)) => signatures,
+            _ => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+    debug!("resolving potential matches took {:?}", start_resolve_time.elapsed());
+    if !potential_matches.is_empty() {
+        info!("resolved {} potential function signatures", potential_matches.len());
+    }
+
+    // iterate over potential matches and attempt to decode the calldata with them
+    let mut matches = potential_matches.iter().map(|potential_match| {
+        // decode the signature into Vec<ParamType>
+        let inputs = parse_function_parameters(&potential_match.signature)
+            .map_err(|e| Error::Eyre(eyre!("parsing function parameters failed: {}", e)))?;
+
+        if let Ok(result) = decode_abi(&inputs, byte_args)
+            .map_err(|e| Error::Eyre(eyre!("decoding calldata failed: {}", e)))
+        {
+            let mut found_match = potential_match.clone();
+            found_match.decoded_inputs = Some(result);
+            Ok(found_match)
+        } else {
+            debug!(
+                "potential match '{}' ignored. decoding types failed",
+                &potential_match.signature
+            );
+            Err(Error::Eyre(eyre!(
+                "potential match '{}' ignored. decoding types failed",
+                &potential_match.signature
+            )))
+        }
+    })
+    .filter(|result| result.is_ok())
+    .map(|result| result.expect("unreachable"))
+    .collect::<Vec<ResolvedFunction>>();
+
+    if matches.len() > 1 {
+        debug!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
+        matches.sort_by(|a, b| {
+            let a_score = score_signature(&a.signature);
+            let b_score = score_signature(&b.signature);
+            b_score.cmp(&a_score)
+        });
+    }
+    else if matches.is_empty() {
+        warn!("couldn't find any resolved matches for '{}'", function_selector);
+        info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
+
+        // we're going to build a Vec<ParamType> of all possible types for each
+        let mut potential_inputs: Vec<ParamType> = Vec::new();
+
+        // chunk in blocks of 32 bytes
+        let calldata_words = calldata[4..].chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
+
+        // while calldata_words is not empty, iterate over it
+        let mut i = 0;
+        let mut covered_words = HashSet::new();
+        while covered_words.len() != calldata_words.len() {
+            let word = calldata_words[i].to_owned();
+
+            // check if the first word is abiencoded
+            if let Some(abi_encoded) = try_decode_dynamic_parameter(i, &calldata_words)? {
+                let potential_type = to_type(&abi_encoded.ty);
+                potential_inputs.push(potential_type);
+                covered_words.extend(abi_encoded.coverages);
+            } else {
+                let (_, mut potential_types) = get_potential_types_for_word(&word);
+
+                // perform heuristics
+                // - if we use right-padding, this is probably bytesN
+                // - if we use left-padding, this is probably uintN or intN
+                // - if we use no padding, this is probably bytes32
+                match get_padding(&word) {
+                    Padding::Left => potential_types
+                        .retain(|t| t.starts_with("uint") || t.starts_with("address")),
+                    _ => potential_types
+                        .retain(|t| t.starts_with("bytes") || t.starts_with("string")),
+                }
+
+                let potential_type =
+                    to_type(potential_types.first().expect("potential types is empty"));
+
+                potential_inputs.push(potential_type);
+                covered_words.insert(i);
+            }
+
+            i += 1;
+        }
+
+        trace!(
+            "potential parameter inputs, ({:?})",
+            potential_inputs.iter().map(|x| x.to_string()).collect::<Vec<String>>()
+        );
+
+        if let Ok((decoded_inputs, params)) = try_decode(&potential_inputs, byte_args) {
+            // build a ResolvedFunction to add to matches
+            let resolved_function = ResolvedFunction {
+                name: format!("Unresolved_{}", function_selector),
+                signature: format!(
+                    "Unresolved_{}({})",
+                    function_selector,
+                    params.iter().map(|x| x.kind.to_string()).collect::<Vec<String>>().join(", ")
+                ),
+                inputs: params.iter().map(|x| x.kind.to_string()).collect::<Vec<String>>(),
+                decoded_inputs: Some(decoded_inputs),
+            };
+
+            matches.push(resolved_function);
+        } else {
+            return Err(Error::Eyre(eyre!("failed to dynamically decode calldata")));
+        }
+    }
+
+    let selected_match = matches.first().expect("matches is empty").clone();
+    // build trace
+    let mut trace = TraceFactory::default();
+    let decode_call = trace.add_call(
+        0,
+        line!(),
+        "heimdall".to_string(),
+        "decode".to_string(),
+        vec![args.target.truncate(64)],
+        "()".to_string(),
+    );
+    trace.br(decode_call);
+    trace.add_message(decode_call, line!(), vec![format!("name:      {}", selected_match.name)]);
+    trace.add_message(
+        decode_call,
+        line!(),
+        vec![format!("signature: {}", selected_match.signature)],
+    );
+    trace.add_message(decode_call, line!(), vec![format!("selector:  0x{function_selector}")]);
+    trace.add_message(decode_call, line!(), vec![format!("calldata:  {} bytes", calldata.len())]);
+    trace.br(decode_call);
+
+    // build decoded string for --explain
+    let decoded_string = &mut format!(
+        "{}\n{}\n{}\n{}",
+        format!("name: {}", selected_match.name),
+        format!("signature: {}", selected_match.signature),
+        format!("selector: 0x{function_selector}"),
+        format!("calldata: {} bytes", calldata.len())
+    );
+
+    // build inputs
+    for (i, input) in
+        selected_match.decoded_inputs.as_ref().ok_or(Error::Eyre(eyre!("tracing decode error")))?.iter().enumerate()
+    {
+        let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
+        if decoded_inputs_as_message.is_empty() {
+            break;
+        }
+
+        if i == 0 {
+            decoded_inputs_as_message[0] = format!(
+                "input {}:{}{}",
+                i,
+                " ".repeat(4 - i.to_string().len()),
+                decoded_inputs_as_message[0].replacen("           ", "", 1)
+            )
+        } else {
+            decoded_inputs_as_message[0] = format!(
+                "      {}:{}{}",
+                i,
+                " ".repeat(4 - i.to_string().len()),
+                decoded_inputs_as_message[0].replacen("           ", "", 1)
+            )
+        }
+
+        // add to trace and decoded string
+        trace.add_message(decode_call, 1, decoded_inputs_as_message.clone());
+        decoded_string.push_str(&format!("\n{}", decoded_inputs_as_message.clone().join("\n")));
+    }
+
+    info!("decoded {} bytes successfully", calldata.len());
+    debug!("disassembly took {:?}", start_time.elapsed());
+
+    Ok(DecodeResult {
+        _trace: trace,
+        decoded: selected_match
+    })
 }
