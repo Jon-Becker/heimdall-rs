@@ -183,7 +183,7 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
     let selected_match = matches.first().expect("matches is empty").clone();
     debug!("decoding calldata took {:?}", decode_start_time.elapsed());
     info!("decoded {} bytes successfully", calldata.len());
-    debug!("disassembly took {:?}", start_time.elapsed());
+    debug!("decoding took {:?}", start_time.elapsed());
     Ok(DecodeResult {
         _trace: TraceFactory::try_from(&selected_match)?,
         decoded: selected_match
