@@ -76,6 +76,7 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
     }
 
     // iterate over potential matches and attempt to decode the calldata with them
+    let decode_start_time = Instant::now();
     let mut matches = potential_matches.iter().map(|potential_match| {
         // decode the signature into Vec<ParamType>
         let inputs = parse_function_parameters(&potential_match.signature)
@@ -180,6 +181,8 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
     }
 
     let selected_match = matches.first().expect("matches is empty").clone();
+    debug!("decoding calldata took {:?}", decode_start_time.elapsed());
+
     // build trace
     let mut trace = TraceFactory::default();
     let decode_call = trace.add_call(
