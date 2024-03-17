@@ -154,7 +154,7 @@ pub async fn get_transaction_list(
     Ok(transactions)
 }
 
-/// Get the contrct creation block and transaction hash for the given address.
+/// Get the contract creation block and transaction hash for the given address.
 ///
 /// ```
 /// use heimdall_common::resources::transpose::get_contract_creation;

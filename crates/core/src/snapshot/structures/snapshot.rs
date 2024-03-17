@@ -44,7 +44,7 @@ pub struct Snapshot {
     // as well as ABI specifications.
     pub errors: HashMap<U256, Option<ResolvedError>>,
 
-    // stores the matched resolved function for this Functon
+    // stores the matched resolved function for this Function
     pub resolved_function: Option<ResolvedFunction>,
 
     // modifiers

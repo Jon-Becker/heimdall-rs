@@ -85,7 +85,7 @@ fn convert_access_to_variable(line: &str) -> Result<String, Error> {
         // unlock the map
         drop(mem_map);
 
-        // upadte the memory name
+        // update the memory name
         cleaned = cleaned.replace(memloc.as_str(), &variable_name);
 
         // recurse to replace any other memory accesses
