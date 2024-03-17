@@ -182,72 +182,10 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
 
     let selected_match = matches.first().expect("matches is empty").clone();
     debug!("decoding calldata took {:?}", decode_start_time.elapsed());
-
-    // build trace
-    let mut trace = TraceFactory::default();
-    let decode_call = trace.add_call(
-        0,
-        line!(),
-        "heimdall".to_string(),
-        "decode".to_string(),
-        vec![args.target.truncate(64)],
-        "()".to_string(),
-    );
-    trace.br(decode_call);
-    trace.add_message(decode_call, line!(), vec![format!("name:      {}", selected_match.name)]);
-    trace.add_message(
-        decode_call,
-        line!(),
-        vec![format!("signature: {}", selected_match.signature)],
-    );
-    trace.add_message(decode_call, line!(), vec![format!("selector:  0x{function_selector}")]);
-    trace.add_message(decode_call, line!(), vec![format!("calldata:  {} bytes", calldata.len())]);
-    trace.br(decode_call);
-
-    // build decoded string for --explain
-    let decoded_string = &mut format!(
-        "{}\n{}\n{}\n{}",
-        format!("name: {}", selected_match.name),
-        format!("signature: {}", selected_match.signature),
-        format!("selector: 0x{function_selector}"),
-        format!("calldata: {} bytes", calldata.len())
-    );
-
-    // build inputs
-    for (i, input) in
-        selected_match.decoded_inputs.as_ref().ok_or(Error::Eyre(eyre!("tracing decode error")))?.iter().enumerate()
-    {
-        let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
-        if decoded_inputs_as_message.is_empty() {
-            break;
-        }
-
-        if i == 0 {
-            decoded_inputs_as_message[0] = format!(
-                "input {}:{}{}",
-                i,
-                " ".repeat(4 - i.to_string().len()),
-                decoded_inputs_as_message[0].replacen("           ", "", 1)
-            )
-        } else {
-            decoded_inputs_as_message[0] = format!(
-                "      {}:{}{}",
-                i,
-                " ".repeat(4 - i.to_string().len()),
-                decoded_inputs_as_message[0].replacen("           ", "", 1)
-            )
-        }
-
-        // add to trace and decoded string
-        trace.add_message(decode_call, 1, decoded_inputs_as_message.clone());
-        decoded_string.push_str(&format!("\n{}", decoded_inputs_as_message.clone().join("\n")));
-    }
-
     info!("decoded {} bytes successfully", calldata.len());
     debug!("disassembly took {:?}", start_time.elapsed());
-
     Ok(DecodeResult {
-        _trace: trace,
+        _trace: TraceFactory::try_from(&selected_match)?,
         decoded: selected_match
     })
 }
