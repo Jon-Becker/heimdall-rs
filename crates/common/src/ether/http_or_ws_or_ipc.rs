@@ -65,7 +65,7 @@ impl From<HttpOrWsOrIpcError> for ProviderError {
 }
 
 /// Next, we create our transport type, which in this case will be an enum that contains
-/// either [`Http`][`Ws`] or [`Ipc`].
+/// either [`Http`], [`Ws`] or [`Ipc`].
 #[derive(Clone, Debug)]
 pub enum HttpOrWsOrIpc {
     Ws(Ws),
@@ -74,19 +74,18 @@ pub enum HttpOrWsOrIpc {
 }
 
 // We implement a convenience "constructor" method, to easily initialize the transport.
-// This will connect to [`Ws`] if it's a valid [URL](url::Url), otherwise it'll
-// default to [`Ipc`].
+// This will connect to [`Http`] if the rpc_url contains 'http', to [`Ws`] if it contains 'ws',
+// otherwise it'll default to [`Ipc`].
 impl HttpOrWsOrIpc {
-    pub async fn connect(s: &str) -> Result<Self, HttpOrWsOrIpcError> {
-        let this = if s.to_lowercase().contains("ipc"){
-            Self::Ipc(Ipc::connect(s).await?)
+    pub async fn connect(rpc_url: &str) -> Result<Self, HttpOrWsOrIpcError> {
+        let this = if rpc_url.to_lowercase().contains("http") {
+            Self::Http(Http::from_str(rpc_url).unwrap())
         }
-        else if s.to_lowercase().contains("http"){
-            Self::Http(Http::from_str(s).unwrap())
+        else if rpc_url.to_lowercase().contains("ws") {
+            Self::Ws(Ws::connect(rpc_url).await?)
         }
-        else 
-        {
-            Self::Ws(Ws::connect(s).await?)
+        else {
+            Self::Ipc(Ipc::connect(rpc_url).await?)
         };
         Ok(this)
     }
@@ -121,6 +120,7 @@ impl JsonRpcClient for HttpOrWsOrIpc {
 
 // We can also implement [`PubsubClient`], since both `Ws` and `Ipc` implement it, by
 // doing the same as in the `JsonRpcClient` implementation above.
+// Trying to subscribe on a `Http` will panic.
 impl PubsubClient for HttpOrWsOrIpc {
     // Since both `Ws` and `Ipc`'s `NotificationStream` associated type is the same,
     // we can simply return one of them.
