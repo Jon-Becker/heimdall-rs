@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use crate::{info_spinner, Error};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TransposeStats {
@@ -221,7 +221,10 @@ pub async fn get_label(address: &str, api_key: &str) -> Option<String> {
             "{{\"sql\":\"SELECT COALESCE( (SELECT name FROM ethereum.contract_labels WHERE contract_address = '{address}' ), (SELECT ens_name FROM ethereum.ens_names WHERE primary_address = '{address}' LIMIT 1), (SELECT protocol_name FROM ethereum.protocols WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.tokens WHERE contract_address = '{address}' ), (SELECT symbol FROM ethereum.collections WHERE contract_address = '{address}' ) ) as label\",\"parameters\":{{}},\"options\":{{\"timeout\": 999999999}}}}",
         );
 
+    trace!("querying label for address: {}", address);
+    let start_time = Instant::now();
     let response = call_transpose(&query, api_key).await?;
+    trace!("fetching label for {address} took {:?}", start_time.elapsed());
 
     // parse the results
     if let Some(result) = response.results.into_iter().next() {

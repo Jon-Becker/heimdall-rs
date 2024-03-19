@@ -1,3 +1,3 @@
-# heimdall-decompiler
+# heimdall-inspect
 
-Decompiles EVM bytecode to human-readable representations
+Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more.
