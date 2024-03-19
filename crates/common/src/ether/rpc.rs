@@ -1,4 +1,7 @@
-use crate::{error::Error, ether::http_or_ws_or_ipc::{self, HttpOrWsOrIpc}};
+use crate::{
+    error::Error,
+    ether::http_or_ws_or_ipc::{self, HttpOrWsOrIpc},
+};
 use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,

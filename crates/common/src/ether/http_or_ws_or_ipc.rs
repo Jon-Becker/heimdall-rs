@@ -50,7 +50,7 @@ impl RpcError for HttpOrWsOrIpcError {
         match self {
             HttpOrWsOrIpcError::Ws(WsClientError::JsonError(e)) => Some(e),
             HttpOrWsOrIpcError::Ipc(IpcError::JsonError(e)) => Some(e),
-            HttpOrWsOrIpcError::Http(HttpClientError::SerdeJson{err : e, text: _}) => Some(e),
+            HttpOrWsOrIpcError::Http(HttpClientError::SerdeJson { err: e, text: _ }) => Some(e),
             _ => None,
         }
     }
@@ -80,11 +80,9 @@ impl HttpOrWsOrIpc {
     pub async fn connect(rpc_url: &str) -> Result<Self, HttpOrWsOrIpcError> {
         let this = if rpc_url.to_lowercase().contains("http") {
             Self::Http(Http::from_str(rpc_url).unwrap())
-        }
-        else if rpc_url.to_lowercase().contains("ws") {
+        } else if rpc_url.to_lowercase().contains("ws") {
             Self::Ws(Ws::connect(rpc_url).await?)
-        }
-        else {
+        } else {
             Self::Ipc(Ipc::connect(rpc_url).await?)
         };
         Ok(this)
@@ -146,7 +144,7 @@ impl PubsubClient for HttpOrWsOrIpc {
         Ok(())
     }
 }
- 
+
 #[tokio::test]
 async fn test_subscription() {
     // Spawn Anvil
