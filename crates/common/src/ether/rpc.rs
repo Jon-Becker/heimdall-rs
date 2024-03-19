@@ -1,8 +1,8 @@
-use crate::error::Error;
+use crate::{error::Error, ether::http_or_ws_or_ipc::{self, HttpOrWsOrIpc}};
 use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,
-    providers::{Http, Middleware, Provider},
+    providers::{Middleware, Provider},
     types::{
         BlockNumber::{self},
         BlockTrace, Filter, FilterBlockOption, StateDiff, TraceType, Transaction, H256,
@@ -11,6 +11,24 @@ use ethers::{
 use heimdall_cache::{read_cache, store_cache};
 use std::{str::FromStr, time::Duration};
 use tracing::{debug, error, trace};
+
+/// Get the Provider object for RPC URL
+///
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_provider;
+///
+/// // let provider = get_provider("https://eth.llamarpc.com").await?;
+/// //assert_eq!(provider.get_chainid().await.unwrap(), 1);
+/// ```
+pub async fn get_provider(rpc_url: &str) -> Result<Provider<HttpOrWsOrIpc>, Error> {
+    Ok(Provider::new(match http_or_ws_or_ipc::HttpOrWsOrIpc::connect(rpc_url).await {
+        Ok(provider) => provider,
+        Err(error) => {
+            error!("failed to connect to RPC provider '{}' .", &rpc_url);
+            return Err(Error::Generic(error.to_string()));
+        }
+    }))
+}
 
 /// Get the chainId of the provided RPC URL
 ///
@@ -44,7 +62,7 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
         }
 
         // create new provider
-        let provider = match Provider::<Http>::try_from(rpc_url) {
+        let provider = match get_provider(rpc_url).await {
             Ok(provider) => provider,
             Err(_) => {
                 error!("failed to connect to RPC provider '{}' .", &rpc_url);
@@ -108,7 +126,7 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<Vec<u8>, 
         }
 
         // create new provider
-        let provider = match Provider::<Http>::try_from(rpc_url) {
+        let provider = match get_provider(rpc_url).await {
             Ok(provider) => provider,
             Err(_) => {
                 error!("failed to connect to RPC provider '{}' .", &rpc_url);
@@ -175,7 +193,7 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
         }
 
         // create new provider
-        let provider = match Provider::<Http>::try_from(rpc_url) {
+        let provider = match get_provider(rpc_url).await {
             Ok(provider) => provider,
             Err(_) => {
                 error!("failed to connect to RPC provider '{}' .", &rpc_url);
@@ -250,7 +268,7 @@ pub async fn get_storage_diff(
             );
 
             // create new provider
-            let provider = match Provider::<Http>::try_from(rpc_url) {
+            let provider = match get_provider(rpc_url).await {
                 Ok(provider) => provider,
                 Err(_) => {
                     error!("failed to connect to RPC provider '{}' .", &rpc_url);
@@ -325,7 +343,7 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
                 &transaction_hash);
 
             // create new provider
-            let provider = match Provider::<Http>::try_from(rpc_url) {
+            let provider = match get_provider(rpc_url).await {
                 Ok(provider) => provider,
                 Err(_) => {
                     error!("failed to connect to RPC provider '{}' .", &rpc_url);
@@ -394,7 +412,7 @@ pub async fn get_block_logs(
             trace!("fetching logs from node for block: '{}' .", &block_number);
 
             // create new provider
-            let provider = match Provider::<Http>::try_from(rpc_url) {
+            let provider = match get_provider(rpc_url).await {
                 Ok(provider) => provider,
                 Err(_) => {
                     error!("failed to connect to RPC provider '{}' .", &rpc_url);
@@ -539,5 +557,13 @@ pub mod tests {
             .expect("get_block_logs() returned an error!");
 
         assert!(!logs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_chain_id_with_ws_rpc() {
+        let rpc_url = "wss://zksync.drpc.org";
+        let rpc_chain_id = chain_id(rpc_url).await.expect("chain_id() returned an error!");
+
+        assert_eq!(rpc_chain_id, 324);
     }
 }
