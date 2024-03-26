@@ -106,7 +106,6 @@ impl JsonRpcClient for HttpOrWsOrIpc {
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned + Send,
     {
-        // println!("request");
         let res = match self {
             Self::Ws(ws) => JsonRpcClient::request(ws, method, params).await?,
             Self::Ipc(ipc) => JsonRpcClient::request(ipc, method, params).await?,
