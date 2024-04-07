@@ -1,0 +1,74 @@
+use std::collections::HashSet;
+
+use ethers::{abi::AbiEncode, types::U256};
+use eyre::{eyre, OptionExt};
+use heimdall_common::ether::evm::core::{
+    opcodes::{WrappedInput, WrappedOpcode},
+    types::convert_bitmask,
+    vm::State,
+};
+use tracing::{debug, trace};
+
+use crate::{
+    core::analyze::AnalyzerState,
+    interfaces::{AnalyzedFunction, CalldataFrame, TypeHeuristic},
+    Error,
+};
+
+pub fn event_heuristic(
+    function: &mut AnalyzedFunction,
+    state: &State,
+    _: &mut AnalyzerState,
+) -> Result<(), Error> {
+    if (0xA0..=0xA4).contains(&state.last_instruction.opcode) {
+        // this should be the last event in state
+        let event = state.events.last().ok_or_eyre("no events in state")?;
+        let selector = event.topics.first().unwrap_or(&U256::zero()).to_owned();
+        let anonymous = selector == U256::zero();
+
+        // insert this selector into events
+        function.events.insert(selector);
+
+        // decode the data field
+        let data_mem_ops =
+            function.get_memory_range(state.last_instruction.inputs[0], state.last_instruction.inputs[1]);
+        let data_mem_ops_solidified = data_mem_ops
+            .iter()
+            .map(|x| x.operations.solidify())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        // add the event emission to the function's logic
+        function.logic.push(format!(
+            "emit Event_{}({}{});{}",
+            &event
+                .topics
+                .first()
+                .unwrap_or(&U256::from(0))
+                .encode_hex()
+                .replacen("0x", "", 1)[0..8],
+            event.topics.get(1..).map(|topics| {
+                if !event.data.is_empty() && !topics.is_empty() {
+                    let mut solidified_topics: Vec<String> = Vec::new();
+                    for (i, _) in topics.iter().enumerate() {
+                        solidified_topics
+                            .push(state.last_instruction.input_operations[i + 3].solidify());
+                    }
+                    format!("{}, ", solidified_topics.join(", "))
+                }
+                else {
+                    let mut solidified_topics: Vec<String> = Vec::new();
+                    for (i, _) in topics.iter().enumerate() {
+                        solidified_topics
+                            .push(state.last_instruction.input_operations[i + 3].solidify());
+                    }
+                    solidified_topics.join(", ")
+                }
+            }).unwrap_or("".to_string()),
+            data_mem_ops_solidified,
+            if anonymous { " // anonymous event" } else { "" }
+        ));
+    }
+
+    Ok(())
+}

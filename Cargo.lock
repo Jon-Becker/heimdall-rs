@@ -1889,13 +1889,20 @@ dependencies = [
 name = "heimdall-cfg"
 version = "0.7.3"
 dependencies = [
+ "alloy-json-abi",
  "clap",
  "derive_builder",
+ "ethers",
+ "eyre",
+ "futures",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
+ "heimdall-disassembler",
+ "lazy_static",
  "petgraph",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -1934,6 +1941,7 @@ dependencies = [
  "colored",
  "crossbeam-channel",
  "ethers",
+ "eyre",
  "fancy-regex",
  "heimdall-cache",
  "indicatif",
@@ -2005,10 +2013,13 @@ version = "0.7.3"
 dependencies = [
  "clap",
  "derive_builder",
+ "ethers",
+ "eyre",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -2018,10 +2029,19 @@ dependencies = [
  "alloy-json-abi",
  "clap",
  "derive_builder",
+ "ethers",
+ "eyre",
+ "fancy-regex",
+ "futures",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
+ "heimdall-disassembler",
+ "lazy_static",
+ "serde",
+ "serde_json",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -2029,11 +2049,12 @@ name = "heimdall-disassembler"
 version = "0.7.3"
 dependencies = [
  "clap",
- "derive_builder",
+ "eyre",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -2053,12 +2074,21 @@ dependencies = [
 name = "heimdall-inspect"
 version = "0.7.3"
 dependencies = [
+ "async-convert",
+ "async-recursion",
  "clap",
  "derive_builder",
+ "ethers",
+ "eyre",
+ "futures",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
+ "heimdall-decoder",
+ "serde",
  "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

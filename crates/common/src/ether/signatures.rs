@@ -6,7 +6,11 @@ use tracing::trace;
 
 use crate::{
     error::Error,
-    utils::{http::get_json_from_url, io::{logging::TraceFactory, types::display}, strings::replace_last},
+    utils::{
+        http::get_json_from_url,
+        io::{logging::TraceFactory, types::display},
+        strings::replace_last,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -315,7 +319,6 @@ pub fn score_signature(signature: &str) -> u32 {
     score
 }
 
-
 /// trait impls
 /// trait impls
 /// trait impls
@@ -335,21 +338,11 @@ impl TryFrom<&ResolvedFunction> for TraceFactory {
             "()".to_string(),
         );
         trace.br(decode_call);
-        trace.add_message(
-            decode_call,
-            line!(),
-            vec![format!("signature: {}", function.signature)],
-        );
+        trace.add_message(decode_call, line!(), vec![format!("signature: {}", function.signature)]);
         trace.br(decode_call);
 
         // build inputs
-        for (i, input) in
-            function
-                .decoded_inputs
-                .as_ref()
-                .unwrap_or(&Vec::new())
-                .iter()
-                .enumerate()
+        for (i, input) in function.decoded_inputs.as_ref().unwrap_or(&Vec::new()).iter().enumerate()
         {
             let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
             if decoded_inputs_as_message.is_empty() {
@@ -379,7 +372,6 @@ impl TryFrom<&ResolvedFunction> for TraceFactory {
         Ok(trace)
     }
 }
-
 
 /// tests
 /// tests

@@ -34,6 +34,7 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

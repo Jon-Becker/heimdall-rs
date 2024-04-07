@@ -18,9 +18,9 @@ use heimdall_config::{config, ConfigArgs, Configuration};
 use heimdall_core::{
     heimdall_cfg::{cfg, CFGArgs},
     heimdall_decoder::{decode, DecodeArgs},
+    heimdall_decompiler::{decompile, DecompilerArgs},
     heimdall_disassembler::{disassemble, DisassemblerArgs},
     heimdall_dump::{dump, DumpArgs},
-    heimdall_decompiler::{decompile, DecompilerArgs},
     heimdall_inspect::{inspect, InspectArgs},
     heimdall_snapshot::{snapshot, SnapshotArgs},
 };
@@ -242,11 +242,7 @@ async fn main() -> Result<(), Error> {
             let cfg = cfg(cmd.clone())
                 .await
                 .map_err(|e| Error::Generic(format!("failed to generate cfg: {}", e)))?;
-            let stringified_dot = cfg.as_dot();
-
-            if args.logs.verbosity.level() >= Level::DEBUG {
-                cfg.display();
-            }
+            let stringified_dot = cfg.as_dot(cmd.color_edges);
 
             if cmd.output == "print" {
                 print_with_less(&stringified_dot)
@@ -383,17 +379,15 @@ async fn main() -> Result<(), Error> {
             if cmd.output == "print" {
                 let mut output_str = String::new();
 
-                if let Some(decoded_trace) = inspect_result.decoded_trace {
-                    output_str.push_str(&format!(
-                        "Decoded Trace:\n\n{}\n",
-                        serde_json::to_string_pretty(&decoded_trace)?
-                    ));
-                }
+                output_str.push_str(&format!(
+                    "Decoded Trace:\n\n{}\n",
+                    serde_json::to_string_pretty(&inspect_result.decoded_trace)?
+                ));
 
                 print_with_less(&output_str)
                     .await
                     .map_err(|e| Error::Generic(format!("failed to print decoded trace: {}", e)))?;
-            } else if let Some(decoded_trace) = inspect_result.decoded_trace {
+            } else {
                 // write decoded trace with serde
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
@@ -402,8 +396,11 @@ async fn main() -> Result<(), Error> {
                             Error::Generic(format!("failed to build output path: {}", e))
                         })?;
 
-                write_file(&output_path, &serde_json::to_string_pretty(&decoded_trace)?)
-                    .map_err(|e| Error::Generic(format!("failed to write decoded trace: {}", e)))?;
+                write_file(
+                    &output_path,
+                    &serde_json::to_string_pretty(&inspect_result.decoded_trace)?,
+                )
+                .map_err(|e| Error::Generic(format!("failed to write decoded trace: {}", e)))?;
             }
         }
 

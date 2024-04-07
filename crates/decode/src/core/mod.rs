@@ -1,14 +1,30 @@
 use std::{collections::HashSet, fmt::format, time::Instant};
 
-use eyre::eyre;
-use heimdall_common::{ether::{calldata::get_calldata_from_target, evm::core::types::{get_padding, get_potential_types_for_word, parse_function_parameters, to_type, Padding}, signatures::{score_signature, ResolveSelector, ResolvedFunction}}, utils::{io::{logging::TraceFactory, types::display}, strings::{encode_hex, StringExt}}};
-use tracing::{debug, info, trace, warn};
 use ethers::{
     abi::{decode as decode_abi, Param, ParamType, Token},
     types::Transaction,
 };
+use eyre::eyre;
+use heimdall_common::{
+    ether::{
+        calldata::get_calldata_from_target,
+        evm::core::types::{
+            get_padding, get_potential_types_for_word, parse_function_parameters, to_type, Padding,
+        },
+        signatures::{score_signature, ResolveSelector, ResolvedFunction},
+    },
+    utils::{
+        io::{logging::TraceFactory, types::display},
+        strings::{encode_hex, StringExt},
+    },
+};
+use tracing::{debug, info, trace, warn};
 
-use crate::{error::Error, interfaces::DecodeArgs, utils::{try_decode, try_decode_dynamic_parameter}};
+use crate::{
+    error::Error,
+    interfaces::DecodeArgs,
+    utils::{try_decode, try_decode_dynamic_parameter},
+};
 
 #[derive(Debug, Clone)]
 pub struct DecodeResult {
@@ -44,7 +60,8 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
         return Err(Error::Eyre(eyre!("calldata is empty. is this a value transfer?")));
     }
 
-    // if the calldata isnt a standard size, i.e. (len - 4) % 32 != 0, we should warn the user and/or truncate it
+    // if the calldata isnt a standard size, i.e. (len - 4) % 32 != 0, we should warn the user
+    // and/or truncate it
     if (calldata[4..].len() % 32 != 0) && !args.truncate_calldata {
         warn!("calldata is not a standard size. if decoding fails, consider using the `--truncate-calldata` flag.");
     } else if args.truncate_calldata {
@@ -77,31 +94,33 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
 
     // iterate over potential matches and attempt to decode the calldata with them
     let decode_start_time = Instant::now();
-    let mut matches = potential_matches.iter().map(|potential_match| {
-        // decode the signature into Vec<ParamType>
-        let inputs = parse_function_parameters(&potential_match.signature)
-            .map_err(|e| Error::Eyre(eyre!("parsing function parameters failed: {}", e)))?;
+    let mut matches = potential_matches
+        .iter()
+        .map(|potential_match| {
+            // decode the signature into Vec<ParamType>
+            let inputs = parse_function_parameters(&potential_match.signature)
+                .map_err(|e| Error::Eyre(eyre!("parsing function parameters failed: {}", e)))?;
 
-        if let Ok(result) = decode_abi(&inputs, byte_args)
-            .map_err(|e| Error::Eyre(eyre!("decoding calldata failed: {}", e)))
-        {
-            let mut found_match = potential_match.clone();
-            found_match.decoded_inputs = Some(result);
-            Ok(found_match)
-        } else {
-            debug!(
-                "potential match '{}' ignored. decoding types failed",
-                &potential_match.signature
-            );
-            Err(Error::Eyre(eyre!(
-                "potential match '{}' ignored. decoding types failed",
-                &potential_match.signature
-            )))
-        }
-    })
-    .filter(|result| result.is_ok())
-    .map(|result| result.expect("unreachable"))
-    .collect::<Vec<ResolvedFunction>>();
+            if let Ok(result) = decode_abi(&inputs, byte_args)
+                .map_err(|e| Error::Eyre(eyre!("decoding calldata failed: {}", e)))
+            {
+                let mut found_match = potential_match.clone();
+                found_match.decoded_inputs = Some(result);
+                Ok(found_match)
+            } else {
+                debug!(
+                    "potential match '{}' ignored. decoding types failed",
+                    &potential_match.signature
+                );
+                Err(Error::Eyre(eyre!(
+                    "potential match '{}' ignored. decoding types failed",
+                    &potential_match.signature
+                )))
+            }
+        })
+        .filter(|result| result.is_ok())
+        .map(|result| result.expect("unreachable"))
+        .collect::<Vec<ResolvedFunction>>();
 
     if matches.len() > 1 {
         debug!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
@@ -110,8 +129,7 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
             let b_score = score_signature(&b.signature);
             b_score.cmp(&a_score)
         });
-    }
-    else if matches.is_empty() {
+    } else if matches.is_empty() {
         warn!("couldn't find any resolved matches for '{}'", function_selector);
         info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
 
@@ -184,8 +202,5 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
     debug!("decoding calldata took {:?}", decode_start_time.elapsed());
     info!("decoded {} bytes successfully", calldata.len());
     debug!("decoding took {:?}", start_time.elapsed());
-    Ok(DecodeResult {
-        _trace: TraceFactory::try_from(&selected_match)?,
-        decoded: selected_match
-    })
+    Ok(DecodeResult { _trace: TraceFactory::try_from(&selected_match)?, decoded: selected_match })
 }

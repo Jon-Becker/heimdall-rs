@@ -150,7 +150,7 @@ mod integration_tests {
                 match rt.block_on(heimdall_decoder::decode(args)) {
                     Ok(result) => {
                         // check if any resolved_function is named Unresolved_{}
-                        if result.decoded.iter().any(|rf| rf.name.starts_with("Unresolved_")) {
+                        if result.decoded.name.starts_with("Unresolved_") {
                             println!("decoding txid: {} ... unresolved succeeded", txid);
                         }
 

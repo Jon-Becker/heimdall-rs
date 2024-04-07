@@ -1,6 +1,9 @@
 use std::{cmp::Ordering, collections::HashSet};
 
-use ethers::{abi::{decode, Param, ParamType, Token}, types::U256};
+use ethers::{
+    abi::{decode, Param, ParamType, Token},
+    types::U256,
+};
 use eyre::eyre;
 use heimdall_common::{
     ether::evm::core::types::{
@@ -19,7 +22,10 @@ pub struct AbiEncoded {
 }
 
 /// Attempt to decode the given calldata with the given types.
-pub fn try_decode(inputs: &[ParamType], byte_args: &[u8]) -> Result<(Vec<Token>, Vec<Param>), Error> {
+pub fn try_decode(
+    inputs: &[ParamType],
+    byte_args: &[u8],
+) -> Result<(Vec<Token>, Vec<Param>), Error> {
     if let Ok(result) = decode(inputs, byte_args) {
         // convert tokens to params
         let mut params: Vec<Param> = Vec::new();

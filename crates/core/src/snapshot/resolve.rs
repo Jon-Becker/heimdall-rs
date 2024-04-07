@@ -31,7 +31,7 @@ pub fn match_parameters(
                 .values()
                 .map(|(_, potential_types)| potential_types
                     .first()
-                    .expect("impossible case: argument has no potential types")
+                    .unwrap_or("bytes32".to_string())
                     .clone())
                 .collect::<Vec<String>>()
                 .join(",")

@@ -1,14 +1,21 @@
-use super::util::Function;
-use heimdall_common::ether::signatures::ResolvedFunction;
-use tracing::trace;
+use std::collections::HashMap;
 
-/// Given a list of potential [`ResolvedFunction`]s and a [`Function`], return a list of
+use crate::{error::Error, interfaces::AnalyzedFunction};
+use heimdall_common::{
+    ether::{
+        selectors::resolve_selectors,
+        signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
+    },
+    utils::{io::logging::TraceFactory, strings::encode_hex_reduced},
+};
+use tracing::{trace, warn};
+
+/// Given a list of potential [`ResolvedFunction`]s and a [`Snapshot`], return a list of
 /// [`ResolvedFunction`]s (that is, resolved signatures that were found on a 4byte directory) that
-/// match the parameters found during symbolic execution for said [`Function`].
-// TODO: revisit this logic, it's not very efficient
+/// match the parameters found during symbolic execution for said [`Snapshot`].
 pub fn match_parameters(
     resolved_functions: Vec<ResolvedFunction>,
-    function: &Function,
+    function: &AnalyzedFunction,
 ) -> Vec<ResolvedFunction> {
     let mut matched_functions: Vec<ResolvedFunction> = Vec::new();
     for mut resolved_function in resolved_functions {
@@ -20,9 +27,9 @@ pub fn match_parameters(
             &function
                 .arguments
                 .values()
-                .map(|(_, potential_types)| potential_types
+                .map(|f| f.potential_types()
                     .first()
-                    .unwrap_or("bytes32".to_string())
+                    .unwrap_or(&"bytes32".to_string())
                     .clone())
                 .collect::<Vec<String>>()
                 .join(",")
@@ -35,11 +42,11 @@ pub fn match_parameters(
         for (index, input) in resolved_function.inputs.iter().enumerate() {
             trace!("    checking for parameter {} with type {}", &index.to_string(), &input);
             match function.arguments.get(&index) {
-                Some((_, potential_types)) => {
+                Some(f) => {
                     // arrays are typically recorded as bytes by the decompiler's potential
                     // types
                     if input.contains("[]") {
-                        if !potential_types.contains(&"bytes".to_string()) {
+                        if !f.potential_types().contains(&"bytes".to_string()) {
                             trace!(
                                 "        parameter {} does not match type {} for function {}({})",
                                 &index.to_string(),
@@ -49,7 +56,7 @@ pub fn match_parameters(
                             );
                             continue;
                         }
-                    } else if !potential_types.contains(input) {
+                    } else if !f.potential_types().contains(input) {
                         matched = false;
                         trace!(
                             "        parameter {} does not match type {} for function {}({})",
