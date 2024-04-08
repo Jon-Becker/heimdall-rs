@@ -1,8 +1,8 @@
-use ethers::{abi::Bytes, types::Transaction};
 
-use super::rpc::{get_code, get_transaction};
+
+use super::rpc::{get_transaction};
 use crate::{
-    constants::{ADDRESS_REGEX, BYTECODE_REGEX, CALLDATA_REGEX, TRANSACTION_HASH_REGEX},
+    constants::{CALLDATA_REGEX, TRANSACTION_HASH_REGEX},
     utils::strings::decode_hex,
     Error,
 };
@@ -10,7 +10,7 @@ use crate::{
 pub async fn get_calldata_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
     if TRANSACTION_HASH_REGEX.is_match(target).unwrap_or(false) {
         // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
-        let raw_transaction = get_transaction(&target, &rpc_url).await.map_err(|_| {
+        let raw_transaction = get_transaction(target, rpc_url).await.map_err(|_| {
             Error::Generic("failed to fetch transaction from RPC provider.".to_string())
         })?;
 

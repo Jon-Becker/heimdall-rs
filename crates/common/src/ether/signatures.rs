@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use ethers::abi::Token;
-use eyre::eyre;
+
 use heimdall_cache::{read_cache, store_cache};
 use tracing::trace;
 

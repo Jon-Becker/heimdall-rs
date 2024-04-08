@@ -162,11 +162,7 @@ mod integration_tests {
                         println!("  \\- error: {:?}", e);
 
                         // we dont want to count RPC errors as failures
-                        match e {
-                            // heimdall_decoder::error::Error::RpcError(_) => 1,
-                            // TODO: fix this
-                            _ => 0,
-                        }
+                        0
                     }
                 }
             })

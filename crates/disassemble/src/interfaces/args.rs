@@ -89,7 +89,6 @@ impl DisassemblerArgsBuilder {
             rpc_url: self.rpc_url.clone().ok_or_else(|| eyre::eyre!("rpc_url is required"))?,
             decimal_counter: self
                 .decimal_counter
-                .clone()
                 .ok_or_else(|| eyre::eyre!("decimal_counter is required"))?,
             name: self.name.clone().ok_or_else(|| eyre::eyre!("name is required"))?,
             output: self.output.clone().ok_or_else(|| eyre::eyre!("output is required"))?,

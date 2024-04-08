@@ -25,7 +25,7 @@ use tracing::trace;
 
 use async_convert::{async_trait, TryFrom};
 use futures::future::try_join_all;
-use heimdall_decoder::{decode, DecodeArgsBuilder, DecodeResult};
+use heimdall_decoder::{decode, DecodeArgsBuilder};
 
 use crate::error::Error;
 

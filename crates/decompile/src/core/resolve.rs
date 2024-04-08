@@ -1,14 +1,12 @@
-use std::collections::HashMap;
 
-use crate::{error::Error, interfaces::AnalyzedFunction};
+
+use crate::{interfaces::AnalyzedFunction};
 use heimdall_common::{
     ether::{
-        selectors::resolve_selectors,
-        signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
+        signatures::{ResolvedFunction},
     },
-    utils::{io::logging::TraceFactory, strings::encode_hex_reduced},
 };
-use tracing::{trace, warn};
+use tracing::{trace};
 
 /// Given a list of potential [`ResolvedFunction`]s and a [`Snapshot`], return a list of
 /// [`ResolvedFunction`]s (that is, resolved signatures that were found on a 4byte directory) that
@@ -27,10 +25,7 @@ pub fn match_parameters(
             &function
                 .arguments
                 .values()
-                .map(|f| f.potential_types()
-                    .first()
-                    .unwrap_or(&"bytes32".to_string())
-                    .clone())
+                .map(|f| f.potential_types().first().unwrap_or(&"bytes32".to_string()).clone())
                 .collect::<Vec<String>>()
                 .join(",")
         );

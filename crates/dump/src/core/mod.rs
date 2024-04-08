@@ -3,6 +3,6 @@ use crate::{
     interfaces::{DumpArgs, DumpRow},
 };
 
-pub async fn dump(args: DumpArgs) -> Result<Vec<DumpRow>, Error> {
+pub async fn dump(_args: DumpArgs) -> Result<Vec<DumpRow>, Error> {
     todo!()
 }

@@ -1,8 +1,7 @@
-use std::{collections::HashSet, fmt::format, time::Instant};
+use std::{collections::HashSet, time::Instant};
 
 use ethers::{
-    abi::{decode as decode_abi, Param, ParamType, Token},
-    types::Transaction,
+    abi::{decode as decode_abi, ParamType},
 };
 use eyre::eyre;
 use heimdall_common::{
@@ -14,8 +13,8 @@ use heimdall_common::{
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
     utils::{
-        io::{logging::TraceFactory, types::display},
-        strings::{encode_hex, StringExt},
+        io::{logging::TraceFactory},
+        strings::{encode_hex},
     },
 };
 use tracing::{debug, info, trace, warn};
@@ -70,7 +69,7 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
         // truncate calldata to a standard size
         let selector = calldata[0..4].to_owned();
         let args = calldata[4..][..calldata[4..].len() - (calldata[4..].len() % 32)].to_owned();
-        calldata = [selector, args].concat().into();
+        calldata = [selector, args].concat();
     }
 
     // parse the two parts of calldata, inputs and selector
@@ -118,8 +117,7 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
                 )))
             }
         })
-        .filter(|result| result.is_ok())
-        .map(|result| result.expect("unreachable"))
+        .filter_map(|result| result.ok())
         .collect::<Vec<ResolvedFunction>>();
 
     if matches.len() > 1 {

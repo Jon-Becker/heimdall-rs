@@ -1,6 +1,6 @@
 pub(crate) mod analyze;
+pub(crate) mod out;
 pub(crate) mod resolve;
-pub(crate) mod output;
 
 use alloy_json_abi::JsonAbi;
 use ethers::types::H160;
@@ -8,7 +8,7 @@ use eyre::eyre;
 use heimdall_common::{
     ether::{
         bytecode::get_bytecode_from_target,
-        compiler::{detect_compiler, Compiler},
+        compiler::{detect_compiler},
         evm::core::vm::VM,
         selectors::{find_function_selectors, resolve_selectors},
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
@@ -19,19 +19,22 @@ use heimdall_common::{
         threading::run_with_timeout,
     },
 };
-use heimdall_disassembler::{disassemble, DisassemblerArgs, DisassemblerArgsBuilder};
+use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
 };
 
 use crate::{
-    core::{analyze::{Analyzer, AnalyzerType}, output::abi::build_abi, resolve::match_parameters},
+    core::{
+        analyze::{Analyzer, AnalyzerType},
+        out::abi::build_abi,
+        resolve::match_parameters,
+    },
     error::Error,
     interfaces::{AnalyzedFunction, DecompilerArgs},
-    utils::heuristics::Heuristic,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone)]
 pub struct DecompileResult {
@@ -48,7 +51,7 @@ impl DecompileResult {
 
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // init
-    let start_time = Instant::now();
+    let _start_time = Instant::now();
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
@@ -71,7 +74,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     }
 
     // perform versioning and compiler heuristics
-    let (compiler, version) = detect_compiler(&contract_bytecode);
+    let (_compiler, _version) = detect_compiler(&contract_bytecode);
 
     // create a new EVM instance. we will use this for finding function selectors,
     // performing symbolic execution, and more.
@@ -188,82 +191,93 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         let start_error_resolving_time = Instant::now();
         let mut error_selectors: Vec<String> = analyzed_functions
             .iter()
-            .map(|f| f.errors.iter().map(|e| encode_hex_reduced(*e).replacen("0x", "", 1)))
-            .flatten()
+            .flat_map(|f| f.errors.iter().map(|e| encode_hex_reduced(*e).replacen("0x", "", 1)))
             .collect();
         error_selectors.dedup();
         debug!("resolving {} error signatures", error_selectors.len());
-        let resolved_errors: HashMap<String, ResolvedError> = resolve_selectors(
-            error_selectors.clone()
-        )
-        .await
-        .iter()
-        .map(|(k, v)| {
-            // sort by score, take the highest
-            let mut potential_values = v.clone();
-            potential_values.sort_by(|a: &ResolvedError, b: &ResolvedError| {
-                let a_score = score_signature(&a.signature);
-                let b_score = score_signature(&b.signature);
-                b_score.cmp(&a_score)
-            });
+        let resolved_errors: HashMap<String, ResolvedError> =
+            resolve_selectors(error_selectors.clone())
+                .await
+                .iter()
+                .map(|(k, v)| {
+                    // sort by score, take the highest
+                    let mut potential_values = v.clone();
+                    potential_values.sort_by(|a: &ResolvedError, b: &ResolvedError| {
+                        let a_score = score_signature(&a.signature);
+                        let b_score = score_signature(&b.signature);
+                        b_score.cmp(&a_score)
+                    });
 
-            (k.clone(), potential_values.remove(0))
-        })
-        .collect();
+                    (k.clone(), potential_values.remove(0))
+                })
+                .collect();
         debug!("resolving error signatures took {:?}", start_error_resolving_time.elapsed());
-        info!("resolved {} error signatures from {} selectors", resolved_errors.len(), error_selectors.len());
+        info!(
+            "resolved {} error signatures from {} selectors",
+            resolved_errors.len(),
+            error_selectors.len()
+        );
         all_resolved_errors.extend(resolved_errors);
 
         // resolve event selectors
         let start_event_resolving_time = Instant::now();
         let mut event_selectors: Vec<String> = analyzed_functions
             .iter()
-            .map(|f| f.events.iter().map(|e| encode_hex_reduced(*e).replacen("0x", "", 1)))
-            .flatten()
+            .flat_map(|f| f.events.iter().map(|e| encode_hex_reduced(*e).replacen("0x", "", 1)))
             .collect();
         event_selectors.dedup();
         debug!("resolving {} event signatures", event_selectors.len());
-        let resolved_events: HashMap<String, ResolvedLog> = resolve_selectors(
-            event_selectors.clone()
-        )
-        .await
-        .iter()
-        .map(|(k, v)| {
-            // sort by score, take the highest
-            let mut potential_values = v.clone();
-            potential_values.sort_by(|a: &ResolvedLog, b: &ResolvedLog| {
-                let a_score = score_signature(&a.signature);
-                let b_score = score_signature(&b.signature);
-                b_score.cmp(&a_score)
-            });
+        let resolved_events: HashMap<String, ResolvedLog> =
+            resolve_selectors(event_selectors.clone())
+                .await
+                .iter()
+                .map(|(k, v)| {
+                    // sort by score, take the highest
+                    let mut potential_values = v.clone();
+                    potential_values.sort_by(|a: &ResolvedLog, b: &ResolvedLog| {
+                        let a_score = score_signature(&a.signature);
+                        let b_score = score_signature(&b.signature);
+                        b_score.cmp(&a_score)
+                    });
 
-            (k.clone(), potential_values.remove(0))
-        })
-        .collect();
+                    (k.clone(), potential_values.remove(0))
+                })
+                .collect();
         debug!("resolving event signaturess took {:?}", start_event_resolving_time.elapsed());
-        info!("resolved {} event signatures from {} selectors", resolved_events.len(), event_selectors.len());
+        info!(
+            "resolved {} event signatures from {} selectors",
+            resolved_events.len(),
+            event_selectors.len()
+        );
         all_resolved_events.extend(resolved_events);
     }
 
-    analyzed_functions
-        .iter_mut()
-        .for_each(|f| {
-            let resolve_function_signatures = resolved_selectors.get(&f.selector).unwrap_or(&Vec::new()).to_owned();
-            let mut matched_resolved_functions = match_parameters(resolve_function_signatures, &f);
-            debug!("matched {} resolved functions for '{}'", matched_resolved_functions.len(), f.selector);
+    analyzed_functions.iter_mut().for_each(|f| {
+        let resolve_function_signatures =
+            resolved_selectors.get(&f.selector).unwrap_or(&Vec::new()).to_owned();
+        let mut matched_resolved_functions = match_parameters(resolve_function_signatures, f);
+        debug!(
+            "matched {} resolved functions for '{}'",
+            matched_resolved_functions.len(),
+            f.selector
+        );
 
-            matched_resolved_functions.sort_by(|a, b| {
-                let a_score = score_signature(&a.signature);
-                let b_score = score_signature(&b.signature);
-                b_score.cmp(&a_score)
-            });
-
-            f.resolved_function = matched_resolved_functions.first().cloned();
-            debug!("using signature '{}' for '{}'", f.resolved_function.as_ref().map(|r| r.signature.clone()).unwrap_or_default(), f.selector);
+        matched_resolved_functions.sort_by(|a, b| {
+            let a_score = score_signature(&a.signature);
+            let b_score = score_signature(&b.signature);
+            b_score.cmp(&a_score)
         });
 
+        f.resolved_function = matched_resolved_functions.first().cloned();
+        debug!(
+            "using signature '{}' for '{}'",
+            f.resolved_function.as_ref().map(|r| r.signature.clone()).unwrap_or_default(),
+            f.selector
+        );
+    });
+
     // construct the abi for the given analyzed functions
-    let abi = build_abi(&args, analyzed_functions, all_resolved_errors, all_resolved_events);
+    let _abi = build_abi(analyzed_functions, all_resolved_errors, all_resolved_events)?;
 
     todo!()
 }

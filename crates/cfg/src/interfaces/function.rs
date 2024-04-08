@@ -1,15 +1,14 @@
-use std::{collections::HashMap, fmt::Display, time::Instant};
+use std::{collections::HashMap};
 
-use crate::Error;
+
 use ethers::types::U256;
 use heimdall_common::ether::{
     evm::{
         core::{log::Log, opcodes::WrappedOpcode},
-        ext::exec::VMTrace,
     },
     signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
 };
-use tracing::debug;
+
 
 /// The [`AnalyzedFunction`] struct represents a function that has been analyzed by the decompiler.
 #[derive(Clone, Debug)]
@@ -78,7 +77,7 @@ impl AnalyzedFunction {
     pub fn new(selector: &str, entry_point: &u128, fallback: bool) -> Self {
         AnalyzedFunction {
             selector: if fallback { "00000000".to_string() } else { selector.to_string() },
-            entry_point: entry_point.clone(),
+            entry_point: *entry_point,
             arguments: HashMap::new(),
             memory: HashMap::new(),
             returns: None,
@@ -126,7 +125,7 @@ impl AnalyzedFunction {
 
         // get the memory range
         while size > 0 {
-            if let Some(opcode) = operations.get(0) {
+            if let Some(opcode) = operations.first() {
                 self.memory.insert(
                     U256::from(offset),
                     StorageFrame { value: U256::zero(), operations: opcode.clone() },

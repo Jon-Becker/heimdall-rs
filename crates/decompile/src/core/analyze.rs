@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, time::Instant};
+use std::{fmt::Display, time::Instant};
 
 use heimdall_common::ether::evm::ext::exec::VMTrace;
 use tracing::debug;
@@ -6,7 +6,8 @@ use tracing::debug;
 use crate::{
     interfaces::AnalyzedFunction,
     utils::heuristics::{
-        argument_heuristic, event_heuristic, modifier_heuristic, solidity_heuristic, yul_heuristic, Heuristic
+        argument_heuristic, event_heuristic, modifier_heuristic, solidity_heuristic, yul_heuristic,
+        Heuristic,
     },
     Error,
 };

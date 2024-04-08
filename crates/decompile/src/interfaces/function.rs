@@ -1,15 +1,16 @@
-use std::{collections::{HashMap, HashSet}, fmt::Display, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+};
 
-use crate::Error;
+
 use ethers::types::U256;
 use heimdall_common::ether::{
     evm::{
-        core::{log::Log, opcodes::WrappedOpcode, types::byte_size_to_type},
-        ext::exec::VMTrace,
+        core::{opcodes::WrappedOpcode, types::byte_size_to_type},
     },
-    signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
+    signatures::{ResolvedFunction},
 };
-use tracing::{debug, trace};
+
 
 /// The [`AnalyzedFunction`] struct represents a function that has been analyzed by the decompiler.
 #[derive(Clone, Debug)]
@@ -75,10 +76,7 @@ impl CalldataFrame {
     /// Get the potential types for the given argument
     pub fn potential_types(&self) -> Vec<String> {
         // get all potential types that can fit in self.mask_size
-        let mut all_potential_types: HashSet<String> = byte_size_to_type(self.mask_size).1.iter().cloned().collect();
-        trace!("initial potential types: {:?}", all_potential_types);
-        trace!("heuristics: {:?}", self.heuristics);
-        all_potential_types.into_iter().collect()
+        byte_size_to_type(self.mask_size).1.to_vec()
     }
 }
 
@@ -93,7 +91,7 @@ impl AnalyzedFunction {
     pub fn new(selector: &str, entry_point: &u128, fallback: bool) -> Self {
         AnalyzedFunction {
             selector: if fallback { "00000000".to_string() } else { selector.to_string() },
-            entry_point: entry_point.clone(),
+            entry_point: *entry_point,
             arguments: HashMap::new(),
             memory: HashMap::new(),
             returns: None,
@@ -141,7 +139,7 @@ impl AnalyzedFunction {
 
         // get the memory range
         while size > 0 {
-            if let Some(opcode) = operations.get(0) {
+            if let Some(opcode) = operations.first() {
                 self.memory.insert(
                     U256::from(offset),
                     StorageFrame { value: U256::zero(), operations: opcode.clone() },

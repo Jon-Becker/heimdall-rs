@@ -6,7 +6,7 @@ use heimdall_common::{
     ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
     utils::strings::encode_hex,
 };
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info};
 
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     // init

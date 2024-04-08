@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 
 use ethers::types::U256;
-use eyre::eyre;
+
 use heimdall_common::ether::evm::core::{
-    opcodes::{WrappedInput, WrappedOpcode},
     types::convert_bitmask,
     vm::State,
 };
@@ -31,31 +30,23 @@ pub fn argument_heuristic(
                 .unwrap_or(usize::MAX);
 
             // insert only if this argument is not already in the hashmap
-            if !function.arguments.contains_key(&arg_index) {
+            function.arguments.entry(arg_index).or_insert_with(|| {
                 debug!(
                     "discovered new argument at index {} from CALLDATALOAD({})",
                     arg_index, state.last_instruction.inputs[0]
                 );
-                function.arguments.insert(
-                    arg_index,
-                    CalldataFrame {
+                CalldataFrame {
                         arg_op: state.last_instruction.input_operations[0].to_string(),
                         mask_size: 32, // init to 32 because all CALLDATALOADs are 32 bytes
                         heuristics: HashSet::new(),
-                    },
-                );
-            }
+                    }
+            });
         }
 
         // CALLDATACOPY
         0x37 => {
-            print!("CALLDATACOPY(");
-
-            // solidify each arg and print
-            state.last_instruction.input_operations.iter().for_each(|op| {
-                print!("{:?}, ", op.yulify());
-            });
-            print!(")\n");
+            // TODO: implement CALLDATACOPY support
+            trace!("CALLDATACOPY detected; not implemented");
         }
 
         // AND | OR
@@ -66,13 +57,15 @@ pub fn argument_heuristic(
                 state.last_instruction.input_operations.iter().find(|op| op.opcode.code == 0x35)
             {
                 // this is a bitwise mask, we can use it to determine the size of the variable
-                let (mask_size_bytes, mut potential_types) =
+                let (mask_size_bytes, _potential_types) =
                     convert_bitmask(state.last_instruction.clone());
 
                 // yulify the calldataload operation, and find the associated argument index
                 // this MUST exist, as we have already inserted it in the CALLDATALOAD heuristic
                 let arg_op = calldataload_op.inputs[0].to_string();
-                if let Some((arg_index, frame)) = function.arguments.iter_mut().find(|(_, frame)| frame.arg_op == arg_op) {
+                if let Some((arg_index, frame)) =
+                    function.arguments.iter_mut().find(|(_, frame)| frame.arg_op == arg_op)
+                {
                     debug!(
                         "instruction {} ({}) indicates argument {} is masked to {} bytes",
                         state.last_instruction.instruction,
@@ -91,13 +84,13 @@ pub fn argument_heuristic(
             // check if this instruction is operating on a known argument.
             // if it is, add 'integer' to the list of heuristics
             // TODO: we probably want to use an enum for heuristics
-            if let Some((arg_index, frame)) =
-                function.arguments.iter_mut().find(|(_, frame)| {
-                    state.last_instruction.output_operations.iter().any(|operation| {
-                        operation.to_string().contains(frame.arg_op.as_str())
-                    })
-                })
-            {
+            if let Some((arg_index, frame)) = function.arguments.iter_mut().find(|(_, frame)| {
+                state
+                    .last_instruction
+                    .output_operations
+                    .iter()
+                    .any(|operation| operation.to_string().contains(frame.arg_op.as_str()))
+            }) {
                 debug!(
                     "instruction {} ({}) indicates argument {} may be a numeric type",
                     state.last_instruction.instruction,
@@ -114,13 +107,13 @@ pub fn argument_heuristic(
             // check if this instruction is operating on a known argument.
             // if it is, add 'bytes' to the list of heuristics
             // TODO: we probably want to use an enum for heuristics
-            if let Some((arg_index, frame)) =
-                function.arguments.iter_mut().find(|(_, frame)| {
-                    state.last_instruction.output_operations.iter().any(|operation| {
-                        operation.to_string().contains(frame.arg_op.as_str())
-                    })
-                })
-            {
+            if let Some((arg_index, frame)) = function.arguments.iter_mut().find(|(_, frame)| {
+                state
+                    .last_instruction
+                    .output_operations
+                    .iter()
+                    .any(|operation| operation.to_string().contains(frame.arg_op.as_str()))
+            }) {
                 debug!(
                     "instruction {} ({}) indicates argument {} may be a bytes type",
                     state.last_instruction.instruction,
@@ -141,7 +134,9 @@ pub fn argument_heuristic(
                 // yulify the calldataload operation, and find the associated argument index
                 // this MUST exist, as we have already inserted it in the CALLDATALOAD heuristic
                 let arg_op = calldataload_op.inputs[0].to_string();
-                if let Some((arg_index, frame)) = function.arguments.iter_mut().find(|(_, frame)| frame.arg_op == arg_op) {
+                if let Some((arg_index, frame)) =
+                    function.arguments.iter_mut().find(|(_, frame)| frame.arg_op == arg_op)
+                {
                     debug!(
                         "instruction {} ({}) indicates argument {} may be a boolean",
                         state.last_instruction.instruction,
@@ -149,7 +144,8 @@ pub fn argument_heuristic(
                         arg_index
                     );
 
-                    // NOTE: we don't want to update mask_size here, as we are only adding potential types
+                    // NOTE: we don't want to update mask_size here, as we are only adding potential
+                    // types
                     frame.heuristics.insert(TypeHeuristic::Boolean);
                 }
             }

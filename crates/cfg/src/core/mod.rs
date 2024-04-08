@@ -1,33 +1,29 @@
 pub(crate) mod graph;
 
-use alloy_json_abi::JsonAbi;
+
 use ethers::types::H160;
 use eyre::eyre;
 use heimdall_common::{
     ether::{
         bytecode::get_bytecode_from_target,
-        compiler::{detect_compiler, Compiler},
+        compiler::{detect_compiler},
         evm::core::vm::VM,
-        selectors::{find_function_selectors, resolve_selectors},
-        signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
     },
     utils::{
-        io::logging::TraceFactory,
-        strings::{encode_hex, StringExt},
+        strings::{StringExt},
         threading::run_with_timeout,
     },
 };
-use heimdall_disassembler::{disassemble, DisassemblerArgs, DisassemblerArgsBuilder};
+
 use petgraph::{dot::Dot, Graph};
 use std::{
-    collections::HashMap,
     time::{Duration, Instant},
 };
 
 use super::CFGArgs;
 
-use crate::{core::graph::build_cfg, error::Error, interfaces::AnalyzedFunction};
-use tracing::{debug, error, info, trace, warn};
+use crate::{core::graph::build_cfg, error::Error};
+use tracing::{debug, info};
 
 #[derive(Debug, Clone)]
 pub struct CFGResult {
@@ -76,7 +72,7 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
     }
 
     // perform versioning and compiler heuristics
-    let (compiler, version) = detect_compiler(&contract_bytecode);
+    let (_compiler, _version) = detect_compiler(&contract_bytecode);
 
     // create a new EVM instance. we will use this for finding function selectors,
     // performing symbolic execution, and more.

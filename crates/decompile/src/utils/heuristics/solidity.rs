@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+
 
 use ethers::{
     abi::{decode, AbiEncode, ParamType},
@@ -7,17 +7,17 @@ use ethers::{
 use eyre::eyre;
 use heimdall_common::{
     ether::evm::core::{
-        opcodes::{WrappedInput, WrappedOpcode},
-        types::{byte_size_to_type, convert_bitmask},
+        opcodes::{WrappedOpcode},
+        types::{byte_size_to_type},
         vm::State,
     },
     utils::strings::{decode_hex, encode_hex_reduced},
 };
-use lazy_static::lazy_static;
+
 
 use crate::{
     core::analyze::AnalyzerState,
-    interfaces::{AnalyzedFunction, CalldataFrame, StorageFrame},
+    interfaces::{AnalyzedFunction, StorageFrame},
     utils::{
         constants::{AND_BITMASK_REGEX, VARIABLE_SIZE_CHECK_REGEX},
         precompile::decode_precompile,
@@ -35,121 +35,82 @@ pub fn solidity_heuristic(
 
     let opcode_name =
         instruction.opcode_details.clone().ok_or(eyre!("opcode_details is None"))?.name;
-    let opcode_number = instruction.opcode;
 
-    if opcode_name == "JUMPI" {
-        // this is an if conditional for the children branches
-        let conditional = instruction.input_operations[1].solidify();
+    match instruction.opcode {
+        // JUMPI
+        0x57 => {
+            let conditional = instruction.input_operations[1].solidify();
 
-        // perform a series of checks to determine if the condition
-        // is added by the compiler and can be ignored
-        if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
-            VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
-            (conditional.replace('!', "") == "success")
-        {
-            return Ok(());
+            // perform a series of checks to determine if the condition
+            // is added by the compiler and can be ignored
+            if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
+                VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
+                (conditional.replace('!', "") == "success")
+            {
+                return Ok(());
+            }
+
+            function.logic.push(format!("if ({conditional}) {{").to_string());
+            analyzer_state.jumped_conditional = Some(conditional.clone());
+            analyzer_state.conditional_stack.push(conditional);
         }
 
-        function.logic.push(format!("if ({conditional}) {{").to_string());
+        // REVERT
+        0xfd => {
+            let revert_data = memory.read(
+                instruction.inputs[0].try_into().unwrap_or(0),
+                instruction.inputs[1].try_into().unwrap_or(0),
+            );
+            let hex_data = revert_data.get(4..).unwrap_or(&[]);
 
-        // save a copy of the conditional and add it to the conditional map
-        analyzer_state.jumped_conditional = Some(conditional.clone());
-        analyzer_state.conditional_stack.push(conditional);
-    } else if opcode_name == "REVERT" {
-        // Safely convert U256 to usize
-        let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
-        let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
-        let revert_data = memory.read(offset, size);
-
-        // (1) if revert_data starts with 0x08c379a0, the folling is an error string
-        // abiencoded (2) if revert_data starts with 0x4e487b71, the
-        // following is a compiler panic (3) if revert_data starts with any
-        // other 4byte selector, it is a custom error and should
-        //     be resolved and added to the generated ABI
-        // (4) if revert_data is empty, it is an empty revert. Ex:
-        //       - if (true != false) { revert() };
-        //       - require(true != false)
-        let revert_logic;
-
-        // handle case with error string abiencoded
-        if revert_data.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
-            let revert_string = match revert_data.get(4..) {
-                Some(hex_data) => match decode(&[ParamType::String], hex_data) {
-                    Ok(revert) => revert[0].to_string(),
-                    Err(_) => "decoding error".to_string(),
-                },
-                None => "decoding error".to_string(),
-            };
-            revert_logic = match analyzer_state.jumped_conditional.clone() {
-                Some(condition) => {
-                    format!("require({condition}, \"{revert_string}\");")
-                }
+            // find the cause of the revert
+            let revert_condition = match analyzer_state.jumped_conditional.clone() {
+                Some(conditional) => conditional,
                 None => {
+                    let mut conditional = "".to_string();
                     // loop backwards through logic to find the last IF statement
                     for i in (0..function.logic.len()).rev() {
                         if function.logic[i].starts_with("if") {
-                            let conditional = match analyzer_state.conditional_stack.pop() {
-                                Some(condition) => condition,
-                                None => break,
-                            };
-
-                            function.logic[i] =
-                                format!("require({conditional}, \"{revert_string}\");");
+                            conditional =
+                                analyzer_state.conditional_stack.pop().unwrap_or_default();
+                            break;
                         }
                     }
-                    return Ok(());
+                    conditional
                 }
-            }
-        }
-        // handle case with panics
-        else if revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
-            return Ok(());
-        }
-        // handle case with custom error OR empty revert
-        else {
-            let custom_error_placeholder = match revert_data.get(0..4) {
-                Some(selector) => {
-                    function.errors.insert(U256::from(selector));
-                    format!(
-                        "CustomError_{}()",
-                        encode_hex_reduced(U256::from(selector)).replacen("0x", "", 1)
-                    )
-                }
-                None => "()".to_string(),
             };
 
-            revert_logic = match analyzer_state.jumped_conditional.clone() {
-                Some(condition) => {
-                    if custom_error_placeholder == *"()" {
-                        format!("require({condition});",)
-                    } else {
-                        format!("require({condition}, {custom_error_placeholder});")
-                    }
-                }
-                None => {
-                    // loop backwards through logic to find the last IF statement
-                    for i in (0..function.logic.len()).rev() {
-                        if function.logic[i].starts_with("if") {
-                            let conditional = match analyzer_state.conditional_stack.pop() {
-                                Some(condition) => condition,
-                                None => break,
-                            };
-
-                            if custom_error_placeholder == *"()" {
-                                function.logic[i] = format!("require({conditional});",);
-                            } else {
-                                function.logic[i] =
-                                    format!("require({conditional}, {custom_error_placeholder});");
-                            }
-                        }
-                    }
-                    return Ok(());
-                }
+            // handle string reverts
+            if revert_data.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
+                let revert_string = decode(&[ParamType::String], hex_data)
+                    .map(|x| x[0].to_string())
+                    .unwrap_or("decoding error".to_string());
+                function
+                    .logic
+                    .push(format!("require({revert_condition}, \"{revert_string}\");").to_string());
+            }
+            // handle custom errors and empty reverts
+            else if !revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
+                let custom_error = revert_data
+                    .get(0..4)
+                    .map(|selector| {
+                        function.errors.insert(U256::from(selector));
+                        format!(
+                            "CustomError_{}()",
+                            encode_hex_reduced(U256::from(selector)).replacen("0x", "", 1)
+                        )
+                    })
+                    .unwrap_or("UnknownError()".to_string());
+                function
+                    .logic
+                    .push(format!("require({revert_condition}, {custom_error});").to_string());
             }
         }
 
-        function.logic.push(revert_logic);
-    } else if opcode_name == "RETURN" {
+        _ => {}
+    };
+
+    if opcode_name == "RETURN" {
         // Safely convert U256 to usize
         let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
 

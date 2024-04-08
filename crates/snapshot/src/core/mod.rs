@@ -28,6 +28,6 @@ impl SnapshotResult {
     }
 }
 
-pub async fn snapshot(args: SnapshotArgs) -> Result<SnapshotResult, Error> {
+pub async fn snapshot(_args: SnapshotArgs) -> Result<SnapshotResult, Error> {
     todo!()
 }

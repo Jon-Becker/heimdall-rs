@@ -1,4 +1,4 @@
-use ethers::types::{Address, Bytes, Log, TransactionTrace, H256, U256, U64};
+use ethers::types::{Log, TransactionTrace, U256, U64};
 use eyre::eyre;
 use futures::future::try_join_all;
 use std::{collections::VecDeque, time::Instant};
@@ -69,7 +69,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     debug!("decoding logs took {:?}", decode_log_time.elapsed());
 
     // convert Vec<TransactionTrace> to DecodedTransactionTrace
-    let start_decode_time = Instant::now();
+    let _start_decode_time = Instant::now();
     let mut decoded_trace =
         match block_trace.trace {
             Some(trace) => <DecodedTransactionTrace as async_convert::TryFrom<

@@ -53,8 +53,20 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24ed0f2a6c3a1c947b4508522a53a190dba8f94dcd4e3e1a5af945a498e78f2f"
 dependencies = [
- "alloy-primitives",
- "alloy-sol-type-parser",
+ "alloy-primitives 0.6.4",
+ "alloy-sol-type-parser 0.6.4",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "alloy-json-abi"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83a35ddfd27576474322a5869e4c123e5f3e7b2177297c18e4e82ea501cb125b"
+dependencies = [
+ "alloy-primitives 0.7.0",
+ "alloy-sol-type-parser 0.7.0",
  "serde",
  "serde_json",
 ]
@@ -64,6 +76,28 @@ name = "alloy-primitives"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "600d34d8de81e23b6d909c094e23b3d357e01ca36b78a8c5424c501eedbe86f0"
+dependencies = [
+ "alloy-rlp",
+ "bytes",
+ "cfg-if",
+ "const-hex",
+ "derive_more",
+ "hex-literal",
+ "itoa",
+ "k256",
+ "keccak-asm",
+ "proptest",
+ "rand",
+ "ruint",
+ "serde",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "alloy-primitives"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99bbad0a6b588ef4aec1b5ddbbfdacd9ef04e00b979617765b03174318ee1f3a"
 dependencies = [
  "alloy-rlp",
  "bytes",
@@ -96,6 +130,15 @@ name = "alloy-sol-type-parser"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0045cc89524e1451ccf33e8581355b6027ac7c6e494bb02959d4213ad0d8e91d"
+dependencies = [
+ "winnow 0.6.5",
+]
+
+[[package]]
+name = "alloy-sol-type-parser"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "715f4d09a330cc181fc7c361b5c5c2766408fa59a0bac60349dcb7baabd404cc"
 dependencies = [
  "winnow 0.6.5",
 ]
@@ -1889,7 +1932,7 @@ dependencies = [
 name = "heimdall-cfg"
 version = "0.7.3"
 dependencies = [
- "alloy-json-abi",
+ "alloy-json-abi 0.6.4",
  "clap",
  "derive_builder",
  "ethers",
@@ -1909,6 +1952,7 @@ dependencies = [
 name = "heimdall-cli"
 version = "0.7.3"
 dependencies = [
+ "alloy-json-abi 0.7.0",
  "backtrace",
  "clap",
  "colored",
@@ -2026,7 +2070,7 @@ dependencies = [
 name = "heimdall-decompiler"
 version = "0.7.3"
 dependencies = [
- "alloy-json-abi",
+ "alloy-json-abi 0.7.0",
  "clap",
  "derive_builder",
  "ethers",
