@@ -1,17 +1,8 @@
-
-
 use ethers::{abi::AbiEncode, types::U256};
-use eyre::{OptionExt};
-use heimdall_common::ether::evm::core::{
-    vm::State,
-};
+use eyre::OptionExt;
+use heimdall_common::ether::evm::core::vm::State;
 
-
-use crate::{
-    core::analyze::AnalyzerState,
-    interfaces::{AnalyzedFunction},
-    Error,
-};
+use crate::{core::analyze::AnalyzerState, interfaces::AnalyzedFunction, Error};
 
 pub fn event_heuristic(
     function: &mut AnalyzedFunction,

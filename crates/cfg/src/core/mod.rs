@@ -1,24 +1,14 @@
 pub(crate) mod graph;
 
-
 use ethers::types::H160;
 use eyre::eyre;
 use heimdall_common::{
-    ether::{
-        bytecode::get_bytecode_from_target,
-        compiler::{detect_compiler},
-        evm::core::vm::VM,
-    },
-    utils::{
-        strings::{StringExt},
-        threading::run_with_timeout,
-    },
+    ether::{bytecode::get_bytecode_from_target, compiler::detect_compiler, evm::core::vm::VM},
+    utils::{strings::StringExt, threading::run_with_timeout},
 };
 
 use petgraph::{dot::Dot, Graph};
-use std::{
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use super::CFGArgs;
 

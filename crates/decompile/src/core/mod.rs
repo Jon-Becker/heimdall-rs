@@ -8,7 +8,7 @@ use eyre::eyre;
 use heimdall_common::{
     ether::{
         bytecode::get_bytecode_from_target,
-        compiler::{detect_compiler},
+        compiler::detect_compiler,
         evm::core::vm::VM,
         selectors::{find_function_selectors, resolve_selectors},
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},

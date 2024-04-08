@@ -1,6 +1,4 @@
-
-
-use super::rpc::{get_transaction};
+use super::rpc::get_transaction;
 use crate::{
     constants::{CALLDATA_REGEX, TRANSACTION_HASH_REGEX},
     utils::strings::decode_hex,

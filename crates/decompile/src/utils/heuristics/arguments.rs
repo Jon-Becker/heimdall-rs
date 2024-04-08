@@ -2,10 +2,7 @@ use std::collections::HashSet;
 
 use ethers::types::U256;
 
-use heimdall_common::ether::evm::core::{
-    types::convert_bitmask,
-    vm::State,
-};
+use heimdall_common::ether::evm::core::{types::convert_bitmask, vm::State};
 use tracing::{debug, trace};
 
 use crate::{
@@ -36,10 +33,10 @@ pub fn argument_heuristic(
                     arg_index, state.last_instruction.inputs[0]
                 );
                 CalldataFrame {
-                        arg_op: state.last_instruction.input_operations[0].to_string(),
-                        mask_size: 32, // init to 32 because all CALLDATALOADs are 32 bytes
-                        heuristics: HashSet::new(),
-                    }
+                    arg_op: state.last_instruction.input_operations[0].to_string(),
+                    mask_size: 32, // init to 32 because all CALLDATALOADs are 32 bytes
+                    heuristics: HashSet::new(),
+                }
             });
         }
 

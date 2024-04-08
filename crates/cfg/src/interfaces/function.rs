@@ -1,14 +1,10 @@
-use std::{collections::HashMap};
-
+use std::collections::HashMap;
 
 use ethers::types::U256;
 use heimdall_common::ether::{
-    evm::{
-        core::{log::Log, opcodes::WrappedOpcode},
-    },
+    evm::core::{log::Log, opcodes::WrappedOpcode},
     signatures::{ResolvedError, ResolvedFunction, ResolvedLog},
 };
-
 
 /// The [`AnalyzedFunction`] struct represents a function that has been analyzed by the decompiler.
 #[derive(Clone, Debug)]

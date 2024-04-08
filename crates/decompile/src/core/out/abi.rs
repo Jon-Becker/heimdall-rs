@@ -1,22 +1,16 @@
-use std::{
-    collections::HashMap,
-    time::{Instant},
-};
+use std::{collections::HashMap, time::Instant};
 
 use alloy_json_abi::{Error, Event, EventParam, Function, JsonAbi, Param, StateMutability};
 
-
-use eyre::{Result};
+use eyre::Result;
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    utils::{
-        strings::encode_hex_reduced,
-    },
+    utils::strings::encode_hex_reduced,
 };
 
 use tracing::debug;
 
-use crate::{interfaces::AnalyzedFunction};
+use crate::interfaces::AnalyzedFunction;
 
 pub fn build_abi(
     functions: Vec<AnalyzedFunction>,

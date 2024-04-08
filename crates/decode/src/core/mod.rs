@@ -1,8 +1,6 @@
 use std::{collections::HashSet, time::Instant};
 
-use ethers::{
-    abi::{decode as decode_abi, ParamType},
-};
+use ethers::abi::{decode as decode_abi, ParamType};
 use eyre::eyre;
 use heimdall_common::{
     ether::{
@@ -12,10 +10,7 @@ use heimdall_common::{
         },
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
-    utils::{
-        io::{logging::TraceFactory},
-        strings::{encode_hex},
-    },
+    utils::{io::logging::TraceFactory, strings::encode_hex},
 };
 use tracing::{debug, info, trace, warn};
 

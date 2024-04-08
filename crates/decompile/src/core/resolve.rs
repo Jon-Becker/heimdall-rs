@@ -1,12 +1,6 @@
-
-
-use crate::{interfaces::AnalyzedFunction};
-use heimdall_common::{
-    ether::{
-        signatures::{ResolvedFunction},
-    },
-};
-use tracing::{trace};
+use crate::interfaces::AnalyzedFunction;
+use heimdall_common::ether::signatures::ResolvedFunction;
+use tracing::trace;
 
 /// Given a list of potential [`ResolvedFunction`]s and a [`Snapshot`], return a list of
 /// [`ResolvedFunction`]s (that is, resolved signatures that were found on a 4byte directory) that

@@ -1,19 +1,12 @@
-
-
 use ethers::{
     abi::{decode, AbiEncode, ParamType},
     types::U256,
 };
 use eyre::eyre;
 use heimdall_common::{
-    ether::evm::core::{
-        opcodes::{WrappedOpcode},
-        types::{byte_size_to_type},
-        vm::State,
-    },
+    ether::evm::core::{opcodes::WrappedOpcode, types::byte_size_to_type, vm::State},
     utils::strings::{decode_hex, encode_hex_reduced},
 };
-
 
 use crate::{
     core::analyze::AnalyzerState,
