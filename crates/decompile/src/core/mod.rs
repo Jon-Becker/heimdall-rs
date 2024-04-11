@@ -177,7 +177,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
             // analyze the symbolic execution trace
             let analyzed_function = analyzer.analyze()?;
-            println!("{:#?}", analyzed_function.arguments);
+            println!("{:#?}", analyzed_function.logic);
 
             Ok::<_, Error>(analyzed_function)
         })
@@ -186,6 +186,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     debug!("analyzing symbolic execution results took {:?}", start_analysis_time.elapsed());
     info!("analyzed {} symbolic execution traces", analyzed_functions.len());
 
+    // resolve event and error selectors
     if !args.skip_resolving {
         // resolve error selectors
         let start_error_resolving_time = Instant::now();
@@ -252,6 +253,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         all_resolved_events.extend(resolved_events);
     }
 
+    // match analyzed parameters with resolved signatures for each function
     analyzed_functions.iter_mut().for_each(|f| {
         let resolve_function_signatures =
             resolved_selectors.get(&f.selector).unwrap_or(&Vec::new()).to_owned();

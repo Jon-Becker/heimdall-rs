@@ -136,9 +136,6 @@ pub fn build_abi(
         abi.functions.insert(name, vec![function]);
     });
 
-    // pretty print abi
-    println!("{}", serde_json::to_string_pretty(&abi).expect("failed to serialize abi"));
-
     debug!("constructing abi took {:?}", start_time.elapsed());
 
     Ok(abi)

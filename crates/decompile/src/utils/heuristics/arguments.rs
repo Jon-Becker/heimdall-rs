@@ -2,19 +2,23 @@ use std::collections::HashSet;
 
 use ethers::types::U256;
 
-use heimdall_common::ether::evm::core::{types::convert_bitmask, vm::State};
+use heimdall_common::ether::evm::core::{
+    types::{byte_size_to_type, convert_bitmask},
+    vm::State,
+};
 use tracing::{debug, trace};
 
 use crate::{
-    core::analyze::AnalyzerState,
+    core::analyze::{AnalyzerState, AnalyzerType},
     interfaces::{AnalyzedFunction, CalldataFrame, TypeHeuristic},
+    utils::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2},
     Error,
 };
 
 pub fn argument_heuristic(
     function: &mut AnalyzedFunction,
     state: &State,
-    _: &mut AnalyzerState,
+    analyzer_state: &mut AnalyzerState,
 ) -> Result<(), Error> {
     match state.last_instruction.opcode {
         // CALLDATALOAD
@@ -73,6 +77,84 @@ pub fn argument_heuristic(
 
                     frame.mask_size = mask_size_bytes;
                 }
+            }
+        }
+
+        // RETURN
+        0xf3 => {
+            // Safely convert U256 to usize
+            let size: usize = state.last_instruction.inputs[1].try_into().unwrap_or(0);
+
+            let return_memory_operations = function.get_memory_range(
+                state.last_instruction.inputs[0],
+                state.last_instruction.inputs[1],
+            );
+            let return_memory_operations_solidified = return_memory_operations
+                .iter()
+                .map(|x| x.operations.solidify())
+                .collect::<Vec<String>>()
+                .join(", ");
+
+            // add the return statement to the function logic
+            if analyzer_state.analyzer_type == AnalyzerType::Solidity {
+                if return_memory_operations.len() <= 1 {
+                    function.logic.push(format!("return {return_memory_operations_solidified};"));
+                } else {
+                    function.logic.push(format!(
+                        "return abi.encodePacked({return_memory_operations_solidified});"
+                    ));
+                }
+            } else if analyzer_state.analyzer_type == AnalyzerType::Yul {
+                function.logic.push(format!(
+                    "return({}, {})",
+                    state.last_instruction.input_operations[0].yulify(),
+                    state.last_instruction.input_operations[1].yulify()
+                ));
+            }
+
+            // if we've already determined a return type, we don't want to do it again.
+            // we use bytes32 as a default return type
+            if function.returns != Some(String::from("bytes32")) {
+                return Ok(());
+            }
+
+            // if the any input op is ISZERO(x), this is a boolean return
+            if return_memory_operations.iter().any(|x| x.operations.opcode.name == "ISZERO") {
+                function.returns = Some(String::from("bool"));
+            }
+            // if the size of returndata is > 32, it must be a bytes memory return.
+            // it could be a struct, but we cant really determine that from the bytecode
+            else if size > 32 {
+                function.returns = Some(String::from("bytes memory"));
+            } else {
+                // attempt to find a return type within the return memory operations
+                let byte_size = match AND_BITMASK_REGEX
+                    .find(&return_memory_operations_solidified)
+                    .ok()
+                    .flatten()
+                {
+                    Some(bitmask) => {
+                        let cast = bitmask.as_str();
+
+                        cast.matches("ff").count()
+                    }
+                    None => match AND_BITMASK_REGEX_2
+                        .find(&return_memory_operations_solidified)
+                        .ok()
+                        .flatten()
+                    {
+                        Some(bitmask) => {
+                            let cast = bitmask.as_str();
+
+                            cast.matches("ff").count()
+                        }
+                        None => 32,
+                    },
+                };
+
+                // convert the cast size to a string
+                let (_, cast_types) = byte_size_to_type(byte_size);
+                function.returns = Some(cast_types[0].to_string());
             }
         }
 

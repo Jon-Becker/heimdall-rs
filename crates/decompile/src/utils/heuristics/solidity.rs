@@ -23,13 +23,80 @@ pub fn solidity_heuristic(
     state: &State,
     analyzer_state: &mut AnalyzerState,
 ) -> Result<(), Error> {
-    let instruction = state.last_instruction.clone();
-    let memory = state.memory.clone();
-
-    let opcode_name =
-        instruction.opcode_details.clone().ok_or(eyre!("opcode_details is None"))?.name;
+    let instruction = &state.last_instruction;
 
     match instruction.opcode {
+        // CALLDATACOPY
+        0x37 => {
+            let memory_offset = &instruction.input_operations[0];
+            let source_offset = instruction.inputs[1];
+            let size_bytes = instruction.inputs[2];
+
+            // add the mstore to the function's memory map
+            function.logic.push(format!(
+                "memory[{}] = msg.data[{}:{}];",
+                memory_offset.solidify(),
+                source_offset,
+                source_offset.saturating_add(size_bytes)
+            ));
+        }
+
+        // CODECOPY
+        0x39 => {
+            let memory_offset = &instruction.input_operations[0];
+            let source_offset = instruction.inputs[1];
+            let size_bytes = instruction.inputs[2];
+
+            // add the mstore to the function's memory map
+            function.logic.push(format!(
+                "memory[{}] = this.code[{}:{}];",
+                memory_offset.solidify(),
+                source_offset,
+                source_offset.saturating_add(size_bytes)
+            ));
+        }
+
+        // EXTCODECOPY
+        0x3C => {
+            let address = &instruction.input_operations[0];
+            let memory_offset = &instruction.input_operations[1];
+            let source_offset = instruction.inputs[2];
+            let size_bytes = instruction.inputs[3];
+
+            // add the mstore to the function's memory map
+            function.logic.push(format!(
+                "memory[{}] = address({}).code[{}:{}]",
+                memory_offset.solidify(),
+                address.solidify(),
+                source_offset,
+                source_offset.saturating_add(size_bytes)
+            ));
+        }
+
+        // MSTORE / MSTORE8
+        0x52 | 0x53 => {
+            let key = instruction.inputs[0];
+            let value = instruction.inputs[1];
+            let operation = instruction.input_operations[1].clone();
+
+            // add the mstore to the function's memory map
+            function.memory.insert(key, StorageFrame { value, operations: operation });
+            function.logic.push(format!(
+                "memory[{}] = {};",
+                encode_hex_reduced(key),
+                instruction.input_operations[1].solidify()
+            ));
+        }
+
+        // SSTORE
+        0x55 => {
+            function.logic.push(format!(
+                "storage[{}] = {};",
+                instruction.input_operations[0].solidify(),
+                instruction.input_operations[1].solidify(),
+            ));
+        }
+
         // JUMPI
         0x57 => {
             let conditional = instruction.input_operations[1].solidify();
@@ -48,9 +115,99 @@ pub fn solidity_heuristic(
             analyzer_state.conditional_stack.push(conditional);
         }
 
+        // TSTORE
+        0x5d => {
+            function.logic.push(format!(
+                "transient[{}] = {};",
+                instruction.input_operations[0].solidify(),
+                instruction.input_operations[1].solidify(),
+            ));
+        }
+
+        // CREATE / CREATE2
+        0xf0 | 0xf5 => {
+            function.logic.push(format!(
+                "assembly {{ addr := create({}) }}",
+                instruction
+                    .input_operations
+                    .iter()
+                    .map(|x| x.solidify())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ));
+        }
+
+        // CALL / CALLCODE
+        0xf1 | 0xf2 => {
+            let gas = format!("gas: {}", instruction.input_operations[0].solidify());
+            let address = instruction.input_operations[1].solidify();
+            let value = format!("value: {}", instruction.input_operations[2].solidify());
+            let calldata = function.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
+
+            // build the modifier w/ gas and value
+            let modifier = format!("{{ {}, {} }}", gas, value);
+
+            // check if the external call is a precompiled contract
+            match decode_precompile(
+                instruction.inputs[1],
+                calldata.clone(),
+                instruction.input_operations[5].clone(),
+            ) {
+                (true, precompile_logic) => {
+                    function.logic.push(precompile_logic);
+                }
+                _ => {
+                    function.logic.push(format!(
+                        "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
+                        address,
+                        modifier,
+                        calldata
+                            .iter()
+                            .map(|x| x.operations.solidify())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    ));
+                }
+            }
+        }
+
+        // STATICCALL / DELEGATECALL
+        0xfa | 0xf4 => {
+            let gas = format!("gas: {}", instruction.input_operations[0].solidify());
+            let address = instruction.input_operations[1].solidify();
+            let calldata = function.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
+
+            // build the modifier w/ gas
+            let modifier = format!("{{ {} }}", gas);
+
+            // check if the external call is a precompiled contract
+            match decode_precompile(
+                instruction.inputs[1],
+                calldata.clone(),
+                instruction.input_operations[4].clone(),
+            ) {
+                (true, precompile_logic) => {
+                    function.logic.push(precompile_logic);
+                }
+                _ => {
+                    function.logic.push(format!(
+                        "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
+                        address,
+                        modifier,
+                        instruction.opcode_details.clone().expect("impossible").name.to_lowercase(),
+                        calldata
+                            .iter()
+                            .map(|x| x.operations.solidify())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                    ));
+                }
+            }
+        }
+
         // REVERT
         0xfd => {
-            let revert_data = memory.read(
+            let revert_data = state.memory.read(
                 instruction.inputs[0].try_into().unwrap_or(0),
                 instruction.inputs[1].try_into().unwrap_or(0),
             );
@@ -100,260 +257,15 @@ pub fn solidity_heuristic(
             }
         }
 
-        _ => {}
-    };
-
-    if opcode_name == "RETURN" {
-        // Safely convert U256 to usize
-        let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
-
-        let return_memory_operations =
-            function.get_memory_range(instruction.inputs[0], instruction.inputs[1]);
-        let return_memory_operations_solidified = return_memory_operations
-            .iter()
-            .map(|x| x.operations.solidify())
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        // we don't want to overwrite the return value if it's already been set
-        if function.returns == Some(String::from("uint256")) || function.returns.is_none() {
-            // if the return operation == ISZERO, this is a boolean return
-            if return_memory_operations.len() == 1 &&
-                return_memory_operations[0].operations.opcode.name == "ISZERO"
-            {
-                function.returns = Some(String::from("bool"));
-            } else {
-                function.returns = match size > 32 {
-                    // if the return data is > 32 bytes, we append "memory" to the return
-                    // type
-                    true => Some(format!("{} memory", "bytes")),
-                    false => {
-                        // attempt to find a return type within the return memory operations
-                        let byte_size = match AND_BITMASK_REGEX
-                            .find(&return_memory_operations_solidified)
-                            .ok()
-                            .flatten()
-                        {
-                            Some(bitmask) => {
-                                let cast = bitmask.as_str();
-
-                                cast.matches("ff").count()
-                            }
-                            None => 32,
-                        };
-
-                        // convert the cast size to a string
-                        let (_, cast_types) = byte_size_to_type(byte_size);
-                        Some(cast_types[0].to_string())
-                    }
-                };
-            }
-        }
-        if return_memory_operations.len() <= 1 {
-            function.logic.push(format!("return {return_memory_operations_solidified};"));
-        } else {
+        // SELFDESTRUCT
+        0xff => {
             function
                 .logic
-                .push(format!("return abi.encodePacked({return_memory_operations_solidified});"));
+                .push(format!("selfdestruct({});", instruction.input_operations[0].solidify()));
         }
-    } else if opcode_name == "SELDFESTRUCT" {
-        let addr = match decode_hex(&instruction.inputs[0].encode_hex()) {
-            Ok(hex_data) => match decode(&[ParamType::Address], &hex_data) {
-                Ok(addr) => addr[0].to_string(),
-                Err(_) => "decoding error".to_string(),
-            },
-            _ => "".to_string(),
-        };
 
-        function.logic.push(format!("selfdestruct({addr});"));
-    } else if opcode_name == "SSTORE" {
-        function.logic.push(format!(
-            "storage[{}] = {};",
-            instruction.input_operations[0].solidify(),
-            instruction.input_operations[1].solidify(),
-        ));
-    } else if opcode_name == "TSTORE" {
-        function.logic.push(format!(
-            "transient[{}] = {};",
-            instruction.input_operations[0].solidify(),
-            instruction.input_operations[1].solidify()
-        ));
-    } else if opcode_name.contains("MSTORE") {
-        let key = instruction.inputs[0];
-        let value = instruction.inputs[1];
-        let operation = instruction.input_operations[1].clone();
-
-        // add the mstore to the function's memory map
-        function.memory.insert(key, StorageFrame { value, operations: operation });
-        function.logic.push(format!(
-            "memory[{}] = {};",
-            encode_hex_reduced(key),
-            instruction.input_operations[1].solidify()
-        ));
-    } else if opcode_name == "CALLDATACOPY" {
-        let memory_offset = &instruction.input_operations[0];
-        let source_offset = instruction.inputs[1];
-        let size_bytes = instruction.inputs[2];
-
-        // add the mstore to the function's memory map
-        function.logic.push(format!(
-            "memory[{}] = msg.data[{}:{}];",
-            memory_offset.solidify(),
-            source_offset,
-            source_offset.saturating_add(size_bytes)
-        ));
-    } else if opcode_name == "CODECOPY" {
-        let memory_offset = &instruction.input_operations[0];
-        let source_offset = instruction.inputs[1];
-        let size_bytes = instruction.inputs[2];
-
-        // add the mstore to the function's memory map
-        function.logic.push(format!(
-            "memory[{}] = this.code[{}:{}]",
-            memory_offset.solidify(),
-            source_offset,
-            source_offset.saturating_add(size_bytes)
-        ));
-    } else if opcode_name == "EXTCODECOPY" {
-        let address = &instruction.input_operations[0];
-        let memory_offset = &instruction.input_operations[1];
-        let source_offset = instruction.inputs[2];
-        let size_bytes = instruction.inputs[3];
-
-        // add the mstore to the function's memory map
-        function.logic.push(format!(
-            "memory[{}] = address({}).code[{}:{}]",
-            memory_offset.solidify(),
-            address.solidify(),
-            source_offset,
-            source_offset.saturating_add(size_bytes)
-        ));
-    } else if opcode_name == "STATICCALL" {
-        // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
-        // logic
-        let modifier = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
-            true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
-            false => String::from(""),
-        };
-
-        let address = &instruction.input_operations[1];
-        let extcalldata_memory =
-            function.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
-
-        // check if the external call is a precompiled contract
-        match decode_precompile(
-            instruction.inputs[1],
-            extcalldata_memory.clone(),
-            instruction.input_operations[2].clone(),
-        ) {
-            (true, precompile_logic) => {
-                function.logic.push(precompile_logic);
-            }
-            _ => {
-                function.logic.push(format!(
-                    "(bool success, bytes memory ret0) = address({}).staticcall{}(abi.encode({}));",
-                    address.solidify(),
-                    modifier,
-                    extcalldata_memory
-                        .iter()
-                        .map(|x| x.operations.solidify())
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                ));
-            }
-        }
-    } else if opcode_name == "DELEGATECALL" {
-        // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
-        // logic
-        let modifier = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
-            true => format!("{{ gas: {} }}", instruction.input_operations[0].solidify()),
-            false => String::from(""),
-        };
-
-        let address = &instruction.input_operations[1];
-        let extcalldata_memory =
-            function.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
-
-        // check if the external call is a precompiled contract
-        match decode_precompile(
-            instruction.inputs[1],
-            extcalldata_memory.clone(),
-            instruction.input_operations[2].clone(),
-        ) {
-            (true, precompile_logic) => {
-                function.logic.push(precompile_logic);
-            }
-            _ => {
-                function.logic.push(format!(
-                    "(bool success, bytes memory ret0) = address({}).delegatecall{}(abi.encode({}));",
-                    address.solidify(),
-                    modifier,
-                    extcalldata_memory
-                        .iter()
-                        .map(|x| x.operations.solidify())
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                ));
-            }
-        }
-    } else if opcode_name == "CALL" || opcode_name == "CALLCODE" {
-        // if the gas param WrappedOpcode is not GAS(), add the gas param to the function's
-        // logic
-        let gas = match instruction.input_operations[0] != WrappedOpcode::new(0x5A, vec![]) {
-            true => format!("gas: {}, ", instruction.input_operations[0].solidify()),
-            false => String::from(""),
-        };
-        let value = match instruction.input_operations[2] != WrappedOpcode::new(0x5A, vec![]) {
-            true => format!("value: {}", instruction.input_operations[2].solidify()),
-            false => String::from(""),
-        };
-        let modifier = match !gas.is_empty() || !value.is_empty() {
-            true => format!("{{ {gas}{value} }}"),
-            false => String::from(""),
-        };
-
-        let address = &instruction.input_operations[1];
-        let extcalldata_memory =
-            function.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
-
-        // check if the external call is a precompiled contract
-        match decode_precompile(
-            instruction.inputs[1],
-            extcalldata_memory.clone(),
-            instruction.input_operations[5].clone(),
-        ) {
-            (is_precompile, precompile_logic) if is_precompile => {
-                function.logic.push(precompile_logic);
-            }
-            _ => {
-                function.logic.push(format!(
-                    "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
-                    address.solidify(),
-                    modifier,
-                    extcalldata_memory
-                        .iter()
-                        .map(|x| x.operations.solidify())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                ));
-            }
-        }
-    } else if opcode_name == "CREATE" {
-        function.logic.push(format!(
-            "assembly {{ addr := create({}, {}, {}) }}",
-            instruction.input_operations[0].solidify(),
-            instruction.input_operations[1].solidify(),
-            instruction.input_operations[2].solidify(),
-        ));
-    } else if opcode_name == "CREATE2" {
-        function.logic.push(format!(
-            "assembly {{ addr := create({}, {}, {}, {}) }}",
-            instruction.input_operations[0].solidify(),
-            instruction.input_operations[1].solidify(),
-            instruction.input_operations[2].solidify(),
-            instruction.input_operations[3].solidify(),
-        ));
-    }
+        _ => {}
+    };
 
     Ok(())
 }
