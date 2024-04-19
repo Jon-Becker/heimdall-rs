@@ -114,7 +114,7 @@ pub fn argument_heuristic(
 
             // if we've already determined a return type, we don't want to do it again.
             // we use bytes32 as a default return type
-            if function.returns != Some(String::from("bytes32")) {
+            if function.returns.is_some() && function.returns.as_deref() != Some("bytes32") {
                 return Ok(());
             }
 
@@ -155,6 +155,10 @@ pub fn argument_heuristic(
                 // convert the cast size to a string
                 let (_, cast_types) = byte_size_to_type(byte_size);
                 function.returns = Some(cast_types[0].to_string());
+                debug!(
+                    "return type determined to be '{}' from ops '{}'",
+                    cast_types[0], return_memory_operations_solidified
+                );
             }
         }
 

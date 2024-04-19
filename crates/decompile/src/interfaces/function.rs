@@ -6,6 +6,8 @@ use heimdall_common::ether::{
     signatures::ResolvedFunction,
 };
 
+use crate::core::analyze::AnalyzerType;
+
 /// The [`AnalyzedFunction`] struct represents a function that has been analyzed by the decompiler.
 #[derive(Clone, Debug)]
 pub struct AnalyzedFunction {
@@ -51,6 +53,9 @@ pub struct AnalyzedFunction {
 
     /// whether this is the fallback function for the contract
     pub fallback: bool,
+
+    /// the analyzer type used to analyze this function
+    pub analyzer_type: AnalyzerType,
 }
 
 #[derive(Clone, Debug)]
@@ -97,6 +102,7 @@ impl AnalyzedFunction {
             pure: true,
             view: true,
             payable: true,
+            analyzer_type: AnalyzerType::Abi,
             fallback,
         }
     }

@@ -13,9 +13,9 @@ use tracing::debug;
 use crate::interfaces::AnalyzedFunction;
 
 pub fn build_abi(
-    functions: Vec<AnalyzedFunction>,
-    all_resolved_errors: HashMap<String, ResolvedError>,
-    all_resolved_logs: HashMap<String, ResolvedLog>,
+    functions: &[AnalyzedFunction],
+    all_resolved_errors: &HashMap<String, ResolvedError>,
+    all_resolved_logs: &HashMap<String, ResolvedLog>,
 ) -> Result<JsonAbi> {
     debug!("constructing abi");
     let start_time = Instant::now();

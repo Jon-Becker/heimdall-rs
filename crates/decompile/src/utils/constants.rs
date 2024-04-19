@@ -56,6 +56,8 @@ pragma solidity >=0.8.0;
 ///
 /// @custom:github    You can find the open-source decompiler here:
 ///                       https://heimdall.rs
+
+contract DecompiledContract {
 ".to_string();
 
     /// the static header for decompiled yul contracts

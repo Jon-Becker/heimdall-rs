@@ -125,6 +125,7 @@ impl Analyzer {
             "analzying symbolic execution trace for '{}' with the {} analyzer",
             self.function.selector, self.typ
         );
+        self.function.analyzer_type = self.typ.clone();
         let start_analysis_time = Instant::now();
 
         // Register heuristics

@@ -14,7 +14,6 @@ use heimdall_common::{
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
     },
     utils::{
-        io::logging::TraceFactory,
         strings::{encode_hex, encode_hex_reduced, StringExt},
         threading::run_with_timeout,
     },
@@ -28,7 +27,7 @@ use std::{
 use crate::{
     core::{
         analyze::{Analyzer, AnalyzerType},
-        out::abi::build_abi,
+        out::{abi::build_abi, source::build_source},
         resolve::match_parameters,
     },
     error::Error,
@@ -40,13 +39,6 @@ use tracing::{debug, info, warn};
 pub struct DecompileResult {
     pub source: Option<String>,
     pub abi: JsonAbi,
-    _trace: TraceFactory,
-}
-
-impl DecompileResult {
-    pub fn display(&self) {
-        self._trace.display();
-    }
 }
 
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
@@ -177,7 +169,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
             // analyze the symbolic execution trace
             let analyzed_function = analyzer.analyze()?;
-            println!("{:#?}", analyzed_function.logic);
 
             Ok::<_, Error>(analyzed_function)
         })
@@ -279,7 +270,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     });
 
     // construct the abi for the given analyzed functions
-    let _abi = build_abi(analyzed_functions, all_resolved_errors, all_resolved_events)?;
+    let abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
+    let source = build_source(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
 
-    todo!()
+    Ok(DecompileResult { source, abi })
 }

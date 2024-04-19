@@ -144,10 +144,6 @@ async fn main() -> Result<(), Error> {
                 .await
                 .map_err(|e| Error::Generic(format!("failed to decompile bytecode: {}", e)))?;
 
-            if args.logs.verbosity.level() >= Level::DEBUG {
-                result.display();
-            }
-
             if cmd.output == "print" {
                 let mut output_str = String::new();
                 output_str.push_str(&format!(
