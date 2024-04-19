@@ -1,7 +1,8 @@
 use ethers::types::U256;
-use heimdall_common::ether::evm::core::opcodes::WrappedOpcode;
 
-use crate::interfaces::StorageFrame;
+use crate::ether::evm::core::opcodes::WrappedOpcode;
+
+use super::function::StorageFrame;
 
 /// Detects the usage of precompiled contracts within the EVM. Whenever an internal call is found
 /// within symbolic execution traces, this function will attempt to detect if the call is to a
@@ -9,7 +10,6 @@ use crate::interfaces::StorageFrame;
 /// `0x..01`), are precompiled contracts.
 /// Once a precompile has been detected, this function attempts to format it in a solidity-like
 /// format.
-/// TODO: move to common
 pub fn decode_precompile(
     precompile_address: U256,
     extcalldata_memory: Vec<StorageFrame>,

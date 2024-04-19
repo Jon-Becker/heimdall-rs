@@ -1,9 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use ethers::types::U256;
-use heimdall_common::ether::{
-    evm::core::{opcodes::WrappedOpcode, types::byte_size_to_type},
-    signatures::ResolvedFunction,
+use heimdall_common::{
+    ether::{
+        evm::core::{opcodes::WrappedOpcode, types::byte_size_to_type},
+        signatures::ResolvedFunction,
+    },
+    utils::function::StorageFrame,
 };
 
 use crate::core::analyze::AnalyzerType;
@@ -56,12 +59,6 @@ pub struct AnalyzedFunction {
 
     /// the analyzer type used to analyze this function
     pub analyzer_type: AnalyzerType,
-}
-
-#[derive(Clone, Debug)]
-pub struct StorageFrame {
-    pub value: U256,
-    pub operations: WrappedOpcode,
 }
 
 #[derive(Clone, Debug)]
