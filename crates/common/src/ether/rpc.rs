@@ -564,9 +564,9 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_chain_id_with_ws_rpc() {
-        let rpc_url = "wss://zksync.drpc.org";
+        let rpc_url = "wss://arbitrum-one-rpc.publicnode.com";
         let rpc_chain_id = chain_id(rpc_url).await.expect("chain_id() returned an error!");
 
-        assert_eq!(rpc_chain_id, 324);
+        assert_eq!(rpc_chain_id, 42161);
     }
 }

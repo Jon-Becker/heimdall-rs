@@ -151,7 +151,8 @@ mod tests {
     #[tokio::test]
     async fn test_subscription() {
         // Connect to transport, using Arbitrum as it has the fastest block time of 0.25s
-        let transport = HttpOrWsOrIpc::connect("wss://arbitrum-one-rpc.publicnode.com").await.unwrap();
+        let transport =
+            HttpOrWsOrIpc::connect("wss://arbitrum-one-rpc.publicnode.com").await.unwrap();
 
         // Wrap the transport in a provider
         let provider = Provider::new(transport);
