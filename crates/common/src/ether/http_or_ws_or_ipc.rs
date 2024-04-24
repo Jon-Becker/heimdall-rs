@@ -143,23 +143,26 @@ impl PubsubClient for HttpOrWsOrIpc {
     }
 }
 
-#[tokio::test]
-async fn test_subscription() {
-    // Spawn Anvil
-    let anvil = ethers::utils::Anvil::new().block_time(1u64).spawn();
+#[cfg(test)]
+mod tests {
+    use crate::ether::http_or_ws_or_ipc::HttpOrWsOrIpc;
+    use ethers::prelude::*;
 
-    // Connect to our transport
-    let transport = HttpOrWsOrIpc::connect(&anvil.ws_endpoint()).await.unwrap();
+    #[tokio::test]
+    async fn test_subscription() {
+        // Connect to transport, using Arbitrum as it has the fastest block time of 0.25s
+        let transport = HttpOrWsOrIpc::connect("wss://arbitrum-one-rpc.publicnode.com").await.unwrap();
 
-    // Wrap the transport in a provider
-    let provider = Provider::new(transport);
+        // Wrap the transport in a provider
+        let provider = Provider::new(transport);
 
-    // Now we can use our custom transport provider like normal
-    let block_number = provider.get_block_number().await.unwrap();
-    println!("Current block: {block_number}");
+        // Now we can use our custom transport provider like normal
+        let block_number = provider.get_block_number().await.unwrap();
+        println!("Current block: {block_number}");
 
-    let mut subscription = provider.subscribe_blocks().await.unwrap().take(3);
-    while let Some(block) = subscription.next().await {
-        println!("New block: {:?}", block.number);
+        let mut subscription = provider.subscribe_blocks().await.unwrap().take(2);
+        while let Some(block) = subscription.next().await {
+            println!("New block: {:?}", block.number);
+        }
     }
 }
