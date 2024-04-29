@@ -42,9 +42,11 @@ pub fn build_source(
     // add event and error declarations
     let resolved_event_error_map =
         get_event_and_error_declarations(&functions, all_resolved_errors, all_resolved_logs);
-    resolved_event_error_map.iter().for_each(|(_, (resolved_name, typ))| {
-        source.push(format!("{} {}", typ, resolved_name));
-    });
+    if analyzer_type == AnalyzerType::Solidity {
+        resolved_event_error_map.iter().for_each(|(_, (resolved_name, typ))| {
+            source.push(format!("{} {}", typ, resolved_name));
+        });
+    }
 
     // add functions
     functions.iter().for_each(|f| {
