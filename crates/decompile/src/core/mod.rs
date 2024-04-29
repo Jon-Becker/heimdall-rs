@@ -1,5 +1,6 @@
 pub(crate) mod analyze;
 pub(crate) mod out;
+pub(crate) mod postprocess;
 pub(crate) mod resolve;
 
 use alloy_json_abi::JsonAbi;
@@ -28,6 +29,7 @@ use crate::{
     core::{
         analyze::{Analyzer, AnalyzerType},
         out::{abi::build_abi, source::build_source},
+        postprocess::PostprocessOrchestrator,
         resolve::match_parameters,
     },
     error::Error,
@@ -53,6 +55,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
         )));
     }
+    let analyzer_type = AnalyzerType::from_args(args.include_solidity, args.include_yul);
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
@@ -156,7 +159,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         .into_iter()
         .map(|(selector, trace_root)| {
             let mut analyzer = Analyzer::new(
-                AnalyzerType::from_args(args.include_solidity, args.include_yul),
+                analyzer_type.clone(),
                 AnalyzedFunction::new(
                     &selector,
                     selectors
@@ -267,6 +270,13 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             f.resolved_function.as_ref().map(|r| r.signature.clone()).unwrap_or_default(),
             f.selector
         );
+    });
+
+    // get a new PostprocessorOrchestrator
+    // note: this will do nothing if the include_solidity and include_yul flags are false
+    let mut postprocessor = PostprocessOrchestrator::new(analyzer_type)?;
+    analyzed_functions.iter_mut().for_each(|f| {
+        postprocessor.postprocess(f).map_err(|e| f.notices.push(e.to_string())).ok();
     });
 
     // construct the abi for the given analyzed functions

@@ -127,26 +127,10 @@ impl AnalyzedFunction {
         memory_slice
     }
 
-    /// Inserts a range of memory into the function's memory map
-    pub fn insert_memory_range(
-        &mut self,
-        offset: U256,
-        size: U256,
-        operations: Vec<WrappedOpcode>,
-    ) {
-        let mut offset: usize = offset.try_into().unwrap_or(0);
-        let mut size: usize = size.try_into().unwrap_or(0);
-
-        // get the memory range
-        while size > 0 {
-            if let Some(opcode) = operations.first() {
-                self.memory.insert(
-                    U256::from(offset),
-                    StorageFrame { value: U256::zero(), operations: opcode.clone() },
-                );
-            }
-            offset += 32;
-            size = size.saturating_sub(32);
-        }
+    /// Get the arguments in a sorted vec
+    pub fn sorted_arguments(&self) -> Vec<(usize, CalldataFrame)> {
+        let mut arguments: Vec<_> = self.arguments.clone().into_iter().collect();
+        arguments.sort_by(|x, y| x.0.cmp(&y.0));
+        arguments
     }
 }

@@ -5,7 +5,7 @@ use alloy_json_abi::{Error, Event, EventParam, Function, JsonAbi, Param, StateMu
 use eyre::Result;
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    utils::strings::encode_hex_reduced,
+    utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
 
 use tracing::debug;
@@ -44,7 +44,7 @@ pub fn build_abi(
         let function = Function {
             name: name.clone(),
             inputs: f
-                .arguments
+                .sorted_arguments()
                 .iter()
                 .enumerate()
                 .map(|(i, (_, arg))| Param {
@@ -96,7 +96,7 @@ pub fn build_abi(
                         })
                         .collect(),
                 ),
-                None => (format!("CustomError_{}", error_selector), vec![]),
+                None => (format!("CustomError_{}", error_selector.to_lower_hex()), vec![]),
             };
 
             let error = Error { name: name.clone(), inputs };
@@ -125,7 +125,7 @@ pub fn build_abi(
                         })
                         .collect(),
                 ),
-                None => (format!("Event_{}", event_selector), vec![]),
+                None => (format!("Event_{}", event_selector.to_lower_hex()), vec![]),
             };
 
             let event = Event { name: name.clone(), inputs, anonymous: event_selector.is_zero() };

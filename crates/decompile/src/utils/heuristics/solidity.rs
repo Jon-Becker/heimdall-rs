@@ -3,7 +3,13 @@ use ethers::{
     types::U256,
 };
 
-use heimdall_common::{ether::evm::core::vm::State, utils::strings::encode_hex_reduced};
+use heimdall_common::{
+    ether::evm::core::{
+        opcodes::{WrappedInput, WrappedOpcode},
+        vm::State,
+    },
+    utils::strings::encode_hex_reduced,
+};
 
 use crate::{
     core::analyze::AnalyzerState,
@@ -93,18 +99,22 @@ pub fn solidity_heuristic(
 
         // JUMPI
         0x57 => {
+            // this is an if conditional for the children branches
             let conditional = instruction.input_operations[1].solidify();
 
             // perform a series of checks to determine if the condition
             // is added by the compiler and can be ignored
             if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
                 VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
-                (conditional.replace('!', "") == "success")
+                (conditional.replace('!', "") == "success") ||
+                (conditional == "!msg.value")
             {
-                return Ok(());
+                return Ok(())
             }
 
             function.logic.push(format!("if ({conditional}) {{").to_string());
+
+            // save a copy of the conditional and add it to the conditional map
             analyzer_state.jumped_conditional = Some(conditional.clone());
             analyzer_state.conditional_stack.push(conditional);
         }
@@ -201,54 +211,100 @@ pub fn solidity_heuristic(
 
         // REVERT
         0xfd => {
-            let revert_data = state.memory.read(
-                instruction.inputs[0].try_into().unwrap_or(0),
-                instruction.inputs[1].try_into().unwrap_or(0),
-            );
-            let hex_data = revert_data.get(4..).unwrap_or(&[]);
+            // Safely convert U256 to usize
+            let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
+            let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
+            let revert_data = state.memory.read(offset, size);
 
-            // find the cause of the revert
-            let revert_condition = match analyzer_state.jumped_conditional.clone() {
-                Some(conditional) => conditional,
-                None => {
-                    let mut conditional = "".to_string();
-                    // loop backwards through logic to find the last IF statement
-                    for i in (0..function.logic.len()).rev() {
-                        if function.logic[i].starts_with("if") {
-                            conditional =
-                                analyzer_state.conditional_stack.pop().unwrap_or_default();
-                            break;
-                        }
-                    }
-                    conditional
-                }
-            };
+            // (1) if revert_data starts with 0x08c379a0, the folling is an error string
+            // abiencoded (2) if revert_data starts with 0x4e487b71, the
+            // following is a compiler panic (3) if revert_data starts with any
+            // other 4byte selector, it is a custom error and should
+            //     be resolved and added to the generated ABI
+            // (4) if revert_data is empty, it is an empty revert. Ex:
+            //       - if (true != false) { revert() };
+            //       - require(true != false)
+            let revert_logic;
 
-            // handle string reverts
+            // handle case with error string abiencoded
             if revert_data.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
-                let revert_string = decode(&[ParamType::String], hex_data)
-                    .map(|x| x[0].to_string())
-                    .unwrap_or("decoding error".to_string());
-                function
-                    .logic
-                    .push(format!("require({revert_condition}, \"{revert_string}\");").to_string());
+                let revert_string = match revert_data.get(4..) {
+                    Some(hex_data) => match decode(&[ParamType::String], hex_data) {
+                        Ok(revert) => revert[0].to_string(),
+                        Err(_) => "decoding error".to_string(),
+                    },
+                    None => "decoding error".to_string(),
+                };
+                revert_logic = match analyzer_state.jumped_conditional.clone() {
+                    Some(condition) => {
+                        analyzer_state.jumped_conditional = None;
+                        format!("require({condition}, \"{revert_string}\");")
+                    }
+                    None => {
+                        // loop backwards through logic to find the last IF statement
+                        for i in (0..function.logic.len()).rev() {
+                            if function.logic[i].starts_with("if") {
+                                let conditional = match analyzer_state.conditional_stack.pop() {
+                                    Some(condition) => condition,
+                                    None => break,
+                                };
+
+                                function.logic[i] =
+                                    format!("require({conditional}, \"{revert_string}\");");
+                            }
+                        }
+                        return Ok(())
+                    }
+                }
             }
-            // handle custom errors and empty reverts
+            // handle case with custom error OR empty revert
             else if !revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
-                let custom_error = revert_data
-                    .get(0..4)
-                    .map(|selector| {
+                let custom_error_placeholder = match revert_data.get(0..4) {
+                    Some(selector) => {
                         function.errors.insert(U256::from(selector));
                         format!(
                             "CustomError_{}()",
                             encode_hex_reduced(U256::from(selector)).replacen("0x", "", 1)
                         )
-                    })
-                    .unwrap_or("UnknownError()".to_string());
-                function
-                    .logic
-                    .push(format!("require({revert_condition}, {custom_error});").to_string());
+                    }
+                    None => "()".to_string(),
+                };
+
+                revert_logic = match analyzer_state.jumped_conditional.clone() {
+                    Some(condition) => {
+                        analyzer_state.jumped_conditional = None;
+                        if custom_error_placeholder == *"()" {
+                            format!("require({condition});",)
+                        } else {
+                            format!("require({condition}, {custom_error_placeholder});")
+                        }
+                    }
+                    None => {
+                        // loop backwards through logic to find the last IF statement
+                        for i in (0..function.logic.len()).rev() {
+                            if function.logic[i].starts_with("if") {
+                                let conditional = match analyzer_state.conditional_stack.pop() {
+                                    Some(condition) => condition,
+                                    None => break,
+                                };
+
+                                if custom_error_placeholder == *"()" {
+                                    function.logic[i] = format!("require({conditional});",);
+                                } else {
+                                    function.logic[i] = format!(
+                                        "require({conditional}, {custom_error_placeholder});"
+                                    );
+                                }
+                            }
+                        }
+                        return Ok(())
+                    }
+                }
+            } else {
+                return Ok(())
             }
+
+            function.logic.push(revert_logic);
         }
 
         // SELFDESTRUCT

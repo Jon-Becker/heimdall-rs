@@ -1,9 +1,15 @@
-use std::{collections::HashMap, time::Instant};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Instant,
+};
 
 use alloy_json_abi::StateMutability;
 
 use eyre::Result;
-use heimdall_common::ether::signatures::{ResolvedError, ResolvedLog};
+use heimdall_common::{
+    ether::signatures::{ResolvedError, ResolvedLog},
+    utils::{hex::ToLowerHex, strings::encode_hex_reduced},
+};
 
 use tracing::debug;
 
@@ -15,8 +21,8 @@ use crate::{
 
 pub fn build_source(
     functions: &[AnalyzedFunction],
-    _all_resolved_errors: &HashMap<String, ResolvedError>,
-    _all_resolved_logs: &HashMap<String, ResolvedLog>,
+    all_resolved_errors: &HashMap<String, ResolvedError>,
+    all_resolved_logs: &HashMap<String, ResolvedLog>,
 ) -> Result<Option<String>> {
     // we can get the AnalyzerType from the first function, since they are all the same
     let analyzer_type =
@@ -33,28 +39,48 @@ pub fn build_source(
     // write the header to the output file
     source.extend(get_source_header(&analyzer_type));
 
-    // add functions
-    functions.iter().for_each(|f| {
-        // get the function header
-        source.extend(get_function_header(f));
-
-        // add the function body
-        source.extend(f.logic.clone());
-
-        // close the function
-        source.push("}".to_string());
+    // add event and error declarations
+    let resolved_event_error_map =
+        get_event_and_error_declarations(&functions, all_resolved_errors, all_resolved_logs);
+    resolved_event_error_map.iter().for_each(|(_, (resolved_name, typ))| {
+        source.push(format!("{} {}", typ, resolved_name));
     });
 
-    debug!("constructing {} source took {:?}", analyzer_type, start_time.elapsed());
+    // add functions
+    functions.iter().for_each(|f| {
+        let mut function_source = Vec::new();
+
+        // get the function header
+        function_source.extend(get_function_header(f));
+        function_source.extend(f.logic.clone());
+        function_source.push("}".to_string());
+
+        let imbalance = get_indentation_imbalance(&function_source);
+        function_source.extend(vec!["}".to_string(); imbalance as usize]);
+
+        // add the function to the source
+        source.extend(function_source);
+    });
 
     // add missing closing brackets
     let imbalance = get_indentation_imbalance(&source);
     source.extend(vec!["}".to_string(); imbalance as usize]);
 
-    // indent the source
+    // indent and combine source
     indent_source(&mut source);
+    let mut source = source.join("\n");
 
-    Ok(Some(source.join("\n")))
+    // replace all custom event and error declarations with their resolved names
+    resolved_event_error_map.iter().for_each(|(unresolved_name, (resolved_name, _))| {
+        // get only the name of both (remove `(..)`)
+        let unresolved_name = unresolved_name.split('(').next().expect("unresolved name is empty");
+        let resolved_name = resolved_name.split('(').next().expect("resolved name is empty");
+        source = source.replace(unresolved_name, resolved_name);
+    });
+
+    debug!("constructing {} source took {:?}", analyzer_type, start_time.elapsed());
+
+    Ok(Some(source))
 }
 
 /// Helper function which returns the header for the decompiled source code.
@@ -106,7 +132,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
     let function_signature = format!(
         "{}({}) {}",
         function_name,
-        f.arguments
+        f.sorted_arguments()
             .iter()
             .enumerate()
             .map(|(i, (_, arg))| {
@@ -136,7 +162,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
             ];
             output
                 .extend(f.notices.iter().map(|notice| format!("/// @notice             {notice}")));
-            output.extend(f.arguments.iter().map(|(i, arg)| {
+            output.extend(f.sorted_arguments().iter().map(|(i, arg)| {
                 format!("/// @param              arg{i} {:?}", arg.potential_types(),)
             }));
             output.push(format!("function {function_signature} {{"));
@@ -151,7 +177,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
             ];
             output
                 .extend(f.notices.iter().map(|notice| format!(" * @notice             {notice}")));
-            output.extend(f.arguments.iter().map(|(i, arg)| {
+            output.extend(f.sorted_arguments().iter().map(|(i, arg)| {
                 format!(" * @param                arg{i} {:?}", arg.potential_types(),)
             }));
             output.extend(vec![" */".to_string(), format!("case 0x{} {{", f.selector)]);
@@ -160,6 +186,81 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
         }
         _ => vec![],
     }
+}
+
+/// Helper function which will get the event and error declarations for the decompiled source code.
+fn get_event_and_error_declarations(
+    functions: &[AnalyzedFunction],
+    all_resolved_errors: &HashMap<String, ResolvedError>,
+    all_resolved_logs: &HashMap<String, ResolvedLog>,
+) -> HashMap<String, (String, String)> {
+    let mut output = HashMap::new();
+
+    // get all events and errors
+    let all_events = functions.iter().flat_map(|f| f.events.clone()).collect::<HashSet<_>>();
+    let all_errors = functions.iter().flat_map(|f| f.errors.clone()).collect::<HashSet<_>>();
+
+    // add event declarations
+    all_events.iter().for_each(|event_selector| {
+        // determine the name of the event
+        let (name, inputs) = match all_resolved_logs
+            .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
+        {
+            Some(event) => (event.name.clone(), event.inputs.clone()),
+            None => (
+                format!(
+                    "Event_{}",
+                    event_selector
+                        .to_lower_hex()
+                        .replacen("0x", "", 1)
+                        .get(0..8)
+                        .unwrap_or("00000000")
+                ),
+                vec![],
+            ),
+        };
+
+        let unresolved_name = format!(
+            "Event_{}",
+            event_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
+        );
+        output.insert(
+            unresolved_name,
+            (format!("{name}({});", inputs.join(", ")), "event".to_string()),
+        );
+    });
+
+    // add error declarations
+    all_errors.iter().for_each(|error_selector| {
+        // determine the name of the error
+        let (name, inputs) = match all_resolved_errors
+            .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
+        {
+            Some(error) => (error.name.clone(), error.inputs.clone()),
+            None => (
+                format!(
+                    "CustomError_{}",
+                    error_selector
+                        .to_lower_hex()
+                        .replacen("0x", "", 1)
+                        .get(0..8)
+                        .unwrap_or("00000000")
+                ),
+                vec![],
+            ),
+        };
+
+        let unresolved_name = format!(
+            "CustomError_{}",
+            error_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
+        );
+        output.insert(
+            unresolved_name,
+            (format!("{name}({});", inputs.join(", ")), "error".to_string()),
+        );
+    });
+
+    output
 }
 
 /// Helper function which will indent the source code.
