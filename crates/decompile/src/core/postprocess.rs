@@ -1,15 +1,27 @@
 use std::{fmt::Display, time::Instant};
 
-use heimdall_common::ether::evm::ext::exec::VMTrace;
 use tracing::debug;
 
-use crate::{interfaces::AnalyzedFunction, utils::postprocessors::Postprocessor, Error};
+use crate::{
+    interfaces::AnalyzedFunction,
+    utils::postprocessors::{arithmetic_postprocessor, bitwise_mask_postprocessor, Postprocessor},
+    Error,
+};
 
 use super::analyze::AnalyzerType;
 
 /// State shared between postprocessors
 #[derive(Debug, Clone)]
-pub(crate) struct PostprocessorState {}
+pub(crate) struct PostprocessorState {
+    /// Tracks which analyzer type was used to generate the code
+    pub analyzer_type: AnalyzerType,
+}
+
+impl Default for PostprocessorState {
+    fn default() -> Self {
+        Self { analyzer_type: AnalyzerType::Solidity }
+    }
+}
 
 /// The [`PostprocessorOrchestrator`] is responsible for managing the cleanup of
 /// generated code from [`AnalyzedFunction`]s passed into [`PostprocessorOrchestrator::postprocess`]
@@ -34,7 +46,10 @@ impl PostprocessOrchestrator {
     /// Register heuristics for the given function and trace
     pub fn register_postprocessors(&mut self) -> Result<(), Error> {
         match self.typ {
-            AnalyzerType::Solidity => {}
+            AnalyzerType::Solidity => {
+                self.postprocessors.push(Postprocessor::new(bitwise_mask_postprocessor));
+                self.postprocessors.push(Postprocessor::new(arithmetic_postprocessor));
+            }
             AnalyzerType::Yul => {}
             _ => {}
         };
@@ -50,11 +65,8 @@ impl PostprocessOrchestrator {
         );
         let start_postprocess_time = Instant::now();
 
-        // Perform postprocessing
-        self.register_postprocessors()?;
-
         // get postprocessor state
-        let mut state = PostprocessorState {};
+        let mut state = PostprocessorState { analyzer_type: self.typ.clone() };
 
         // for each line in the function, run the postprocessors
         function.logic.iter_mut().for_each(|line| {

@@ -45,7 +45,7 @@ pub struct DecompileResult {
 
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // init
-    let _start_time = Instant::now();
+    let start_time = Instant::now();
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
@@ -282,6 +282,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // construct the abi for the given analyzed functions
     let abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
     let source = build_source(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
+
+    debug!("decompilation took {:?}", start_time.elapsed());
 
     Ok(DecompileResult { source, abi })
 }

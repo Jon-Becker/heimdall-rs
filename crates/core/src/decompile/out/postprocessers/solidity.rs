@@ -746,12 +746,6 @@ fn cleanup(
         return cleaned;
     }
 
-    // Find and convert all castings
-    cleaned = convert_bitmask_to_casting(&cleaned).unwrap_or(cleaned);
-
-    // Remove all repetitive casts
-    cleaned = simplify_casts(&cleaned);
-
     // Remove all unnecessary parentheses
     cleaned = simplify_parentheses(&cleaned, 0).unwrap_or(cleaned);
 

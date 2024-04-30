@@ -5,8 +5,12 @@ use heimdall_common::ether::signatures::{ResolvedError, ResolvedLog};
 use crate::{core::postprocess::PostprocessorState, interfaces::AnalyzedFunction, Error};
 
 // import postprocessors
+mod arithmetic;
+mod bitwise;
 
 // re-export postprocessors
+pub use arithmetic::arithmetic_postprocessor;
+pub use bitwise::bitwise_mask_postprocessor;
 
 /// A heuristic is a function that takes a function and a state and modifies the function based on
 /// the state
