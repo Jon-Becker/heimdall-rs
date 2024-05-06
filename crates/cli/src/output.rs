@@ -1,4 +1,4 @@
-use std::{env, io::Write};
+use std::env;
 
 use heimdall_common::{
     constants::{ADDRESS_REGEX, TRANSACTION_HASH_REGEX},

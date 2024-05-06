@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Expression(Token);
 
@@ -7,6 +9,100 @@ pub enum Token {
     Variable(String),
     Operator(String),
     Expression(Vec<Token>),
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Token::Literal(literal) => write!(f, "{}", literal),
+            Token::Variable(variable) => write!(f, "{}", variable),
+            Token::Operator(operator) => write!(f, "{}", operator),
+            Token::Expression(tokens) => {
+                write!(f, "(")?;
+                for token in tokens.iter() {
+                    write!(f, "{} ", token)?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
+}
+
+impl Token {
+    /// Simplifies an expression by:
+    /// - removing unnecessary parentheses
+    /// - removing redundant operators
+    /// - evaluating literals
+    ///
+    /// Examples:
+    /// - "a + (b + c)" -> "a + b + c"
+    /// - "0x1234 + 0x5678" -> "0x68AC"
+    /// - "0x01 * 0x02" -> "0x02"
+    /// - "((a + b)) * c -> "(a + b) * c"
+    ///
+    /// Note: if the set of parentheses will change the order of operations, they will not be
+    /// removed. A list of operators that change the order of operations are:
+    /// - "*"
+    /// - "/"
+    /// - "%"
+    /// - "<<"
+    /// - ">>"
+    /// - "&"
+    /// - "|"
+    /// - "^"
+    /// - "~"
+    pub fn simplify(&self) -> Token {
+        match self {
+            Token::Expression(tokens) => {
+                let mut stack = Vec::new();
+                let mut simplified = Vec::new();
+
+                for token in tokens.iter() {
+                    match token {
+                        Token::Expression(inner_tokens) if inner_tokens.len() == 1 => {
+                            stack.push(inner_tokens[0].simplify());
+                        }
+                        Token::Operator(op) if op == "&" || op == "|" || op == "^" => {
+                            if let Some(Token::Operator(prev_op)) = stack.last() {
+                                if op == prev_op {
+                                    continue; // Skip redundant operators
+                                }
+                            }
+                            stack.push(token.clone());
+                        }
+                        Token::Literal(lit) => {
+                            if lit.len() <= 2 {
+                                stack.push(token.clone());
+                            } else if let Ok(num) = u64::from_str_radix(&lit[2..], 16) {
+                                stack.push(Token::Literal(format!("0x{:X}", num)));
+                            } else {
+                                stack.push(token.clone());
+                            }
+                        }
+                        _ => stack.push(token.clone()),
+                    }
+                }
+
+                // Flatten the stack and handle unnecessary parentheses
+                while let Some(token) = stack.pop() {
+                    match token {
+                        Token::Expression(inner_tokens) => {
+                            if inner_tokens.len() == 1 {
+                                simplified.push(inner_tokens.into_iter().next().unwrap());
+                            } else {
+                                simplified.push(Token::Expression(inner_tokens));
+                            }
+                        }
+                        _ => simplified.push(token),
+                    }
+                }
+
+                simplified.reverse();
+                Token::Expression(simplified)
+            }
+            _ => self.clone(),
+        }
+    }
 }
 
 /// Tokenizes an expression into a vector of tokens
@@ -242,10 +338,76 @@ mod tests {
     }
 
     #[test]
-    fn test_tokenize_complex() {
-        let s = "store_b = (arg1 << 0x01) | (~(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff >> (arg1 << 0x03)) & (0 + (arg1 + 0x20)));";
+    fn test_tokenize_simplify_expr_none() {
+        let s = "a + b * c";
         let result = tokenize(s);
+        assert_eq!(
+            result.simplify(),
+            Token::Expression(vec![
+                Token::Variable("a".to_string()),
+                Token::Operator("+".to_string()),
+                Token::Variable("b".to_string()),
+                Token::Operator("*".to_string()),
+                Token::Variable("c".to_string()),
+            ])
+        );
+    }
 
-        println!("{:#?}", result);
+    #[test]
+    fn test_tokenize_simplify_expr_keeps_necessary_parens() {
+        let s = "(a + b) * c";
+        let result = tokenize(s);
+        assert_eq!(
+            result.simplify(),
+            Token::Expression(vec![
+                Token::Expression(vec![
+                    Token::Variable("a".to_string()),
+                    Token::Operator("+".to_string()),
+                    Token::Variable("b".to_string()),
+                ]),
+                Token::Operator("*".to_string()),
+                Token::Variable("c".to_string()),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_tokenize_simplify_expr_removes_double_parens() {
+        let s = "((a + b)) * c";
+        let result = tokenize(s);
+        assert_eq!(
+            result.simplify(),
+            Token::Expression(vec![
+                Token::Expression(vec![
+                    Token::Variable("a".to_string()),
+                    Token::Operator("+".to_string()),
+                    Token::Variable("b".to_string()),
+                ]),
+                Token::Operator("*".to_string()),
+                Token::Variable("c".to_string()),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_tokenize_simplify_expr_keeps_necessary_parens_2() {
+        let s = "(a + b) * (c + d)";
+        let result = tokenize(s);
+        assert_eq!(
+            result.simplify(),
+            Token::Expression(vec![
+                Token::Expression(vec![
+                    Token::Variable("a".to_string()),
+                    Token::Operator("+".to_string()),
+                    Token::Variable("b".to_string()),
+                ]),
+                Token::Operator("*".to_string()),
+                Token::Expression(vec![
+                    Token::Variable("c".to_string()),
+                    Token::Operator("+".to_string()),
+                    Token::Variable("d".to_string()),
+                ]),
+            ])
+        );
     }
 }

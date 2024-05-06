@@ -23,6 +23,7 @@ pub fn build_source(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
+    storage_variables: &HashMap<String, String>,
 ) -> Result<Option<String>> {
     // we can get the AnalyzerType from the first function, since they are all the same
     let analyzer_type =
@@ -39,17 +40,29 @@ pub fn build_source(
     // write the header to the output file
     source.extend(get_source_header(&analyzer_type));
 
+    // add storage variables
+    if analyzer_type == AnalyzerType::Solidity {
+        source.extend(get_storage_variables(storage_variables));
+    }
+
     // add event and error declarations
     let resolved_event_error_map =
-        get_event_and_error_declarations(&functions, all_resolved_errors, all_resolved_logs);
+        get_event_and_error_declarations(functions, all_resolved_errors, all_resolved_logs);
     if analyzer_type == AnalyzerType::Solidity {
         resolved_event_error_map.iter().for_each(|(_, (resolved_name, typ))| {
             source.push(format!("{} {}", typ, resolved_name));
         });
+
+        // add the fallback function, if it exists
+        if let Some(fallback) = functions.iter().find(|f| f.fallback) {
+            source.push(String::from("fallback() external payable {"));
+            source.extend(fallback.logic.clone());
+            source.extend(vec![String::from("}"), String::from("")]);
+        }
     }
 
     // add functions
-    functions.iter().for_each(|f| {
+    functions.iter().filter(|f| !f.fallback).for_each(|f| {
         let mut function_source = Vec::new();
 
         // get the function header
@@ -63,6 +76,16 @@ pub fn build_source(
         // add the function to the source
         source.extend(function_source);
     });
+    if analyzer_type == AnalyzerType::Yul {
+        // add the fallback function, if it exists
+        if let Some(fallback) = functions.iter().find(|f| f.fallback) {
+            source.push("default {".to_string());
+            source.extend(fallback.logic.clone());
+            source.push("}".to_string());
+        } else {
+            source.push("default { revert(0, 0) }".to_string());
+        }
+    }
 
     // add missing closing brackets
     let imbalance = get_indentation_imbalance(&source);
@@ -188,6 +211,15 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
         }
         _ => vec![],
     }
+}
+
+/// Helper function which will write the storage variable declarations for the decompiled source
+/// code.
+fn get_storage_variables(storage_variables: &HashMap<String, String>) -> Vec<String> {
+    let mut output: Vec<String> =
+        storage_variables.iter().map(|(name, typ)| format!("{} {};", typ, name)).collect();
+    output.push(String::new());
+    output
 }
 
 /// Helper function which will get the event and error declarations for the decompiled source code.

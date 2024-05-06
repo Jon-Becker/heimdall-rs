@@ -69,66 +69,47 @@ pub struct CalldataFrame {
     pub heuristics: Vec<String>,
 }
 
-impl AnalyzedFunction {
-    pub fn new(selector: &str, entry_point: &u128, fallback: bool) -> Self {
-        AnalyzedFunction {
-            selector: if fallback { "00000000".to_string() } else { selector.to_string() },
-            entry_point: *entry_point,
-            arguments: HashMap::new(),
-            memory: HashMap::new(),
-            returns: None,
-            logic: Vec::new(),
-            events: HashMap::new(),
-            errors: HashMap::new(),
-            resolved_function: None,
-            notices: Vec::new(),
-            pure: true,
-            view: true,
-            payable: true,
-            fallback,
-        }
-    }
+// impl AnalyzedFunction {
+//     /// Gets the inputs for a range of memory
+//     pub fn get_memory_range(&self, _offset: U256, _size: U256) -> Vec<StorageFrame> {
+//         let mut memory_slice: Vec<StorageFrame> = Vec::new();
 
-    /// Gets the inputs for a range of memory
-    pub fn get_memory_range(&self, _offset: U256, _size: U256) -> Vec<StorageFrame> {
-        let mut memory_slice: Vec<StorageFrame> = Vec::new();
+//         // Safely convert U256 to usize
+//         let mut offset: usize = std::cmp::min(_offset.try_into().unwrap_or(0), 2048);
+//         let mut size: usize = std::cmp::min(_size.try_into().unwrap_or(0), 2048);
 
-        // Safely convert U256 to usize
-        let mut offset: usize = std::cmp::min(_offset.try_into().unwrap_or(0), 2048);
-        let mut size: usize = std::cmp::min(_size.try_into().unwrap_or(0), 2048);
+//         // get the memory range
+//         while size > 0 {
+//             if let Some(memory) = self.memory.get(&U256::from(offset)) {
+//                 memory_slice.push(memory.clone());
+//             }
+//             offset += 32;
+//             size = size.saturating_sub(32);
+//         }
 
-        // get the memory range
-        while size > 0 {
-            if let Some(memory) = self.memory.get(&U256::from(offset)) {
-                memory_slice.push(memory.clone());
-            }
-            offset += 32;
-            size = size.saturating_sub(32);
-        }
+//         memory_slice
+//     }
 
-        memory_slice
-    }
+//     /// Inserts a range of memory into the function's memory map
+//     pub fn insert_memory_range(
+//         &mut self,
+//         offset: U256,
+//         size: U256,
+//         operations: Vec<WrappedOpcode>,
+//     ) {
+//         let mut offset: usize = offset.try_into().unwrap_or(0);
+//         let mut size: usize = size.try_into().unwrap_or(0);
 
-    /// Inserts a range of memory into the function's memory map
-    pub fn insert_memory_range(
-        &mut self,
-        offset: U256,
-        size: U256,
-        operations: Vec<WrappedOpcode>,
-    ) {
-        let mut offset: usize = offset.try_into().unwrap_or(0);
-        let mut size: usize = size.try_into().unwrap_or(0);
-
-        // get the memory range
-        while size > 0 {
-            if let Some(opcode) = operations.first() {
-                self.memory.insert(
-                    U256::from(offset),
-                    StorageFrame { value: U256::zero(), operations: opcode.clone() },
-                );
-            }
-            offset += 32;
-            size = size.saturating_sub(32);
-        }
-    }
-}
+//         // get the memory range
+//         while size > 0 {
+//             if let Some(opcode) = operations.first() {
+//                 self.memory.insert(
+//                     U256::from(offset),
+//                     StorageFrame { value: U256::zero(), operations: opcode.clone() },
+//                 );
+//             }
+//             offset += 32;
+//             size = size.saturating_sub(32);
+//         }
+//     }
+// }

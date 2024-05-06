@@ -2038,7 +2038,6 @@ dependencies = [
  "heimdall-disassembler",
  "heimdall-dump",
  "heimdall-inspect",
- "heimdall-snapshot",
  "indicatif",
  "lazy_static",
  "petgraph",
@@ -2108,10 +2107,14 @@ dependencies = [
  "clap",
  "derive_builder",
  "ethers",
+ "eyre",
+ "futures",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
  "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2133,19 +2136,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "heimdall-snapshot"
-version = "0.7.3"
-dependencies = [
- "clap",
- "derive_builder",
- "ethers",
- "heimdall-cache",
- "heimdall-common",
- "heimdall-config",
- "thiserror",
 ]
 
 [[package]]

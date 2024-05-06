@@ -41,6 +41,5 @@ heimdall-cfg = { workspace = true }
 heimdall-dump = { workspace = true }
 heimdall-decoder = { workspace = true }
 heimdall-inspect = { workspace = true }
-heimdall-snapshot = { workspace = true }
 heimdall-decompiler = { workspace = true }
 heimdall-disassembler = { workspace = true }

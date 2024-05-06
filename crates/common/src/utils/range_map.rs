@@ -5,6 +5,12 @@ use crate::ether::evm::core::opcodes::WrappedOpcode;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RangeMap(pub HashMap<Range<usize>, WrappedOpcode>);
 
+impl Default for RangeMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RangeMap {
     pub fn new() -> Self {
         Self(HashMap::new())

@@ -5,12 +5,13 @@ pub(crate) mod output;
 use error::Error;
 use log_args::LogArgs;
 use output::{build_output_path, print_with_less};
-use tracing::{info, Level};
+use tracing::info;
 
 use clap::{Parser, Subcommand};
 
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::utils::{
+    hex::ToLowerHex,
     io::file::{write_file, write_lines_to_file},
     version::{current_version, remote_version},
 };
@@ -22,7 +23,6 @@ use heimdall_core::{
     heimdall_disassembler::{disassemble, DisassemblerArgs},
     heimdall_dump::{dump, DumpArgs},
     heimdall_inspect::{inspect, InspectArgs},
-    heimdall_snapshot::{snapshot, SnapshotArgs},
 };
 
 #[derive(Debug, Parser)]
@@ -68,13 +68,6 @@ pub enum Subcommands {
         about = "Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more"
     )]
     Inspect(InspectArgs),
-
-    #[clap(
-        name = "snapshot",
-        about = "Infer function information from bytecode, including access control, gas
-    consumption, storage accesses, event emissions, and more"
-    )]
-    Snapshot(SnapshotArgs),
 }
 
 #[tokio::main]
@@ -270,25 +263,17 @@ async fn main() -> Result<(), Error> {
                 filename = format!("{}-{}", given_name, filename);
             }
 
-            // if the user has not specified a transpose api key, use the default
-            if cmd.transpose_api_key.as_str() == "" {
-                cmd.transpose_api_key = configuration.transpose_api_key;
-            }
-
             let result = dump(cmd.clone())
                 .await
                 .map_err(|e| Error::Generic(format!("failed to dump storage: {}", e)))?;
             let mut lines = Vec::new();
 
             // add header
-            lines.push(String::from("last_modified,alias,slot,decoded_type,value"));
+            lines.push(String::from("slot,value"));
 
             // add rows
-            for row in result {
-                lines.push(format!(
-                    "{},{},{},{},{}",
-                    row.last_modified, row.alias, row.slot, row.decoded_type, row.value
-                ));
+            for (slot, value) in result {
+                lines.push(format!("{},{}", slot.to_lower_hex(), value.to_lower_hex()));
             }
 
             if cmd.output == "print" {
@@ -305,46 +290,6 @@ async fn main() -> Result<(), Error> {
 
                 write_lines_to_file(&output_path, lines)
                     .map_err(|e| Error::Generic(format!("failed to write dump: {}", e)))?;
-            }
-        }
-
-        Subcommands::Snapshot(mut cmd) => {
-            // if the user has not specified a rpc url, use the default
-            if cmd.rpc_url.as_str() == "" {
-                cmd.rpc_url = configuration.rpc_url;
-            }
-
-            // if the user has passed an output filename, override the default filename
-            let mut filename = "snapshot.csv".to_string();
-            let given_name = cmd.name.as_str();
-
-            if !given_name.is_empty() {
-                filename = format!("{}-{}", given_name, filename);
-            }
-
-            let snapshot_result = snapshot(cmd.clone())
-                .await
-                .map_err(|e| Error::Generic(format!("failed to snapshot contract: {}", e)))?;
-            let csv_lines = snapshot_result.generate_csv();
-
-            if args.logs.verbosity.level() >= Level::DEBUG {
-                snapshot_result.display();
-            }
-
-            if cmd.output == "print" {
-                print_with_less(&csv_lines.join("\n"))
-                    .await
-                    .map_err(|e| Error::Generic(format!("failed to print snapshot: {}", e)))?;
-            } else {
-                let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
-                        .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?;
-
-                write_lines_to_file(&output_path, csv_lines)
-                    .map_err(|e| Error::Generic(format!("failed to write snapshot: {}", e)))?;
             }
         }
 

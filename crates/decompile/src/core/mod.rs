@@ -162,10 +162,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                 analyzer_type.clone(),
                 AnalyzedFunction::new(
                     &selector,
-                    selectors
-                        .get(&selector)
-                        .expect("impossible case: analyzing nonexistent selector"),
-                    selector == "fallback",
+                    selectors.get(&selector).unwrap_or(&0x0u128),
+                    selector == "fallback" || selector == "0x00000000",
                 ),
                 trace_root,
             );
@@ -275,13 +273,35 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // get a new PostprocessorOrchestrator
     // note: this will do nothing if the include_solidity and include_yul flags are false
     let mut postprocessor = PostprocessOrchestrator::new(analyzer_type)?;
-    analyzed_functions.iter_mut().for_each(|f| {
-        postprocessor.postprocess(f).map_err(|e| f.notices.push(e.to_string())).ok();
-    });
+    let states = analyzed_functions
+        .iter_mut()
+        .filter_map(|f| {
+            postprocessor.postprocess(f).map_err(|e| f.notices.push(e.to_string())).ok()
+        })
+        .collect::<Vec<_>>();
+
+    let storage_variables = states
+        .iter()
+        .flat_map(|s| s.storage_type_map.iter())
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .chain(
+            states
+                .iter()
+                .flat_map(|s| s.transient_type_map.iter())
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<HashMap<String, String>>()
+                .into_iter(),
+        )
+        .collect::<HashMap<String, String>>();
 
     // construct the abi for the given analyzed functions
     let abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
-    let source = build_source(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
+    let source = build_source(
+        &analyzed_functions,
+        &all_resolved_errors,
+        &all_resolved_events,
+        &storage_variables,
+    )?;
 
     debug!("decompilation took {:?}", start_time.elapsed());
 

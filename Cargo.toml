@@ -2,7 +2,6 @@
 members = [
     "crates/disassemble",
     "crates/decompile",
-    "crates/snapshot",
     "crates/tracing",
     "crates/inspect",
     "crates/decode",
@@ -43,6 +42,5 @@ heimdall-cfg = { path = "crates/cfg" }
 heimdall-dump = { path = "crates/dump" }
 heimdall-inspect = { path = "crates/inspect" }
 heimdall-decoder = { path = "crates/decode" }
-heimdall-snapshot = { path = "crates/snapshot" }
 heimdall-decompiler = { path = "crates/decompile" }
 heimdall-disassembler = { path = "crates/disassemble" }

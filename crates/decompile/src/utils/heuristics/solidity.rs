@@ -3,13 +3,7 @@ use ethers::{
     types::U256,
 };
 
-use heimdall_common::{
-    ether::evm::core::{
-        opcodes::{WrappedInput, WrappedOpcode},
-        vm::State,
-    },
-    utils::strings::encode_hex_reduced,
-};
+use heimdall_common::{ether::evm::core::vm::State, utils::strings::encode_hex_reduced};
 
 use crate::{
     core::analyze::AnalyzerState,

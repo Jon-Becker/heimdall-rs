@@ -28,7 +28,7 @@ pub fn bitwise_mask_postprocessor(
         let mut found_bitmask = false;
 
         if let Some(bitmask) =
-            AND_BITMASK_REGEX.find(&line).map_err(|e| eyre!("regex error: {}", e))?
+            AND_BITMASK_REGEX.find(line).map_err(|e| eyre!("regex error: {}", e))?
         {
             let cast = bitmask.as_str();
             let cast_size = NON_ZERO_BYTE_REGEX.find_iter(cast).count();
@@ -63,7 +63,7 @@ pub fn bitwise_mask_postprocessor(
 
             found_bitmask = true;
         } else if let Some(bitmask) =
-            AND_BITMASK_REGEX_2.find(&line).map_err(|e| eyre!("regex error: {}", e))?
+            AND_BITMASK_REGEX_2.find(line).map_err(|e| eyre!("regex error: {}", e))?
         {
             let cast = bitmask.as_str();
             let cast_size = NON_ZERO_BYTE_REGEX.find_iter(cast).count();
@@ -111,7 +111,7 @@ pub fn bitwise_mask_postprocessor(
     }
 
     // 2. simplify casts
-    *line = simplify_casts(&line);
+    *line = simplify_casts(line);
 
     Ok(())
 }

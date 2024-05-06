@@ -33,7 +33,6 @@ impl DecodeResult {
 }
 
 pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
-    // init
     let start_time = Instant::now();
 
     // check if we require an OpenAI API key
@@ -122,6 +121,10 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
             let b_score = score_signature(&b.signature);
             b_score.cmp(&a_score)
         });
+        // debug print
+        for match_ in &matches {
+            debug!(" > {}: {}", match_.signature, score_signature(&match_.signature));
+        }
     } else if matches.is_empty() {
         warn!("couldn't find any resolved matches for '{}'", function_selector);
         info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");

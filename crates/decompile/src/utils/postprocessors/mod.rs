@@ -1,16 +1,20 @@
-use std::collections::HashMap;
-
-use heimdall_common::ether::signatures::{ResolvedError, ResolvedLog};
-
-use crate::{core::postprocess::PostprocessorState, interfaces::AnalyzedFunction, Error};
+use crate::{core::postprocess::PostprocessorState, Error};
 
 // import postprocessors
 mod arithmetic;
 mod bitwise;
+mod memory;
+mod storage;
+mod transient;
+mod variable;
 
 // re-export postprocessors
 pub use arithmetic::arithmetic_postprocessor;
 pub use bitwise::bitwise_mask_postprocessor;
+pub use memory::memory_postprocessor;
+pub use storage::storage_postprocessor;
+pub use transient::transient_postprocessor;
+pub use variable::variable_postprocessor;
 
 /// A heuristic is a function that takes a function and a state and modifies the function based on
 /// the state

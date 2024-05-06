@@ -24,10 +24,6 @@ pub struct DumpArgs {
     #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
-    /// Your Transpose.io API Key
-    #[clap(long = "transpose-api-key", short, default_value = "", hide_default_value = true)]
-    pub transpose_api_key: String,
-
     /// The number of threads to use when fetching data.
     #[clap(long, default_value = "4", hide_default_value = true)]
     pub threads: usize,
@@ -37,16 +33,8 @@ pub struct DumpArgs {
     pub from_block: u128,
 
     /// The block number to stop dumping at.
-    #[clap(long, default_value = "9999999999", hide_default_value = true)]
-    pub to_block: u128,
-
-    /// Whether to skip opening the TUI.
     #[clap(long)]
-    pub no_tui: bool,
-
-    /// The chain of the target. Valid chains are ethereum, polygon, goerli, canto, and arbitrum.
-    #[clap(long, default_value = "ethereum", hide_default_value = true)]
-    pub chain: String,
+    pub to_block: Option<u128>,
 
     /// The name for the output file
     #[clap(long, short, default_value = "", hide_default_value = true)]
@@ -59,12 +47,9 @@ impl DumpArgsBuilder {
             target: Some(String::new()),
             output: Some(String::new()),
             rpc_url: Some(String::new()),
-            transpose_api_key: Some(String::new()),
-            threads: Some(8),
+            threads: Some(4),
             from_block: Some(0),
-            to_block: Some(9999999999),
-            no_tui: Some(true),
-            chain: Some(String::from("ethereum")),
+            to_block: Some(None),
             name: Some(String::new()),
         }
     }

@@ -47,6 +47,12 @@ pub struct DisassemblerArgsBuilder {
     output: Option<String>,
 }
 
+impl Default for DisassemblerArgsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DisassemblerArgsBuilder {
     pub fn new() -> Self {
         Self {
