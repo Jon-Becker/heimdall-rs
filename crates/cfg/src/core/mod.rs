@@ -86,11 +86,7 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
         Ok(map) => {
             map.map_err(|e| Error::Eyre(eyre!("symbolic execution (fallback) failed: {}", e)))?
         }
-        Err(e) => {
-            return Err(Error::Eyre(eyre!(
-                "symbolic execution failed: {e}",
-            )))
-        }
+        Err(e) => return Err(Error::Eyre(eyre!("symbolic execution failed: {e}",))),
     };
 
     debug!("'{}' has {} unique branches", args.target.truncate(64), jumpdest_count);

@@ -152,7 +152,7 @@ mod tests {
         let timeout = std::time::Duration::from_millis(1);
         let f = || std::thread::sleep(std::time::Duration::from_secs(1));
         let result = run_with_timeout(f, timeout);
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         let timeout = std::time::Duration::from_secs(1);
         let f = || panic!("test");
         let result = run_with_timeout(f, timeout);
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -179,6 +179,6 @@ mod tests {
         let timeout = std::time::Duration::from_secs(1);
         let f = || loop {};
         let result = run_with_timeout(f, timeout);
-        assert_eq!(result.is_err(), true);
+        assert!(result.is_err());
     }
 }

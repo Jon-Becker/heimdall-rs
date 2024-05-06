@@ -16,7 +16,7 @@ To install the latest stable release:
 bifrost
 ```
 
-To install the lastest stable release (pre-compiled):
+To install the latest stable release (pre-compiled):
 ```bash
 bifrost --binary
 ```

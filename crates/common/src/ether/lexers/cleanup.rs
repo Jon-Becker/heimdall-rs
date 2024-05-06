@@ -151,7 +151,7 @@ pub fn simplify_casts(line: &str) -> String {
     cleaned
 }
 
-/// Simplifies arithmatic by removing unnecessary operations
+/// Simplifies arithmetic by removing unnecessary operations
 pub fn simplify_arithmatic(line: &str) -> String {
     let cleaned = DIV_BY_ONE_REGEX.replace_all(line, "");
     let cleaned = MUL_BY_ONE_REGEX.replace_all(&cleaned, "");

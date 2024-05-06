@@ -28,7 +28,7 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
     let mut compiler = Compiler::Unknown;
     let mut version = "unknown".to_string();
 
-    // perfom prefix check for rough version matching
+    // perform prefix check for rough version matching
     if bytecode.starts_with(&[0x36, 0x3d, 0x3d, 0x37, 0x3d, 0x3d, 0x3d, 0x36, 0x3d, 0x73]) ||
         bytecode.starts_with(&[0x5f, 0x5f, 0x36, 0x5f, 0x5f, 0x37])
     {

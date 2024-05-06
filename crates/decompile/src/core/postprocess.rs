@@ -19,7 +19,7 @@ use crate::{
 use super::analyze::AnalyzerType;
 
 /// State shared between postprocessors
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct PostprocessorState {
     /// A mapping from memory locations to their corresponding variable names
     pub memory_map: HashMap<String, String>,
@@ -35,20 +35,6 @@ pub(crate) struct PostprocessorState {
     pub transient_map: HashMap<String, String>,
     /// A mapping which holds inferred types for transient storage variables
     pub transient_type_map: HashMap<String, String>,
-}
-
-impl Default for PostprocessorState {
-    fn default() -> Self {
-        Self {
-            memory_map: HashMap::new(),
-            variable_map: HashMap::new(),
-            memory_type_map: HashMap::new(),
-            storage_map: HashMap::new(),
-            storage_type_map: HashMap::new(),
-            transient_map: HashMap::new(),
-            transient_type_map: HashMap::new(),
-        }
-    }
 }
 
 /// The [`PostprocessorOrchestrator`] is responsible for managing the cleanup of

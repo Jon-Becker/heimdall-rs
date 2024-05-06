@@ -1,7 +1,7 @@
 use std::{io, io::Write, thread, time::Instant};
 
 #[allow(dead_code)]
-/// asyncronous version of the benchmark function. will execute the function to_bench
+/// asynchronous version of the benchmark function. will execute the function to_bench
 /// `runs` times, and print the mean and standard deviation of the run times.
 pub fn benchmark(benchmark_name: &str, runs: usize, to_bench: fn()) {
     let mut time = 0usize;
