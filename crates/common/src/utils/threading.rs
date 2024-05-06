@@ -1,4 +1,5 @@
 use crossbeam_channel::unbounded;
+use eyre::Result;
 use std::{sync::Arc, thread};
 
 /// A simple thread pool implementation that takes a vector of items, splits them into chunks, and
@@ -72,7 +73,7 @@ pub fn task_pool<
 
 /// Takes a function and some arguments, and runs the function in a separate thread. If the function
 /// doesnt finish within the given timeout, the thread is killed, and the function returns None.
-pub fn run_with_timeout<T, F>(f: F, timeout: std::time::Duration) -> Option<T>
+pub fn run_with_timeout<T, F>(f: F, timeout: std::time::Duration) -> Result<T>
 where
     T: Send + 'static,
     F: FnOnce() -> T + Send + 'static, {
@@ -85,11 +86,11 @@ where
     let result = rx.recv_timeout(timeout);
     if result.is_err() {
         handle.thread().unpark();
-        return None
+        return result.map_err(|e| eyre::eyre!(e));
     }
 
     handle.join().ok();
-    result.ok()
+    result.map_err(|e| eyre::eyre!(e))
 }
 
 #[cfg(test)]
@@ -145,13 +146,13 @@ mod tests {
         let timeout = std::time::Duration::from_secs(1);
         let f = || 1;
         let result = run_with_timeout(f, timeout);
-        assert_eq!(result, Some(1));
+        assert_eq!(result.unwrap(), 1);
 
         // Test case with a function that doesnt finish within the timeout
         let timeout = std::time::Duration::from_millis(1);
         let f = || std::thread::sleep(std::time::Duration::from_secs(1));
         let result = run_with_timeout(f, timeout);
-        assert_eq!(result, None);
+        assert_eq!(result.is_err(), true);
     }
 
     #[test]
@@ -160,7 +161,7 @@ mod tests {
         let timeout = std::time::Duration::from_secs(1);
         let f = || panic!("test");
         let result = run_with_timeout(f, timeout);
-        assert_eq!(result, None);
+        assert_eq!(result.is_err(), true);
     }
 
     #[test]
@@ -169,7 +170,7 @@ mod tests {
         let timeout = std::time::Duration::from_secs(1);
         let f = |x: i32| x * 2;
         let result = run_with_timeout(move || f(2), timeout);
-        assert_eq!(result, Some(4));
+        assert_eq!(result.unwrap(), 4);
     }
 
     #[test]
@@ -178,6 +179,6 @@ mod tests {
         let timeout = std::time::Duration::from_secs(1);
         let f = || loop {};
         let result = run_with_timeout(f, timeout);
-        assert_eq!(result, None);
+        assert_eq!(result.is_err(), true);
     }
 }

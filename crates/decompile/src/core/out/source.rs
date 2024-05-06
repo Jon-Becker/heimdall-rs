@@ -218,7 +218,9 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
 fn get_storage_variables(storage_variables: &HashMap<String, String>) -> Vec<String> {
     let mut output: Vec<String> =
         storage_variables.iter().map(|(name, typ)| format!("{} {};", typ, name)).collect();
-    output.push(String::new());
+    if !output.is_empty() {
+        output.push("".to_string());
+    }
     output
 }
 

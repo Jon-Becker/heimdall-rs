@@ -943,8 +943,9 @@ impl VM {
                 let size = self.stack.pop().value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                // Note: clamping to 8 words here, since we dont actually use the return data
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(32 * 8);
+                let size: usize = size.try_into().unwrap_or(32 * 8);
 
                 let mut value = Vec::with_capacity(size);
                 value.resize(size, 0xff);

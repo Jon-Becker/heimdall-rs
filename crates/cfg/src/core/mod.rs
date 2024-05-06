@@ -83,13 +83,12 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
         move || evm_clone.symbolic_exec(),
         Duration::from_millis(args.timeout),
     ) {
-        Some(map) => {
+        Ok(map) => {
             map.map_err(|e| Error::Eyre(eyre!("symbolic execution (fallback) failed: {}", e)))?
         }
-        None => {
+        Err(e) => {
             return Err(Error::Eyre(eyre!(
-                "symbolic execution (fallback) timed out after {}ms",
-                args.timeout
+                "symbolic execution failed: {e}",
             )))
         }
     };

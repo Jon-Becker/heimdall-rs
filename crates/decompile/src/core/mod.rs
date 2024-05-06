@@ -115,13 +115,12 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             move || evm_clone.symbolic_exec(),
             Duration::from_millis(args.timeout),
         ) {
-            Some(map) => {
+            Ok(map) => {
                 map.map_err(|e| Error::Eyre(eyre!("symbolic execution (fallback) failed: {}", e)))?
             }
-            None => {
+            Err(e) => {
                 return Err(Error::Eyre(eyre!(
-                    "symbolic execution (fallback) timed out after {}ms",
-                    args.timeout
+                    "symbolic execution failed: {e}",
                 )))
             }
         };
@@ -139,11 +138,10 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             move || evm_clone.symbolic_exec_selector(&selector_clone, entry_point),
             Duration::from_millis(args.timeout),
         ) {
-            Some(map) => map.map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?,
-            None => {
+            Ok(map) => map.map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?,
+            Err(e) => {
                 return Err(Error::Eyre(eyre!(
-                    "symbolic execution timed out after {}ms",
-                    args.timeout
+                    "symbolic execution failed: {e}",
                 )))
             }
         };
