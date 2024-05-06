@@ -5,24 +5,24 @@ pub(crate) mod output;
 use error::Error;
 use log_args::LogArgs;
 use output::{build_output_path, print_with_less};
-use tracing::{info, Level};
+use tracing::info;
 
 use clap::{Parser, Subcommand};
 
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::utils::{
+    hex::ToLowerHex,
     io::file::{write_file, write_lines_to_file},
     version::{current_version, remote_version},
 };
 use heimdall_config::{config, ConfigArgs, Configuration};
 use heimdall_core::{
-    cfg::{cfg, output::build_cfg, CFGArgs},
-    decode::{decode, DecodeArgs},
-    decompile::{decompile, out::abi::ABIStructure, DecompilerArgs},
-    disassemble::{disassemble, DisassemblerArgs},
-    dump::{dump, DumpArgs},
-    inspect::{inspect, InspectArgs},
-    snapshot::{snapshot, util::csv::generate_csv, SnapshotArgs},
+    heimdall_cfg::{cfg, CFGArgs},
+    heimdall_decoder::{decode, DecodeArgs},
+    heimdall_decompiler::{decompile, DecompilerArgs},
+    heimdall_disassembler::{disassemble, DisassemblerArgs},
+    heimdall_dump::{dump, DumpArgs},
+    heimdall_inspect::{inspect, InspectArgs},
 };
 
 #[derive(Debug, Parser)]
@@ -68,13 +68,6 @@ pub enum Subcommands {
         about = "Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more"
     )]
     Inspect(InspectArgs),
-
-    #[clap(
-        name = "snapshot",
-        about = "Infer function information from bytecode, including access control, gas
-    consumption, storage accesses, event emissions, and more"
-    )]
-    Snapshot(SnapshotArgs),
 }
 
 #[tokio::main]
@@ -144,34 +137,13 @@ async fn main() -> Result<(), Error> {
                 .await
                 .map_err(|e| Error::Generic(format!("failed to decompile bytecode: {}", e)))?;
 
-            if args.logs.verbosity.level() >= Level::DEBUG {
-                result.display();
-            }
-
             if cmd.output == "print" {
                 let mut output_str = String::new();
+                output_str.push_str(&format!(
+                    "ABI:\n\n[{}]\n",
+                    serde_json::to_string_pretty(&result.abi).map_err(Error::SerdeError)?
+                ));
 
-                if let Some(abi) = &result.abi {
-                    output_str.push_str(&format!(
-                        "ABI:\n\n[{}]\n",
-                        abi.iter()
-                            .map(|x| {
-                                match x {
-                                    ABIStructure::Function(x) => {
-                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
-                                    }
-                                    ABIStructure::Error(x) => {
-                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
-                                    }
-                                    ABIStructure::Event(x) => {
-                                        serde_json::to_string_pretty(x).map_err(Error::SerdeError)
-                                    }
-                                }
-                            })
-                            .collect::<Result<Vec<String>, Error>>()?
-                            .join(",\n")
-                    ));
-                }
                 if let Some(source) = &result.source {
                     output_str.push_str(&format!("Source:\n\n{}\n", source));
                 }
@@ -181,37 +153,18 @@ async fn main() -> Result<(), Error> {
                 })?;
             } else {
                 // write the contract ABI
-                if let Some(abi) = result.abi {
-                    let output_path =
-                        build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &abi_filename)
-                            .await
-                            .map_err(|e| {
-                                Error::Generic(format!("failed to build output path: {}", e))
-                            })?;
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &abi_filename)
+                        .await
+                        .map_err(|e| {
+                            Error::Generic(format!("failed to build output path: {}", e))
+                        })?;
 
-                    write_file(
-                        &output_path,
-                        &format!(
-                            "[{}]",
-                            abi.iter()
-                                .map(|x| {
-                                    match x {
-                                        ABIStructure::Function(x) => {
-                                            serde_json::to_string_pretty(x)
-                                                .map_err(Error::SerdeError)
-                                        }
-                                        ABIStructure::Error(x) => serde_json::to_string_pretty(x)
-                                            .map_err(Error::SerdeError),
-                                        ABIStructure::Event(x) => serde_json::to_string_pretty(x)
-                                            .map_err(Error::SerdeError),
-                                    }
-                                })
-                                .collect::<Result<Vec<String>, Error>>()?
-                                .join(",\n")
-                        ),
-                    )
-                    .map_err(|e| Error::Generic(format!("failed to write ABI: {}", e)))?;
-                }
+                write_file(
+                    &output_path,
+                    &serde_json::to_string_pretty(&result.abi).map_err(Error::SerdeError)?,
+                )
+                .map_err(|e| Error::Generic(format!("failed to write ABI: {}", e)))?;
 
                 // write the contract source
                 if let Some(source) = &result.source {
@@ -278,11 +231,7 @@ async fn main() -> Result<(), Error> {
             let cfg = cfg(cmd.clone())
                 .await
                 .map_err(|e| Error::Generic(format!("failed to generate cfg: {}", e)))?;
-            let stringified_dot = build_cfg(&cfg.graph, &cmd);
-
-            if args.logs.verbosity.level() >= Level::DEBUG {
-                cfg.display();
-            }
+            let stringified_dot = cfg.as_dot(cmd.color_edges);
 
             if cmd.output == "print" {
                 print_with_less(&stringified_dot)
@@ -314,25 +263,17 @@ async fn main() -> Result<(), Error> {
                 filename = format!("{}-{}", given_name, filename);
             }
 
-            // if the user has not specified a transpose api key, use the default
-            if cmd.transpose_api_key.as_str() == "" {
-                cmd.transpose_api_key = configuration.transpose_api_key;
-            }
-
             let result = dump(cmd.clone())
                 .await
                 .map_err(|e| Error::Generic(format!("failed to dump storage: {}", e)))?;
             let mut lines = Vec::new();
 
             // add header
-            lines.push(String::from("last_modified,alias,slot,decoded_type,value"));
+            lines.push(String::from("slot,value"));
 
             // add rows
-            for row in result {
-                lines.push(format!(
-                    "{},{},{},{},{}",
-                    row.last_modified, row.alias, row.slot, row.decoded_type, row.value
-                ));
+            for (slot, value) in result {
+                lines.push(format!("{},{}", slot.to_lower_hex(), value.to_lower_hex()));
             }
 
             if cmd.output == "print" {
@@ -349,50 +290,6 @@ async fn main() -> Result<(), Error> {
 
                 write_lines_to_file(&output_path, lines)
                     .map_err(|e| Error::Generic(format!("failed to write dump: {}", e)))?;
-            }
-        }
-
-        Subcommands::Snapshot(mut cmd) => {
-            // if the user has not specified a rpc url, use the default
-            if cmd.rpc_url.as_str() == "" {
-                cmd.rpc_url = configuration.rpc_url;
-            }
-
-            // if the user has passed an output filename, override the default filename
-            let mut filename = "snapshot.csv".to_string();
-            let given_name = cmd.name.as_str();
-
-            if !given_name.is_empty() {
-                filename = format!("{}-{}", given_name, filename);
-            }
-
-            let snapshot_result = snapshot(cmd.clone())
-                .await
-                .map_err(|e| Error::Generic(format!("failed to snapshot contract: {}", e)))?;
-            let csv_lines = generate_csv(
-                &snapshot_result.snapshots,
-                &snapshot_result.resolved_errors,
-                &snapshot_result.resolved_events,
-            );
-
-            if args.logs.verbosity.level() >= Level::DEBUG {
-                snapshot_result.display();
-            }
-
-            if cmd.output == "print" {
-                print_with_less(&csv_lines.join("\n"))
-                    .await
-                    .map_err(|e| Error::Generic(format!("failed to print snapshot: {}", e)))?;
-            } else {
-                let output_path =
-                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
-                        .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?;
-
-                write_lines_to_file(&output_path, csv_lines)
-                    .map_err(|e| Error::Generic(format!("failed to write snapshot: {}", e)))?;
             }
         }
 
@@ -423,17 +320,15 @@ async fn main() -> Result<(), Error> {
             if cmd.output == "print" {
                 let mut output_str = String::new();
 
-                if let Some(decoded_trace) = inspect_result.decoded_trace {
-                    output_str.push_str(&format!(
-                        "Decoded Trace:\n\n{}\n",
-                        serde_json::to_string_pretty(&decoded_trace)?
-                    ));
-                }
+                output_str.push_str(&format!(
+                    "Decoded Trace:\n\n{}\n",
+                    serde_json::to_string_pretty(&inspect_result.decoded_trace)?
+                ));
 
                 print_with_less(&output_str)
                     .await
                     .map_err(|e| Error::Generic(format!("failed to print decoded trace: {}", e)))?;
-            } else if let Some(decoded_trace) = inspect_result.decoded_trace {
+            } else {
                 // write decoded trace with serde
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
@@ -442,8 +337,11 @@ async fn main() -> Result<(), Error> {
                             Error::Generic(format!("failed to build output path: {}", e))
                         })?;
 
-                write_file(&output_path, &serde_json::to_string_pretty(&decoded_trace)?)
-                    .map_err(|e| Error::Generic(format!("failed to write decoded trace: {}", e)))?;
+                write_file(
+                    &output_path,
+                    &serde_json::to_string_pretty(&inspect_result.decoded_trace)?,
+                )
+                .map_err(|e| Error::Generic(format!("failed to write decoded trace: {}", e)))?;
             }
         }
 

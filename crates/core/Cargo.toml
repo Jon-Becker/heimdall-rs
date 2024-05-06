@@ -35,3 +35,11 @@ async-convert = "1.0.0"
 futures = "0.3.28"
 tracing = "0.1.40"
 gag = "1.0.0"
+
+# modules
+heimdall-cfg = { workspace = true }
+heimdall-dump = { workspace = true }
+heimdall-decoder = { workspace = true }
+heimdall-inspect = { workspace = true }
+heimdall-decompiler = { workspace = true }
+heimdall-disassembler = { workspace = true }

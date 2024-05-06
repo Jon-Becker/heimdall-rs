@@ -1,11 +1,17 @@
 [workspace]
 members = [
+    "crates/disassemble",
+    "crates/decompile",
     "crates/tracing",
+    "crates/inspect",
+    "crates/decode",
     "crates/common",
     "crates/config",
     "crates/cache",
     "crates/core",
+    "crates/dump",
     "crates/cli",
+    "crates/cfg",
 ]
 version = "0.7.3"
 
@@ -30,3 +36,11 @@ heimdall-cli = { path = "crates/cli" }
 heimdall-common = { path = "crates/common" }
 heimdall-config = { path = "crates/config" }
 heimdall-tracing = { path = "crates/tracing" }
+
+# core mods
+heimdall-cfg = { path = "crates/cfg" }
+heimdall-dump = { path = "crates/dump" }
+heimdall-inspect = { path = "crates/inspect" }
+heimdall-decoder = { path = "crates/decode" }
+heimdall-decompiler = { path = "crates/decompile" }
+heimdall-disassembler = { path = "crates/disassemble" }

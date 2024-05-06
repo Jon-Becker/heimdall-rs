@@ -5,6 +5,12 @@ use crate::ether::evm::core::opcodes::WrappedOpcode;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RangeMap(pub HashMap<Range<usize>, WrappedOpcode>);
 
+impl Default for RangeMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RangeMap {
     pub fn new() -> Self {
         Self(HashMap::new())
@@ -13,6 +19,24 @@ impl RangeMap {
     /// Given an offset into memory, returns the associated opcode if it exists
     pub fn get_by_offset(&self, offset: usize) -> Option<WrappedOpcode> {
         self.0.get(self.find_range(offset).expect("RangeMap::have_range is broken")).cloned()
+    }
+
+    /// Given a range, returns associated opcodes if they exist
+    pub fn get_by_range(&self, offset: usize, size: usize) -> Vec<WrappedOpcode> {
+        let mut memory_range: Vec<WrappedOpcode> = Vec::new();
+        let mut offset: usize = offset;
+        let mut size: usize = size;
+
+        // get the memory range
+        while size > 0 {
+            if let Some(memory) = self.get_by_offset(offset) {
+                memory_range.push(memory.clone());
+            }
+            offset += 32;
+            size = size.saturating_sub(32);
+        }
+
+        memory_range
     }
 
     /// Associates the provided opcode with the range of memory modified by writing a `size`-byte

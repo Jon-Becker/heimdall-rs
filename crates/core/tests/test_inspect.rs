@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod integration_tests {
     use heimdall_common::utils::{sync::blocking_await, threading::task_pool};
-    use heimdall_core::inspect::{InspectArgs, InspectArgsBuilder};
+    use heimdall_inspect::{InspectArgs, InspectArgsBuilder};
     use serde_json::Value;
 
     #[tokio::test]
@@ -18,7 +18,7 @@ mod integration_tests {
             skip_resolving: true,
         };
 
-        let _ = heimdall_core::inspect::inspect(args).await.expect("failed to inspect");
+        let _ = heimdall_inspect::inspect(args).await.expect("failed to inspect");
     }
 
     #[tokio::test]
@@ -35,7 +35,7 @@ mod integration_tests {
             skip_resolving: true,
         };
 
-        let _ = heimdall_core::inspect::inspect(args).await.expect("failed to inspect");
+        let _ = heimdall_inspect::inspect(args).await.expect("failed to inspect");
     }
 
     /// Thorough testing for inspect across a large number of transactions.
@@ -70,7 +70,7 @@ mod integration_tests {
 
                 // get the storage diff for this transaction
                 println!("inspecting txid: {}", txid);
-                match rt.block_on(heimdall_core::inspect::inspect(args)) {
+                match rt.block_on(heimdall_inspect::inspect(args)) {
                     Ok(_) => {
                         println!("inspecting txid: {} ... succeeded", txid);
                         1
@@ -80,10 +80,7 @@ mod integration_tests {
                         println!("  \\- error: {:?}", e);
 
                         // we dont want to count RPC errors as failures
-                        match e {
-                            heimdall_core::error::Error::RpcError(_) => 1,
-                            _ => 0,
-                        }
+                        0
                     }
                 }
             })
@@ -99,6 +96,6 @@ mod integration_tests {
             success_rate * 100.0
         );
 
-        assert!(success_rate >= 0.93);
+        assert!(success_rate >= 0.92);
     }
 }

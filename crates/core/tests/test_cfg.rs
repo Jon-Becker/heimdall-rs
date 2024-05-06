@@ -2,7 +2,7 @@
 mod benchmark {
     use heimdall_common::utils::testing::benchmarks::async_bench;
 
-    use heimdall_core::cfg::CFGArgs;
+    use heimdall_cfg::CFGArgs;
 
     #[tokio::test]
     async fn benchmark_generate_cfg_simple() {
@@ -16,7 +16,7 @@ mod benchmark {
                 name: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::cfg::cfg(args).await;
+            let _ = heimdall_cfg::cfg(args).await;
         }
 
         async_bench("benchmark_generate_cfg_simple", 100, bench).await;
@@ -34,7 +34,7 @@ mod benchmark {
                 name: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::cfg::cfg(args).await;
+            let _ = heimdall_cfg::cfg(args).await;
         }
 
         async_bench("benchmark_generate_cfg_complex", 100, bench).await;
@@ -43,12 +43,12 @@ mod benchmark {
 
 #[cfg(test)]
 mod integration_tests {
-    use heimdall_core::cfg::CFGArgs;
+    use heimdall_cfg::CFGArgs;
     use petgraph::dot::Dot;
 
     #[tokio::test]
     async fn test_cfg_simple() {
-        let result = heimdall_core::cfg::cfg(CFGArgs {
+        let result = heimdall_cfg::cfg(CFGArgs {
             target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
@@ -72,7 +72,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_cfg_complex() {
-        let result = heimdall_core::cfg::cfg(CFGArgs {
+        let result = heimdall_cfg::cfg(CFGArgs {
             target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
