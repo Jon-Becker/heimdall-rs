@@ -32,44 +32,37 @@ pub fn event_heuristic(
             .join(", ");
 
         // add the event emission to the function's logic
-        match analyzer_state.analyzer_type {
-            AnalyzerType::Solidity => {
-                function.logic.push(format!(
-                    "emit Event_{}({}{});{}",
-                    &event
-                        .topics
-                        .first()
-                        .unwrap_or(&U256::from(0))
-                        .encode_hex()
-                        .replacen("0x", "", 1)[0..8],
-                    event
-                        .topics
-                        .get(1..)
-                        .map(|topics| {
-                            if !event.data.is_empty() && !topics.is_empty() {
-                                let mut solidified_topics: Vec<String> = Vec::new();
-                                for (i, _) in topics.iter().enumerate() {
-                                    solidified_topics.push(
-                                        state.last_instruction.input_operations[i + 3].solidify(),
-                                    );
-                                }
-                                format!("{}, ", solidified_topics.join(", "))
-                            } else {
-                                let mut solidified_topics: Vec<String> = Vec::new();
-                                for (i, _) in topics.iter().enumerate() {
-                                    solidified_topics.push(
-                                        state.last_instruction.input_operations[i + 3].solidify(),
-                                    );
-                                }
-                                solidified_topics.join(", ")
+        if analyzer_state.analyzer_type == AnalyzerType::Solidity {
+            function.logic.push(format!(
+                "emit Event_{}({}{});{}",
+                &event.topics.first().unwrap_or(&U256::from(0)).encode_hex().replacen("0x", "", 1)
+                    [0..8],
+                event
+                    .topics
+                    .get(1..)
+                    .map(|topics| {
+                        if !event.data.is_empty() && !topics.is_empty() {
+                            let mut solidified_topics: Vec<String> = Vec::new();
+                            for (i, _) in topics.iter().enumerate() {
+                                solidified_topics.push(
+                                    state.last_instruction.input_operations[i + 3].solidify(),
+                                );
                             }
-                        })
-                        .unwrap_or("".to_string()),
-                    data_mem_ops_solidified,
-                    if anonymous { " // anonymous event" } else { "" }
-                ));
-            }
-            _ => {}
+                            format!("{}, ", solidified_topics.join(", "))
+                        } else {
+                            let mut solidified_topics: Vec<String> = Vec::new();
+                            for (i, _) in topics.iter().enumerate() {
+                                solidified_topics.push(
+                                    state.last_instruction.input_operations[i + 3].solidify(),
+                                );
+                            }
+                            solidified_topics.join(", ")
+                        }
+                    })
+                    .unwrap_or("".to_string()),
+                data_mem_ops_solidified,
+                if anonymous { " // anonymous event" } else { "" }
+            ));
         }
     }
 

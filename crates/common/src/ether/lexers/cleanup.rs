@@ -244,10 +244,7 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> Result<String, Er
     if are_parentheses_unnecessary(&logical_expression) {
         cleaned.replace_range(
             paren_start..paren_end,
-            match logical_expression.get(2..logical_expression.len() - 2) {
-                Some(x) => x,
-                None => "",
-            },
+            logical_expression.get(2..logical_expression.len() - 2).unwrap_or_default(),
         );
 
         // remove double negation, if one was created
