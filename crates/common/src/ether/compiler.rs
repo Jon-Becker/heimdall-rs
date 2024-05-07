@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::utils::iter::ByteSliceExt;
-use tracing::trace;
+use tracing::{debug, trace, warn};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Compiler {
@@ -90,8 +90,14 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
                     .join(".");
             }
 
-            trace!("exact compiler version match found due to cbor encoded metadata: {}", version);
+            trace!("exact compiler version match found due to cbor encoded metadata");
         }
+    }
+
+    if compiler == Compiler::Solc {
+        debug!("detected compiler {compiler} {version}.");
+    } else {
+        warn!("detected compiler {} {} is not supported by heimdall.", compiler, version);
     }
 
     (compiler, version.trim_end_matches('.').to_string())

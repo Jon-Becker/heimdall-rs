@@ -1,11 +1,16 @@
 use async_trait::async_trait;
 use ethers::abi::Token;
+
 use heimdall_cache::{read_cache, store_cache};
 use tracing::trace;
 
 use crate::{
     error::Error,
-    utils::{http::get_json_from_url, strings::replace_last},
+    utils::{
+        http::get_json_from_url,
+        io::{logging::TraceFactory, types::display},
+        strings::replace_last,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -66,7 +71,7 @@ impl ResolveSelector for ResolvedError {
         // get function possibilities from openchain
         let signatures = match get_json_from_url(
             &format!(
-                "https://api.openchain.xyz/signature-database/v1/lookup?filter=true&function=0x{}",
+                "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
                 &selector
             ),
             10,
@@ -153,7 +158,7 @@ impl ResolveSelector for ResolvedLog {
         // get function possibilities from openchain
         let signatures = match get_json_from_url(
             &format!(
-                "https://api.openchain.xyz/signature-database/v1/lookup?filter=true&event=0x{}",
+                "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&event=0x{}",
                 &selector
             ),
             10,
@@ -240,7 +245,7 @@ impl ResolveSelector for ResolvedFunction {
         // get function possibilities from openchain
         let signatures = match get_json_from_url(
             &format!(
-                "https://api.openchain.xyz/signature-database/v1/lookup?filter=true&function=0x{}",
+                "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
                 &selector
             ),
             10,
@@ -313,6 +318,64 @@ pub fn score_signature(signature: &str) -> u32 {
 
     score
 }
+
+/// trait impls
+/// trait impls
+/// trait impls
+
+impl TryFrom<&ResolvedFunction> for TraceFactory {
+    // eyre
+    type Error = eyre::Report;
+
+    fn try_from(function: &ResolvedFunction) -> Result<Self, Self::Error> {
+        let mut trace = TraceFactory::default();
+        let decode_call = trace.add_call(
+            0,
+            line!(),
+            "heimdall".to_string(),
+            "decode".to_string(),
+            vec![],
+            "()".to_string(),
+        );
+        trace.br(decode_call);
+        trace.add_message(decode_call, line!(), vec![format!("signature: {}", function.signature)]);
+        trace.br(decode_call);
+
+        // build inputs
+        for (i, input) in function.decoded_inputs.as_ref().unwrap_or(&Vec::new()).iter().enumerate()
+        {
+            let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
+            if decoded_inputs_as_message.is_empty() {
+                break;
+            }
+
+            if i == 0 {
+                decoded_inputs_as_message[0] = format!(
+                    "input {}:{}{}",
+                    i,
+                    " ".repeat(4 - i.to_string().len()),
+                    decoded_inputs_as_message[0].replacen("           ", "", 1)
+                )
+            } else {
+                decoded_inputs_as_message[0] = format!(
+                    "      {}:{}{}",
+                    i,
+                    " ".repeat(4 - i.to_string().len()),
+                    decoded_inputs_as_message[0].replacen("           ", "", 1)
+                )
+            }
+
+            // add to trace and decoded string
+            trace.add_message(decode_call, 1, decoded_inputs_as_message.clone());
+        }
+
+        Ok(trace)
+    }
+}
+
+/// tests
+/// tests
+/// tests
 
 #[cfg(test)]
 mod tests {

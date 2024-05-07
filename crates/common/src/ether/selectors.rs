@@ -1,14 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
-    time::Duration,
+    time::Instant,
 };
 
-use indicatif::ProgressBar;
 use tokio::task;
-use tracing::trace;
+use tracing::{debug, error, info, trace, warn};
 
-use crate::{error::Error, info_spinner, utils::strings::decode_hex};
+use crate::{error::Error, utils::strings::decode_hex};
 
 use super::{
     evm::core::vm::VM,
@@ -91,6 +90,8 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
             }
         }
     }
+
+    info!("discovered {} function selectors in assembly", function_selectors.len());
     function_selectors
 }
 
@@ -143,40 +144,25 @@ pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
 pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
 where
     T: ResolveSelector + Send + Clone + 'static, {
+    // short-circuit if there are no selectors
+    if selectors.is_empty() {
+        return HashMap::new();
+    }
+
     let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
         Arc::new(Mutex::new(HashMap::new()));
-
-    let resolve_progress: Arc<Mutex<ProgressBar>> =
-        Arc::new(Mutex::new(ProgressBar::new_spinner()));
-
     let mut threads = Vec::new();
-
-    resolve_progress
-        .lock()
-        .expect("Could not obtain lock on resolve_progress.")
-        .enable_steady_tick(Duration::from_millis(100));
-    resolve_progress
-        .lock()
-        .expect("Could not obtain lock on resolve_progress.")
-        .set_style(info_spinner!());
-    resolve_progress
-        .lock()
-        .expect("Could not obtain lock on resolve_progress.")
-        .set_message("resolving selectors");
+    let start_time = Instant::now();
+    let selector_count = selectors.len();
 
     for selector in selectors {
         let function_clone = resolved_functions.clone();
-        let resolve_progress = resolve_progress.clone();
 
         // create a new thread for each selector
         threads.push(task::spawn(async move {
             if let Ok(Some(function)) = T::resolve(&selector).await {
                 let mut _resolved_functions =
                     function_clone.lock().expect("Could not obtain lock on function_clone.");
-                let mut _resolve_progress =
-                    resolve_progress.lock().expect("Could not obtain lock on resolve_progress.");
-                _resolve_progress
-                    .set_message(format!("resolved {} selectors", _resolved_functions.len()));
                 _resolved_functions.insert(selector, function);
             }
         }));
@@ -186,13 +172,16 @@ where
     for thread in threads {
         if let Err(e) = thread.await {
             // Handle error
-            eprintln!("Task failed: {:?}", e);
+            error!("failed to resolve selector: {:?}", e);
         }
     }
 
-    resolve_progress.lock().expect("failed to acquire lock on resolve_progress").finish_and_clear();
-
-    let x =
-        resolved_functions.lock().expect("Could not obtain lock on resolved_functions.").clone();
-    x
+    let signatures =
+        resolved_functions.lock().expect("failed to obtain lock on resolved_functions.").clone();
+    if signatures.is_empty() {
+        warn!("failed to resolve any signatures from {} selectors", selector_count);
+    }
+    info!("resolved {} signatures from {} selectors", signatures.len(), selector_count);
+    debug!("signature resolution took {:?}", start_time.elapsed());
+    signatures
 }

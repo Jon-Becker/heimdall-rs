@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod benchmark {
     use heimdall_common::utils::testing::benchmarks::async_bench;
-
-    use heimdall_core::decompile::DecompilerArgs;
+    use heimdall_decompiler::{decompile, DecompilerArgs};
 
     #[tokio::test]
     async fn benchmark_decompile_solidity_simple() {
@@ -18,7 +17,7 @@ mod benchmark {
                 name: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::decompile::decompile(args).await;
+            let _ = decompile(args).await;
         }
 
         async_bench("benchmark_decompile_solidity_simple", 100, bench).await;
@@ -38,7 +37,7 @@ mod benchmark {
                 name: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::decompile::decompile(args).await;
+            let _ = decompile(args).await;
         }
 
         async_bench("benchmark_decompile_solidity_complex", 100, bench).await;
@@ -58,7 +57,7 @@ mod benchmark {
                 name: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::decompile::decompile(args).await;
+            let _ = decompile(args).await;
         }
 
         async_bench("benchmark_decompile_yul_simple", 100, bench).await;
@@ -78,7 +77,7 @@ mod benchmark {
                 name: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::decompile::decompile(args).await;
+            let _ = decompile(args).await;
         }
 
         async_bench("benchmark_decompile_yul_complex", 100, bench).await;
@@ -98,7 +97,7 @@ mod benchmark {
                 name: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::decompile::decompile(args).await;
+            let _ = decompile(args).await;
         }
 
         async_bench("benchmark_build_abi_simple", 100, bench).await;
@@ -118,7 +117,7 @@ mod benchmark {
                 name: String::from(""),
                 timeout: 10000,
             };
-            let _ = heimdall_core::decompile::decompile(args).await;
+            let _ = decompile(args).await;
         }
 
         async_bench("benchmark_build_abi_complex", 100, bench).await;
@@ -128,11 +127,11 @@ mod benchmark {
 #[cfg(test)]
 mod integration_tests {
     use heimdall_common::utils::io::file::delete_path;
-    use heimdall_core::decompile::DecompilerArgs;
+    use heimdall_decompiler::{decompile, DecompilerArgs};
 
     #[tokio::test]
     async fn test_decompile_precompile() {
-        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+        let result = decompile(DecompilerArgs {
             target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
@@ -146,10 +145,8 @@ mod integration_tests {
         .await
         .expect("failed to decompile");
 
-        println!("{result:?}");
-
         // assert that the output is correct
-        for line in &["function Unresolved_19045a25(bytes memory arg0, bytes memory arg1) public payable returns (address) {",
+        for line in &["function Unresolved_19045a25(uint256 arg0, uint256 arg1) public payable returns (address) {",
             " = ecrecover("] {
             println!("{line}");
             assert!(result.source.clone().expect("decompile source is empty").contains(line));
@@ -158,7 +155,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_decompile_weth() {
-        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+        let result = decompile(DecompilerArgs {
             target: String::from("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
@@ -174,14 +171,14 @@ mod integration_tests {
 
         // assert that the output is correct
         for line in &["function Unresolved_06fdde03() public view returns (bytes memory) {",
-            "function Unresolved_095ea7b3(address arg0, bytes memory arg1) public returns (bool) {",
+            "function Unresolved_095ea7b3(address arg0, uint256 arg1) public returns (bool) {",
             "function Unresolved_18160ddd() public view returns (address) {",
-            "function Unresolved_23b872dd(address arg0, address arg1, bytes memory arg2) public returns (bool) {",
-            "function Unresolved_2e1a7d4d(bool arg0) public {",
+            "function Unresolved_23b872dd(address arg0, address arg1, uint256 arg2) public returns (bool) {",
+            "function Unresolved_2e1a7d4d(uint256 arg0) public {",
             "function Unresolved_313ce567() public view returns (bool) {",
             "function Unresolved_70a08231(address arg0) public view returns (uint256) {",
             "function Unresolved_95d89b41() public view returns (bytes memory) {",
-            "function Unresolved_a9059cbb(address arg0, bytes memory arg1) public returns (bool) {",
+            "function Unresolved_a9059cbb(address arg0, uint256 arg1) public returns (bool) {",
             "function Unresolved_d0e30db0() public payable {",
             "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"] {
             println!("{line}");
@@ -191,7 +188,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_decompile_ctf() {
-        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+        let result = decompile(DecompilerArgs {
             target: String::from("0x9f00c43700bc0000Ff91bE00841F8e04c0495000"),
             rpc_url: String::from("https://eth.llamarpc.com"),
             default: true,
@@ -206,9 +203,9 @@ mod integration_tests {
         .expect("failed to decompile");
 
         // assert that the output is correct
-        for line in &["function Unresolved_2fa61cd8(address arg0) public view payable returns (uint16) {",
-            "function Unresolved_41161b10(bytes memory arg0, address arg1) public payable returns (bool) {",
-            "function Unresolved_06fdde03() public pure payable returns (bytes memory) {"] {
+        for line in &["function Unresolved_2fa61cd8(address arg0) public payable returns (uint16) {",
+            "function Unresolved_41161b10(uint240 arg0, address arg1) public payable returns (bool) {",
+            "function Unresolved_06fdde03() public payable returns (bytes memory) {"] {
             println!("{line}");
             assert!(result.source.clone().expect("decompile source is empty").contains(line));
         }
@@ -216,7 +213,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_decompile_vyper() {
-        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+        let result = decompile(DecompilerArgs {
             target: String::from("0x5f3560e01c63fdf80bda811861005d57602436103417610061576004358060a01c610061576040525f5c6002146100615760025f5d6040515a595f5f36365f8537835f8787f1905090509050610057573d5f5f3e3d5ffd5b60035f5d005b5f5ffd5b5f80fd"),
             rpc_url: String::from(""),
             default: true,
@@ -244,7 +241,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_decompile_huff() {
-        let result = heimdall_core::decompile::decompile(DecompilerArgs {
+        let result = decompile(DecompilerArgs {
             target: String::from("0x5f3560e01c806306fdde03146100295780632fa61cd81461004457806341161b1014610058575f5ffd5b60205f52684c61627972696e7468602952600960205260605ff35b6004355f524360205260405f205f5260205ff35b6004356024355f5f61020d565b60016100b2565b61021f57610149565b806100f9565b5f6100ca565b61012d57610278565b086101c7565b61012d57610249565b60026100e6565b526101b3565b806100f2565b82610114565b5f6100a0565b016100c4565b91610154565b906101c1565bf35b60016100ec565b6010610108565b836101a7565b9361017d565b146101f7565b01610100565b6001610234565b6003610143565b9161014f565bf35b83610159565b0261013d565b60ff61019b565b10610240565b836101cd565b1661023a565b602061026c565b6101ba576100a6565b1c610255565b1461027e565b80610099565b61024f565b61024f565b066101a1565b036100be565b16610192565b90610226565b81610272565b916101e1565b106101e8565b016101db565b6100655761016b565b61012d576100ac565b14610189565b15610090565b1c61022d565b15610134565b602061007b565b6010610171565b50610213565b15610081565b600161008a565b600261010e565b80610206565b6010610183565b61012d5761025c565b91610267565b6100d357610075565b806100e0565b60ff61011b565b82610261565b61020d565b600161015f565b6010610121565b60016100b8565b6001610165565b1461006c565b806101ad565b61012d576101f1565b91610218565b846100da565b6003610127565b61024f565b816101d4565b61024f565b5f610106565b03610200565b916100cc565b61017757"),
             rpc_url: String::from(""),
             default: true,
@@ -352,7 +349,7 @@ mod integration_tests {
 
         for contract in contracts {
             println!("Testing contract: {contract}");
-            let result = heimdall_core::decompile::decompile(DecompilerArgs {
+            let result = decompile(DecompilerArgs {
                 target: contract.to_string(),
                 rpc_url: String::from("https://eth.llamarpc.com"),
                 default: true,

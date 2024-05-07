@@ -1,4 +1,5 @@
 pub mod bytecode;
+pub mod calldata;
 pub mod compiler;
 pub mod evm;
 pub mod http_or_ws_or_ipc;

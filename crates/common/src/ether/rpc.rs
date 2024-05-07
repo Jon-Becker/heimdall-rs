@@ -8,7 +8,7 @@ use ethers::{
     providers::{Middleware, Provider},
     types::{
         BlockNumber::{self},
-        BlockTrace, Filter, FilterBlockOption, StateDiff, TraceType, Transaction, H256,
+        BlockTrace, Filter, FilterBlockOption, TraceType, Transaction, H256,
     },
 };
 use heimdall_cache::{read_cache, store_cache};
@@ -92,6 +92,54 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
     })
     .await
     .map_err(|e| Error::Generic(format!("failed to get chain id: {:?}", e)))
+}
+
+/// Get the latest block number of the provided RPC URL
+///
+/// ```no_run
+/// use heimdall_common::ether::rpc::latest_block_number;
+/// // let block_number = latest_block_number("https://eth.llamarpc.com").await?;
+/// // assert!(block_number > 0);
+/// ```
+pub async fn latest_block_number(rpc_url: &str) -> Result<u128, Error> {
+    backoff::future::retry(
+        ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_secs(10)),
+            ..ExponentialBackoff::default()
+        },
+    || async {
+        trace!("checking latest block number for rpc url: '{}'", &rpc_url);
+
+        // make sure the RPC provider isn't empty
+        if rpc_url.is_empty() {
+            error!("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
+            return Err(backoff::Error::Permanent(()))
+        }
+
+        // create new provider
+        let provider = match Provider::<Http>::try_from(rpc_url) {
+            Ok(provider) => provider,
+            Err(_) => {
+                error!("failed to connect to RPC provider '{}' .", &rpc_url);
+                return Err(backoff::Error::Permanent(()))
+            }
+        };
+
+        // fetch the latest block number from the node
+        let block_number = match provider.get_block_number().await {
+            Ok(block_number) => block_number,
+            Err(_) => {
+                error!("failed to fetch latest block number from '{}' .", &rpc_url);
+                return Err(backoff::Error::Transient { err: (), retry_after: None })
+            }
+        };
+
+        trace!("latest block number is '{}'", &block_number);
+
+        Ok(block_number.as_u64() as u128)
+    })
+    .await
+    .map_err(|e| Error::Generic(format!("failed to get latest block number: {:?}", e)))
 }
 
 /// Get the bytecode of the provided contract address
@@ -234,99 +282,6 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
     .map_err(|_| Error::Generic(format!("failed to get transaction: {:?}", &transaction_hash)))
 }
 
-/// Get the storage diff of the provided transaction hash
-///
-/// ```no_run
-/// use heimdall_common::ether::rpc::get_storage_diff;
-///
-/// // let storage_diff = get_storage_diff("0x0", "https://eth.llamarpc.com").await;
-/// // assert!(storage_diff.is_ok());
-/// ```
-pub async fn get_storage_diff(
-    transaction_hash: &str,
-    rpc_url: &str,
-) -> Result<Option<StateDiff>, Error> {
-    backoff::future::retry(
-        ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..ExponentialBackoff::default()
-        },
-        || async {
-            // get chain_id
-            let chain_id = chain_id(rpc_url).await
-                .map_err(|_| error!("failed to get chain id for rpc url: {:?}", &rpc_url))?;
-
-            // check the cache for a matching address
-            if let Some(state_diff) =
-                read_cache(&format!("diff.{}.{}", &chain_id, &transaction_hash))
-                .map_err(|_| error!("failed to read cache for transaction: {:?}", &transaction_hash))?
-            {
-                trace!("found cached state diff for transaction '{}' .", &transaction_hash);
-                return Ok(state_diff)
-            }
-
-            trace!(
-                "fetching storage diff from node for transaction: '{}' .",
-                &transaction_hash
-            );
-
-            // create new provider
-            let provider = match get_provider(rpc_url).await {
-                Ok(provider) => provider,
-                Err(_) => {
-                    error!("failed to connect to RPC provider '{}' .", &rpc_url);
-                    return Err(backoff::Error::Permanent(()))
-                }
-            };
-
-            // safely unwrap the transaction hash
-            let transaction_hash_hex = match H256::from_str(transaction_hash) {
-                Ok(transaction_hash) => transaction_hash,
-                Err(_) => {
-                    error!(
-                        "failed to parse transaction hash '{}' .",
-                        &transaction_hash
-                    );
-                    return Err(backoff::Error::Permanent(()))
-                }
-            };
-
-            // fetch the state diff for the transaction
-            let state_diff = match provider
-                .trace_replay_transaction(transaction_hash_hex, vec![TraceType::StateDiff])
-                .await {
-                Ok(traces) => traces.state_diff,
-                Err(_) => {
-                    error!(
-                        "failed to replay and trace transaction '{}' . does your RPC provider support it?",
-                        &transaction_hash
-                    );
-                    return Err(backoff::Error::Transient { err: (), retry_after: None })
-                }
-            };
-
-            // write the state diff to the cache
-            store_cache(
-                &format!("diff.{}.{}", &chain_id, &transaction_hash),
-                &state_diff,
-                None,
-            )
-            .map_err(|_| {
-                error!(
-                    "failed to cache state diff for transaction: {:?}",
-                    &transaction_hash
-                )
-            })?;
-
-            trace!("fetched state diff for transaction '{}' .", &transaction_hash);
-
-            Ok(state_diff)
-        },
-    )
-    .await
-    .map_err(|_| Error::Generic(format!("failed to get storage diff for transaction: {:?}", &transaction_hash)))
-}
-
 /// Get the raw trace data of the provided transaction hash
 ///
 /// ```no_run
@@ -454,6 +409,59 @@ pub async fn get_block_logs(
     .map_err(|_| Error::Generic(format!("failed to get logs for block: {:?}", &block_number)))
 }
 
+/// Get all traces for the given block number
+///
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_block_state_diff;
+///
+/// // let traces = get_block_state_diff(1, "https://eth.llamarpc.com").await;
+/// // assert!(traces.is_ok());
+/// ```
+pub async fn get_block_state_diff(
+    block_number: u64,
+    rpc_url: &str,
+) -> Result<Vec<BlockTrace>, Error> {
+    backoff::future::retry(
+        ExponentialBackoff {
+            max_elapsed_time: Some(Duration::from_secs(10)),
+            ..ExponentialBackoff::default()
+        },
+        || async {
+            trace!("fetching traces from node for block: '{}' .", &block_number);
+
+            // create new provider
+            let provider = match Provider::<Http>::try_from(rpc_url) {
+                Ok(provider) => provider,
+                Err(_) => {
+                    error!("failed to connect to RPC provider '{}' .", &rpc_url);
+                    return Err(backoff::Error::Permanent(()));
+                }
+            };
+
+            // fetch the logs for the block
+            let trace = match provider
+                .trace_replay_block_transactions(BlockNumber::from(block_number), vec![TraceType::StateDiff])
+                .await
+            {
+                Ok(trace) => trace,
+                Err(_) => {
+                    error!(
+                        "failed to fetch traces for block '{}' . does your RPC provider support it?",
+                        &block_number
+                    );
+                    return Err(backoff::Error::Transient { err: (), retry_after: None });
+                }
+            };
+
+            trace!("fetched traces for block '{}' .", &block_number);
+
+            Ok(trace)
+        },
+    )
+    .await
+    .map_err(|_| Error::Generic(format!("failed to get traces for block: {:?}", &block_number)))
+}
+
 #[cfg(test)]
 pub mod tests {
     use crate::{ether::rpc::*, utils::hex::ToLowerHex};
@@ -511,26 +519,6 @@ pub mod tests {
         let transaction = get_transaction(transaction_hash, rpc_url).await;
 
         assert!(transaction.is_err())
-    }
-
-    #[tokio::test]
-    async fn test_get_storage_diff() {
-        let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
-        let rpc_url = "https://eth.llamarpc.com";
-        let storage_diff = get_storage_diff(transaction_hash, rpc_url)
-            .await
-            .expect("get_storage_diff() returned an error!");
-
-        assert!(storage_diff.is_some());
-    }
-
-    #[tokio::test]
-    async fn test_get_storage_diff_invalid_transaction_hash() {
-        let transaction_hash = "0x0";
-        let rpc_url = "https://eth.llamarpc.com";
-        let storage_diff = get_storage_diff(transaction_hash, rpc_url).await;
-
-        assert!(storage_diff.is_err())
     }
 
     #[tokio::test]

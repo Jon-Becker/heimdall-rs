@@ -19,8 +19,14 @@ const HEIMDALL_LOG_FILE_NAME: &str = "heimdall.log";
 
 /// Default [directives](Directive) for [EnvFilter] which disables high-frequency debug logs from
 /// `hyper` and `trust-dns`
-const DEFAULT_ENV_FILTER_DIRECTIVES: [&str; 5] =
-    ["hyper=off", "trust_dns_proto=off", "trust_dns_resolver=off", "reqwest=off", "mio=off"];
+const DEFAULT_ENV_FILTER_DIRECTIVES: [&str; 6] = [
+    "hyper=off",
+    "trust_dns_proto=off",
+    "trust_dns_resolver=off",
+    "reqwest=off",
+    "mio=off",
+    "ethers_providers=off",
+];
 
 /// Manages the collection of layers for a tracing subscriber.
 ///

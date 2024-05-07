@@ -403,7 +403,7 @@ impl Default for WrappedOpcode {
 
 impl WrappedInput {
     /// Returns a WrappedInput's solidity representation.
-    fn _solidify(&self) -> String {
+    pub fn _solidify(&self) -> String {
         let mut solidified_wrapped_input = String::new();
 
         match self {
