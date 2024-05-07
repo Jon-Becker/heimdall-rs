@@ -31,7 +31,7 @@ pub fn decode_precompile(
                 return_data_offset.solidify(),
                 extcalldata_memory
                     .iter()
-                    .map(|x| x.operations.solidify())
+                    .map(|x| x.operation.solidify())
                     .collect::<Vec<String>>()
                     .join(", ")
             );
@@ -43,7 +43,7 @@ pub fn decode_precompile(
                 return_data_offset.solidify(),
                 extcalldata_memory
                     .iter()
-                    .map(|x| x.operations.solidify())
+                    .map(|x| x.operation.solidify())
                     .collect::<Vec<String>>()
                     .join(", ")
             );
@@ -55,7 +55,7 @@ pub fn decode_precompile(
                 return_data_offset.solidify(),
                 extcalldata_memory
                     .iter()
-                    .map(|x| x.operations.solidify())
+                    .map(|x| x.operation.solidify())
                     .collect::<Vec<String>>()
                     .join(", ")
             );

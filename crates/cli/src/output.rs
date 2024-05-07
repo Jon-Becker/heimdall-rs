@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, io::Write};
 
 use heimdall_common::{
     constants::{ADDRESS_REGEX, TRANSACTION_HASH_REGEX},
@@ -45,17 +45,16 @@ pub async fn build_output_path(
 
 /// pass the input to the `less` command
 pub async fn print_with_less(input: &str) -> Result<(), Error> {
-    // let mut child =
-    //     std::process::Command::new("less").stdin(std::process::Stdio::piped()).spawn()?;
+    let mut child =
+        std::process::Command::new("less").stdin(std::process::Stdio::piped()).spawn()?;
 
-    // let stdin = child
-    //     .stdin
-    //     .as_mut()
-    //     .ok_or_else(|| Error::Generic("unable to get stdin for less".to_string()))?;
-    // stdin.write_all(input.as_bytes())?;
+    let stdin = child
+        .stdin
+        .as_mut()
+        .ok_or_else(|| Error::Generic("unable to get stdin for less".to_string()))?;
+    stdin.write_all(input.as_bytes())?;
 
-    // child.wait()?;
-    println!("{}", input);
+    child.wait()?;
     Ok(())
 }
 

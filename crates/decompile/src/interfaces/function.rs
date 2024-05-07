@@ -14,10 +14,6 @@ pub struct AnalyzedFunction {
     /// the function's 4byte selector
     pub selector: String,
 
-    /// the function's entry point in the code.
-    /// the entry point is the instruction the dispatcher JUMPs to when called.
-    pub entry_point: u128,
-
     /// argument structure:
     ///   - key : slot operations of the argument.
     ///   - value : tuple of ({slot: U256, mask: usize}, potential_types)
@@ -60,8 +56,7 @@ pub struct AnalyzedFunction {
 
 #[derive(Clone, Debug)]
 pub struct StorageFrame {
-    pub value: U256,
-    pub operations: WrappedOpcode,
+    pub operation: WrappedOpcode,
 }
 
 #[derive(Clone, Debug)]
@@ -87,10 +82,9 @@ pub enum TypeHeuristic {
 }
 
 impl AnalyzedFunction {
-    pub fn new(selector: &str, entry_point: &u128, fallback: bool) -> Self {
+    pub fn new(selector: &str, fallback: bool) -> Self {
         AnalyzedFunction {
             selector: if fallback { "00000000".to_string() } else { selector.to_string() },
-            entry_point: *entry_point,
             arguments: HashMap::new(),
             memory: HashMap::new(),
             returns: None,

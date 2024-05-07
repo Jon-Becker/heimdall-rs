@@ -91,7 +91,7 @@ pub fn argument_heuristic(
             );
             let return_memory_operations_solidified = return_memory_operations
                 .iter()
-                .map(|x| x.operations.solidify())
+                .map(|x| x.operation.solidify())
                 .collect::<Vec<String>>()
                 .join(", ");
 
@@ -119,7 +119,7 @@ pub fn argument_heuristic(
             }
 
             // if the any input op is ISZERO(x), this is a boolean return
-            if return_memory_operations.iter().any(|x| x.operations.opcode.name == "ISZERO") {
+            if return_memory_operations.iter().any(|x| x.operation.opcode.name == "ISZERO") {
                 function.returns = Some(String::from("bool"));
             }
             // if the size of returndata is > 32, it must be a bytes memory return.

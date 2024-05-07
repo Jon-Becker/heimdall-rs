@@ -25,11 +25,8 @@ pub fn event_heuristic(
         // decode the data field
         let data_mem_ops = function
             .get_memory_range(state.last_instruction.inputs[0], state.last_instruction.inputs[1]);
-        let data_mem_ops_solidified = data_mem_ops
-            .iter()
-            .map(|x| x.operations.solidify())
-            .collect::<Vec<String>>()
-            .join(", ");
+        let data_mem_ops_solidified =
+            data_mem_ops.iter().map(|x| x.operation.solidify()).collect::<Vec<String>>().join(", ");
 
         // add the event emission to the function's logic
         if analyzer_state.analyzer_type == AnalyzerType::Solidity {
