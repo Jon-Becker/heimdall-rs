@@ -70,11 +70,10 @@ pub fn solidity_heuristic(
         // MSTORE / MSTORE8
         0x52 | 0x53 => {
             let key = instruction.inputs[0];
-            let value = instruction.inputs[1];
             let operation = instruction.input_operations[1].clone();
 
             // add the mstore to the function's memory map
-            function.memory.insert(key, StorageFrame { value, operations: operation });
+            function.memory.insert(key, StorageFrame { operation });
             function.logic.push(format!(
                 "memory[{}] = {};",
                 encode_hex_reduced(key),
@@ -161,7 +160,7 @@ pub fn solidity_heuristic(
                         modifier,
                         calldata
                             .iter()
-                            .map(|x| x.operations.solidify())
+                            .map(|x| x.operation.solidify())
                             .collect::<Vec<String>>()
                             .join(", ")
                     ));
@@ -195,7 +194,7 @@ pub fn solidity_heuristic(
                         instruction.opcode_details.clone().expect("impossible").name.to_lowercase(),
                         calldata
                             .iter()
-                            .map(|x| x.operations.solidify())
+                            .map(|x| x.operation.solidify())
                             .collect::<Vec<String>>()
                             .join(", ")
                     ));

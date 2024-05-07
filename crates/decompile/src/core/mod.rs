@@ -152,7 +152,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                 analyzer_type.clone(),
                 AnalyzedFunction::new(
                     &selector,
-                    selectors.get(&selector).unwrap_or(&0x0u128),
                     selector == "fallback" || selector == "0x00000000",
                 ),
                 trace_root,
