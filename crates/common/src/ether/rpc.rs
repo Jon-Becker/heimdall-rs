@@ -21,7 +21,7 @@ use tracing::{debug, error, trace};
 /// use heimdall_common::ether::rpc::get_provider;
 ///
 /// // let provider = get_provider("https://eth.llamarpc.com").await?;
-/// //assert_eq!(provider.get_chainid().await.unwrap(), 1);
+/// // assert_eq!(provider.get_chainid().await.unwrap(), 1);
 /// ```
 pub async fn get_provider(rpc_url: &str) -> Result<Provider<HttpOrWsOrIpc>, Error> {
     Ok(Provider::new(match http_or_ws_or_ipc::HttpOrWsOrIpc::connect(rpc_url).await {
@@ -39,7 +39,7 @@ pub async fn get_provider(rpc_url: &str) -> Result<Provider<HttpOrWsOrIpc>, Erro
 /// use heimdall_common::ether::rpc::chain_id;
 ///
 /// // let chain_id = chain_id("https://eth.llamarpc.com").await?;
-/// //assert_eq!(chain_id, 1);
+/// // assert_eq!(chain_id, 1);
 /// ```
 pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
     backoff::future::retry(
@@ -117,7 +117,7 @@ pub async fn latest_block_number(rpc_url: &str) -> Result<u128, Error> {
         }
 
         // create new provider
-        let provider = match Provider::<Http>::try_from(rpc_url) {
+        let provider = match get_provider(rpc_url).await {
             Ok(provider) => provider,
             Err(_) => {
                 error!("failed to connect to RPC provider '{}' .", &rpc_url);
@@ -430,7 +430,7 @@ pub async fn get_block_state_diff(
             trace!("fetching traces from node for block: '{}' .", &block_number);
 
             // create new provider
-            let provider = match Provider::<Http>::try_from(rpc_url) {
+            let provider = match get_provider(rpc_url).await {
                 Ok(provider) => provider,
                 Err(_) => {
                     error!("failed to connect to RPC provider '{}' .", &rpc_url);
