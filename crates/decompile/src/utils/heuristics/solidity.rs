@@ -3,12 +3,12 @@ use ethers::{
     types::U256,
 };
 
-use heimdall_common::{ether::evm::core::vm::State, utils::strings::encode_hex_reduced};
+use heimdall_common::{ether::evm::core::vm::State, utils::strings::encode_hex_reduced, utils::precompile::decode_precompile};
 
 use crate::{
     core::analyze::AnalyzerState,
-    interfaces::{AnalyzedFunction, StorageFrame},
-    utils::{constants::VARIABLE_SIZE_CHECK_REGEX, precompile::decode_precompile},
+    interfaces::{AnalyzedFunction},
+    utils::{constants::VARIABLE_SIZE_CHECK_REGEX},
     Error,
 };
 
@@ -74,7 +74,7 @@ pub fn solidity_heuristic(
             let operation = instruction.input_operations[1].clone();
 
             // add the mstore to the function's memory map
-            function.memory.insert(key, StorageFrame { value, operations: operation });
+            function.memory.insert(key, heimdall_common::utils::function::StorageFrame { value, operations: operation });
             function.logic.push(format!(
                 "memory[{}] = {};",
                 encode_hex_reduced(key),

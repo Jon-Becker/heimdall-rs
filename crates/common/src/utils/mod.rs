@@ -1,9 +1,11 @@
 pub mod env;
+pub mod function;
 pub mod hex;
 pub mod http;
 pub mod integers;
 pub mod io;
 pub mod iter;
+pub mod precompile;
 pub mod range_map;
 pub mod strings;
 pub mod sync;

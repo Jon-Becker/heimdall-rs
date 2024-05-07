@@ -1,8 +1,8 @@
-use heimdall_common::{ether::evm::core::vm::State, utils::strings::encode_hex_reduced};
+use heimdall_common::{ether::evm::core::vm::State, utils::strings::encode_hex_reduced, utils::function::StorageFrame};
 
 use crate::{
     core::analyze::AnalyzerState,
-    interfaces::{AnalyzedFunction, StorageFrame},
+    interfaces::{AnalyzedFunction},
     Error,
 };
 
