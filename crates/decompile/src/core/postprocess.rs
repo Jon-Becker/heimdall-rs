@@ -106,6 +106,23 @@ impl PostprocessOrchestrator {
             )
         }));
 
+        // add known variables to memory_type_map
+        state.memory_type_map.extend([
+            (String::from(".balance"), String::from("uint256")),
+            (String::from(".blockhash"), String::from("bytes32")),
+            (String::from(".codehash"), String::from("bytes32")),
+            (String::from(".sender"), String::from("address")),
+            (String::from(".origin"), String::from("address")),
+            (String::from(".timestamp"), String::from("uint256")),
+            (String::from(".value"), String::from("uint256")),
+            (String::from(".length"), String::from("uint256")),
+            (String::from(".coinbase"), String::from("address")),
+            (String::from(".number"), String::from("uint256")),
+            (String::from(".difficulty"), String::from("uint256")),
+            (String::from(".gaslimit"), String::from("uint256")),
+            (String::from(".chainid"), String::from("uint256")),
+        ]);
+
         // If this is a constant / getter, we can simplify it
         // Note: this can't be done with a postprocessor because it needs all lines
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
