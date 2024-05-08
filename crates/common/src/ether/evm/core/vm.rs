@@ -10,6 +10,7 @@ use ethers::{
     types::{H160, I256},
     utils::keccak256,
 };
+use eyre::OptionExt;
 
 use crate::{
     error::Error,
@@ -246,7 +247,11 @@ impl VM {
         }
 
         // get the opcode at the current instruction
-        let opcode = self.bytecode[(self.instruction - 1) as usize];
+        let opcode = self
+            .bytecode
+            .get((self.instruction - 1) as usize)
+            .ok_or_eyre("invalid jumpdest")?
+            .to_owned();
         let last_instruction = self.instruction;
         self.instruction += 1;
 
