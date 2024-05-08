@@ -122,6 +122,22 @@ pub fn argument_heuristic(
             if return_memory_operations.iter().any(|x| x.operation.opcode.name == "ISZERO") {
                 function.returns = Some(String::from("bool"));
             }
+            // if the input op is any of the following, it is a uint256 return
+            // this is because these push numeric values onto the stack
+            else if return_memory_operations.iter().any(|x| {
+                [0x31, 0x34, 0x3a, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x58, 0x5a]
+                    .contains(&x.operation.opcode.code)
+            }) {
+                function.returns = Some(String::from("uint256"));
+            }
+            // if the input op is any of the following, it is an address return
+            // this is because these push address values onto the stack
+            else if return_memory_operations
+                .iter()
+                .any(|x| [0x30, 0x32, 0x33, 0x41].contains(&x.operation.opcode.code))
+            {
+                function.returns = Some(String::from("address"));
+            }
             // if the size of returndata is > 32, it must be a bytes memory return.
             // it could be a struct, but we cant really determine that from the bytecode
             else if size > 32 {
@@ -155,11 +171,12 @@ pub fn argument_heuristic(
                 // convert the cast size to a string
                 let (_, cast_types) = byte_size_to_type(byte_size);
                 function.returns = Some(cast_types[0].to_string());
-                debug!(
-                    "return type determined to be '{}' from ops '{}'",
-                    cast_types[0], return_memory_operations_solidified
-                );
             }
+
+            debug!(
+                "return type determined to be '{:?}' from ops '{}'",
+                function.returns, return_memory_operations_solidified
+            );
         }
 
         // integer type heuristics

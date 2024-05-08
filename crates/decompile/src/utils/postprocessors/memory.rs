@@ -50,19 +50,6 @@ pub fn memory_postprocessor(
         state.variable_map.insert(assignment[0].clone(), assignment[1].replace(';', ""));
         let var_name = assignment[0].clone();
 
-        // if the line contains a cast, we can infer the type from the cast
-        if let Some(cast_range) = TYPE_CAST_REGEX.find(&assignment[1]).unwrap_or(None) {
-            // get the type of the cast
-            let cast_type = assignment[1]
-                .get(cast_range.start()..)
-                .expect("impossible case: failed to get cast type after check")
-                .split('(')
-                .collect::<Vec<&str>>()[0];
-
-            *line = format!("{cast_type} {line}");
-            state.memory_type_map.insert(var_name.to_string(), cast_type.to_string());
-        }
-
         // infer the type from args and vars in the expression
         for (var, var_type) in state.memory_type_map.iter() {
             if line.contains(var) &&
@@ -76,6 +63,20 @@ pub fn memory_postprocessor(
         }
 
         if !state.memory_type_map.contains_key(&var_name) {
+            // if the line contains a cast, we can infer the type from the cast
+            if let Some(cast_range) = TYPE_CAST_REGEX.find(&assignment[1]).unwrap_or(None) {
+                // get the type of the cast
+                let cast_type = assignment[1]
+                    .get(cast_range.start()..)
+                    .expect("impossible case: failed to get cast type after check")
+                    .split('(')
+                    .collect::<Vec<&str>>()[0];
+
+                *line = format!("{cast_type} {line}");
+                state.memory_type_map.insert(var_name.to_string(), cast_type.to_string());
+                return Ok(())
+            }
+
             // we can do some type inference here
             if ["+", "-", "/", "*", "int", ">=", "<="].iter().any(|op| line.contains(op)) ||
                 assignment[1].replace(';', "").parse::<i64>().is_ok()
