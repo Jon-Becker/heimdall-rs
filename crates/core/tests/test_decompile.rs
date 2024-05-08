@@ -172,7 +172,7 @@ mod integration_tests {
         // assert that the output is correct
         for line in &["function Unresolved_06fdde03() public view returns (bytes memory) {",
             "function Unresolved_095ea7b3(address arg0, uint256 arg1) public returns (bool) {",
-            "function Unresolved_18160ddd() public view returns (address) {",
+            "function Unresolved_18160ddd() public view returns (uint256) {",
             "function Unresolved_23b872dd(address arg0, address arg1, uint256 arg2) public returns (bool) {",
             "function Unresolved_2e1a7d4d(uint256 arg0) public {",
             "function Unresolved_313ce567() public view returns (bool) {",
