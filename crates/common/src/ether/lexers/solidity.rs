@@ -260,8 +260,8 @@ impl WrappedOpcode {
             "NUMBER" => {
                 solidified_wrapped_opcode.push_str("block.number");
             }
-            "DIFFICULTY" => {
-                solidified_wrapped_opcode.push_str("block.difficulty");
+            "PREVRANDAO" => {
+                solidified_wrapped_opcode.push_str("block.prevrandao");
             }
             "GASLIMIT" => {
                 solidified_wrapped_opcode.push_str("block.gaslimit");
