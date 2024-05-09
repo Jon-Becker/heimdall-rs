@@ -992,8 +992,8 @@ impl VM {
                 self.stack.push(U256::from(timestamp), operation);
             }
 
-            // NUMBER -> BASEFEE
-            (0x43..=0x48) => {
+            // NUMBER -> BLOBBASEFEE
+            (0x43..=0x4a) => {
                 self.stack.push(U256::from(1u8), operation);
             }
 
