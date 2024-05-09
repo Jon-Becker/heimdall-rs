@@ -12,7 +12,7 @@ exclude.workspace = true
 
 [dependencies]
 heimdall-common = { workspace = true }
-clap = { version = "3.1.18", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 mesc = { version = "0.2.0" }
 serde = { version = "1.0", features = ["derive"] }
 toml = { version = "0.7.6" }

@@ -1,4 +1,4 @@
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use derive_builder::Builder;
 use heimdall_config::parse_url_arg;
 
@@ -6,8 +6,6 @@ use heimdall_config::parse_url_arg;
 #[clap(
     about = "Dump the value of all storage slots accessed by a contract",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-    global_setting = AppSettings::DeriveDisplayOrder,
-    global_setting = AppSettings::ColoredHelp,
     override_usage = "heimdall dump <TARGET> [OPTIONS]"
 )]
 pub struct DumpArgs {
@@ -21,7 +19,7 @@ pub struct DumpArgs {
 
     /// The RPC URL to use for fetching data.
     /// This can be an explicit URL or a reference to a MESC endpoint.
-    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
+    #[clap(long, short, value_parser = parse_url_arg, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// The number of threads to use when fetching data.

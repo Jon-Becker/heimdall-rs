@@ -1,7 +1,7 @@
 pub mod error;
 
 use crate::error::Error;
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use heimdall_common::utils::io::file::{delete_path, read_file, write_file};
 use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
@@ -12,7 +12,6 @@ use tracing::{debug, error, info};
 #[clap(
     about = "Display and edit the current configuration",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-    global_setting = AppSettings::DeriveDisplayOrder,
     override_usage = "heimdall config [OPTIONS]"
 )]
 pub struct ConfigArgs {

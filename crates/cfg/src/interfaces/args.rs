@@ -1,4 +1,4 @@
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use derive_builder::Builder;
 use heimdall_config::parse_url_arg;
 
@@ -6,7 +6,6 @@ use heimdall_config::parse_url_arg;
 #[clap(
     about = "Generate a visual control flow graph for EVM bytecode",
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-    global_setting = AppSettings::DeriveDisplayOrder,
     override_usage = "heimdall cfg <TARGET> [OPTIONS]"
 )]
 pub struct CFGArgs {
@@ -16,7 +15,7 @@ pub struct CFGArgs {
 
     /// The RPC provider to use for fetching target bytecode.
     /// This can be an explicit URL or a reference to a MESC endpoint.
-    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
+    #[clap(long, short, value_parser = parse_url_arg, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// When prompted, always select the default value.
