@@ -1151,6 +1151,35 @@ impl VM {
                 self.storage.tstore(key.into(), value.into());
             }
 
+            // MCOPY
+            0x5E => {
+                let dest_offset = self.stack.pop().value;
+                let offset = self.stack.pop().value;
+                let size = self.stack.pop().value;
+
+                // Safely convert U256 to usize
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let value_offset_safe = (offset + size)
+                    .min(self.memory.size().try_into().expect("failed to convert u128 to usize"));
+
+                let mut value =
+                    self.memory.memory.get(offset..value_offset_safe).unwrap_or(&[]).to_owned();
+
+                // pad value with 0x00
+                if value.len() < size {
+                    value.resize(size, 0u8);
+                }
+
+                // consume dynamic gas
+                let minimum_word_size = ((size + 31) / 32) as u128;
+                let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
+                self.consume_gas(gas_cost);
+
+                self.memory.store_with_opcode(dest_offset, size, &value, operation);
+            }
+
             // PC
             0x58 => {
                 self.stack.push(U256::from(self.instruction), operation);
@@ -1960,6 +1989,17 @@ mod tests {
         assert_eq!(
             vm.memory.read(0, 32),
             decode_hex("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+                .expect("failed to parse hex")
+        );
+    }
+
+    #[test]
+    fn test_mcopy() {
+        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020602060005e");
+        vm.execute().expect("execution failed!");
+        assert_eq!(
+            vm.memory.read(0, 64),
+            decode_hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
                 .expect("failed to parse hex")
         );
     }

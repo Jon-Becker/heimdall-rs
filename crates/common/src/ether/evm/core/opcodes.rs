@@ -89,6 +89,7 @@ impl Opcode {
             0x5b => Opcode { code, name: "JUMPDEST", mingas: 1, inputs: 0, outputs: 0 },
             0x5c => Opcode { code, name: "TLOAD", mingas: 100, inputs: 1, outputs: 1 },
             0x5d => Opcode { code, name: "TSTORE", mingas: 100, inputs: 2, outputs: 0 },
+            0x5e => Opcode { code, name: "MCOPY", mingas: 3, inputs: 3, outputs: 0 },
             0x5f => Opcode { code, name: "PUSH0", mingas: 3, inputs: 0, outputs: 1 },
             0x60 => Opcode { code, name: "PUSH1", mingas: 3, inputs: 0, outputs: 1 },
             0x61 => Opcode { code, name: "PUSH2", mingas: 3, inputs: 0, outputs: 1 },
