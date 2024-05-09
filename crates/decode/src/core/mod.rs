@@ -17,7 +17,7 @@ use tracing::{debug, info, trace, warn};
 use crate::{
     error::Error,
     interfaces::DecodeArgs,
-    utils::{try_decode, try_decode_dynamic_parameter},
+    utils::{parse_deployment_bytecode, try_decode, try_decode_dynamic_parameter},
 };
 
 #[derive(Debug, Clone)]
@@ -32,7 +32,7 @@ impl DecodeResult {
     }
 }
 
-pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
+pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     let start_time = Instant::now();
 
     // check if we require an OpenAI API key
@@ -51,6 +51,22 @@ pub async fn decode(args: DecodeArgs) -> Result<DecodeResult, Error> {
 
     if calldata.is_empty() {
         return Err(Error::Eyre(eyre!("calldata is empty. is this a value transfer?")));
+    }
+
+    // if args.constructor is true, we need to extract the constructor arguments and use that
+    // as the calldata
+    if args.constructor {
+        let constructor = parse_deployment_bytecode(calldata.clone())?;
+        debug!(
+            "parsed constructor argument hex string from deployment bytecode: '{}'",
+            encode_hex(constructor.arguments.clone())
+        );
+
+        // prefix with four zero bytes to avoid selector issues
+        calldata =
+            [0x00, 0x00, 0x00, 0x00].iter().chain(constructor.arguments.iter()).cloned().collect();
+        // ensure we dont resolve signatures, this is a constructor not calldata
+        args.skip_resolving = true;
     }
 
     // if the calldata isnt a standard size, i.e. (len - 4) % 32 != 0, we should warn the user

@@ -13,6 +13,7 @@ mod benchmark {
                 openai_api_key: String::from(""),
                 explain: false,
                 default: true,
+                constructor: false,
                 truncate_calldata: false,
                 skip_resolving: false,
             };
@@ -31,6 +32,7 @@ mod benchmark {
                 openai_api_key: String::from(""),
                 explain: false,
                 default: true,
+                constructor: false,
                 truncate_calldata: false,
                 skip_resolving: false,
             };
@@ -49,6 +51,7 @@ mod benchmark {
                 openai_api_key: String::from(""),
                 explain: false,
                 default: true,
+                constructor: false,
                 truncate_calldata: false,
                 skip_resolving: false,
             };
@@ -67,6 +70,7 @@ mod benchmark {
                 openai_api_key: String::from(""),
                 explain: false,
                 default: true,
+                constructor: false,
                 truncate_calldata: false,
                 skip_resolving: false,
             };
@@ -89,6 +93,7 @@ mod tests {
             openai_api_key: String::from(""),
             explain: false,
             default: true,
+            constructor: false,
             truncate_calldata: false,
             skip_resolving: false,
         };
@@ -103,6 +108,7 @@ mod tests {
             openai_api_key: String::from(""),
             explain: false,
             default: true,
+            constructor: false,
             truncate_calldata: false,
             skip_resolving: false,
         };
