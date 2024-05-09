@@ -1,11 +1,12 @@
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use heimdall_config::parse_url_arg;
 
 #[derive(Debug, Clone, Parser)]
-#[clap(about = "Disassembles EVM bytecode to assembly",
-       after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
-       global_setting = AppSettings::DeriveDisplayOrder,
-       override_usage = "heimdall disassemble <TARGET> [OPTIONS]")]
+#[clap(
+    about = "Disassembles EVM bytecode to assembly",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
+    override_usage = "heimdall disassemble <TARGET> [OPTIONS]"
+)]
 pub struct DisassemblerArgs {
     /// The target to disassemble, either a file, bytecode, contract address, or ENS name.
     #[clap(required = true)]
@@ -13,7 +14,7 @@ pub struct DisassemblerArgs {
 
     /// The RPC provider to use for fetching target bytecode.
     /// This can be an explicit URL or a reference to a MESC endpoint.
-    #[clap(long, short, parse(try_from_str = parse_url_arg), default_value = "", hide_default_value = true)]
+    #[clap(long, short, value_parser = parse_url_arg, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
     /// Whether to use base-10 for the program counter.

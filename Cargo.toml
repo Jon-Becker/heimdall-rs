@@ -13,7 +13,6 @@ members = [
     "crates/cli",
     "crates/cfg",
 ]
-version = "0.7.3"
 
 # Explicitly set the resolver to version 2, which is the default for packages with edition >= 2021
 # https://doc.rust-lang.org/edition-guide/rust-2021/default-cargo-resolver.html
@@ -44,3 +43,5 @@ heimdall-inspect = { path = "crates/inspect" }
 heimdall-decoder = { path = "crates/decode" }
 heimdall-decompiler = { path = "crates/decompile" }
 heimdall-disassembler = { path = "crates/disassemble" }
+
+clap = "4"

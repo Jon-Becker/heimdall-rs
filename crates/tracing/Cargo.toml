@@ -11,9 +11,13 @@ keywords.workspace = true
 exclude.workspace = true
 
 [dependencies]
-clap = {version = "3.1.18", features = ["derive"]}
+clap = { workspace = true, features = ["derive"] }
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "json"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "env-filter",
+    "fmt",
+    "json",
+] }
 tracing-appender = "0.2.3"
 tracing-journald = "0.3"
 tracing-logfmt = "0.3.3"

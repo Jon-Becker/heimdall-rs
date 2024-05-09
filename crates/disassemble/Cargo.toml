@@ -15,6 +15,6 @@ heimdall-config = { workspace = true }
 heimdall-common = { workspace = true }
 heimdall-cache = { workspace = true }
 thiserror = "1.0.50"
-clap = { version = "3.1.18", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 eyre = "0.6.12"
 tracing = "0.1.40"
