@@ -118,7 +118,7 @@ impl PostprocessOrchestrator {
             (String::from(".length"), String::from("uint256")),
             (String::from(".coinbase"), String::from("address")),
             (String::from(".number"), String::from("uint256")),
-            (String::from(".difficulty"), String::from("uint256")),
+            (String::from(".prevrandao"), String::from("uint256")),
             (String::from(".gaslimit"), String::from("uint256")),
             (String::from(".chainid"), String::from("uint256")),
         ]);

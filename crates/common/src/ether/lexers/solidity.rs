@@ -260,8 +260,8 @@ impl WrappedOpcode {
             "NUMBER" => {
                 solidified_wrapped_opcode.push_str("block.number");
             }
-            "DIFFICULTY" => {
-                solidified_wrapped_opcode.push_str("block.difficulty");
+            "PREVRANDAO" => {
+                solidified_wrapped_opcode.push_str("block.prevrandao");
             }
             "GASLIMIT" => {
                 solidified_wrapped_opcode.push_str("block.gaslimit");
@@ -806,12 +806,12 @@ mod tests {
     }
 
     #[test]
-    fn test_wrapped_opcode_solidify_difficulty() {
-        let opcode = Opcode { code: 0x44, name: "DIFFICULTY", mingas: 1, inputs: 0, outputs: 1 };
+    fn test_wrapped_opcode_solidify_prevrandao() {
+        let opcode = Opcode { code: 0x44, name: "PREVRANDAO", mingas: 1, inputs: 0, outputs: 1 };
         let inputs = vec![];
         let wrapped_opcode = WrappedOpcode { opcode, inputs };
 
-        assert_eq!(wrapped_opcode.solidify(), "block.difficulty");
+        assert_eq!(wrapped_opcode.solidify(), "block.prevrandao");
     }
 
     #[test]
