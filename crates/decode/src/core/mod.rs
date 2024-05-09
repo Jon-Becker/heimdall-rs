@@ -56,6 +56,8 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     // if args.constructor is true, we need to extract the constructor arguments and use that
     // as the calldata
     if args.constructor {
+        debug!("extracting constructor arguments from deployment bytecode.");
+        warn!("the --constructor flag is in unstable, and will be improved in future releases.");
         let constructor = parse_deployment_bytecode(calldata.clone())?;
         debug!(
             "parsed constructor argument hex string from deployment bytecode: '{}'",
