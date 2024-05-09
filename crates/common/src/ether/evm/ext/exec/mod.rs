@@ -23,7 +23,7 @@ use crate::{
     utils::strings::decode_hex,
 };
 use std::collections::HashMap;
-use tracing::trace;
+use tracing::{trace, warn};
 
 #[derive(Clone, Debug, Default)]
 pub struct VMTrace {
@@ -257,26 +257,42 @@ impl VM {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
-                    if let Ok(child_trace) = trace_vm.recursive_map(branch_count, handled_jumps) {
-                        vm_trace.children.push(child_trace);
+                    match trace_vm.recursive_map(branch_count, handled_jumps) {
+                        Ok(child_trace) => vm_trace.children.push(child_trace),
+                        Err(e) => {
+                            warn!("error executing branch: {}", e);
+                            return Ok(vm_trace);
+                        }
                     }
 
                     // push the current path onto the stack
-                    if let Ok(child_trace) = vm.recursive_map(branch_count, handled_jumps) {
-                        vm_trace.children.push(child_trace);
+                    match vm.recursive_map(branch_count, handled_jumps) {
+                        Ok(child_trace) => vm_trace.children.push(child_trace),
+                        Err(e) => {
+                            warn!("error executing branch: {}", e);
+                            return Ok(vm_trace);
+                        }
                     }
                     break;
                 } else {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = state.last_instruction.instruction + 1;
-                    if let Ok(child_trace) = trace_vm.recursive_map(branch_count, handled_jumps) {
-                        vm_trace.children.push(child_trace);
+                    match trace_vm.recursive_map(branch_count, handled_jumps) {
+                        Ok(child_trace) => vm_trace.children.push(child_trace),
+                        Err(e) => {
+                            warn!("error executing branch: {}", e);
+                            return Ok(vm_trace);
+                        }
                     }
 
                     // push the current path onto the stack
-                    if let Ok(child_trace) = vm.recursive_map(branch_count, handled_jumps) {
-                        vm_trace.children.push(child_trace);
+                    match vm.recursive_map(branch_count, handled_jumps) {
+                        Ok(child_trace) => vm_trace.children.push(child_trace),
+                        Err(e) => {
+                            warn!("error executing branch: {}", e);
+                            return Ok(vm_trace);
+                        }
                     }
                     break;
                 }

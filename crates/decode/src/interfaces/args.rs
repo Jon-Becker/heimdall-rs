@@ -31,6 +31,10 @@ pub struct DecodeArgs {
     #[clap(long, short)]
     pub default: bool,
 
+    /// Whether constructor bytecode has been provided.
+    #[clap(long, short)]
+    pub constructor: bool,
+
     /// Whether to truncate nonstandard sized calldata.
     #[clap(long, short)]
     pub truncate_calldata: bool,
@@ -48,6 +52,7 @@ impl DecodeArgsBuilder {
             openai_api_key: Some(String::new()),
             explain: Some(false),
             default: Some(true),
+            constructor: Some(false),
             truncate_calldata: Some(false),
             skip_resolving: Some(false),
         }
