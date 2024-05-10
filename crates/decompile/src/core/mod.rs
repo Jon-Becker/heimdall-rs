@@ -185,8 +185,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                     // sort by score, take the highest
                     let mut potential_values = v.clone();
                     potential_values.sort_by(|a: &ResolvedError, b: &ResolvedError| {
-                        let a_score = score_signature(&a.signature);
-                        let b_score = score_signature(&b.signature);
+                        let a_score = score_signature(&a.signature, None);
+                        let b_score = score_signature(&b.signature, None);
                         b_score.cmp(&a_score)
                     });
 
@@ -217,8 +217,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                     // sort by score, take the highest
                     let mut potential_values = v.clone();
                     potential_values.sort_by(|a: &ResolvedLog, b: &ResolvedLog| {
-                        let a_score = score_signature(&a.signature);
-                        let b_score = score_signature(&b.signature);
+                        let a_score = score_signature(&a.signature, None);
+                        let b_score = score_signature(&b.signature, None);
                         b_score.cmp(&a_score)
                     });
 
@@ -246,8 +246,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         );
 
         matched_resolved_functions.sort_by(|a, b| {
-            let a_score = score_signature(&a.signature);
-            let b_score = score_signature(&b.signature);
+            let a_score = score_signature(&a.signature, None);
+            let b_score = score_signature(&b.signature, None);
             b_score.cmp(&a_score)
         });
 
