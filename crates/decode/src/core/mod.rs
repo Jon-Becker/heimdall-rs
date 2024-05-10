@@ -134,14 +134,20 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
 
     if matches.len() > 1 {
         debug!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
+        let num_words = calldata[4..].chunks(32).len();
+
         matches.sort_by(|a, b| {
-            let a_score = score_signature(&a.signature);
-            let b_score = score_signature(&b.signature);
+            let a_score = score_signature(&a.signature, Some(num_words));
+            let b_score = score_signature(&b.signature, Some(num_words));
             b_score.cmp(&a_score)
         });
         // debug print
         for match_ in &matches {
-            debug!(" > {}: {}", match_.signature, score_signature(&match_.signature));
+            debug!(
+                " > {}: {}",
+                match_.signature,
+                score_signature(&match_.signature, Some(num_words))
+            );
         }
     } else if matches.is_empty() {
         warn!("couldn't find any resolved matches for '{}'", function_selector);
@@ -153,7 +159,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         // chunk in blocks of 32 bytes
         let calldata_words = calldata[4..].chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
 
-        // while calldata_words is not empty, iterate over it
+        // while calldata_words is not empty, iterate over itcar
         let mut i = 0;
         let mut covered_words = HashSet::new();
         while covered_words.len() != calldata_words.len() {

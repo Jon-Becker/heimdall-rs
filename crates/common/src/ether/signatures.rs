@@ -305,7 +305,7 @@ impl ResolveSelector for ResolvedFunction {
     }
 }
 
-pub fn score_signature(signature: &str) -> u32 {
+pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
     // the score starts at 1000
     let mut score = 1000;
 
@@ -314,7 +314,27 @@ pub fn score_signature(signature: &str) -> u32 {
     score -= signature.len() as u32;
 
     // prioritize signatures with less numbers
-    score -= (signature.matches(|c: char| c.is_numeric()).count() as u32) * 3;
+    score -= (signature.split("(").next().unwrap_or("").matches(|c: char| c.is_numeric()).count()
+        as u32) *
+        3;
+
+    // prioritize signatures with parameters
+    let num_params = signature.matches(',').count() + 1;
+    score += num_params as u32 * 10;
+
+    // count the number of parameters in the signature, if enabled
+    if let Some(num_words) = num_words {
+        let num_dyn_params = signature.matches("bytes").count() +
+            signature.matches("string").count() +
+            signature.matches("[").count();
+        let num_static_params = num_params - num_dyn_params;
+
+        // reduce the score if the signature has less static parameters than there are words in the
+        // calldata
+        if num_static_params < num_words {
+            score -= (num_words - num_static_params) as u32 * 10;
+        }
+    }
 
     score
 }
@@ -481,7 +501,7 @@ mod tests {
     #[test]
     fn score_signature_should_return_correct_score() {
         let signature = String::from("test_signature");
-        let score = score_signature(&signature);
+        let score = score_signature(&signature, None);
         let expected_score = 1000 -
             (signature.len() as u32) -
             (signature.matches(|c: char| c.is_numeric()).count() as u32) * 3;
