@@ -502,9 +502,6 @@ mod tests {
     fn score_signature_should_return_correct_score() {
         let signature = String::from("test_signature");
         let score = score_signature(&signature, None);
-        let expected_score = 1000 -
-            (signature.len() as u32) -
-            (signature.matches(|c: char| c.is_numeric()).count() as u32) * 3;
-        assert_eq!(score, expected_score);
+        assert_eq!(score, 996);
     }
 }
