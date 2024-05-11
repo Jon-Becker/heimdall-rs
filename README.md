@@ -19,6 +19,8 @@ Currently, Heimdall supports the following operations:
 
 ## Installation & Usage
 
+## CLI 
+
 Ensure that Rust & Cargo are installed:
 
 ```bash
@@ -42,6 +44,12 @@ bifrost
 After compilation, the `heimdall` command will be available to use from a new terminal. For advanced options, see the [bifrost documentation](https://jbecker.dev/r/heimdall-rs/wiki/installation).
 
 _Having trouble? Check out the [Troubleshooting](https://jbecker.dev/r/heimdall-rs/wiki/troubleshooting) section in the wiki._
+
+
+## On The Cloud 
+
+If you don't want to install anything on your machine, you can try the Heimdall engine on the cloud. To try the cloud (alpha) decompiler, you can use [EVMD](https://evmd.xyz) (the container might need time to warm up).
+
 
 ## Documentation
 
