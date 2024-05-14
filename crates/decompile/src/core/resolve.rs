@@ -25,6 +25,9 @@ pub fn match_parameters(
         );
         // skip checking if length of parameters list is less than the resolved functions inputs
         resolved_function.inputs.retain(|x| !x.is_empty());
+        if resolved_function.inputs.len() < function.arguments.len() {
+            continue;
+        }
         let mut matched = true;
 
         // check each parameter type against a list of potential types
