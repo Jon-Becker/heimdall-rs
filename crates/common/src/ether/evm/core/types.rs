@@ -284,17 +284,18 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 }
 
 /// Given a string (typically a line of decompiled source code), extract a type cast if one exists.
-// TODO: instead of returning a String, return a ParamType
+///
 /// ```
 /// use heimdall_common::ether::evm::core::types::find_cast;
+/// use ethers::abi::ParamType;
 ///
 /// let line = "uint256(0x000011)";
 /// let (range, cast_type) = find_cast(line).expect("failed to find type cast");
 /// assert_eq!(range, 8..16);
 /// assert_eq!(&line[range], "0x000011");
-/// assert_eq!(cast_type, "uint256");
+/// assert_eq!(cast_type, ParamType::Uint(256));
 /// ```
-pub fn find_cast(line: &str) -> Result<(Range<usize>, String), Error> {
+pub fn find_cast(line: &str) -> Result<(Range<usize>, ParamType), Error> {
     // find the start of the cast
     match TYPE_CAST_REGEX.find(line).expect("Failed to find type cast.") {
         Some(m) => {
@@ -304,7 +305,7 @@ pub fn find_cast(line: &str) -> Result<(Range<usize>, String), Error> {
 
             // find where the cast ends
             let range = find_balanced_encapsulator(&line[end..], ('(', ')'))?;
-            Ok((end + range.start..end + range.end, cast_type))
+            Ok((end + range.start..end + range.end, to_type(&cast_type)))
         }
         None => Err(Error::ParseError("failed to find type cast".to_string())),
     }
