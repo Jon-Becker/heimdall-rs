@@ -314,7 +314,7 @@ pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
     score -= signature.len() as u32;
 
     // prioritize signatures with less numbers
-    score -= (signature.split("(").next().unwrap_or("").matches(|c: char| c.is_numeric()).count()
+    score -= (signature.split('(').next().unwrap_or("").matches(|c: char| c.is_numeric()).count()
         as u32) *
         3;
 
@@ -326,7 +326,7 @@ pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
     if let Some(num_words) = num_words {
         let num_dyn_params = signature.matches("bytes").count() +
             signature.matches("string").count() +
-            signature.matches("[").count();
+            signature.matches('[').count();
         let num_static_params = num_params - num_dyn_params;
 
         // reduce the score if the signature has less static parameters than there are words in the
