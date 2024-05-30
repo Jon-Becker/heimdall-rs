@@ -1938,6 +1938,7 @@ dependencies = [
 name = "heimdall-core"
 version = "0.8.1"
 dependencies = [
+ "alloy-json-abi",
  "async-convert",
  "async-recursion",
  "clap",
