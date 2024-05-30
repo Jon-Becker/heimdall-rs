@@ -31,6 +31,7 @@ derive_builder = "0.12.0"
 async-convert = "1.0.0"
 futures = "0.3.28"
 tracing = "0.1.40"
+alloy-json-abi = { version = "0.7.4", features = ["serde_json"]}
 
 # modules
 heimdall-cfg = { workspace = true }

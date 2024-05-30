@@ -138,10 +138,10 @@ pub fn argument_heuristic(
             {
                 function.returns = Some(String::from("address"));
             }
-            // if the size of returndata is > 32, it must be a bytes memory return.
+            // if the size of returndata is > 32, it must be a bytes return.
             // it could be a struct, but we cant really determine that from the bytecode
             else if size > 32 {
-                function.returns = Some(String::from("bytes memory"));
+                function.returns = Some(String::from("bytes"));
             } else {
                 // attempt to find a return type within the return memory operations
                 let byte_size = match AND_BITMASK_REGEX
