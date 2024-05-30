@@ -126,6 +126,7 @@ mod benchmark {
 
 #[cfg(test)]
 mod integration_tests {
+    use alloy_json_abi::JsonAbi;
     use heimdall_common::utils::io::file::delete_path;
     use heimdall_decompiler::{decompile, DecompilerArgs};
 
@@ -391,6 +392,10 @@ mod integration_tests {
             if output.contains("error CustomError_") {
                 is_error_covered = true;
             }
+
+            let abi_serialized = serde_json::to_string(&result.abi).unwrap();
+            let abi_deserialized = JsonAbi::from_json_str(&abi_serialized);
+            assert!(abi_deserialized.is_ok());
         }
 
         // assert that all flags are true
