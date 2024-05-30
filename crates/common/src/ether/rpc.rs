@@ -523,9 +523,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_get_trace() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
-        let rpc_url = "https://eth.llamarpc.com";
-        let trace = get_trace(transaction_hash, rpc_url).await;
+        let trace = get_trace(transaction_hash, &rpc_url).await;
 
         assert!(trace.is_ok())
     }

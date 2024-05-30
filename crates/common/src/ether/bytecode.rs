@@ -4,9 +4,13 @@ use crate::{
     utils::strings::decode_hex,
     Error,
 };
+use ethers::types::Bytes;
+use eyre::Result;
 use std::fs;
 use tracing::error;
 
+/// Given a target, determines whether it is a contract address, bytecode, or file path, and returns
+/// the bytecode for the target.
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
     if ADDRESS_REGEX.is_match(target).unwrap_or(false) {
         // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
@@ -35,10 +39,53 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec
     }
 }
 
+/// Removes pushed bytes from the bytecode, leaving only the instructions
+/// themselves.
+///
+/// For example:
+///   0x6060 (PUSH1 0x60) would become 0x60 (PUSH1).
+///   0x60806040 (PUSH1 0x60 PUSH1 0x40) would become 0x60 0x60 (PUSH1 PUSH1).
+pub fn remove_pushbytes_from_bytecode(bytecode: Bytes) -> Result<Bytes> {
+    let push_range = 0x5f..=0x7f;
+    let mut pruned = Vec::new();
+
+    let mut i = 0;
+    while i < bytecode.len() {
+        if push_range.contains(&bytecode[i]) {
+            pruned.push(bytecode[i]);
+            i += bytecode[i] as usize - 0x5f + 1;
+        } else {
+            pruned.push(bytecode[i]);
+            i += 1;
+        }
+    }
+
+    Ok(Bytes::from(pruned))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use ethers::types::Bytes;
+    use std::{fs, str::FromStr};
+
+    #[test]
+    fn test_remove_pushbytes_from_bytecode() {
+        let bytecode = Bytes::from_str("0x6040").unwrap();
+        let pruned = remove_pushbytes_from_bytecode(bytecode).unwrap();
+        assert_eq!(pruned, Bytes::from_str("0x60").unwrap());
+
+        let bytecode = Bytes::from_str("0x60406080").unwrap();
+        let pruned = remove_pushbytes_from_bytecode(bytecode).unwrap();
+        assert_eq!(pruned, Bytes::from_str("0x6060").unwrap());
+
+        let bytecode = Bytes::from_str(
+            "0x604060807f2222222222222222222222222222222222222222222222222222222222222222",
+        )
+        .unwrap();
+        let pruned = remove_pushbytes_from_bytecode(bytecode).unwrap();
+        assert_eq!(pruned, Bytes::from_str("0x60607f").unwrap());
+    }
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_address() {
