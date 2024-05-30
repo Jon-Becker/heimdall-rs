@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
-use crate::utils::iter::ByteSliceExt;
+use crate::{ether::bytecode::remove_pushbytes_from_bytecode, utils::iter::ByteSliceExt};
+use ethers::types::Bytes;
 use tracing::{debug, trace, warn};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -22,19 +23,17 @@ impl Display for Compiler {
     }
 }
 
-// returns the compiler version used to compile the contract.
-// for example: (solc, 0.8.10) or (vyper, 0.2.16)
+/// returns the compiler version used to compile the contract.
+/// for example: (solc, 0.8.10) or (vyper, 0.2.16)
+///
+/// Research:
+/// https://jbecker.dev/research/evm-compiler-fingerprinting
 pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
     let mut compiler = Compiler::Unknown;
     let mut version = "unknown".to_string();
 
-    // perform prefix check for rough version matching
-    if bytecode.starts_with(&[0x36, 0x3d, 0x3d, 0x37, 0x3d, 0x3d, 0x3d, 0x36, 0x3d, 0x73]) ||
-        bytecode.starts_with(&[0x5f, 0x5f, 0x36, 0x5f, 0x5f, 0x37])
-    {
-        compiler = Compiler::Proxy;
-        version = "minimal".to_string();
-    } else if bytecode.starts_with(&[
+    // Previously known heuristic: perform prefix check for rough version matching
+    if bytecode.starts_with(&[
         0x36, 0x60, 0x00, 0x60, 0x00, 0x37, 0x61, 0x10, 0x00, 0x60, 0x00, 0x36, 0x60, 0x00, 0x73,
     ]) {
         compiler = Compiler::Proxy;
@@ -60,11 +59,54 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
         compiler = Compiler::Solc;
     }
 
-    // TODO: add more heuristics for compiler version detection
+    // Remove `PUSHN [u8; n]` bytes so we are left with only operations
+    let pruned_bytecode = remove_pushbytes_from_bytecode(Bytes::from_iter(bytecode.iter()))
+        .expect("invalid bytecode");
 
+    // detect minimal proxies
+    if pruned_bytecode.eq(&vec![
+        0x36, 0x3d, 0x3d, 0x37, 0x3d, 0x3d, 0x3d, 0x36, 0x3d, 0x73, 0x5a, 0xf4, 0x3d, 0x82, 0x80,
+        0x3e, 0x90, 0x3d, 0x91, 0x60, 0x57, 0xfd, 0x5b, 0xf3,
+    ]) {
+        compiler = Compiler::Proxy;
+        version = "minimal".to_string();
+    }
+
+    // heuristics are in the form of (sequence, solc confidence, vyper confidence)
+    let heuristics = [
+        ([0x80, 0x63, 0x14, 0x61, 0x57], 0.9447, 0.0),
+        ([0x14, 0x61, 0x57, 0x80, 0x63], 0.9371, 0.0),
+        ([0x61, 0x57, 0x80, 0x63, 0x14], 0.9371, 0.0),
+        ([0x57, 0x80, 0x63, 0x14, 0x61], 0.9371, 0.0),
+        ([0x54, 0x60, 0x52, 0x60, 0x60], 0.00, 0.3103),
+        ([0x60, 0x54, 0x60, 0x52, 0x60], 0.00, 0.3054),
+        ([0x61, 0x52, 0x61, 0x51, 0x61], 0.00, 0.2894),
+        ([0x61, 0x51, 0x61, 0x52, 0x60], 0.00, 0.2816),
+        ([0x61, 0x52, 0x60, 0x61, 0x52], 0.00, 0.2734),
+        ([0x90, 0x50, 0x90, 0x50, 0x81], 0.00, 0.2727),
+        ([0x61, 0x52, 0x7f, 0x61, 0x52], 0.00, 0.2656),
+    ];
+
+    // for each heuristic, check if the bytecode contains the sequence and increment the confidence
+    // for that compiler. the compiler with the highest confidence is chosen
+    let (mut solc_confidence, mut vyper_confidence) = (0.0, 0.0);
+    for (sequence, solc, vyper) in heuristics.iter() {
+        if pruned_bytecode.contains_slice(sequence) {
+            solc_confidence += solc;
+            vyper_confidence += vyper;
+        }
+    }
+
+    if solc_confidence != 0.0 && solc_confidence > vyper_confidence {
+        compiler = Compiler::Solc;
+    } else if vyper_confidence != 0.0 && vyper_confidence > solc_confidence {
+        compiler = Compiler::Vyper;
+    }
+
+    // Previously known heuristic: check for cbor encoded compiler metadata
     // check for cbor encoded compiler metadata
     // https://cbor.io
-    if compiler == Compiler::Solc {
+    if bytecode.contains_slice(&[0x73, 0x6f, 0x6c, 0x63, 0x43]) {
         let compiler_version = bytecode.split_by_slice(&[0x73, 0x6f, 0x6c, 0x63, 0x43]);
 
         if compiler_version.len() > 1 {
@@ -74,11 +116,12 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
                     .map(|v| v.to_string())
                     .collect::<Vec<String>>()
                     .join(".");
+                compiler = Compiler::Solc;
             }
 
             trace!("exact compiler version match found due to cbor encoded metadata: {}", version);
         }
-    } else if compiler == Compiler::Vyper {
+    } else if bytecode.contains_slice(&[0x76, 0x79, 0x70, 0x65, 0x72, 0x83]) {
         let compiler_version = bytecode.split_by_slice(&[0x76, 0x79, 0x70, 0x65, 0x72, 0x83]);
 
         if compiler_version.len() > 1 {
@@ -88,16 +131,18 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
                     .map(|v| v.to_string())
                     .collect::<Vec<String>>()
                     .join(".");
+                compiler = Compiler::Vyper;
             }
 
             trace!("exact compiler version match found due to cbor encoded metadata");
         }
     }
 
-    if compiler == Compiler::Solc {
-        debug!("detected compiler {compiler} {version}.");
-    } else {
-        warn!("detected compiler {} {} is not supported by heimdall.", compiler, version);
+    debug!("detected compiler {compiler} {version}.");
+
+    // if not Solidity, warn
+    if compiler != Compiler::Solc {
+        warn!("{} is not fully supported by heimdall", compiler);
     }
 
     (compiler, version.trim_end_matches('.').to_string())
@@ -109,7 +154,10 @@ mod test_compiler {
 
     #[test]
     fn test_detect_compiler_proxy_minimal() {
-        let bytecode = &[0x36, 0x3d, 0x3d, 0x37, 0x3d, 0x3d, 0x3d, 0x36, 0x3d, 0x73];
+        let bytecode = &[
+            0x36, 0x3d, 0x3d, 0x37, 0x3d, 0x3d, 0x3d, 0x36, 0x3d, 0x73, 0x5a, 0xf4, 0x3d, 0x82,
+            0x80, 0x3e, 0x90, 0x3d, 0x91, 0x60, 0x57, 0xfd, 0x5b, 0xf3,
+        ];
         let expected_result = (Compiler::Proxy, "minimal".to_string());
         assert_eq!(detect_compiler(bytecode), expected_result);
     }
