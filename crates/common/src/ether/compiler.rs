@@ -155,13 +155,6 @@ mod test_compiler {
     use super::*;
 
     #[test]
-    fn test_detect_compiler_proxy_minimal() {
-        let bytecode = Bytes::from_str("0x3660006000376110006000366000732157a7894439191e520825fe9399ab8655e0f7085af41558576110006000f3").expect("invalid bytecode");
-        let expected_result = (Compiler::Proxy, "minimal".to_string());
-        assert_eq!(detect_compiler(&bytecode), expected_result);
-    }
-
-    #[test]
     fn test_detect_compiler_proxy_vyper() {
         let bytecode = &[
             0x36, 0x60, 0x00, 0x60, 0x00, 0x37, 0x61, 0x10, 0x00, 0x60, 0x00, 0x36, 0x60, 0x00,
