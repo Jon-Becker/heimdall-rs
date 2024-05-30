@@ -150,7 +150,6 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
 
 #[cfg(test)]
 mod test_compiler {
-    use std::str::FromStr;
 
     use super::*;
 
