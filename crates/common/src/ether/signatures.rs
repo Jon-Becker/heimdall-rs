@@ -226,7 +226,7 @@ impl ResolveSelector for ResolvedFunction {
             None => selector,
         };
 
-        trace!("resolving event selector {}", &selector);
+        trace!("resolving function selector {}", &selector);
 
         // get cached results
         if let Some(cached_results) =
