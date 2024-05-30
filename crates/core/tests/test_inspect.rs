@@ -6,11 +6,16 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_inspect_simple() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let args = InspectArgs {
             target: String::from(
                 "0xa5f676d0ee4c23cc1ccb0b802be5aaead5827a3337c06e9da8b0a85dfa3e7dd5",
             ),
-            rpc_url: String::from("https://eth.llamarpc.com"),
+            rpc_url: rpc_url,
             default: true,
             transpose_api_key: String::from(""),
             name: String::from(""),
@@ -23,11 +28,16 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_inspect_create() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let args = InspectArgs {
             target: String::from(
                 "0x37321f192623002fc4b398b90ea825c37f81e29526fd355cff93ef6962fc0fba",
             ),
-            rpc_url: String::from("https://eth.llamarpc.com"),
+            rpc_url: rpc_url,
             default: true,
             transpose_api_key: String::from(""),
             name: String::from(""),
@@ -42,6 +52,11 @@ mod integration_tests {
     #[test]
     #[ignore]
     fn heavy_test_inspect_thorough() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         // load ./tests/testdata/txids.json into a vector using serde
         let txids = serde_json::from_str::<Value>(
             &std::fs::read_to_string("./tests/testdata/txids.json").expect("failed to read file"),
@@ -57,10 +72,10 @@ mod integration_tests {
         let total = txids.len();
 
         // task_pool(items, num_threads, f)
-        let results = task_pool(txids, 10, |txid: String| {
+        let results = task_pool(txids, 10, move |txid: String| {
             let args = InspectArgsBuilder::new()
                 .target(txid.to_string())
-                .rpc_url("https://eth.llamarpc.com".to_string())
+                .rpc_url(rpc_url.to_string())
                 .build()
                 .expect("failed to build args");
 
