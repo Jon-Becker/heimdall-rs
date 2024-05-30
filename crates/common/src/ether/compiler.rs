@@ -150,16 +150,15 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
 
 #[cfg(test)]
 mod test_compiler {
+    use std::str::FromStr;
+
     use super::*;
 
     #[test]
     fn test_detect_compiler_proxy_minimal() {
-        let bytecode = &[
-            0x36, 0x3d, 0x3d, 0x37, 0x3d, 0x3d, 0x3d, 0x36, 0x3d, 0x73, 0x5a, 0xf4, 0x3d, 0x82,
-            0x80, 0x3e, 0x90, 0x3d, 0x91, 0x60, 0x57, 0xfd, 0x5b, 0xf3,
-        ];
+        let bytecode = Bytes::from_str("0x3660006000376110006000366000732157a7894439191e520825fe9399ab8655e0f7085af41558576110006000f3").expect("invalid bytecode");
         let expected_result = (Compiler::Proxy, "minimal".to_string());
-        assert_eq!(detect_compiler(bytecode), expected_result);
+        assert_eq!(detect_compiler(&bytecode), expected_result);
     }
 
     #[test]
