@@ -7,6 +7,6 @@ members = [
     "snapshot",
     "decompile",
     "disassemble",
-    "inspect"
+    "inspect",
 ]
-version = "0.8.1"
+version = "0.8.2"
