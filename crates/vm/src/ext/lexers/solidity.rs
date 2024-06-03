@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
 use ethers::types::U256;
-
-use crate::{
+use heimdall_common::{
     constants::{MEMLEN_REGEX, WORD_REGEX},
-    ether::evm::core::opcodes::*,
     utils::strings::encode_hex_reduced,
 };
+
+use crate::core::opcodes::{Opcode, WrappedInput, WrappedOpcode};
 
 pub fn is_ext_call_precompile(precompile_address: U256) -> bool {
     let address: usize = match precompile_address.try_into() {
@@ -392,15 +392,6 @@ impl WrappedOpcode {
     }
 }
 
-impl Default for WrappedOpcode {
-    fn default() -> Self {
-        WrappedOpcode {
-            opcode: Opcode { code: 0, name: "unknown", mingas: 0, inputs: 0, outputs: 0 },
-            inputs: Vec::new(),
-        }
-    }
-}
-
 impl WrappedInput {
     /// Returns a WrappedInput's solidity representation.
     pub fn _solidify(&self) -> String {
@@ -427,9 +418,9 @@ impl WrappedInput {
 
 #[cfg(test)]
 mod tests {
-    use crate::ether::{
-        evm::core::opcodes::{Opcode, WrappedInput, WrappedOpcode},
-        lexers::solidity::is_ext_call_precompile,
+    use crate::{
+        core::opcodes::{Opcode, WrappedInput, WrappedOpcode},
+        ext::lexers::solidity::is_ext_call_precompile,
     };
     use ethers::types::U256;
 

@@ -2,26 +2,23 @@ mod jump_frame;
 mod util;
 
 use crate::{
-    error::Error,
-    ether::evm::{
-        core::{
-            stack::Stack,
-            vm::{State, VM},
-        },
-        ext::exec::{
-            jump_frame::JumpFrame,
-            util::{
-                historical_diffs_approximately_equal, jump_condition_appears_recursive,
-                jump_condition_contains_mutated_memory_access,
-                jump_condition_contains_mutated_storage_access,
-                jump_stack_depth_less_than_max_stack_depth, stack_contains_too_many_items,
-                stack_contains_too_many_of_the_same_item, stack_diff,
-                stack_item_source_depth_too_deep,
-            },
+    core::{
+        stack::Stack,
+        vm::{State, VM},
+    },
+    ext::exec::{
+        jump_frame::JumpFrame,
+        util::{
+            historical_diffs_approximately_equal, jump_condition_appears_recursive,
+            jump_condition_contains_mutated_memory_access,
+            jump_condition_contains_mutated_storage_access,
+            jump_stack_depth_less_than_max_stack_depth, stack_contains_too_many_items,
+            stack_contains_too_many_of_the_same_item, stack_diff, stack_item_source_depth_too_deep,
         },
     },
-    utils::strings::decode_hex,
 };
+use eyre::Result;
+use heimdall_common::utils::strings::decode_hex;
 use std::collections::HashMap;
 use tracing::{trace, warn};
 
@@ -39,7 +36,7 @@ impl VM {
         &mut self,
         selector: &str,
         entry_point: u128,
-    ) -> Result<(VMTrace, u32), Error> {
+    ) -> Result<(VMTrace, u32)> {
         self.calldata = decode_hex(selector)?;
 
         // step through the bytecode until we reach the entry point
@@ -61,7 +58,7 @@ impl VM {
     }
 
     // build a map of function jump possibilities from the EVM bytecode
-    pub fn symbolic_exec(&self) -> Result<(VMTrace, u32), Error> {
+    pub fn symbolic_exec(&self) -> Result<(VMTrace, u32)> {
         let mut vm = self.clone();
 
         trace!("beginning contract-wide symbolic execution");
@@ -75,7 +72,7 @@ impl VM {
         &mut self,
         branch_count: &mut u32,
         handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
-    ) -> Result<VMTrace, Error> {
+    ) -> Result<VMTrace> {
         let mut vm = self.clone();
 
         // create a new VMTrace object

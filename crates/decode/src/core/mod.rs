@@ -5,12 +5,12 @@ use eyre::eyre;
 use heimdall_common::{
     ether::{
         calldata::get_calldata_from_target,
-        evm::core::types::{
-            get_padding, get_potential_types_for_word, parse_function_parameters, to_type, Padding,
-        },
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
     },
     utils::{io::logging::TraceFactory, strings::encode_hex},
+};
+use heimdall_vm::core::types::{
+    get_padding, get_potential_types_for_word, parse_function_parameters, to_type, Padding,
 };
 use tracing::{debug, info, trace, warn};
 

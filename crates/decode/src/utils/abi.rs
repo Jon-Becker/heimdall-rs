@@ -5,11 +5,9 @@ use ethers::{
     types::U256,
 };
 use eyre::eyre;
-use heimdall_common::{
-    ether::evm::core::types::{
-        get_padding, get_padding_size, get_potential_types_for_word, Padding,
-    },
-    utils::strings::encode_hex,
+use heimdall_common::utils::strings::encode_hex;
+use heimdall_vm::core::types::{
+    get_padding, get_padding_size, get_potential_types_for_word, Padding,
 };
 use tracing::trace;
 

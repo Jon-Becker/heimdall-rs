@@ -1,6 +1,6 @@
 use ethers::{abi::AbiEncode, types::U256};
 use eyre::OptionExt;
-use heimdall_common::ether::evm::core::vm::State;
+use heimdall_vm::core::vm::State;
 
 use crate::{
     core::analyze::{AnalyzerState, AnalyzerType},

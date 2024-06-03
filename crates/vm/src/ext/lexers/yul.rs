@@ -1,4 +1,6 @@
-use crate::{ether::evm::core::opcodes::*, utils::strings::encode_hex_reduced};
+use heimdall_common::utils::strings::encode_hex_reduced;
+
+use crate::core::opcodes::{WrappedInput, WrappedOpcode};
 
 impl WrappedOpcode {
     /// Returns a WrappedOpcode's yul representation.
@@ -40,7 +42,7 @@ mod tests {
 
     use ethers::types::U256;
 
-    use crate::ether::evm::core::opcodes::{WrappedInput, WrappedOpcode};
+    use crate::core::opcodes::{WrappedInput, WrappedOpcode};
 
     #[test]
     fn test_push0() {

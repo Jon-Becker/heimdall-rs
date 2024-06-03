@@ -10,18 +10,14 @@ use ethers::{
     types::{H160, I256},
     utils::keccak256,
 };
-use eyre::OptionExt;
-
-use crate::{
-    error::Error,
-    ether::evm::core::opcodes::{Opcode, WrappedInput, WrappedOpcode},
-    utils::strings::sign_uint,
-};
+use eyre::{OptionExt, Result};
+use heimdall_common::utils::strings::sign_uint;
 
 use super::{
     constants::{COINBASE_ADDRESS, CREATE2_ADDRESS, CREATE_ADDRESS},
     log::Log,
     memory::Memory,
+    opcodes::{Opcode, WrappedInput, WrappedOpcode},
     stack::Stack,
     storage::Storage,
 };
@@ -107,7 +103,7 @@ impl VM {
     /// value, and gas limit.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let vm = VM::new(
@@ -153,7 +149,7 @@ impl VM {
     /// Exits current execution with the given code and returndata.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -177,7 +173,7 @@ impl VM {
     /// Consume gas units, halting execution if out of gas
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -215,7 +211,7 @@ impl VM {
     /// executed.
     ///
     /// ```no_run
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -231,7 +227,7 @@ impl VM {
     /// // vm._step(); // 0x00 EXIT
     /// // assert_eq!(vm.exitcode, 10);
     /// ```
-    fn _step(&mut self) -> Result<Instruction, Error> {
+    fn _step(&mut self) -> Result<Instruction> {
         // sanity check
         if self.bytecode.len() < self.instruction as usize {
             self.exit(2, Vec::new());
@@ -1370,7 +1366,7 @@ impl VM {
     /// executing the instruction
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1386,7 +1382,7 @@ impl VM {
     /// vm.step(); // 0x00 EXIT
     /// assert_eq!(vm.exitcode, 10);
     /// ```
-    pub fn step(&mut self) -> Result<State, Error> {
+    pub fn step(&mut self) -> Result<State> {
         let instruction = self._step()?;
 
         Ok(State {
@@ -1403,7 +1399,7 @@ impl VM {
     /// View the next n instructions without executing them
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1419,7 +1415,7 @@ impl VM {
     /// vm.peek(1); // 0x00 EXIT (not executed)
     /// assert_eq!(vm.exitcode, 255);
     /// ```
-    pub fn peek(&mut self, n: usize) -> Result<Vec<State>, Error> {
+    pub fn peek(&mut self, n: usize) -> Result<Vec<State>> {
         let mut states = Vec::new();
         let mut vm_clone = self.clone();
 
@@ -1439,7 +1435,7 @@ impl VM {
     /// Resets the VM state for a new execution
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1473,7 +1469,7 @@ impl VM {
     /// Executes the code until finished
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1489,7 +1485,7 @@ impl VM {
     /// vm.execute().expect("execution failed!"); // 0x00 EXIT (not executed)
     /// assert_eq!(vm.exitcode, 10);
     /// ```
-    pub fn execute(&mut self) -> Result<ExecutionResult, Error> {
+    pub fn execute(&mut self) -> Result<ExecutionResult> {
         while self.bytecode.len() >= self.instruction as usize {
             self.step()?;
 
@@ -1512,7 +1508,7 @@ impl VM {
     /// Executes provided calldata until finished
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1528,7 +1524,7 @@ impl VM {
     /// vm.call(&vec![], 0);
     /// assert_eq!(vm.exitcode, 10);
     /// ```
-    pub fn call(&mut self, calldata: &[u8], value: u128) -> Result<ExecutionResult, Error> {
+    pub fn call(&mut self, calldata: &[u8], value: u128) -> Result<ExecutionResult> {
         // reset the VM temp state
         self.reset();
         self.calldata = calldata.to_owned();
@@ -1544,8 +1540,9 @@ mod tests {
     use std::str::FromStr;
 
     use ethers::{prelude::U256, types::H160};
+    use heimdall_common::utils::strings::decode_hex;
 
-    use crate::{ether::evm::core::vm::VM, utils::strings::decode_hex};
+    use super::*;
 
     // creates a new test VM with calldata.
     fn new_test_vm(bytecode: &str) -> VM {

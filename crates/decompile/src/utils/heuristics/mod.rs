@@ -1,4 +1,4 @@
-use heimdall_common::ether::evm::core::vm::State;
+use heimdall_vm::core::vm::State;
 
 use crate::{core::analyze::AnalyzerState, interfaces::AnalyzedFunction, Error};
 

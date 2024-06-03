@@ -1,4 +1,4 @@
-use crate::utils::range_map::RangeMap;
+use crate::ext::range_map::RangeMap;
 
 use super::opcodes::WrappedOpcode;
 
@@ -29,7 +29,7 @@ impl Memory {
     /// Gets the current size of the memory in bytes.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::memory::Memory;
+    /// use heimdall_vm::core::memory::Memory;
     ///
     /// let memory = Memory::new();
     /// assert_eq!(memory.size(), 0);
@@ -43,7 +43,7 @@ impl Memory {
     /// value.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::memory::Memory;
+    /// use heimdall_vm::core::memory::Memory;
     ///
     /// let mut memory = Memory::new();
     /// assert_eq!(memory.size(), 0);
@@ -65,7 +65,7 @@ impl Memory {
     /// May extend the memory if necessary.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::memory::Memory;
+    /// use heimdall_vm::core::memory::Memory;
     ///
     /// let mut memory = Memory::new();
     /// memory.store(0, 32, &[0xff]);
@@ -114,7 +114,7 @@ impl Memory {
     /// appended to the value.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::memory::Memory;
+    /// use heimdall_vm::core::memory::Memory;
     ///
     /// let mut memory = Memory::new();
     /// memory.store(0, 32, &[0xff]);
@@ -143,7 +143,7 @@ impl Memory {
     /// Calculate the current memory cost
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::memory::Memory;
+    /// use heimdall_vm::core::memory::Memory;
     ///
     /// let mut memory = Memory::new();
     /// memory.store(0, 32, &[0xff]);
@@ -158,7 +158,7 @@ impl Memory {
     /// calculate the memory cost of extending the memory to a given size
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::memory::Memory;
+    /// use heimdall_vm::core::memory::Memory;
     ///
     /// let mut memory = Memory::new();
     /// memory.store(0, 32, &[0xff]);
@@ -187,7 +187,9 @@ impl Memory {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ether::evm::core::memory::Memory, utils::strings::decode_hex};
+    use heimdall_common::utils::strings::decode_hex;
+
+    use super::*;
 
     #[test]
     fn test_mstore_simple() {

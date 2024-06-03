@@ -35,7 +35,7 @@ impl Stack {
     /// Creates a new [`Stack`].
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::stack::Stack;
+    /// use heimdall_vm::core::stack::Stack;
     ///
     /// let stack = Stack::new();
     /// assert_eq!(stack.size(), 0);
@@ -49,7 +49,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -64,7 +64,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -85,7 +85,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -114,7 +114,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -140,7 +140,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -168,7 +168,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -187,7 +187,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -218,7 +218,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -234,7 +234,7 @@ impl Stack {
     ///
     /// ```
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -255,7 +255,7 @@ impl Stack {
     ///
     /// ```no_run
     /// use ethers::prelude::U256;
-    /// use heimdall_common::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -282,8 +282,9 @@ impl Display for Stack {
 
 #[cfg(test)]
 mod tests {
-    use crate::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
     use ethers::types::U256;
+
+    use crate::core::{opcodes::WrappedOpcode, stack::Stack};
 
     #[test]
     fn test_push_pop() {

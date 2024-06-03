@@ -24,4 +24,5 @@ futures = "0.3.30"
 lazy_static = "1.4.0"
 petgraph = "0.6.2"
 
-heimdall-disassembler = { workspace = true }
+heimdall-disassembler.workspace = true
+heimdall-vm.workspace = true

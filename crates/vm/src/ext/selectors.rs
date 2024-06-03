@@ -4,15 +4,15 @@ use std::{
     time::Instant,
 };
 
+use eyre::Result;
+use heimdall_common::{
+    ether::signatures::{ResolveSelector, ResolvedFunction},
+    utils::strings::decode_hex,
+};
 use tokio::task;
 use tracing::{debug, error, info, trace, warn};
 
-use crate::{error::Error, utils::strings::decode_hex};
-
-use super::{
-    evm::core::vm::VM,
-    signatures::{ResolveSelector, ResolvedFunction},
-};
+use crate::core::vm::VM;
 
 // Find all function selectors and all the data associated to this function, represented by
 // [`ResolvedFunction`]
@@ -20,7 +20,7 @@ pub async fn get_resolved_selectors(
     disassembled_bytecode: &str,
     skip_resolving: &bool,
     evm: &VM,
-) -> Result<(HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>), Error> {
+) -> Result<(HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>)> {
     let selectors = find_function_selectors(evm, disassembled_bytecode);
 
     let mut resolved_selectors = HashMap::new();

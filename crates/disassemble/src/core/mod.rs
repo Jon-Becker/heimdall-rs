@@ -2,10 +2,8 @@ use std::time::Instant;
 
 use crate::{error::Error, interfaces::DisassemblerArgs};
 use eyre::eyre;
-use heimdall_common::{
-    ether::{bytecode::get_bytecode_from_target, evm::core::opcodes::Opcode},
-    utils::strings::encode_hex,
-};
+use heimdall_common::{ether::bytecode::get_bytecode_from_target, utils::strings::encode_hex};
+use heimdall_vm::core::opcodes::Opcode;
 use tracing::{debug, info};
 
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {

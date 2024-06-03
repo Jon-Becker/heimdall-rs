@@ -2,7 +2,8 @@ use std::{collections::HashMap, sync::Mutex};
 
 use ethers::prelude::U256;
 use eyre::{eyre, OptionExt, Result};
-use heimdall_common::{ether::evm::ext::exec::VMTrace, utils::strings::encode_hex_reduced};
+use heimdall_common::utils::strings::encode_hex_reduced;
+use heimdall_vm::ext::exec::VMTrace;
 use petgraph::{matrix_graph::NodeIndex, Graph};
 
 use lazy_static::lazy_static;

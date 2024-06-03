@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use ethers::types::U256;
 
-use heimdall_common::ether::evm::core::{
+use heimdall_vm::core::{
     types::{byte_size_to_type, convert_bitmask},
     vm::State,
 };

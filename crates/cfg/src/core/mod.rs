@@ -3,9 +3,10 @@ pub(crate) mod graph;
 use ethers::types::H160;
 use eyre::eyre;
 use heimdall_common::{
-    ether::{bytecode::get_bytecode_from_target, compiler::detect_compiler, evm::core::vm::VM},
+    ether::{bytecode::get_bytecode_from_target, compiler::detect_compiler},
     utils::{strings::StringExt, threading::run_with_timeout},
 };
+use heimdall_vm::core::vm::VM;
 
 use petgraph::{dot::Dot, Graph};
 use std::time::{Duration, Instant};

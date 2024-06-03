@@ -15,7 +15,7 @@ mod integration_tests {
             target: String::from(
                 "0xa5f676d0ee4c23cc1ccb0b802be5aaead5827a3337c06e9da8b0a85dfa3e7dd5",
             ),
-            rpc_url: rpc_url,
+            rpc_url,
             default: true,
             transpose_api_key: String::from(""),
             name: String::from(""),
@@ -37,7 +37,7 @@ mod integration_tests {
             target: String::from(
                 "0x37321f192623002fc4b398b90ea825c37f81e29526fd355cff93ef6962fc0fba",
             ),
-            rpc_url: rpc_url,
+            rpc_url,
             default: true,
             transpose_api_key: String::from(""),
             name: String::from(""),

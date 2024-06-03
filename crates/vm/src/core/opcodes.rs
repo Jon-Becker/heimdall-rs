@@ -15,7 +15,7 @@ impl Opcode {
     /// Creates a new [`Opcode`] with the given code.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::opcodes::Opcode;
+    /// use heimdall_vm::core::opcodes::Opcode;
     ///
     /// let opcode = Opcode::new(0x01);
     /// assert_eq!(opcode.code, 0x01);
@@ -191,11 +191,20 @@ pub struct WrappedOpcode {
     pub inputs: Vec<WrappedInput>,
 }
 
+impl Default for WrappedOpcode {
+    fn default() -> Self {
+        WrappedOpcode {
+            opcode: Opcode { code: 0, name: "unknown", mingas: 0, inputs: 0, outputs: 0 },
+            inputs: Vec::new(),
+        }
+    }
+}
+
 impl WrappedOpcode {
     /// Returns the depth of the opcode, i.e. the maximum recursion depth of its inputs
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::opcodes::*;
+    /// use heimdall_vm::core::opcodes::*;
     ///
     /// let opcode = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(1.into()), WrappedInput::Raw(2.into())]);
     /// assert_eq!(opcode.depth(), 1);
@@ -210,7 +219,7 @@ impl WrappedInput {
     /// WrappedOpcode
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::opcodes::*;
+    /// use heimdall_vm::core::opcodes::*;
     ///
     /// let opcode = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(1.into()), WrappedInput::Raw(2.into())]);
     /// assert_eq!(opcode.depth(), 1);
@@ -248,9 +257,10 @@ impl Display for WrappedInput {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::opcodes::Opcode;
     use ethers::types::U256;
 
-    use crate::ether::evm::core::opcodes::*;
+    use crate::core::opcodes::{WrappedInput, WrappedOpcode};
 
     #[test]
     fn test_opcode() {

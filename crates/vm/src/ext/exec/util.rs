@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
 use ethers::types::U256;
+use heimdall_common::constants::{MEMORY_REGEX, STORAGE_REGEX};
 use tracing::trace;
 
-use crate::{
-    constants::{MEMORY_REGEX, STORAGE_REGEX},
-    ether::evm::core::stack::{Stack, StackFrame},
-};
+use crate::core::stack::{Stack, StackFrame};
 
 use super::jump_frame::JumpFrame;
 

@@ -10,8 +10,6 @@ use heimdall_common::{
     ether::{
         bytecode::get_bytecode_from_target,
         compiler::detect_compiler,
-        evm::core::vm::VM,
-        selectors::{find_function_selectors, resolve_selectors},
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
     },
     utils::{
@@ -20,6 +18,10 @@ use heimdall_common::{
     },
 };
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
+use heimdall_vm::{
+    core::vm::VM,
+    ext::selectors::{find_function_selectors, resolve_selectors},
+};
 use std::{
     collections::HashMap,
     time::{Duration, Instant},

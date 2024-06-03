@@ -1,6 +1,6 @@
 use std::{fmt::Display, time::Instant};
 
-use heimdall_common::ether::evm::ext::exec::VMTrace;
+use heimdall_vm::ext::exec::VMTrace;
 use tracing::debug;
 
 use crate::{
@@ -27,10 +27,10 @@ pub enum AnalyzerType {
 impl AnalyzerType {
     pub fn from_args(solidity: bool, yul: bool) -> Self {
         if solidity {
-            return AnalyzerType::Solidity
+            return AnalyzerType::Solidity;
         }
         if yul {
-            return AnalyzerType::Yul
+            return AnalyzerType::Yul;
         }
 
         AnalyzerType::Abi
@@ -174,7 +174,7 @@ impl Analyzer {
                     )
                 {
                     analyzer_state.conditional_stack.remove(i);
-                    break
+                    break;
                 }
             }
 
