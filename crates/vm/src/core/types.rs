@@ -16,7 +16,7 @@ pub enum Padding {
 /// Parse function parameters [`ParamType`]s from a function signature.
 ///
 /// ```
-/// use heimdall_common::ether::evm::core::types::parse_function_parameters;
+/// use heimdall_vm::core::types::parse_function_parameters;
 /// use ethers::abi::ParamType;
 ///
 /// let function_signature = "foo(uint256,uint256)";
@@ -259,7 +259,7 @@ pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
 /// 2. Potential types that the byte size could be.
 ///
 /// ```
-/// use heimdall_common::ether::evm::core::types::byte_size_to_type;
+/// use heimdall_vm::core::types::byte_size_to_type;
 ///
 /// let (byte_size, potential_types) = byte_size_to_type(1);
 /// assert_eq!(byte_size, 1);
@@ -286,7 +286,7 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 /// Given a string (typically a line of decompiled source code), extract a type cast if one exists.
 ///
 /// ```
-/// use heimdall_common::ether::evm::core::types::find_cast;
+/// use heimdall_vm::core::types::find_cast;
 /// use ethers::abi::ParamType;
 ///
 /// let line = "uint256(0x000011)";

@@ -21,7 +21,7 @@ impl Storage {
     /// Creates a new [`Storage`] struct.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::storage::Storage;
+    /// use heimdall_vm::core::storage::Storage;
     ///
     /// let storage = Storage::new();
     /// ```
@@ -32,7 +32,7 @@ impl Storage {
     /// Store a key-value pair in the storage map.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::storage::Storage;
+    /// use heimdall_vm::core::storage::Storage;
     ///
     /// let mut storage = Storage::new();
     /// storage.store([1u8; 32], [2u8; 32]);
@@ -48,7 +48,7 @@ impl Storage {
     /// Store a key-value pair in the transient storage map.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::storage::Storage;
+    /// use heimdall_vm::core::storage::Storage;
     ///
     /// let mut storage = Storage::new();
     /// storage.tstore([1u8; 32], [2u8; 32]);
@@ -64,7 +64,7 @@ impl Storage {
     /// Load a value from the storage map.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::storage::Storage;
+    /// use heimdall_vm::core::storage::Storage;
     ///
     /// let mut storage = Storage::new();
     /// storage.store([1u8; 32], [2u8; 32]);
@@ -84,7 +84,7 @@ impl Storage {
     /// Load a value from the storage map.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::storage::Storage;
+    /// use heimdall_vm::core::storage::Storage;
     ///
     /// let mut storage = Storage::new();
     /// storage.tstore([1u8; 32], [2u8; 32]);
@@ -102,7 +102,7 @@ impl Storage {
     /// calculate the cost of accessing a key in storage
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::storage::Storage;
+    /// use heimdall_vm::core::storage::Storage;
     ///
     /// let mut storage = Storage::new();
     ///
@@ -125,7 +125,7 @@ impl Storage {
     /// calculate the cost of storing a key-value pair in storage
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::storage::Storage;
+    /// use heimdall_vm::core::storage::Storage;
     ///
     /// let mut storage = Storage::new();
     ///

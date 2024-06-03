@@ -103,7 +103,7 @@ impl VM {
     /// value, and gas limit.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let vm = VM::new(
@@ -149,7 +149,7 @@ impl VM {
     /// Exits current execution with the given code and returndata.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -173,7 +173,7 @@ impl VM {
     /// Consume gas units, halting execution if out of gas
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -211,7 +211,7 @@ impl VM {
     /// executed.
     ///
     /// ```no_run
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1366,7 +1366,7 @@ impl VM {
     /// executing the instruction
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1399,7 +1399,7 @@ impl VM {
     /// View the next n instructions without executing them
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1435,7 +1435,7 @@ impl VM {
     /// Resets the VM state for a new execution
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1469,7 +1469,7 @@ impl VM {
     /// Executes the code until finished
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(
@@ -1508,7 +1508,7 @@ impl VM {
     /// Executes provided calldata until finished
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::vm::VM;
+    /// use heimdall_vm::core::vm::VM;
     /// use ethers::types::H160;
     ///
     /// let mut vm = VM::new(

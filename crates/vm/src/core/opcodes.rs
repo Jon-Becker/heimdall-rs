@@ -15,7 +15,7 @@ impl Opcode {
     /// Creates a new [`Opcode`] with the given code.
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::opcodes::Opcode;
+    /// use heimdall_vm::core::opcodes::Opcode;
     ///
     /// let opcode = Opcode::new(0x01);
     /// assert_eq!(opcode.code, 0x01);
@@ -204,7 +204,7 @@ impl WrappedOpcode {
     /// Returns the depth of the opcode, i.e. the maximum recursion depth of its inputs
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::opcodes::*;
+    /// use heimdall_vm::core::opcodes::*;
     ///
     /// let opcode = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(1.into()), WrappedInput::Raw(2.into())]);
     /// assert_eq!(opcode.depth(), 1);
@@ -219,7 +219,7 @@ impl WrappedInput {
     /// WrappedOpcode
     ///
     /// ```
-    /// use heimdall_common::ether::evm::core::opcodes::*;
+    /// use heimdall_vm::core::opcodes::*;
     ///
     /// let opcode = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(1.into()), WrappedInput::Raw(2.into())]);
     /// assert_eq!(opcode.depth(), 1);
