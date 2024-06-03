@@ -1,4 +1,4 @@
-use crate::utils::range_map::RangeMap;
+use crate::ext::range_map::RangeMap;
 
 use super::opcodes::WrappedOpcode;
 
@@ -187,7 +187,9 @@ impl Memory {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ether::evm::core::memory::Memory, utils::strings::decode_hex};
+    use heimdall_common::utils::strings::decode_hex;
+
+    use super::*;
 
     #[test]
     fn test_mstore_simple() {

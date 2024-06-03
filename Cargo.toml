@@ -12,6 +12,7 @@ members = [
     "crates/dump",
     "crates/cli",
     "crates/cfg",
+    "crates/vm",
 ]
 
 # Explicitly set the resolver to version 2, which is the default for packages with edition >= 2021
@@ -43,5 +44,6 @@ heimdall-inspect = { path = "crates/inspect" }
 heimdall-decoder = { path = "crates/decode" }
 heimdall-decompiler = { path = "crates/decompile" }
 heimdall-disassembler = { path = "crates/disassemble" }
+heimdall-vm = { path = "crates/vm" }
 
 clap = "4"

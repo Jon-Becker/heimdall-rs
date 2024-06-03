@@ -1,8 +1,8 @@
 use eyre::{eyre, OptionExt};
-use heimdall_common::{
-    ether::evm::core::types::{byte_size_to_type, find_cast},
-    utils::strings::{find_balanced_encapsulator, find_balanced_encapsulator_backwards},
+use heimdall_common::utils::strings::{
+    find_balanced_encapsulator, find_balanced_encapsulator_backwards,
 };
+use heimdall_vm::core::types::{byte_size_to_type, find_cast};
 
 use crate::{
     core::postprocess::PostprocessorState,

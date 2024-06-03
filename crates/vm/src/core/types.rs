@@ -1,10 +1,10 @@
 use std::{collections::VecDeque, ops::Range};
 
 use ethers::abi::{AbiEncode, ParamType};
+use eyre::{eyre, Result};
+use heimdall_common::{constants::TYPE_CAST_REGEX, utils::strings::find_balanced_encapsulator};
 
-use crate::{constants::TYPE_CAST_REGEX, error::Error, utils::strings::find_balanced_encapsulator};
-
-use super::vm::Instruction;
+use super::{opcodes::WrappedInput, vm::Instruction};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Padding {
@@ -25,7 +25,7 @@ pub enum Padding {
 ///
 /// assert_eq!(function_parameters, vec![ParamType::Uint(256), ParamType::Uint(256)]);
 /// ```
-pub fn parse_function_parameters(function_signature: &str) -> Result<Vec<ParamType>, Error> {
+pub fn parse_function_parameters(function_signature: &str) -> Result<Vec<ParamType>> {
     // remove the function name from the signature, only keep the parameters
     let param_range = find_balanced_encapsulator(function_signature, ('(', ')'))?;
 
@@ -37,10 +37,10 @@ pub fn parse_function_parameters(function_signature: &str) -> Result<Vec<ParamTy
 
 /// Helper function for extracting types from a string. Used by [`parse_function_parameters`],
 /// typically after entering a nested tuple or similar.
-fn extract_types_from_string(string: &str) -> Result<Vec<ParamType>, Error> {
+fn extract_types_from_string(string: &str) -> Result<Vec<ParamType>> {
     let mut types = Vec::new();
     if string.is_empty() {
-        return Ok(types)
+        return Ok(types);
     }
 
     // if the string contains a tuple we cant simply split on commas
@@ -137,7 +137,7 @@ fn extract_types_from_string(string: &str) -> Result<Vec<ParamType>, Error> {
         // iterate over the split string and convert each type to a ParamType
         for string_type in split {
             if string_type.is_empty() {
-                continue
+                continue;
             }
 
             let param_type = to_type(string_type);
@@ -219,7 +219,7 @@ pub fn to_type(string: &str) -> ParamType {
             }
         }
 
-        return arg_type
+        return arg_type;
     }
 
     arg_type
@@ -237,8 +237,8 @@ pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
     // determine which input contains the bitmask
     for (i, input) in mask.inputs.iter().enumerate() {
         match input {
-            crate::ether::evm::core::opcodes::WrappedInput::Raw(_) => continue,
-            crate::ether::evm::core::opcodes::WrappedInput::Opcode(opcode) => {
+            WrappedInput::Raw(_) => continue,
+            WrappedInput::Opcode(opcode) => {
                 if !(opcode.opcode.name == "CALLDATALOAD" || opcode.opcode.name == "CALLDATACOPY") {
                     if mask.opcode.name == "AND" {
                         type_byte_size = instruction.inputs[i].encode_hex().matches("ff").count();
@@ -295,7 +295,7 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 /// assert_eq!(&line[range], "0x000011");
 /// assert_eq!(cast_type, ParamType::Uint(256));
 /// ```
-pub fn find_cast(line: &str) -> Result<(Range<usize>, ParamType), Error> {
+pub fn find_cast(line: &str) -> Result<(Range<usize>, ParamType)> {
     // find the start of the cast
     match TYPE_CAST_REGEX.find(line).expect("Failed to find type cast.") {
         Some(m) => {
@@ -307,7 +307,7 @@ pub fn find_cast(line: &str) -> Result<(Range<usize>, ParamType), Error> {
             let range = find_balanced_encapsulator(&line[end..], ('(', ')'))?;
             Ok((end + range.start..end + range.end, to_type(&cast_type)))
         }
-        None => Err(Error::ParseError("failed to find type cast".to_string())),
+        None => Err(eyre!("failed to find type cast")),
     }
 }
 
@@ -329,17 +329,17 @@ pub fn get_padding(bytes: &[u8]) -> Padding {
     if null_byte_indices.is_empty() ||
         null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
     {
-        return Padding::None
+        return Padding::None;
     }
 
     // the first byte is a null byte AND the last byte is not a null byte, it is left padded
     if null_byte_indices[0] == 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1 {
-        return Padding::Left
+        return Padding::Left;
     }
 
     // the first byte is not a null byte AND the last byte is a null byte, it is right padded
     if null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] == size - 1 {
-        return Padding::Right
+        return Padding::Right;
     }
 
     // get non-null byte indices
@@ -351,7 +351,7 @@ pub fn get_padding(bytes: &[u8]) -> Padding {
         .collect::<Vec<usize>>();
 
     if non_null_byte_indices.is_empty() {
-        return Padding::None
+        return Padding::None;
     }
 
     // check if the there are more null-bytes before the first non-null byte than after the last
@@ -397,12 +397,9 @@ pub fn get_potential_types_for_word(word: &[u8]) -> (usize, Vec<String>) {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use ethers::abi::ParamType;
-
-    use crate::{
-        ether::evm::core::types::{get_padding, parse_function_parameters, Padding},
-        utils::strings::decode_hex,
-    };
+    use heimdall_common::utils::strings::decode_hex;
 
     #[test]
     fn test_simple_signature() {

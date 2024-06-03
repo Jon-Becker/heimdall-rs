@@ -191,6 +191,15 @@ pub struct WrappedOpcode {
     pub inputs: Vec<WrappedInput>,
 }
 
+impl Default for WrappedOpcode {
+    fn default() -> Self {
+        WrappedOpcode {
+            opcode: Opcode { code: 0, name: "unknown", mingas: 0, inputs: 0, outputs: 0 },
+            inputs: Vec::new(),
+        }
+    }
+}
+
 impl WrappedOpcode {
     /// Returns the depth of the opcode, i.e. the maximum recursion depth of its inputs
     ///
@@ -248,9 +257,10 @@ impl Display for WrappedInput {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::opcodes::Opcode;
     use ethers::types::U256;
 
-    use crate::ether::evm::core::opcodes::*;
+    use crate::core::opcodes::{WrappedInput, WrappedOpcode};
 
     #[test]
     fn test_opcode() {

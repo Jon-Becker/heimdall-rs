@@ -1,5 +1,5 @@
 use eyre::eyre;
-use heimdall_common::ether::evm::core::{
+use heimdall_vm::core::{
     opcodes::{WrappedInput, WrappedOpcode},
     vm::State,
 };

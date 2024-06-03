@@ -1,4 +1,5 @@
-use heimdall_common::{ether::evm::core::vm::State, utils::strings::encode_hex_reduced};
+use heimdall_common::utils::strings::encode_hex_reduced;
+use heimdall_vm::core::vm::State;
 
 use crate::{
     core::analyze::AnalyzerState,
@@ -47,7 +48,7 @@ pub fn yul_heuristic(
 
             // ignore compiler panics, we will reach these due to symbolic execution
             if revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
-                return Ok(())
+                return Ok(());
             }
 
             // find the if statement that caused this revert, and update it to include the revert
@@ -66,7 +67,7 @@ pub fn yul_heuristic(
                         instruction.input_operations[1].yulify()
                     );
 
-                    break
+                    break;
                 }
             }
         }

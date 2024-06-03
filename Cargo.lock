@@ -1865,6 +1865,7 @@ dependencies = [
  "heimdall-common",
  "heimdall-config",
  "heimdall-disassembler",
+ "heimdall-vm",
  "lazy_static",
  "petgraph",
  "thiserror",
@@ -1978,6 +1979,7 @@ dependencies = [
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
+ "heimdall-vm",
  "thiserror",
  "tracing",
 ]
@@ -1997,6 +1999,7 @@ dependencies = [
  "heimdall-common",
  "heimdall-config",
  "heimdall-disassembler",
+ "heimdall-vm",
  "lazy_static",
  "serde",
  "serde_json",
@@ -2013,6 +2016,7 @@ dependencies = [
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
+ "heimdall-vm",
  "thiserror",
  "tracing",
 ]
@@ -2067,6 +2071,35 @@ dependencies = [
  "tracing-journald",
  "tracing-logfmt",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "heimdall-vm"
+version = "0.8.2"
+dependencies = [
+ "async-openai",
+ "async-recursion",
+ "async-trait",
+ "backoff",
+ "chrono",
+ "clap",
+ "colored",
+ "crossbeam-channel",
+ "ethers",
+ "eyre",
+ "fancy-regex",
+ "heimdall-cache",
+ "heimdall-common",
+ "indicatif",
+ "lazy_static",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "strsim 0.10.0",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

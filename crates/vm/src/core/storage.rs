@@ -147,7 +147,7 @@ impl Storage {
 
 #[cfg(test)]
 mod tests {
-    use crate::ether::evm::core::storage::Storage;
+    use crate::core::storage::Storage;
 
     #[test]
     fn test_sstore_sload() {

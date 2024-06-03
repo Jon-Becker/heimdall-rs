@@ -3,7 +3,8 @@ use ethers::{
     types::U256,
 };
 
-use heimdall_common::{ether::evm::core::vm::State, utils::strings::encode_hex_reduced};
+use heimdall_common::utils::strings::encode_hex_reduced;
+use heimdall_vm::core::vm::State;
 
 use crate::{
     core::analyze::AnalyzerState,
@@ -102,7 +103,7 @@ pub fn solidity_heuristic(
                 (conditional.replace('!', "") == "success") ||
                 (conditional == "!msg.value")
             {
-                return Ok(())
+                return Ok(());
             }
 
             function.logic.push(format!("if ({conditional}) {{").to_string());
@@ -246,7 +247,7 @@ pub fn solidity_heuristic(
                                     format!("require({conditional}, \"{revert_string}\");");
                             }
                         }
-                        return Ok(())
+                        return Ok(());
                     }
                 }
             }
@@ -290,11 +291,11 @@ pub fn solidity_heuristic(
                                 }
                             }
                         }
-                        return Ok(())
+                        return Ok(());
                     }
                 }
             } else {
-                return Ok(())
+                return Ok(());
             }
 
             function.logic.push(revert_logic);

@@ -282,8 +282,9 @@ impl Display for Stack {
 
 #[cfg(test)]
 mod tests {
-    use crate::ether::evm::core::{opcodes::WrappedOpcode, stack::Stack};
     use ethers::types::U256;
+
+    use crate::core::{opcodes::WrappedOpcode, stack::Stack};
 
     #[test]
     fn test_push_pop() {
