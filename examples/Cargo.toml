@@ -4,7 +4,6 @@ members = [
     "dump",
     "decode",
     "decode_offline",
-    "snapshot",
     "decompile",
     "disassemble",
     "inspect",

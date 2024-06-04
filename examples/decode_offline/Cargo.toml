@@ -7,7 +7,7 @@ keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
 
 [dependencies]
-heimdall-core = { git = "https://github.com/Jon-Becker/heimdall-rs/", version = "0.8.2" }
+heimdall-decoder = { git = "https://github.com/Jon-Becker/heimdall-rs.git", tag = "0.8.2" }
 serde = "1.0.196"
 serde_yaml = "0.9.31"
 tokio = "1.35.1"
