@@ -1,17 +1,2 @@
-echo "Compiling..."
-
-RUSTFLAGS="-C target-cpu=native -C codegen-units=1 -C incremental=false" CARGO_PROFILE_RELEASE_LTO=true cargo build --release
-
-# get optional parameter for bench prefix
-if [ -z "$1" ]
-then
-    bench_prefix="benchmark_"
-    echo "Running benchmarks: $bench_prefix"
-else
-    bench_prefix="benchmark_$1"
-    echo "Running benchmarks: $bench_prefix"
-fi
-
-echo "Benchmark results:\n"
-cargo test --release -- $bench_prefix 2>&1 | grep -E "±|benchmark_\S*:"
-echo "\n"
+cargo bench
+open target/criterion/report/index.html

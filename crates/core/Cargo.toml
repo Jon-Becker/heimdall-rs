@@ -40,3 +40,27 @@ heimdall-decoder = { workspace = true }
 heimdall-inspect = { workspace = true }
 heimdall-decompiler = { workspace = true }
 heimdall-disassembler = { workspace = true }
+
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
+
+[[bench]]
+name = "bench_cfg"
+harness = false
+
+[[bench]]
+name = "bench_decode"
+harness = false
+
+[[bench]]
+name = "bench_decompile"
+harness = false
+
+[[bench]]
+name = "bench_disassemble"
+harness = false
+
+[[bench]]
+name = "bench_inspect"
+harness = false
