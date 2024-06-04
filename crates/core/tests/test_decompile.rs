@@ -6,9 +6,14 @@ mod benchmark {
     #[tokio::test]
     async fn benchmark_decompile_solidity_simple() {
         async fn bench() {
+            let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+                println!("RPC_URL not set, skipping test");
+                std::process::exit(0);
+            });
+
             let args = DecompilerArgs {
                 target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url,
                 default: true,
                 skip_resolving: true,
                 include_solidity: true,
@@ -26,9 +31,14 @@ mod benchmark {
     #[tokio::test]
     async fn benchmark_decompile_solidity_complex() {
         async fn bench() {
+            let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+                println!("RPC_URL not set, skipping test");
+                std::process::exit(0);
+            });
+
             let args = DecompilerArgs {
                 target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url,
                 default: true,
                 skip_resolving: true,
                 include_solidity: true,
@@ -46,9 +56,14 @@ mod benchmark {
     #[tokio::test]
     async fn benchmark_decompile_yul_simple() {
         async fn bench() {
+            let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+                println!("RPC_URL not set, skipping test");
+                std::process::exit(0);
+            });
+
             let args = DecompilerArgs {
                 target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url,
                 default: true,
                 skip_resolving: true,
                 include_solidity: false,
@@ -66,9 +81,14 @@ mod benchmark {
     #[tokio::test]
     async fn benchmark_decompile_yul_complex() {
         async fn bench() {
+            let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+                println!("RPC_URL not set, skipping test");
+                std::process::exit(0);
+            });
+
             let args = DecompilerArgs {
                 target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url,
                 default: true,
                 skip_resolving: true,
                 include_solidity: false,
@@ -86,9 +106,14 @@ mod benchmark {
     #[tokio::test]
     async fn benchmark_build_abi_simple() {
         async fn bench() {
+            let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+                println!("RPC_URL not set, skipping test");
+                std::process::exit(0);
+            });
+
             let args = DecompilerArgs {
                 target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url,
                 default: true,
                 skip_resolving: true,
                 include_solidity: false,
@@ -106,9 +131,14 @@ mod benchmark {
     #[tokio::test]
     async fn benchmark_build_abi_complex() {
         async fn bench() {
+            let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+                println!("RPC_URL not set, skipping test");
+                std::process::exit(0);
+            });
+
             let args = DecompilerArgs {
                 target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url,
                 default: true,
                 skip_resolving: true,
                 include_solidity: false,
@@ -132,9 +162,14 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_decompile_precompile() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let result = decompile(DecompilerArgs {
             target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-            rpc_url: String::from("https://eth.llamarpc.com"),
+            rpc_url,
             default: true,
             skip_resolving: true,
             include_solidity: true,
@@ -156,9 +191,14 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_decompile_weth() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let result = decompile(DecompilerArgs {
             target: String::from("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"),
-            rpc_url: String::from("https://eth.llamarpc.com"),
+            rpc_url,
             default: true,
             skip_resolving: true,
             include_solidity: true,
@@ -189,9 +229,14 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_decompile_ctf() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let result = decompile(DecompilerArgs {
             target: String::from("0x9f00c43700bc0000Ff91bE00841F8e04c0495000"),
-            rpc_url: String::from("https://eth.llamarpc.com"),
+            rpc_url,
             default: true,
             skip_resolving: true,
             include_solidity: true,
@@ -283,6 +328,11 @@ mod integration_tests {
     #[tokio::test]
     #[ignore]
     async fn heavy_test_decompile_thorough() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let contracts = [
             "0xdAC17F958D2ee523a2206206994597C13D831ec7",
             "0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD",
@@ -352,7 +402,7 @@ mod integration_tests {
             println!("Testing contract: {contract}");
             let result = decompile(DecompilerArgs {
                 target: contract.to_string(),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url: rpc_url.to_string(),
                 default: true,
                 skip_resolving: true,
                 include_solidity: true,

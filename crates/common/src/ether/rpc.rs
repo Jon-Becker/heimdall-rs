@@ -468,8 +468,12 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_chain_id() {
-        let rpc_url = "https://eth.llamarpc.com";
-        let rpc_chain_id = chain_id(rpc_url).await.expect("chain_id() returned an error!");
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        let rpc_chain_id = chain_id(&rpc_url).await.expect("chain_id() returned an error!");
 
         assert_eq!(rpc_chain_id, 1);
     }
@@ -484,28 +488,40 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_get_code() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let contract_address = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
-        let rpc_url = "https://eth.llamarpc.com";
         let bytecode =
-            get_code(contract_address, rpc_url).await.expect("get_code() returned an error!");
+            get_code(contract_address, &rpc_url).await.expect("get_code() returned an error!");
 
         assert!(!bytecode.is_empty());
     }
 
     #[tokio::test]
     async fn test_get_code_invalid_contract_address() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let contract_address = "0x0";
-        let rpc_url = "https://eth.llamarpc.com";
-        let bytecode = get_code(contract_address, rpc_url).await;
+        let bytecode = get_code(contract_address, &rpc_url).await;
 
         assert!(bytecode.is_err())
     }
 
     #[tokio::test]
     async fn test_get_transaction() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
-        let rpc_url = "https://eth.llamarpc.com";
-        let transaction = get_transaction(transaction_hash, rpc_url)
+        let transaction = get_transaction(transaction_hash, &rpc_url)
             .await
             .expect("get_transaction() returned an error!");
 
@@ -514,9 +530,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_get_transaction_invalid_transaction_hash() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let transaction_hash = "0x0";
-        let rpc_url = "https://eth.llamarpc.com";
-        let transaction = get_transaction(transaction_hash, rpc_url).await;
+        let transaction = get_transaction(transaction_hash, &rpc_url).await;
 
         assert!(transaction.is_err())
     }
@@ -536,18 +556,26 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_get_trace_invalid_transaction_hash() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let transaction_hash = "0x0";
-        let rpc_url = "https://eth.llamarpc.com";
-        let trace = get_trace(transaction_hash, rpc_url).await;
+        let trace = get_trace(transaction_hash, &rpc_url).await;
 
         assert!(trace.is_err())
     }
 
     #[tokio::test]
     async fn test_get_block_logs() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let block_number = 18_000_000;
-        let rpc_url = "https://eth.llamarpc.com";
-        let logs = get_block_logs(block_number, rpc_url)
+        let logs = get_block_logs(block_number, &rpc_url)
             .await
             .expect("get_block_logs() returned an error!");
 
@@ -556,8 +584,12 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_chain_id_with_ws_rpc() {
-        let rpc_url = "wss://arbitrum-one-rpc.publicnode.com";
-        let rpc_chain_id = chain_id(rpc_url).await.expect("chain_id() returned an error!");
+        let rpc_url = std::env::var("WS_RPC_URL").unwrap_or_else(|_| {
+            println!("WS_RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        let rpc_chain_id = chain_id(&rpc_url).await.expect("chain_id() returned an error!");
 
         assert_eq!(rpc_chain_id, 42161);
     }

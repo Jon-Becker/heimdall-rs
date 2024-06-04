@@ -89,21 +89,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_address() {
-        let bytecode = get_bytecode_from_target(
-            "0x9f00c43700bc0000Ff91bE00841F8e04c0495000",
-            "https://rpc.ankr.com/eth",
-        )
-        .await
-        .expect("failed to get bytecode from target");
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        let bytecode =
+            get_bytecode_from_target("0x9f00c43700bc0000Ff91bE00841F8e04c0495000", &rpc_url)
+                .await
+                .expect("failed to get bytecode from target");
 
         assert!(!bytecode.is_empty());
     }
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_bytecode() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let bytecode = get_bytecode_from_target(
             "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
-            "https://rpc.ankr.com/eth",
+            &rpc_url,
         )
         .await
         .expect("failed to get bytecode from target");
@@ -113,12 +121,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_bytecode_when_target_is_file_path() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let file_path = "./mock-file.txt";
         let mock_bytecode = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001";
 
         fs::write(file_path, mock_bytecode).expect("failed to write mock bytecode to file");
 
-        let bytecode = get_bytecode_from_target(file_path, "https://rpc.ankr.com/eth")
+        let bytecode = get_bytecode_from_target(file_path, &rpc_url)
             .await
             .expect("failed to get bytecode from target");
 

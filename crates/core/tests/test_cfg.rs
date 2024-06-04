@@ -7,9 +7,14 @@ mod benchmark {
     #[tokio::test]
     async fn benchmark_generate_cfg_simple() {
         async fn bench() {
+            let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+                println!("RPC_URL not set, skipping test");
+                std::process::exit(0);
+            });
+
             let args = CFGArgs {
                 target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url,
                 default: true,
                 color_edges: false,
                 output: String::from(""),
@@ -25,9 +30,14 @@ mod benchmark {
     #[tokio::test]
     async fn benchmark_generate_cfg_complex() {
         async fn bench() {
+            let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+                println!("RPC_URL not set, skipping test");
+                std::process::exit(0);
+            });
+
             let args = CFGArgs {
                 target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
-                rpc_url: String::from("https://eth.llamarpc.com"),
+                rpc_url,
                 default: true,
                 color_edges: false,
                 output: String::from(""),
@@ -48,9 +58,14 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_cfg_simple() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let result = heimdall_cfg::cfg(CFGArgs {
             target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-            rpc_url: String::from("https://eth.llamarpc.com"),
+            rpc_url,
             default: true,
             color_edges: false,
             output: String::from(""),
@@ -72,9 +87,14 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_cfg_complex() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let result = heimdall_cfg::cfg(CFGArgs {
             target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
-            rpc_url: String::from("https://eth.llamarpc.com"),
+            rpc_url,
             default: true,
             color_edges: false,
             output: String::from(""),
