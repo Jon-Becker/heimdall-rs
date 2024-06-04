@@ -33,9 +33,9 @@ pub async fn build_output_path(
             let chain_id = rpc::chain_id(rpc_url)
                 .await
                 .map_err(|_| Error::Generic("Unable to get chain id".to_string()))?;
-            return Ok(format!("{}/output/{}/{}/{}", cwd, chain_id, target, filename))
+            return Ok(format!("{}/output/{}/{}/{}", cwd, chain_id, target, filename));
         } else {
-            return Ok(format!("{}/output/local/{}", cwd, filename))
+            return Ok(format!("{}/output/local/{}", cwd, filename));
         }
     }
 
@@ -64,12 +64,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_default_address() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let output = "output";
         let target = "0x0000000000000000000000000000000000000001";
-        let rpc_url = "https://eth.llamarpc.com";
         let filename = "cfg.dot";
 
-        let path = build_output_path(output, target, rpc_url, filename).await;
+        let path = build_output_path(output, target, &rpc_url, filename).await;
         assert!(path
             .expect("failed to build output path")
             .ends_with("/output/1/0x0000000000000000000000000000000000000001/cfg.dot"));
@@ -77,24 +81,32 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_default_local() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let output = "output";
         let target =
             "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        let rpc_url = "https://eth.llamarpc.com";
         let filename = "cfg.dot";
 
-        let path = build_output_path(output, target, rpc_url, filename).await;
+        let path = build_output_path(output, target, &rpc_url, filename).await;
         assert!(path.expect("failed to build output path").ends_with("/output/local/cfg.dot"));
     }
 
     #[tokio::test]
     async fn test_output_specified() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let output = "/some_dir";
         let target = "0x0000000000000000000000000000000000000001";
-        let rpc_url = "https://eth.llamarpc.com";
         let filename = "cfg.dot";
 
-        let path = build_output_path(output, target, rpc_url, filename).await;
+        let path = build_output_path(output, target, &rpc_url, filename).await;
         assert_eq!(path.expect("failed to build output path"), "/some_dir/cfg.dot".to_string());
     }
 }

@@ -126,11 +126,16 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_disassemble_from_rpc() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let expected = String::from("1 PUSH1 80\n3 PUSH1 40\n4 MSTORE \n25 PUSH20 ffffffffffffffffffffffffffffffffffffffff\n27 PUSH1 00\n28 SLOAD \n29 AND \n30 CALLDATASIZE \n32 PUSH1 00\n33 DUP1 \n34 CALLDATACOPY \n36 PUSH1 00\n37 DUP1 \n38 CALLDATASIZE \n40 PUSH1 00\n41 DUP5 \n42 GAS \n43 DELEGATECALL \n44 RETURNDATASIZE \n46 PUSH1 00\n47 DUP1 \n48 RETURNDATACOPY \n50 PUSH1 00\n51 DUP2 \n52 EQ \n53 ISZERO \n55 PUSH1 3d\n56 JUMPI \n57 RETURNDATASIZE \n59 PUSH1 00\n60 REVERT \n61 JUMPDEST \n62 RETURNDATASIZE \n64 PUSH1 00\n65 RETURN \n66 INVALID \n67 LOG1 \n74 PUSH6 627a7a723058\n75 SHA3 \n76 unknown \n107 PUSH30 648b83cfac072cbccefc2ffc62a6999d4a050ee87a721942de1da9670db8\n108 STOP \n109 unknown \n");
 
         let assembly = disassemble(DisassemblerArgs {
             target: String::from("0xafc2f2d803479a2af3a72022d54cc0901a0ec0d6"),
-            rpc_url: String::from("https://eth.llamarpc.com"),
+            rpc_url,
             decimal_counter: true,
             name: String::from(""),
             output: String::from(""),

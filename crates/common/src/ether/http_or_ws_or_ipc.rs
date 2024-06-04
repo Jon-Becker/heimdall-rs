@@ -150,9 +150,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscription() {
+        let rpc_url = std::env::var("WS_RPC_URL").unwrap_or_else(|_| {
+            println!("WS_RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         // Connect to transport, using Arbitrum as it has the fastest block time of 0.25s
-        let transport =
-            HttpOrWsOrIpc::connect("wss://arbitrum-one-rpc.publicnode.com").await.unwrap();
+        let transport = HttpOrWsOrIpc::connect(&rpc_url).await.unwrap();
 
         // Wrap the transport in a provider
         let provider = Provider::new(transport);

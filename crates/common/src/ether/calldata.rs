@@ -28,9 +28,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_calldata_when_target_is_txhash() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let calldata = get_calldata_from_target(
             "0x317907eeece00619fd4418c18a4ec4ebe5c87cdbff808f4b01cc2c6384799837",
-            "https://rpc.ankr.com/eth",
+            &rpc_url,
         )
         .await
         .expect("failed to get calldata from target");
@@ -40,9 +45,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_calldata_when_target_is_calldata() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
         let calldata = get_calldata_from_target(
             "0xf14fcbc8bf9eac48d61719f80efb268ef1099a248fa332ed639041337954647ec6583f2e",
-            "https://rpc.ankr.com/eth",
+            &rpc_url,
         )
         .await
         .expect("failed to get calldata from target");
@@ -52,11 +62,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_calldata_when_target_is_neither() {
-        let calldata = get_calldata_from_target(
-            "asfnsdalkfasdlfnlasdkfnalkdsfndaskljfnasldkjfnasf",
-            "https://rpc.ankr.com/eth",
-        )
-        .await;
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        let calldata =
+            get_calldata_from_target("asfnsdalkfasdlfnlasdkfnalkdsfndaskljfnasldkjfnasf", &rpc_url)
+                .await;
 
         assert!(calldata.is_err());
     }
