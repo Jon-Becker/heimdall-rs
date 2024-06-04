@@ -7,5 +7,5 @@ keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
 
 [dependencies]
-heimdall-core = { git = "https://github.com/Jon-Becker/heimdall-rs.git", branch = "main" }
+heimdall-cfg = { git = "https://github.com/Jon-Becker/heimdall-rs.git", branch = "main" }
 tokio = { version = "1", features = ["full"] }

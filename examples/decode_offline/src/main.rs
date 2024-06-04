@@ -1,4 +1,4 @@
-use heimdall_core::decode::DecodeArgsBuilder;
+use heimdall_decoder::{decode, DecodeArgsBuilder};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::collections::HashMap;
@@ -48,31 +48,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // save current time
     let start = std::time::Instant::now();
 
-    let result = heimdall_core::decode::decode(
-        DecodeArgsBuilder::new()
-            .target("0x23b872dd0000000000000000000000000eb4b371bf89b641538243de10e0feceae60719800000000000000000000000071b5759d73262fbb223956913ecf4ecc5105764100000000000000000000000000000000000000000000ac826898ac76a279dc4b".to_string())
-            .skip_resolving(true)
-            .build()?,
-    )
-    .await?;
-    // for every found function, get the name
-    for function in result {
-        // get the selector
-        let selector = function.name;
-        // we need to remove "Unresolved_" from the selector and replace it with 0x
-        let selector = selector.replace("Unresolved_", "0x");
-        // get the name from the selector hashmap
-        let name = selectors_db.get(&selector);
-        // print the name
-        println!("name: {:?}", name);
-        // print decoded inputs if any
-        println!("inputs: {:?}", function.inputs);
-        // print decode_inputs if any
-        if function.decoded_inputs.is_some() {
-            println!("decoded_inputs: {:?}", function.decoded_inputs);
-        }
+    // build args
+    let args = DecodeArgsBuilder::new()
+        .target("0x23b872dd0000000000000000000000000eb4b371bf89b641538243de10e0feceae60719800000000000000000000000071b5759d73262fbb223956913ecf4ecc5105764100000000000000000000000000000000000000000000ac826898ac76a279dc4b".to_string())
+        .skip_resolving(true)
+        .build()?;
+
+    // decode the target
+    let result = decode(args).await?;
+    let function = result.decoded;
+
+    // get the selector
+    let selector = function.name;
+    // we need to remove "Unresolved_" from the selector and replace it with 0x
+    let selector = selector.replace("Unresolved_", "0x");
+    // get the name from the selector hashmap
+    let name = selectors_db.get(&selector);
+    // print the name
+    println!("name: {:?}", name);
+    // print decoded inputs if any
+    println!("inputs: {:?}", function.inputs);
+    // print decode_inputs if any
+    if function.decoded_inputs.is_some() {
+        println!("decoded_inputs: {:?}", function.decoded_inputs);
     }
-    
+
     // print time elapsed
     println!("Time elapsed: {:?}", start.elapsed());
 
