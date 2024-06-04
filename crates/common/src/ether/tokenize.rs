@@ -12,7 +12,7 @@ pub enum Token {
 }
 
 impl Display for Token {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt<'a>(&self, f: &mut Formatter<'a>) -> std::fmt::Result {
         match self {
             Token::Literal(literal) => write!(f, "{}", literal),
             Token::Variable(variable) => write!(f, "{}", variable),
@@ -133,17 +133,17 @@ pub fn tokenize(s: &str) -> Token {
                 let mut op = ch.to_string();
                 iter.next();
                 if let Some(&next_ch) = iter.peek() {
-                    if (ch == '=' && (next_ch == '=' || next_ch == '>')) ||
-                        (ch == '&' && next_ch == '&') ||
-                        (ch == '|' && next_ch == '|') ||
-                        (ch == '<' && next_ch == '=') ||
-                        (ch == '>' && next_ch == '=') ||
-                        (ch == '!' && next_ch == '=') ||
-                        (ch == '+' && next_ch == '+') ||
-                        (ch == '-' && next_ch == '-') ||
-                        (ch == '*' && next_ch == '*') ||
-                        (ch == '>' && next_ch == '>') ||
-                        (ch == '<' && next_ch == '<')
+                    if (ch == '=' && (next_ch == '=' || next_ch == '>'))
+                        || (ch == '&' && next_ch == '&')
+                        || (ch == '|' && next_ch == '|')
+                        || (ch == '<' && next_ch == '=')
+                        || (ch == '>' && next_ch == '=')
+                        || (ch == '!' && next_ch == '=')
+                        || (ch == '+' && next_ch == '+')
+                        || (ch == '-' && next_ch == '-')
+                        || (ch == '*' && next_ch == '*')
+                        || (ch == '>' && next_ch == '>')
+                        || (ch == '<' && next_ch == '<')
                     {
                         op.push(next_ch);
                         iter.next();
@@ -177,7 +177,7 @@ pub fn tokenize(s: &str) -> Token {
     Token::Expression(tokens)
 }
 
-fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
+fn parse_literal<'a>(iter: &mut std::iter::Peekable<std::str::Chars<'a>>) -> String {
     let mut literal = String::new();
 
     while let Some(&ch) = iter.peek() {
@@ -191,9 +191,9 @@ fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
     }
 
     // literal validation
-    if literal.starts_with("0x") &&
-        literal.len() > 2 &&
-        literal[2..].chars().all(|c| c.is_ascii_hexdigit())
+    if literal.starts_with("0x")
+        && literal.len() > 2
+        && literal[2..].chars().all(|c| c.is_ascii_hexdigit())
     {
         return literal;
     }
@@ -203,7 +203,7 @@ fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
     String::from("0")
 }
 
-fn parse_variable(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
+fn parse_variable<'a>(iter: &mut std::iter::Peekable<std::str::Chars<'a>>) -> String {
     let mut variable = String::new();
     while let Some(&ch) = iter.peek() {
         match ch {
@@ -217,7 +217,7 @@ fn parse_variable(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
     variable
 }
 
-fn consume_parentheses(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
+fn consume_parentheses<'a>(iter: &mut std::iter::Peekable<std::str::Chars<'a>>) -> String {
     let mut expression = String::new();
     let mut parentheses_count = 1;
 

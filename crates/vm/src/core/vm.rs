@@ -294,8 +294,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -312,8 +312,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -330,8 +330,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -351,8 +351,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -372,8 +372,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -394,8 +394,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -415,8 +415,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -438,8 +438,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -460,8 +460,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -478,8 +478,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&exponent.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&exponent.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -582,8 +582,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -600,8 +600,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -618,8 +618,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -668,8 +668,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -688,8 +688,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -712,8 +712,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode.code)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode.code)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -1075,12 +1075,13 @@ impl VM {
                 let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
                 // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                if (pc <=
-                    self.bytecode
+                if (pc
+                    <= self
+                        .bytecode
                         .len()
                         .try_into()
-                        .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                    (self.bytecode[pc as usize] != 0x5b)
+                        .expect("impossible case: bytecode is larger than u128::MAX"))
+                    && (self.bytecode[pc as usize] != 0x5b)
                 {
                     self.exit(790, Vec::new());
                     return Ok(Instruction {
@@ -1108,12 +1109,13 @@ impl VM {
                 if !condition.eq(&U256::from(0u8)) {
                     // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
                     // destination)
-                    if (pc <=
-                        self.bytecode
+                    if (pc
+                        <= self
+                            .bytecode
                             .len()
                             .try_into()
-                            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                        (self.bytecode[pc as usize] != 0x5b)
+                            .expect("impossible case: bytecode is larger than u128::MAX"))
+                        && (self.bytecode[pc as usize] != 0x5b)
                     {
                         self.exit(790, Vec::new());
                         return Ok(Instruction {
@@ -1248,9 +1250,9 @@ impl VM {
                 let data = self.memory.read(offset, size);
 
                 // consume dynamic gas
-                let gas_cost = (375 * (topic_count as u128)) +
-                    8 * (size as u128) +
-                    self.memory.expansion_cost(offset, size);
+                let gas_cost = (375 * (topic_count as u128))
+                    + 8 * (size as u128)
+                    + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
                 // no need for a panic check because the length of events should never be larger
@@ -1420,9 +1422,9 @@ impl VM {
         let mut vm_clone = self.clone();
 
         for _ in 0..n {
-            if vm_clone.bytecode.len() < vm_clone.instruction as usize ||
-                vm_clone.exitcode != 255 ||
-                !vm_clone.returndata.is_empty()
+            if vm_clone.bytecode.len() < vm_clone.instruction as usize
+                || vm_clone.exitcode != 255
+                || !vm_clone.returndata.is_empty()
             {
                 break;
             }

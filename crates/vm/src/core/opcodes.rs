@@ -236,7 +236,7 @@ impl WrappedInput {
 }
 
 impl Display for WrappedOpcode {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt<'a>(&self, f: &mut Formatter<'a>) -> Result {
         write!(
             f,
             "{}({})",
@@ -247,7 +247,7 @@ impl Display for WrappedOpcode {
 }
 
 impl Display for WrappedInput {
-    fn fmt(&self, f: &mut Formatter) -> Result {
+    fn fmt<'a>(&self, f: &mut Formatter<'a>) -> Result {
         match self {
             WrappedInput::Raw(u256) => write!(f, "{u256}"),
             WrappedInput::Opcode(opcode) => write!(f, "{opcode}"),
