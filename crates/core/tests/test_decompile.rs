@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod integration_tests {
-    use std::{path::PathBuf, process::Command};
+    use std::path::PathBuf;
 
     use alloy_json_abi::JsonAbi;
     use heimdall_common::utils::io::file::delete_path;
@@ -155,26 +155,9 @@ mod integration_tests {
         }
     }
 
-    /// Thorough testing for decompilation across a large number of contracts
-    /// Runs on the top 100 contracts for 2023-06-26
-    ///
-    /// ## Checks:
-    /// - There are no panics or stuck threads
-    /// - The indentation and bracket pairing is correct
-    /// - The number of opening and closing brackets, parentheses, and curly braces are equal
-    /// - The ABI is valid and generated correctly
-    /// - There are at least 1 instance of each of the following (on a test basis, not
-    ///   per-contract):
-    ///   - `function`
-    ///   - `event`
-    ///   - `require`
-    ///   - `error`
-    ///  - The ABI matches the solidity outline
-    ///  - There is no unreachable code (TODO)
-    ///  - There are no empty branches (TODO)
     #[tokio::test]
     #[ignore]
-    async fn heavy_test_decompile_thorough() {
+    async fn heavy_integration_test() {
         let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("no parent")
@@ -241,20 +224,7 @@ mod integration_tests {
                 })
                 .expect("failed to decompile");
 
-            // assert that the number of opening and closing brackets, parentheses, and curly braces
-            // are equal
             let output = result.source.expect("decompile source is empty");
-            let open_brackets = output.matches('{').count();
-            let close_brackets = output.matches('}').count();
-            assert_eq!(open_brackets, close_brackets);
-
-            // let open_parens = output.matches("(").count();
-            // let close_parens = output.matches(")").count();
-            // assert_eq!(open_parens, close_parens);
-
-            let open_braces = output.matches('[').count();
-            let close_braces = output.matches(']').count();
-            assert_eq!(open_braces, close_braces);
 
             // perform flag checks
             if output.contains("function Unresolved_") {

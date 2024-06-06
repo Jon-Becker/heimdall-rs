@@ -2,7 +2,7 @@ use ethers::prelude::U256;
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::ext::exec::VMTrace;
-use petgraph::{data::Build, matrix_graph::NodeIndex, Graph};
+use petgraph::{matrix_graph::NodeIndex, Graph};
 
 /// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
 /// control-flow graph found by the symbolic execution engine.

@@ -1,6 +1,7 @@
-#[cfg(test)]
-mod tests {
-    use heimdall_decoder::DecodeArgs;
+mod integration_tests {
+    use heimdall_common::utils::{sync::blocking_await, threading::task_pool};
+    use heimdall_decoder::{DecodeArgs, DecodeArgsBuilder};
+    use serde_json::Value;
 
     #[tokio::test]
     async fn test_decode_transfer() {
@@ -31,17 +32,10 @@ mod tests {
         };
         let _ = heimdall_decoder::decode(args).await;
     }
-}
 
-mod integration_tests {
-    use heimdall_common::utils::{sync::blocking_await, threading::task_pool};
-    use heimdall_decoder::DecodeArgsBuilder;
-    use serde_json::Value;
-
-    /// Thorough testing for decode across a large number of transactions.
     #[test]
     #[ignore]
-    fn heavy_test_decode_thorough() {
+    fn heavy_integration_test() {
         let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
             println!("RPC_URL not set, skipping test");
             std::process::exit(0);
