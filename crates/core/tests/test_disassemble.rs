@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod integration_tests {
-    use std::io::Write;
+    use std::{io::Write, path::PathBuf};
 
-    use heimdall_disassembler::{disassemble, DisassemblerArgs};
+    use heimdall_common::utils::io::file::delete_path;
+    use heimdall_disassembler::{disassemble, DisassemblerArgs, DisassemblerArgsBuilder};
+    use serde_json::Value;
 
     #[tokio::test]
     async fn test_disassemble_nominal() {
@@ -121,5 +123,69 @@ mod integration_tests {
         .expect("failed to disassemble");
 
         assert_eq!(expected, assembly);
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn heavy_integration_test() {
+        let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("no parent")
+            .parent()
+            .expect("no parent")
+            .to_owned();
+
+        // if the ./largest1k directory does not exist, download it from https://jbecker.dev/data/largest1k.tar.gz
+        let dataset_dir = root_dir.join("largest1k");
+        if !dataset_dir.exists() {
+            eprintln!("dataset not found in root, skipping test");
+            std::process::exit(0);
+        }
+
+        // list files in root_dir
+        let contracts = std::fs::read_dir(dataset_dir)
+            .expect("failed to read dataset directory")
+            .map(|res| {
+                // HashMap from filename (without extension) to bytecode (from serde_json::Value)
+                res.map(|e| {
+                    let path = e.path();
+                    let filename = path
+                        .file_stem()
+                        .expect("no file stem")
+                        .to_str()
+                        .expect("no file stem")
+                        .to_owned();
+
+                    // read contents as json and parse to serde_json::Value
+                    let contents_json: Value = serde_json::from_str(
+                        &std::fs::read_to_string(path).expect("failed to read file"),
+                    )
+                    .expect("failed to parse json");
+                    let bytecode = contents_json["code"].as_str().expect("no bytecode").to_owned();
+
+                    (filename, bytecode)
+                })
+            })
+            .collect::<Result<Vec<_>, std::io::Error>>()
+            .expect("failed to collect files");
+
+        for (contract_address, bytecode) in contracts {
+            println!("Disassembling contract: {contract_address}");
+            let args = DisassemblerArgsBuilder::new()
+                .target(bytecode)
+                .output(String::from("./output/tests/disassemble/integration"))
+                .build()
+                .expect("failed to build args");
+
+            let _ = disassemble(args)
+                .await
+                .map_err(|e| {
+                    eprintln!("failed to disassemble {contract_address}: {e}");
+                    e
+                })
+                .expect("failed to disassemble");
+        }
+
+        delete_path(&String::from("./output/tests/disassemble/integration"));
     }
 }

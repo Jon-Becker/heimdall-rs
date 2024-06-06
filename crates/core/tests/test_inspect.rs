@@ -51,7 +51,7 @@ mod integration_tests {
     /// Thorough testing for inspect across a large number of transactions.
     #[test]
     #[ignore]
-    fn heavy_test_inspect_thorough() {
+    fn heavy_integration_test() {
         let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
             println!("RPC_URL not set, skipping test");
             std::process::exit(0);
