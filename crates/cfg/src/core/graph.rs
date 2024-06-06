@@ -1,18 +1,8 @@
-use std::{collections::HashMap, sync::Mutex};
-
 use ethers::prelude::U256;
-use eyre::{eyre, OptionExt, Result};
+use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::ext::exec::VMTrace;
-use petgraph::{matrix_graph::NodeIndex, Graph};
-
-use lazy_static::lazy_static;
-
-lazy_static! {
-    static ref INSTRUCTION_NODE_MAP: Mutex<HashMap<u128, NodeIndex<u32>>> =
-        Mutex::new(HashMap::new());
-    static ref CONNECTING_EDGES: Mutex<Vec<String>> = Mutex::new(Vec::new());
-}
+use petgraph::{data::Build, matrix_graph::NodeIndex, Graph};
 
 /// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
 /// control-flow graph found by the symbolic execution engine.
@@ -56,53 +46,12 @@ pub fn build_cfg(
         cfg_node.push_str(&format!("{}\n", &assembly));
     }
 
-    // check if the map already contains the current node
-    let mut instruction_node_map =
-        INSTRUCTION_NODE_MAP.lock().map_err(|_| eyre!("failed to lock instruction node map"))?;
-    let chunk_index = match vm_trace.operations.first() {
-        Some(operation) => operation.last_instruction.instruction,
-        None => 0,
-    };
-
-    match instruction_node_map.get(&chunk_index) {
-        Some(node_index) => {
-            // this node already exists, so we need to add an edge to it.
-            if let Some(parent_node) = parent_node {
-                // check if the edge already exists
-                let mut connecting_edges = CONNECTING_EDGES
-                    .lock()
-                    .map_err(|_| eyre!("failed to lock connecting edges"))?;
-                let edge = format!("{} -> {}", parent_node.index(), node_index.index());
-                if !connecting_edges.contains(&edge) {
-                    contract_cfg.add_edge(parent_node, *node_index, jump_taken.to_string());
-                    connecting_edges.push(edge);
-                }
-                drop(connecting_edges)
-            }
-        }
-        None => {
-            // this node does not exist, so we need to add it to the map and the graph
-            let node_index = contract_cfg.add_node(cfg_node);
-
-            if let Some(parent_node) = parent_node {
-                // check if the edge already exists
-                let mut connecting_edges = CONNECTING_EDGES
-                    .lock()
-                    .map_err(|_| eyre!("failed to lock connecting edges"))?;
-                let edge = format!("{} -> {}", parent_node.index(), node_index.index());
-                if !connecting_edges.contains(&edge) {
-                    contract_cfg.add_edge(parent_node, node_index, jump_taken.to_string());
-                    connecting_edges.push(edge);
-                }
-                drop(connecting_edges)
-            }
-
-            instruction_node_map.insert(chunk_index, node_index);
-            parent_node = Some(node_index);
-        }
-    };
-
-    drop(instruction_node_map);
+    // add the node to the graph
+    let node_index = contract_cfg.add_node(cfg_node);
+    if let Some(parent_node) = parent_node {
+        contract_cfg.update_edge(parent_node, node_index, jump_taken.to_string());
+    }
+    parent_node = Some(node_index);
 
     // recurse into the children of the VMTrace map
     for child in vm_trace.children.iter() {
