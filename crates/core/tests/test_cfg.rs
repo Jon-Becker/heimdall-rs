@@ -118,10 +118,7 @@ mod integration_tests {
                 .build()
                 .expect("failed to build args");
 
-            match cfg(args).await.map_err(|e| {
-                eprintln!("failed to generate cfg for contract {contract_address}: {e}");
-                e
-            }) {
+            match cfg(args).await {
                 Ok(_) => {
                     success_count += 1;
                 }
@@ -136,7 +133,5 @@ mod integration_tests {
             success_count as f64 / (success_count + fail_count) as f64 > 0.99,
             "success rate is less than 99%"
         );
-
-        delete_path(&String::from("./output/tests/cfg/integration"));
     }
 }

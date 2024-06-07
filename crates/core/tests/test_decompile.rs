@@ -265,7 +265,5 @@ mod integration_tests {
             success_count as f64 / (success_count + fail_count) as f64 > 0.99,
             "success rate is less than 99%"
         );
-
-        delete_path(&String::from("./output/tests/decompile/integration"));
     }
 }

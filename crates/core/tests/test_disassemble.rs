@@ -185,7 +185,5 @@ mod integration_tests {
                 })
                 .expect("failed to disassemble");
         }
-
-        delete_path(&String::from("./output/tests/disassemble/integration"));
     }
 }
