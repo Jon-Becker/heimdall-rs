@@ -3,7 +3,6 @@ mod integration_tests {
     use std::path::PathBuf;
 
     use alloy_json_abi::JsonAbi;
-    use heimdall_common::utils::io::file::delete_path;
     use heimdall_decompiler::{decompile, DecompilerArgs, DecompilerArgsBuilder};
     use serde_json::Value;
 
@@ -215,7 +214,6 @@ mod integration_tests {
                 .skip_resolving(true)
                 .include_solidity(true)
                 .timeout(10000)
-                .output(String::from("./output/tests/decompile/integration"))
                 .build()
                 .expect("failed to build args");
 

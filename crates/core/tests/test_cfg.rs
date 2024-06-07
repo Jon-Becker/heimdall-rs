@@ -3,7 +3,6 @@ mod integration_tests {
     use std::path::PathBuf;
 
     use heimdall_cfg::{cfg, CFGArgs, CFGArgsBuilder};
-    use heimdall_common::utils::io::file::delete_path;
     use petgraph::dot::Dot;
     use serde_json::Value;
 
@@ -114,7 +113,6 @@ mod integration_tests {
             let args = CFGArgsBuilder::new()
                 .target(bytecode)
                 .timeout(10000)
-                .output(String::from("./output/tests/cfg/integration"))
                 .build()
                 .expect("failed to build args");
 
