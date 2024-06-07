@@ -99,13 +99,15 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> Result<String, Er
 
     // get the logical expression including the char before the parentheses (to detect casts)
     let logical_expression = match paren_start {
-        0 => match cleaned.get(paren_start..paren_end + 1) {
+        0 => match cleaned.get(paren_start..=paren_end) {
             Some(expression) => expression.to_string(),
-            None => cleaned[paren_start..paren_end].to_string(),
+            None => cleaned.chars().skip(paren_start).take(paren_end - paren_start + 1).collect(),
         },
-        _ => match cleaned.get(paren_start - 1..paren_end + 1) {
+        _ => match cleaned.get((paren_start - 1)..=paren_end) {
             Some(expression) => expression.to_string(),
-            None => cleaned[paren_start - 1..paren_end].to_string(),
+            None => {
+                cleaned.chars().skip(paren_start - 1).take(paren_end - paren_start + 2).collect()
+            }
         },
     };
 
