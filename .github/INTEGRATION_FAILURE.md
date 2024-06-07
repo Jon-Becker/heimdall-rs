@@ -3,7 +3,7 @@ title: "bug: long-running integration tests failed"
 labels: P-high, T-bug
 ---
 
-The heavy (long-running) integration tests have failed. This indicates a regression in Foundry.
+The heavy (long-running) integration tests have failed. This indicates a regression in Heimdall.
 
 Check the [heavy integration tests workflow page]({{ env.WORKFLOW_URL }}) for details.
 

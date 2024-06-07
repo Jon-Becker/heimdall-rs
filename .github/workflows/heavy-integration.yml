@@ -31,6 +31,9 @@ jobs:
           # extract the dataset
           tar -xvf largest1k.tar.gz
       - name: Run Tests
+        env:
+          RPC_URL: ${{ secrets.RPC_URL }}
+          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
         run: |
           cargo nextest r --no-fail-fast --release --nocapture -- --ignored
 
