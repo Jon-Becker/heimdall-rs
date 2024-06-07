@@ -13,6 +13,9 @@ use ethers::{
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::sign_uint;
 
+#[cfg(feature = "step-tracing")]
+use tracing::trace;
+
 use super::{
     constants::{COINBASE_ADDRESS, CREATE2_ADDRESS, CREATE_ADDRESS},
     log::Log,
@@ -268,6 +271,18 @@ impl VM {
             .map(|x| WrappedInput::Opcode(x.to_owned()))
             .collect::<Vec<WrappedInput>>();
         let mut operation = WrappedOpcode::new(opcode, wrapped_inputs);
+
+        // if step-tracing feature is enabled, print the current operation
+        #[cfg(feature = "step-tracing")]
+        trace!(
+            pc = self.instruction - 1,
+            opcode = opcode_details.name,
+            inputs = ?inputs
+                .iter()
+                .map(|x| format!("{:#x}", x))
+                .collect::<Vec<String>>(),
+            "executing opcode"
+        );
 
         // execute the operation
         match opcode {
@@ -911,11 +926,12 @@ impl VM {
                 let size = self.stack.pop().value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                // Note: clamping to 8 words here, since we dont actually use the return data
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(32 * 8);
+                let size: usize = size.try_into().unwrap_or(32 * 8);
 
                 let mut value = Vec::with_capacity(size);
-                value.resize(size, 0xff);
+                value.fill(0xff);
 
                 // consume dynamic gas
                 let minimum_word_size = ((size + 31) / 32) as u128;
@@ -949,7 +965,7 @@ impl VM {
                 let size: usize = size.try_into().unwrap_or(32 * 8);
 
                 let mut value = Vec::with_capacity(size);
-                value.resize(size, 0xff);
+                value.fill(0xff);
 
                 // consume dynamic gas
                 let minimum_word_size = ((size + 31) / 32) as u128;

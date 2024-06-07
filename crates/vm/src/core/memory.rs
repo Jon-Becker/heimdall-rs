@@ -52,12 +52,12 @@ impl Memory {
     /// ```
     pub fn extend(&mut self, offset: u128, size: u128) {
         // Calculate the new size of the memory
-        let new_mem_size = (offset + size + 31) / 32 * 32;
+        let new_mem_size = (offset.saturating_add(size).saturating_add(31)) / 32 * 32;
 
         // If the new memory size is greater than the current size, extend the memory
         if new_mem_size > self.size() {
             let byte_difference = (new_mem_size - self.size()) as usize;
-            self.memory.resize(self.memory.len() + byte_difference, 0u8);
+            self.memory.resize(self.memory.len().saturating_add(byte_difference), 0u8);
         }
     }
 
@@ -95,7 +95,7 @@ impl Memory {
         self.extend(offset as u128, size as u128);
 
         // Store the value in memory by replacing bytes in the memory
-        self.memory.splice(offset..offset + size, value);
+        self.memory.splice(offset..offset.saturating_add(size), value);
     }
 
     pub fn store_with_opcode(
@@ -126,7 +126,7 @@ impl Memory {
         let offset = offset.min(65536);
 
         // If the offset + size will be out of bounds, append null bytes until the size is met
-        if offset + size > self.size() as usize {
+        if offset.saturating_add(size) > self.size() as usize {
             let mut value = Vec::with_capacity(size);
 
             if offset <= self.size() as usize {
@@ -136,7 +136,7 @@ impl Memory {
             value.resize(size, 0u8);
             value
         } else {
-            self.memory[offset..offset + size].to_vec()
+            self.memory[offset..offset.saturating_add(size)].to_vec()
         }
     }
 
@@ -151,8 +151,8 @@ impl Memory {
     /// ```
     pub fn memory_cost(&self) -> u128 {
         // Calculate the new size of the memory
-        let memory_word_size = (self.size() + 31) / 32;
-        (memory_word_size.pow(2)) / 512 + (3 * memory_word_size)
+        let memory_word_size = (self.size().saturating_add(31)) / 32;
+        ((memory_word_size.pow(2)) / 512).saturating_add(3 * memory_word_size)
     }
 
     /// calculate the memory cost of extending the memory to a given size
@@ -167,8 +167,9 @@ impl Memory {
     /// ```
     pub fn expansion_cost(&self, offset: usize, size: usize) -> u128 {
         // Calculate the new size of the memory
-        let new_memory_word_size = ((offset + size + 31) / 32) as u128;
-        let new_memory_cost = (new_memory_word_size.pow(2)) / 512 + (3 * new_memory_word_size);
+        let new_memory_word_size = ((offset.saturating_add(size).saturating_add(31)) / 32) as u128;
+        let new_memory_cost =
+            ((new_memory_word_size.pow(2)) / 512).saturating_add(3 * new_memory_word_size);
         if new_memory_cost < self.memory_cost() {
             0
         } else {

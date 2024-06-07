@@ -34,3 +34,6 @@ thiserror = "1.0.50"
 tracing = "0.1.40"
 eyre = "0.6.12"
 heimdall-common.workspace = true
+
+[features]
+step-tracing = []
