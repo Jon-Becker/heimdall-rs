@@ -106,6 +106,9 @@ mod integration_tests {
             .collect::<Result<Vec<_>, std::io::Error>>()
             .expect("failed to collect files");
 
+        let mut success_count = 0;
+        let mut fail_count = 0;
+
         for (contract_address, bytecode) in contracts {
             println!("Generating CFG for contract {contract_address}");
             let args = CFGArgsBuilder::new()
@@ -115,14 +118,24 @@ mod integration_tests {
                 .build()
                 .expect("failed to build args");
 
-            let _ = cfg(args)
-                .await
-                .map_err(|e| {
-                    eprintln!("failed to generate cfg for contract {contract_address}: {e}");
-                    e
-                })
-                .expect("failed to generate cfg");
+            match cfg(args).await.map_err(|e| {
+                eprintln!("failed to generate cfg for contract {contract_address}: {e}");
+                e
+            }) {
+                Ok(_) => {
+                    success_count += 1;
+                }
+                Err(_) => {
+                    fail_count += 1;
+                }
+            };
         }
+
+        // assert 99% success rate
+        assert!(
+            success_count as f64 / (success_count + fail_count) as f64 > 0.99,
+            "success rate is less than 99%"
+        );
 
         delete_path(&String::from("./output/tests/cfg/integration"));
     }

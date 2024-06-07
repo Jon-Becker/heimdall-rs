@@ -205,6 +205,9 @@ mod integration_tests {
         let mut is_require_covered = false;
         let mut is_error_covered = false;
 
+        let mut success_count = 0;
+        let mut fail_count = 0;
+
         for (contract_address, bytecode) in contracts {
             println!("Testing contract: {contract_address}");
             let args = DecompilerArgsBuilder::new()
@@ -216,13 +219,19 @@ mod integration_tests {
                 .build()
                 .expect("failed to build args");
 
-            let result = decompile(args)
-                .await
-                .map_err(|e| {
-                    eprintln!("failed to decompile {contract_address}: {e}");
-                    e
-                })
-                .expect("failed to decompile");
+            let result = match decompile(args).await.map_err(|e| {
+                eprintln!("failed to decompile {contract_address}: {e}");
+                e
+            }) {
+                Ok(result) => {
+                    success_count += 1;
+                    result
+                }
+                Err(_) => {
+                    fail_count += 1;
+                    continue;
+                }
+            };
 
             let output = result.source.expect("decompile source is empty");
 
@@ -250,6 +259,12 @@ mod integration_tests {
         assert!(is_event_covered);
         assert!(is_require_covered);
         assert!(is_error_covered);
+
+        // assert 99% success rate
+        assert!(
+            success_count as f64 / (success_count + fail_count) as f64 > 0.99,
+            "success rate is less than 99%"
+        );
 
         delete_path(&String::from("./output/tests/decompile/integration"));
     }

@@ -1,8 +1,7 @@
-pub(crate) mod error;
 pub(crate) mod log_args;
 pub(crate) mod output;
 
-use error::Error;
+use eyre::{eyre, Result};
 use log_args::LogArgs;
 use output::{build_output_path, print_with_less};
 use tracing::info;
@@ -71,14 +70,18 @@ pub enum Subcommands {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     let args = Arguments::parse();
 
     // setup logging
     let _ = args.logs.init_tracing();
 
-    let configuration = Configuration::load()
-        .map_err(|e| Error::Generic(format!("failed to load configuration: {}", e)))?;
+    // spawn a new tokio runtime to get remote version while the main runtime is running
+    let remote_ver = tokio::task::spawn(remote_version()).await??;
+    let current_version = current_version();
+
+    let configuration =
+        Configuration::load().map_err(|e| eyre!("failed to load configuration: {}", e))?;
     match args.sub {
         Subcommands::Disassemble(mut cmd) => {
             // if the user has not specified a rpc url, use the default
@@ -96,22 +99,20 @@ async fn main() -> Result<(), Error> {
 
             let assembly = disassemble(cmd.clone())
                 .await
-                .map_err(|e| Error::Generic(format!("failed to disassemble bytecode: {}", e)))?;
+                .map_err(|e| eyre!("failed to disassemble bytecode: {}", e))?;
 
             if cmd.output == "print" {
                 print_with_less(&assembly)
                     .await
-                    .map_err(|e| Error::Generic(format!("failed to print assembly: {}", e)))?;
+                    .map_err(|e| eyre!("failed to print assembly: {}", e))?;
             } else {
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
                         .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?;
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?;
 
                 write_file(&output_path, &assembly)
-                    .map_err(|e| Error::Generic(format!("failed to write assembly: {}", e)))?;
+                    .map_err(|e| eyre!("failed to write assembly: {}", e))?;
             }
         }
 
@@ -135,36 +136,31 @@ async fn main() -> Result<(), Error> {
 
             let result = decompile(cmd.clone())
                 .await
-                .map_err(|e| Error::Generic(format!("failed to decompile bytecode: {}", e)))?;
+                .map_err(|e| eyre!("failed to decompile bytecode: {}", e))?;
 
             if cmd.output == "print" {
                 let mut output_str = String::new();
                 output_str.push_str(&format!(
                     "ABI:\n\n[{}]\n",
-                    serde_json::to_string_pretty(&result.abi).map_err(Error::SerdeError)?
+                    serde_json::to_string_pretty(&result.abi)?
                 ));
 
                 if let Some(source) = &result.source {
                     output_str.push_str(&format!("Source:\n\n{}\n", source));
                 }
 
-                print_with_less(&output_str).await.map_err(|e| {
-                    Error::Generic(format!("failed to print decompiled bytecode: {}", e))
-                })?;
+                print_with_less(&output_str)
+                    .await
+                    .map_err(|e| eyre!("failed to print decompiled bytecode: {}", e))?;
             } else {
                 // write the contract ABI
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &abi_filename)
                         .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?;
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?;
 
-                write_file(
-                    &output_path,
-                    &serde_json::to_string_pretty(&result.abi).map_err(Error::SerdeError)?,
-                )
-                .map_err(|e| Error::Generic(format!("failed to write ABI: {}", e)))?;
+                write_file(&output_path, &serde_json::to_string_pretty(&result.abi)?)
+                    .map_err(|e| eyre!("failed to write ABI: {}", e))?;
 
                 // write the contract source
                 if let Some(source) = &result.source {
@@ -176,9 +172,7 @@ async fn main() -> Result<(), Error> {
                             &format!("{}.sol", &decompiled_output_filename),
                         )
                         .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?
                     } else {
                         build_output_path(
                             &cmd.output,
@@ -187,12 +181,10 @@ async fn main() -> Result<(), Error> {
                             &format!("{}.yul", &decompiled_output_filename,),
                         )
                         .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?
                     };
                     write_file(&output_path, source)
-                        .map_err(|e| Error::Generic(format!("failed to write source: {}", e)))?;
+                        .map_err(|e| eyre!("failed to write source: {}", e))?;
                 }
             }
         }
@@ -208,9 +200,8 @@ async fn main() -> Result<(), Error> {
                 cmd.openai_api_key = configuration.openai_api_key;
             }
 
-            let result = decode(cmd)
-                .await
-                .map_err(|e| Error::Generic(format!("failed to decode calldata: {}", e)))?;
+            let result =
+                decode(cmd).await.map_err(|e| eyre!("failed to decode calldata: {}", e))?;
 
             result.display()
         }
@@ -228,24 +219,20 @@ async fn main() -> Result<(), Error> {
             if !given_name.is_empty() {
                 filename = format!("{}-{}", given_name, filename);
             }
-            let cfg = cfg(cmd.clone())
-                .await
-                .map_err(|e| Error::Generic(format!("failed to generate cfg: {}", e)))?;
+            let cfg = cfg(cmd.clone()).await.map_err(|e| eyre!("failed to generate cfg: {}", e))?;
             let stringified_dot = cfg.as_dot(cmd.color_edges);
 
             if cmd.output == "print" {
                 print_with_less(&stringified_dot)
                     .await
-                    .map_err(|e| Error::Generic(format!("failed to print cfg: {}", e)))?;
+                    .map_err(|e| eyre!("failed to print cfg: {}", e))?;
             } else {
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
                         .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?;
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?;
                 write_file(&output_path, &stringified_dot)
-                    .map_err(|e| Error::Generic(format!("failed to write cfg: {}", e)))?;
+                    .map_err(|e| eyre!("failed to write cfg: {}", e))?;
             }
         }
 
@@ -263,9 +250,8 @@ async fn main() -> Result<(), Error> {
                 filename = format!("{}-{}", given_name, filename);
             }
 
-            let result = dump(cmd.clone())
-                .await
-                .map_err(|e| Error::Generic(format!("failed to dump storage: {}", e)))?;
+            let result =
+                dump(cmd.clone()).await.map_err(|e| eyre!("failed to dump storage: {}", e))?;
             let mut lines = Vec::new();
 
             // add header
@@ -279,17 +265,15 @@ async fn main() -> Result<(), Error> {
             if cmd.output == "print" {
                 print_with_less(&lines.join("\n"))
                     .await
-                    .map_err(|e| Error::Generic(format!("failed to print dump: {}", e)))?;
+                    .map_err(|e| eyre!("failed to print dump: {}", e))?;
             } else {
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
                         .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?;
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?;
 
                 write_lines_to_file(&output_path, lines)
-                    .map_err(|e| Error::Generic(format!("failed to write dump: {}", e)))?;
+                    .map_err(|e| eyre!("failed to write dump: {}", e))?;
             }
         }
 
@@ -314,7 +298,7 @@ async fn main() -> Result<(), Error> {
 
             let inspect_result = inspect(cmd.clone())
                 .await
-                .map_err(|e| Error::Generic(format!("failed to inspect transaction: {}", e)))?;
+                .map_err(|e| eyre!("failed to inspect transaction: {}", e))?;
             inspect_result.display();
 
             if cmd.output == "print" {
@@ -327,42 +311,35 @@ async fn main() -> Result<(), Error> {
 
                 print_with_less(&output_str)
                     .await
-                    .map_err(|e| Error::Generic(format!("failed to print decoded trace: {}", e)))?;
+                    .map_err(|e| eyre!("failed to print decoded trace: {}", e))?;
             } else {
                 // write decoded trace with serde
                 let output_path =
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, &filename)
                         .await
-                        .map_err(|e| {
-                            Error::Generic(format!("failed to build output path: {}", e))
-                        })?;
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?;
 
                 write_file(
                     &output_path,
                     &serde_json::to_string_pretty(&inspect_result.decoded_trace)?,
                 )
-                .map_err(|e| Error::Generic(format!("failed to write decoded trace: {}", e)))?;
+                .map_err(|e| eyre!("failed to write decoded trace: {}", e))?;
             }
         }
 
         Subcommands::Config(cmd) => {
-            config(cmd).map_err(|e| Error::Generic(format!("failed to configure: {}", e)))?;
+            config(cmd).map_err(|e| eyre!("failed to configure: {}", e))?;
         }
 
         Subcommands::Cache(cmd) => {
-            cache(cmd).map_err(|e| Error::Generic(format!("failed to manage cache: {}", e)))?;
+            cache(cmd).map_err(|e| eyre!("failed to manage cache: {}", e))?;
         }
     }
 
     // check if the version is up to date
-    let remote_version = remote_version()
-        .await
-        .map_err(|e| Error::Generic(format!("failed to get remote version: {}", e)))?;
-    let current_version = current_version();
-
-    if remote_version.gt(&current_version) {
+    if remote_ver.gt(&current_version) {
         info!("great news! An update is available!");
-        info!("you can update now by running: `bifrost --version {}`", remote_version);
+        info!("you can update now by running: `bifrost --version {}`", remote_ver);
     }
 
     Ok(())

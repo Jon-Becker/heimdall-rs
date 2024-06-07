@@ -84,10 +84,10 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
         move || evm_clone.symbolic_exec(),
         Duration::from_millis(args.timeout),
     ) {
-        Ok(map) => {
-            map.map_err(|e| Error::Eyre(eyre!("symbolic execution (fallback) failed: {}", e)))?
+        Ok(map) => map.map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?,
+        Err(e) => {
+            return Err(Error::Eyre(eyre!("symbolic execution failed: {}", e)));
         }
-        Err(e) => return Err(Error::Eyre(eyre!("symbolic execution failed: {e}",))),
     };
 
     debug!("'{}' has {} unique branches", args.target.truncate(64), jumpdest_count);

@@ -118,9 +118,11 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             Duration::from_millis(args.timeout),
         ) {
             Ok(map) => {
-                map.map_err(|e| Error::Eyre(eyre!("symbolic execution (fallback) failed: {}", e)))?
+                map.map_err(|e| Error::Eyre(eyre!("fallback symbolic execution failed: {}", e)))?
             }
-            Err(e) => return Err(Error::Eyre(eyre!("symbolic execution failed: {e}",))),
+            Err(e) => {
+                return Err(Error::Eyre(eyre!("fallback symbolic execution failed: {}", e)));
+            }
         };
         symbolic_execution_maps.insert("fallback".to_string(), map);
         debug!("symbolic execution (fallback) took {:?}", start_sym_exec_time.elapsed());
@@ -136,8 +138,13 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             move || evm_clone.symbolic_exec_selector(&selector_clone, entry_point),
             Duration::from_millis(args.timeout),
         ) {
-            Ok(map) => map.map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?,
-            Err(e) => return Err(Error::Eyre(eyre!("symbolic execution failed: {e}",))),
+            Ok(map) => map.map_err(|e| {
+                Error::Eyre(eyre!("failed to symbolically execute '{}': {}", selector, e))
+            })?,
+            Err(e) => {
+                warn!("failed to symbolically execute '{}': {}", selector, e);
+                continue;
+            }
         };
         symbolic_execution_maps.insert(selector.clone(), map);
         debug!("symbolically executed '{}' in {:?}", selector, start_sym_exec_time.elapsed());
