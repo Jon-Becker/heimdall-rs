@@ -16,7 +16,7 @@ env:
 jobs:
   heavy-integration:
     name: heavy (long-running) integration tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-16core
     timeout-minutes: 120
 
     steps:
