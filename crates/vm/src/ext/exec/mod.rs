@@ -58,14 +58,12 @@ impl VM {
     }
 
     // build a map of function jump possibilities from the EVM bytecode
-    pub fn symbolic_exec(&self) -> Result<(VMTrace, u32)> {
-        let mut vm = self.clone();
-
+    pub fn symbolic_exec(&mut self) -> Result<(VMTrace, u32)> {
         trace!("beginning contract-wide symbolic execution");
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        Ok((vm.recursive_map(&mut branch_count, &mut HashMap::new())?, branch_count))
+        Ok((self.recursive_map(&mut branch_count, &mut HashMap::new())?, branch_count))
     }
 
     fn recursive_map(
@@ -73,14 +71,14 @@ impl VM {
         branch_count: &mut u32,
         handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
     ) -> Result<VMTrace> {
-        let mut vm = self.clone();
+        let vm = self;
 
         // create a new VMTrace object
         // this will essentially be a tree of executions, with each branch being a different path
         // that symbolic execution discovered
         let mut vm_trace = VMTrace {
             instruction: vm.instruction,
-            gas_used: 21000,
+            gas_used: 0,
             operations: Vec::new(),
             children: Vec::new(),
         };
@@ -89,28 +87,29 @@ impl VM {
         while vm.bytecode.len() >= vm.instruction as usize {
             // execute the next instruction. if the instruction panics, invalidate this path
             let state = vm.step()?;
+            let last_instruction = state.last_instruction.clone();
 
             // update vm_trace
-            vm_trace.operations.push(state.clone());
+            vm_trace.operations.push(state);
             vm_trace.gas_used = vm.gas_used;
 
             // if we encounter a JUMP(I), create children taking both paths and break
-            if state.last_instruction.opcode == 0x57 || state.last_instruction.opcode == 0x56 {
+            if last_instruction.opcode == 0x57 || last_instruction.opcode == 0x56 {
                 trace!(
                     "found branch due to JUMP{} instruction at {}",
-                    if state.last_instruction.opcode == 0x57 { "I" } else { "" },
-                    state.last_instruction.instruction
+                    if last_instruction.opcode == 0x57 { "I" } else { "" },
+                    last_instruction.instruction
                 );
 
                 let jump_condition: Option<String> =
-                    state.last_instruction.input_operations.get(1).map(|op| op.solidify());
+                    last_instruction.input_operations.get(1).map(|op| op.solidify());
                 let jump_taken =
-                    state.last_instruction.inputs.get(1).map(|op| !op.is_zero()).unwrap_or(true);
+                    last_instruction.inputs.get(1).map(|op| !op.is_zero()).unwrap_or(true);
 
                 // build hashable jump frame
                 let jump_frame = JumpFrame::new(
-                    state.last_instruction.instruction,
-                    state.last_instruction.inputs[0],
+                    last_instruction.instruction,
+                    last_instruction.inputs[0],
                     vm.stack.size(),
                     jump_taken,
                 );
@@ -237,7 +236,7 @@ impl VM {
                     }
                 }
 
-                if state.last_instruction.opcode == 0x56 {
+                if last_instruction.opcode == 0x56 {
                     continue;
                 }
 
@@ -245,15 +244,15 @@ impl VM {
                 *branch_count += 1;
                 trace!(
                     "creating branching paths at instructions {} (JUMPDEST) and {} (CONTINUE)",
-                    state.last_instruction.inputs[0],
-                    state.last_instruction.instruction + 1
+                    last_instruction.inputs[0],
+                    last_instruction.instruction + 1
                 );
 
                 // we need to create a trace for the path that wasn't taken.
                 if !jump_taken {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
+                    trace_vm.instruction = last_instruction.inputs[0].as_u128() + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps) {
                         Ok(child_trace) => vm_trace.children.push(child_trace),
                         Err(e) => {
@@ -274,7 +273,7 @@ impl VM {
                 } else {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction = state.last_instruction.instruction + 1;
+                    trace_vm.instruction = last_instruction.instruction + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps) {
                         Ok(child_trace) => vm_trace.children.push(child_trace),
                         Err(e) => {

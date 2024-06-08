@@ -19,6 +19,9 @@ members = [
 # https://doc.rust-lang.org/edition-guide/rust-2021/default-cargo-resolver.html
 resolver = "2"
 
+[profile.release]
+debug = true
+
 [workspace.package]
 version = "0.8.2"
 edition = "2021"

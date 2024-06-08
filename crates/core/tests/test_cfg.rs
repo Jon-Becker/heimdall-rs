@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod integration_tests {
+    use memory_stats::memory_stats;
     use std::path::PathBuf;
 
     use heimdall_cfg::{cfg, CFGArgs, CFGArgsBuilder};
@@ -124,6 +125,13 @@ mod integration_tests {
                     fail_count += 1;
                 }
             };
+
+            if let Some(usage) = memory_stats() {
+                println!("Current physical memory usage: {}", usage.physical_mem);
+                println!("Current virtual memory usage: {}", usage.virtual_mem);
+            } else {
+                println!("Couldn't get the current memory usage :(");
+            }
         }
 
         // assert 99% success rate

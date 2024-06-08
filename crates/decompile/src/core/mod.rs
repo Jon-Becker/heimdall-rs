@@ -112,7 +112,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     if selectors.is_empty() {
         warn!("discovered no function selectors in the bytecode.");
         let start_sym_exec_time = Instant::now();
-        let evm_clone = evm.clone();
+        let mut evm_clone = evm.clone();
         let (map, jumpdest_count) = match run_with_timeout(
             move || evm_clone.symbolic_exec(),
             Duration::from_millis(args.timeout),

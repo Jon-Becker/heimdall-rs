@@ -88,19 +88,6 @@ pub struct Instruction {
     pub output_operations: Vec<WrappedOpcode>,
 }
 
-impl Instruction {
-    /// Gets the [`WrappedOpcode`] representation of the current instruction.
-    pub fn wrapped(&self) -> WrappedOpcode {
-        WrappedOpcode::new(
-            self.opcode,
-            self.input_operations
-                .iter()
-                .map(|op| WrappedInput::Opcode(op.clone()))
-                .collect::<Vec<WrappedInput>>(),
-        )
-    }
-}
-
 impl VM {
     /// Creates a new [`VM`] instance with the given bytecode, calldata, address, origin, caller,
     /// value, and gas limit.

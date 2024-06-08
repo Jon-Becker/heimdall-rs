@@ -79,7 +79,7 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));
     let start_sym_exec_time = Instant::now();
-    let evm_clone = evm.clone();
+    let mut evm_clone = evm.clone();
     let (map, jumpdest_count) = match run_with_timeout(
         move || evm_clone.symbolic_exec(),
         Duration::from_millis(args.timeout),
