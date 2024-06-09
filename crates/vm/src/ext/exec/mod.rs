@@ -17,12 +17,9 @@ use crate::{
         },
     },
 };
-use eyre::Result;
+use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::decode_hex;
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, time::Instant};
 use tracing::{trace, warn};
 
 #[derive(Clone, Debug, Default)]
@@ -59,7 +56,8 @@ impl VM {
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
         Ok((
-            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)?.expect("s"),
+            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)
+                .map(|x| x.ok_or_eyre("symbolic execution failed"))??,
             branch_count,
         ))
     }
@@ -71,7 +69,8 @@ impl VM {
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
         Ok((
-            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)?.expect("s"),
+            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)
+                .map(|x| x.ok_or_eyre("symbolic execution failed"))??,
             branch_count,
         ))
     }
@@ -269,7 +268,7 @@ impl VM {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = last_instruction.inputs[0].as_u128() + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, &timeout_at) {
+                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -279,7 +278,7 @@ impl VM {
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, &timeout_at) {
+                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -292,7 +291,7 @@ impl VM {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = last_instruction.instruction + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, &timeout_at) {
+                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -302,7 +301,7 @@ impl VM {
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, &timeout_at) {
+                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {

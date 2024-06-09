@@ -1,19 +1,6 @@
 use crossbeam_channel::unbounded;
-use eyre::{eyre, Result};
-use std::{
-    future::Future,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread,
-    time::Duration,
-};
-use tokio::{
-    sync::{oneshot, Mutex},
-    task,
-    time::timeout,
-};
+
+use std::{sync::Arc, thread};
 
 /// A simple thread pool implementation that takes a vector of items, splits them into chunks, and
 /// processes each chunk in a separate thread. The results are collected and returned.
