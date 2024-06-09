@@ -2,7 +2,6 @@
 mod integration_tests {
     use std::{io::Write, path::PathBuf};
 
-    use heimdall_common::utils::io::file::delete_path;
     use heimdall_disassembler::{disassemble, DisassemblerArgs, DisassemblerArgsBuilder};
     use serde_json::Value;
 
@@ -185,7 +184,5 @@ mod integration_tests {
                 })
                 .expect("failed to disassemble");
         }
-
-        delete_path(&String::from("./output/tests/disassemble/integration"));
     }
 }

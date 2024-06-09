@@ -12,10 +12,7 @@ use heimdall_common::{
         compiler::detect_compiler,
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
     },
-    utils::{
-        strings::{encode_hex, encode_hex_reduced, StringExt},
-        threading::run_with_timeout,
-    },
+    utils::strings::{encode_hex, encode_hex_reduced, StringExt},
 };
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
 use heimdall_vm::{
@@ -112,18 +109,15 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     if selectors.is_empty() {
         warn!("discovered no function selectors in the bytecode.");
         let start_sym_exec_time = Instant::now();
-        let evm_clone = evm.clone();
-        let (map, jumpdest_count) = match run_with_timeout(
-            move || evm_clone.symbolic_exec(),
-            Duration::from_millis(args.timeout),
-        ) {
-            Ok(map) => {
-                map.map_err(|e| Error::Eyre(eyre!("fallback symbolic execution failed: {}", e)))?
-            }
-            Err(e) => {
-                return Err(Error::Eyre(eyre!("fallback symbolic execution failed: {}", e)));
-            }
-        };
+        let mut evm_clone = evm.clone();
+        let (map, jumpdest_count) = evm_clone
+            .symbolic_exec(
+                Instant::now()
+                    .checked_add(Duration::from_millis(args.timeout))
+                    .expect("invalid timeout"),
+            )
+            .map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?;
+
         symbolic_execution_maps.insert("fallback".to_string(), map);
         debug!("symbolic execution (fallback) took {:?}", start_sym_exec_time.elapsed());
         debug!("'fallback' has {} unique branches", jumpdest_count);
@@ -134,13 +128,14 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         let start_sym_exec_time = Instant::now();
         let mut evm_clone = evm.clone();
         let selector_clone = selector.clone();
-        let (map, jumpdest_count) = match run_with_timeout(
-            move || evm_clone.symbolic_exec_selector(&selector_clone, entry_point),
-            Duration::from_millis(args.timeout),
+        let (map, jumpdest_count) = match evm_clone.symbolic_exec_selector(
+            &selector_clone,
+            entry_point,
+            Instant::now()
+                .checked_add(Duration::from_millis(args.timeout))
+                .expect("invalid timeout"),
         ) {
-            Ok(map) => map.map_err(|e| {
-                Error::Eyre(eyre!("failed to symbolically execute '{}': {}", selector, e))
-            })?,
+            Ok(map) => map,
             Err(e) => {
                 warn!("failed to symbolically execute '{}': {}", selector, e);
                 continue;

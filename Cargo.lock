@@ -2041,6 +2041,7 @@ dependencies = [
  "heimdall-inspect",
  "indicatif",
  "lazy_static",
+ "memory-stats",
  "petgraph",
  "serde",
  "serde_json",
@@ -2648,6 +2649,16 @@ name = "memchr"
 version = "2.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
+
+[[package]]
+name = "memory-stats"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34f79cf9964c5c9545493acda1263f1912f8d2c56c8a2ffee2606cb960acaacc"
+dependencies = [
+ "libc",
+ "winapi",
+]
 
 [[package]]
 name = "mesc"

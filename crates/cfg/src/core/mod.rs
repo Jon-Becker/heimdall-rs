@@ -4,7 +4,7 @@ use ethers::types::H160;
 use eyre::eyre;
 use heimdall_common::{
     ether::{bytecode::get_bytecode_from_target, compiler::detect_compiler},
-    utils::{strings::StringExt, threading::run_with_timeout},
+    utils::strings::StringExt,
 };
 use heimdall_vm::core::vm::VM;
 
@@ -79,16 +79,14 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));
     let start_sym_exec_time = Instant::now();
-    let evm_clone = evm.clone();
-    let (map, jumpdest_count) = match run_with_timeout(
-        move || evm_clone.symbolic_exec(),
-        Duration::from_millis(args.timeout),
-    ) {
-        Ok(map) => map.map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?,
-        Err(e) => {
-            return Err(Error::Eyre(eyre!("symbolic execution failed: {}", e)));
-        }
-    };
+    let mut evm_clone = evm.clone();
+    let (map, jumpdest_count) = evm_clone
+        .symbolic_exec(
+            Instant::now()
+                .checked_add(Duration::from_millis(args.timeout))
+                .expect("invalid timeout"),
+        )
+        .map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?;
 
     debug!("'{}' has {} unique branches", args.target.truncate(64), jumpdest_count);
     debug!("symbolic execution took {:?}", start_sym_exec_time.elapsed());

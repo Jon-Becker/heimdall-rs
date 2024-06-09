@@ -5,6 +5,7 @@ use std::{
 };
 
 use ethers::prelude::U256;
+use eyre::{OptionExt, Result};
 
 use super::opcodes::WrappedOpcode;
 
@@ -41,7 +42,7 @@ impl Stack {
     /// assert_eq!(stack.size(), 0);
     /// ```
     pub fn new() -> Stack {
-        Stack { stack: VecDeque::new() }
+        Stack { stack: VecDeque::with_capacity(1024) }
     }
 
     /// Push a value onto the stack.
@@ -70,13 +71,10 @@ impl Stack {
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
 
     /// let frame = stack.pop();
-    /// assert_eq!(frame.value, U256::from(0x00));
+    /// assert_eq!(frame.unwrap().value, U256::from(0x00));
     /// ```
-    pub fn pop(&mut self) -> StackFrame {
-        match self.stack.pop_front() {
-            Some(value) => value,
-            None => StackFrame { value: U256::from(0u8), operation: WrappedOpcode::default() },
-        }
+    pub fn pop(&mut self) -> Result<StackFrame> {
+        self.stack.pop_front().ok_or_eyre("stack underflow")
     }
 
     /// Pop n values off the stack.
@@ -98,16 +96,12 @@ impl Stack {
     /// assert_eq!(frames[1].value, U256::from(0x01));
     ///
     /// // stack is now [0x00]
-    /// assert_eq!(stack.pop().value, U256::from(0x00));
+    /// assert_eq!(stack.pop().unwrap().value, U256::from(0x00));
     ///
     /// // stack is now []
     /// ```
     pub fn pop_n(&mut self, n: usize) -> Vec<StackFrame> {
-        let mut values = Vec::new();
-        for _ in 0..n {
-            values.push(self.pop());
-        }
-        values
+        self.stack.drain(0..n).collect::<Vec<StackFrame>>()
     }
 
     /// Swap the top value and the nth value on the stack.
@@ -124,8 +118,8 @@ impl Stack {
     /// stack.swap(1);
     ///
     /// // stack is now [0x00, 0x01]
-    /// assert_eq!(stack.pop().value, U256::from(0x00));
-    /// assert_eq!(stack.pop().value, U256::from(0x01));
+    /// assert_eq!(stack.pop().unwrap().value, U256::from(0x00));
+    /// assert_eq!(stack.pop().unwrap().value, U256::from(0x01));
     /// ```
     pub fn swap(&mut self, n: usize) -> bool {
         if self.stack.get_mut(n).is_some() {
@@ -149,8 +143,8 @@ impl Stack {
     /// stack.dup(1);
     ///
     /// // stack is now [0x00, 0x00]
-    /// assert_eq!(stack.pop().value, U256::from(0x00));
-    /// assert_eq!(stack.pop().value, U256::from(0x00));
+    /// assert_eq!(stack.pop().unwrap().value, U256::from(0x00));
+    /// assert_eq!(stack.pop().unwrap().value, U256::from(0x00));
     ///
     /// // stack is now []
     /// ```
@@ -200,9 +194,9 @@ impl Stack {
     /// assert_eq!(frames[1].value, U256::from(0x01));
     ///
     /// // stack is still [0x02, 0x01, 0x00]
-    /// assert_eq!(stack.pop().value, U256::from(0x02));
-    /// assert_eq!(stack.pop().value, U256::from(0x01));
-    /// assert_eq!(stack.pop().value, U256::from(0x00));
+    /// assert_eq!(stack.pop().unwrap().value, U256::from(0x02));
+    /// assert_eq!(stack.pop().unwrap().value, U256::from(0x01));
+    /// assert_eq!(stack.pop().unwrap().value, U256::from(0x00));
     ///
     /// // stack is now []
     /// ```
@@ -291,8 +285,8 @@ mod tests {
         let mut stack = Stack::new();
         stack.push(U256::from(1), WrappedOpcode::default());
         stack.push(U256::from(2), WrappedOpcode::default());
-        assert_eq!(stack.pop().value, U256::from(2));
-        assert_eq!(stack.pop().value, U256::from(1));
+        assert_eq!(stack.pop().unwrap().value, U256::from(2));
+        assert_eq!(stack.pop().unwrap().value, U256::from(1));
         assert!(stack.is_empty());
     }
 
@@ -306,7 +300,7 @@ mod tests {
         assert_eq!(values.len(), 2);
         assert_eq!(values[0].value, U256::from(3));
         assert_eq!(values[1].value, U256::from(2));
-        assert_eq!(stack.pop().value, U256::from(1));
+        assert_eq!(stack.pop().unwrap().value, U256::from(1));
         assert!(stack.is_empty());
     }
 
@@ -317,9 +311,9 @@ mod tests {
         stack.push(U256::from(2), WrappedOpcode::default());
         stack.push(U256::from(3), WrappedOpcode::default());
         assert!(stack.swap(1));
-        assert_eq!(stack.pop().value, U256::from(2));
-        assert_eq!(stack.pop().value, U256::from(3));
-        assert_eq!(stack.pop().value, U256::from(1));
+        assert_eq!(stack.pop().unwrap().value, U256::from(2));
+        assert_eq!(stack.pop().unwrap().value, U256::from(3));
+        assert_eq!(stack.pop().unwrap().value, U256::from(1));
         assert!(stack.is_empty());
         assert!(!stack.swap(1));
     }
@@ -331,10 +325,10 @@ mod tests {
         stack.push(U256::from(2), WrappedOpcode::default());
         stack.push(U256::from(3), WrappedOpcode::default());
         assert!(stack.dup(1));
-        assert_eq!(stack.pop().value, U256::from(3));
-        assert_eq!(stack.pop().value, U256::from(3));
-        assert_eq!(stack.pop().value, U256::from(2));
-        assert_eq!(stack.pop().value, U256::from(1));
+        assert_eq!(stack.pop().unwrap().value, U256::from(3));
+        assert_eq!(stack.pop().unwrap().value, U256::from(3));
+        assert_eq!(stack.pop().unwrap().value, U256::from(2));
+        assert_eq!(stack.pop().unwrap().value, U256::from(1));
         assert!(stack.is_empty());
     }
 

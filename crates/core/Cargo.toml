@@ -44,6 +44,7 @@ heimdall-disassembler = { workspace = true }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
+memory-stats = "1.0.0"
 
 [[bench]]
 name = "bench_cfg"
