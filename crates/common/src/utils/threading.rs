@@ -1,12 +1,18 @@
 use crossbeam_channel::unbounded;
-use eyre::Result;
+use eyre::{eyre, Result};
 use std::{
+    future::Future,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
     thread,
     time::Duration,
+};
+use tokio::{
+    sync::{oneshot, Mutex},
+    task,
+    time::timeout,
 };
 
 /// A simple thread pool implementation that takes a vector of items, splits them into chunks, and
@@ -78,34 +84,6 @@ pub fn task_pool<
     results
 }
 
-/// Takes a function and some arguments, and runs the function in a separate thread. If the function
-/// doesnt finish within the given timeout, the thread is killed, and the function returns None.
-pub fn run_with_timeout<T, F>(f: F, timeout: Duration) -> Result<T>
-where
-    T: Send + 'static,
-    F: FnOnce() -> T + Send + 'static,
-{
-    let (tx, rx) = unbounded();
-    let flag = Arc::new(AtomicBool::new(false));
-    let flag_clone = Arc::clone(&flag);
-
-    let handle = thread::spawn(move || {
-        if !flag_clone.load(Ordering::Relaxed) {
-            let result = f();
-            let _ = tx.send(result);
-        }
-    });
-
-    let result = rx.recv_timeout(timeout);
-    if result.is_err() {
-        flag.store(true, Ordering::Relaxed);
-        return Err(eyre::eyre!("timed out"));
-    }
-
-    handle.join().ok();
-    result.map_err(|e| eyre::eyre!(e))
-}
-
 #[cfg(test)]
 mod tests {
     use crate::utils::threading::*;
@@ -151,47 +129,5 @@ mod tests {
 
         let results = task_pool(items, num_threads, f);
         assert!(results.is_empty());
-    }
-
-    #[test]
-    fn test_run_with_timeout() {
-        // Test case with a function that finishes within the timeout
-        let timeout = std::time::Duration::from_secs(1);
-        let f = || 1;
-        let result = run_with_timeout(f, timeout);
-        assert_eq!(result.unwrap(), 1);
-
-        // Test case with a function that doesnt finish within the timeout
-        let timeout = std::time::Duration::from_millis(1);
-        let f = || std::thread::sleep(std::time::Duration::from_secs(1));
-        let result = run_with_timeout(f, timeout);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_run_with_timeout_with_panic() {
-        // Test case with a function that panics
-        let timeout = std::time::Duration::from_secs(1);
-        let f = || panic!("test");
-        let result = run_with_timeout(f, timeout);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_run_with_timeout_with_args() {
-        // Test case with a function that takes arguments
-        let timeout = std::time::Duration::from_secs(1);
-        let f = |x: i32| x * 2;
-        let result = run_with_timeout(move || f(2), timeout);
-        assert_eq!(result.unwrap(), 4);
-    }
-
-    #[test]
-    fn test_run_with_timeout_infinite_loop() {
-        // Test case with a function that runs an infinite loop
-        let timeout = std::time::Duration::from_secs(1);
-        let f = || loop {};
-        let result = run_with_timeout(f, timeout);
-        assert!(result.is_err());
     }
 }
