@@ -67,7 +67,7 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
 
     // create a new EVM instance. we will use this for finding function selectors,
     // performing symbolic execution, and more.
-    let evm = VM::new(
+    let mut evm = VM::new(
         &contract_bytecode,
         &[],
         H160::default(),
@@ -79,8 +79,7 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));
     let start_sym_exec_time = Instant::now();
-    let mut evm_clone = evm.clone();
-    let (map, jumpdest_count) = evm_clone
+    let (map, jumpdest_count) = evm
         .symbolic_exec(
             Instant::now()
                 .checked_add(Duration::from_millis(args.timeout))
