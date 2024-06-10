@@ -20,6 +20,14 @@ members = [
 resolver = "2"
 
 [profile.release]
+strip = "debuginfo"
+lto = "fat"
+codegen-units = 1
+incremental = false
+
+[profile.dev]
+strip = "none"
+lto = "thin"
 debug = true
 
 [workspace.package]
