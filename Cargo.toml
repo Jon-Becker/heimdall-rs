@@ -19,6 +19,17 @@ members = [
 # https://doc.rust-lang.org/edition-guide/rust-2021/default-cargo-resolver.html
 resolver = "2"
 
+[profile.release]
+strip = "debuginfo"
+lto = "fat"
+codegen-units = 1
+incremental = false
+
+[profile.dev]
+strip = "none"
+lto = "thin"
+debug = true
+
 [workspace.package]
 version = "0.8.2"
 edition = "2021"

@@ -95,7 +95,11 @@ mod integration_tests {
                         println!("  \\- error: {:?}", e);
 
                         // we dont want to count RPC errors as failures
-                        0
+                        if let heimdall_inspect::Error::FetchError(_) = e {
+                            1
+                        } else {
+                            0
+                        }
                     }
                 }
             })

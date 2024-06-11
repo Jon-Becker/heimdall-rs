@@ -17,9 +17,9 @@ use crate::{
         },
     },
 };
-use eyre::Result;
+use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::decode_hex;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 use tracing::{trace, warn};
 
 #[derive(Clone, Debug, Default)]
@@ -36,6 +36,7 @@ impl VM {
         &mut self,
         selector: &str,
         entry_point: u128,
+        timeout: Instant,
     ) -> Result<(VMTrace, u32)> {
         self.calldata = decode_hex(selector)?;
 
@@ -54,87 +55,100 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        Ok((self.recursive_map(&mut branch_count, &mut HashMap::new())?, branch_count))
+        Ok((
+            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)
+                .map(|x| x.ok_or_eyre("symbolic execution failed"))??,
+            branch_count,
+        ))
     }
 
     // build a map of function jump possibilities from the EVM bytecode
-    pub fn symbolic_exec(&self) -> Result<(VMTrace, u32)> {
-        let mut vm = self.clone();
-
+    pub fn symbolic_exec(&mut self, timeout: Instant) -> Result<(VMTrace, u32)> {
         trace!("beginning contract-wide symbolic execution");
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        Ok((vm.recursive_map(&mut branch_count, &mut HashMap::new())?, branch_count))
+        Ok((
+            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)
+                .map(|x| x.ok_or_eyre("symbolic execution failed"))??,
+            branch_count,
+        ))
     }
 
     fn recursive_map(
         &mut self,
         branch_count: &mut u32,
         handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
-    ) -> Result<VMTrace> {
-        let mut vm = self.clone();
+        timeout_at: &Instant,
+    ) -> Result<Option<VMTrace>> {
+        let vm = self;
 
         // create a new VMTrace object
         // this will essentially be a tree of executions, with each branch being a different path
         // that symbolic execution discovered
         let mut vm_trace = VMTrace {
             instruction: vm.instruction,
-            gas_used: 21000,
+            gas_used: 0,
             operations: Vec::new(),
             children: Vec::new(),
         };
 
         // step through the bytecode until we find a JUMPI instruction
         while vm.bytecode.len() >= vm.instruction as usize {
+            // if we have reached the timeout, return None
+            if Instant::now() >= *timeout_at {
+                return Ok(None);
+            }
+
             // execute the next instruction. if the instruction panics, invalidate this path
             let state = vm.step()?;
+            let last_instruction = state.last_instruction.clone();
 
             // update vm_trace
-            vm_trace.operations.push(state.clone());
+            vm_trace.operations.push(state);
             vm_trace.gas_used = vm.gas_used;
 
             // if we encounter a JUMP(I), create children taking both paths and break
-            if state.last_instruction.opcode == 0x57 || state.last_instruction.opcode == 0x56 {
+            if last_instruction.opcode == 0x57 || last_instruction.opcode == 0x56 {
                 trace!(
                     "found branch due to JUMP{} instruction at {}",
-                    if state.last_instruction.opcode == 0x57 { "I" } else { "" },
-                    state.last_instruction.instruction
+                    if last_instruction.opcode == 0x57 { "I" } else { "" },
+                    last_instruction.instruction
                 );
 
                 let jump_condition: Option<String> =
-                    state.last_instruction.input_operations.get(1).map(|op| op.solidify());
+                    last_instruction.input_operations.get(1).map(|op| op.solidify());
                 let jump_taken =
-                    state.last_instruction.inputs.get(1).map(|op| !op.is_zero()).unwrap_or(true);
+                    last_instruction.inputs.get(1).map(|op| !op.is_zero()).unwrap_or(true);
 
                 // build hashable jump frame
                 let jump_frame = JumpFrame::new(
-                    state.last_instruction.instruction,
-                    state.last_instruction.inputs[0],
+                    last_instruction.instruction,
+                    last_instruction.inputs[0],
                     vm.stack.size(),
                     jump_taken,
                 );
 
                 // if the stack contains too many items, it's probably a loop
                 if stack_contains_too_many_items(&vm.stack) {
-                    return Ok(vm_trace);
+                    return Ok(None);
                 }
 
                 // if the stack has over 16 items of the same source, it's probably a loop
                 if stack_contains_too_many_of_the_same_item(&vm.stack) {
-                    return Ok(vm_trace);
+                    return Ok(None);
                 }
 
                 // if any item on the stack has a depth > 16, it's probably a loop (because of stack
                 // too deep)
                 if stack_item_source_depth_too_deep(&vm.stack) {
-                    return Ok(vm_trace);
+                    return Ok(None);
                 }
 
                 // if the jump stack depth is less than the max stack depth of all previous matching
                 // jumps, it's probably a loop
                 if jump_stack_depth_less_than_max_stack_depth(&jump_frame, handled_jumps) {
-                    return Ok(vm_trace);
+                    return Ok(None);
                 }
 
                 // perform heuristic checks on historical stacks
@@ -199,7 +213,7 @@ impl VM {
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return Ok(vm_trace)
+                            return Ok(None);
                         }
 
                         if historical_diffs_approximately_equal(&vm.stack, historical_stacks) {
@@ -212,7 +226,7 @@ impl VM {
 
                             // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return Ok(vm_trace);
+                            return Ok(None);
                         } else {
                             trace!(
                                 "adding historical stack {} to jump frame {:?}",
@@ -237,7 +251,7 @@ impl VM {
                     }
                 }
 
-                if state.last_instruction.opcode == 0x56 {
+                if last_instruction.opcode == 0x56 {
                     continue;
                 }
 
@@ -245,50 +259,54 @@ impl VM {
                 *branch_count += 1;
                 trace!(
                     "creating branching paths at instructions {} (JUMPDEST) and {} (CONTINUE)",
-                    state.last_instruction.inputs[0],
-                    state.last_instruction.instruction + 1
+                    last_instruction.inputs[0],
+                    last_instruction.instruction + 1
                 );
 
                 // we need to create a trace for the path that wasn't taken.
                 if !jump_taken {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction = state.last_instruction.inputs[0].as_u128() + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps) {
-                        Ok(child_trace) => vm_trace.children.push(child_trace),
+                    trace_vm.instruction = last_instruction.inputs[0].as_u128() + 1;
+                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                        Ok(None) => {}
                         Err(e) => {
-                            warn!("error executing branch: {}", e);
-                            return Ok(vm_trace);
+                            warn!("error executing branch: {:?}", e);
+                            return Ok(None);
                         }
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps) {
-                        Ok(child_trace) => vm_trace.children.push(child_trace),
+                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                        Ok(None) => {}
                         Err(e) => {
-                            warn!("error executing branch: {}", e);
-                            return Ok(vm_trace);
+                            warn!("error executing branch: {:?}", e);
+                            return Ok(None);
                         }
                     }
                     break;
                 } else {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction = state.last_instruction.instruction + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps) {
-                        Ok(child_trace) => vm_trace.children.push(child_trace),
+                    trace_vm.instruction = last_instruction.instruction + 1;
+                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                        Ok(None) => {}
                         Err(e) => {
-                            warn!("error executing branch: {}", e);
-                            return Ok(vm_trace);
+                            warn!("error executing branch: {:?}", e);
+                            return Ok(None);
                         }
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps) {
-                        Ok(child_trace) => vm_trace.children.push(child_trace),
+                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                        Ok(None) => {}
                         Err(e) => {
-                            warn!("error executing branch: {}", e);
-                            return Ok(vm_trace);
+                            warn!("error executing branch: {:?}", e);
+                            return Ok(None);
                         }
                     }
                     break;
@@ -301,7 +319,7 @@ impl VM {
             }
         }
 
-        Ok(vm_trace)
+        Ok(Some(vm_trace))
     }
 }
 

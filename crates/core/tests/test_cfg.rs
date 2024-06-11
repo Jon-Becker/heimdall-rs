@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod integration_tests {
+    use memory_stats::memory_stats;
     use std::path::PathBuf;
 
     use heimdall_cfg::{cfg, CFGArgs, CFGArgsBuilder};
-    use heimdall_common::utils::io::file::delete_path;
     use petgraph::dot::Dot;
     use serde_json::Value;
 
@@ -114,14 +114,10 @@ mod integration_tests {
             let args = CFGArgsBuilder::new()
                 .target(bytecode)
                 .timeout(10000)
-                .output(String::from("./output/tests/cfg/integration"))
                 .build()
                 .expect("failed to build args");
 
-            match cfg(args).await.map_err(|e| {
-                eprintln!("failed to generate cfg for contract {contract_address}: {e}");
-                e
-            }) {
+            match cfg(args).await {
                 Ok(_) => {
                     success_count += 1;
                 }
@@ -129,6 +125,13 @@ mod integration_tests {
                     fail_count += 1;
                 }
             };
+
+            if let Some(usage) = memory_stats() {
+                println!("Current physical memory usage: {}", usage.physical_mem);
+                println!("Current virtual memory usage: {}", usage.virtual_mem);
+            } else {
+                println!("Couldn't get the current memory usage :(");
+            }
         }
 
         // assert 99% success rate
@@ -136,7 +139,5 @@ mod integration_tests {
             success_count as f64 / (success_count + fail_count) as f64 > 0.99,
             "success rate is less than 99%"
         );
-
-        delete_path(&String::from("./output/tests/cfg/integration"));
     }
 }

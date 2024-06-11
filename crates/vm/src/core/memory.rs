@@ -23,7 +23,7 @@ impl Default for Memory {
 impl Memory {
     /// Creates a new [`Memory`] with an empty memory vector and empty byte tracker
     pub fn new() -> Memory {
-        Memory { memory: Vec::new(), bytes: ByteTracker::new() }
+        Memory { memory: Vec::with_capacity(2048), bytes: ByteTracker::new() }
     }
 
     /// Gets the current size of the memory in bytes.
