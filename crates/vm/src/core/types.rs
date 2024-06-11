@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, ops::Range};
+use std::{collections::VecDeque, ops::Range, usize};
 
 use ethers::abi::{AbiEncode, ParamType};
 use eyre::{eyre, Result};
@@ -271,6 +271,11 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
     match byte_size {
         1 => potential_types.push("bool".to_string()),
         15..=20 => potential_types.push("address".to_string()),
+        usize::MAX => {
+            // if the byte size is usize::MAX, it is a dynamic type
+            potential_types.push("bytes memory".to_string());
+            return (byte_size, potential_types);
+        }
         _ => {}
     }
 
@@ -326,8 +331,8 @@ pub fn get_padding(bytes: &[u8]) -> Padding {
     // we can avoid doing a full check if any of the following are true:
     // there are no null bytes OR
     // neither first nor last byte is a null byte, it is not padded
-    if null_byte_indices.is_empty() ||
-        null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
+    if null_byte_indices.is_empty()
+        || null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
     {
         return Padding::None;
     }

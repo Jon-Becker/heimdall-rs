@@ -46,8 +46,18 @@ pub fn argument_heuristic(
 
         // CALLDATACOPY
         0x37 => {
-            // TODO: implement CALLDATACOPY support
-            trace!("CALLDATACOPY detected; not implemented");
+            let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4))
+                / (32 * 3)) // Accounts for dest, source and size
+                .try_into()
+                .unwrap_or(usize::MAX);
+
+            function.arguments.entry(arg_index).or_insert_with(|| {
+                CalldataFrame {
+                    arg_op: state.last_instruction.input_operations[0].to_string(),
+                    mask_size: usize::MAX, // init to MAX because it's a dynamic-size argument
+                    heuristics: HashSet::new(),
+                }
+            });
         }
 
         // AND | OR
@@ -255,4 +265,56 @@ pub fn argument_heuristic(
     };
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use ethers::types::U256;
+    use heimdall_vm::core::{
+        memory::Memory,
+        opcodes::Opcode,
+        stack::Stack,
+        storage::Storage,
+        vm::{Instruction, State},
+    };
+
+    use crate::{
+        core::analyze::{AnalyzerState, AnalyzerType},
+        interfaces::AnalyzedFunction,
+    };
+
+    use super::argument_heuristic;
+
+    #[test]
+    fn test_heuristic_for_calldatacopy() {
+        let mut function = AnalyzedFunction::new("0x40c10f19", false);
+        let state = State {
+            last_instruction: Instruction {
+                instruction: 0,
+                opcode_details: Some(Opcode::new(0x37)),
+                opcode: 0x37,
+                inputs: vec![U256::from(160), U256::from(36), U256::from(0)],
+                outputs: vec![],
+                input_operations: vec![],
+                output_operations: vec![],
+            },
+            gas_used: 0,
+            gas_remaining: 0,
+            stack: Stack::new(),
+            memory: Memory::new(),
+            storage: Storage::new(),
+            events: vec![],
+        };
+        let mut analyzer_state = AnalyzerState {
+            jumped_conditional: None,
+            conditional_stack: Vec::new(),
+            analyzer_type: AnalyzerType::Solidity,
+        };
+
+        argument_heuristic(&mut function, &state, &mut analyzer_state).unwrap();
+
+        assert_eq!(function.arguments.len(), 1);
+        assert_eq!(function.arguments[&1].mask_size, usize::MAX);
+        assert_eq!(function.arguments[&1].heuristics.len(), 0);
+    }
 }
