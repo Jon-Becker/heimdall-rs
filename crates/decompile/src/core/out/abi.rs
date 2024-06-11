@@ -37,9 +37,17 @@ pub fn build_abi(
 
         // determine the name of the function
         let name = match f.resolved_function {
-            Some(ref sig) => sig.name.clone(),
+            // Some(ref sig) => sig.name.clone(),
+            Some(_) => format!("Unresolved_{}", f.selector),
             None => format!("Unresolved_{}", f.selector),
         };
+
+        // // if f.resolved_function.as_ref().is_some_and(|x| x.inputs.len() != f.arguments.len()) 
+        // if f.resolved_function.is_some()
+        // {
+        //     println!("resolved: {:?} vs args: {:?}", f.resolved_function.as_ref().unwrap(), f.sorted_arguments());
+        // }
+        // let name = f.selector.clone(); // we bad hackers
 
         let function = Function {
             name: name.clone(),

@@ -75,6 +75,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_output_other_chain() {
+        let output = "output";
+        let target = "0x0000000000000000000000000000000000000056";
+        let rpc_url = "https://binance.llamarpc.com";
+        let filename = "cfg.dot";
+
+        let path = build_output_path(output, target, rpc_url, filename).await;
+        assert!(path
+            .expect("failed to build output path")
+            .ends_with("/output/56/0x0000000000000000000000000000000000000056/cfg.dot"));
+    }
+
+    #[tokio::test]
     async fn test_output_default_local() {
         let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
             println!("RPC_URL not set, skipping test");

@@ -45,6 +45,7 @@ pub struct DecompileResult {
     pub abi: JsonAbi,
 }
 
+static EVIL: bool = true;
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // init
     let start_time = Instant::now();
@@ -177,7 +178,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     info!("analyzed {} symbolic execution traces", analyzed_functions.len());
 
     // resolve event and error selectors
-    if !args.skip_resolving {
+    if !args.skip_resolving && !EVIL {
         // resolve error selectors
         let start_error_resolving_time = Instant::now();
         let mut error_selectors: Vec<String> = analyzed_functions
