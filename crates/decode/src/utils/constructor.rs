@@ -14,7 +14,7 @@ pub struct Constructor {
 
 pub fn parse_deployment_bytecode(input: Vec<u8>) -> Result<Constructor> {
     // convert input to a hex string
-    let input = encode_hex(input);
+    let input = encode_hex(&input);
 
     //
     let input = input.to_lowercase().replace("0x", "");
@@ -42,16 +42,16 @@ pub fn parse_deployment_bytecode(input: Vec<u8>) -> Result<Constructor> {
 
     let constructor_offset = 0;
     let metadata_length = u32::from_str_radix(
-        &input[(contract_offset + contract_length - 4) as usize..
-            (contract_offset + contract_length) as usize],
+        &input[(contract_offset + contract_length - 4) as usize
+            ..(contract_offset + contract_length) as usize],
         16,
-    )? * 2 +
-        4;
+    )? * 2
+        + 4;
 
     let constructor = &input[constructor_offset as usize..contract_offset as usize];
     let contract = &input[contract_offset as usize..(contract_offset + contract_length) as usize];
-    let metadata = &input[(contract_offset + contract_length - metadata_length) as usize..
-        (contract_offset + contract_length) as usize];
+    let metadata = &input[(contract_offset + contract_length - metadata_length) as usize
+        ..(contract_offset + contract_length) as usize];
     let arguments = &input[(contract_offset + contract_length) as usize..];
 
     Ok(Constructor {

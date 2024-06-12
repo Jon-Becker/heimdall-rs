@@ -59,7 +59,7 @@ mod integration_tests {
         let results = task_pool(txids, 10, move |txid: String| {
             let args = DecodeArgsBuilder::new()
                 .target(txid.to_string())
-                .rpc_url(rpc_url.clone())
+                .rpc_url(rpc_url.to_owned())
                 .build()
                 .expect("failed to build args");
 

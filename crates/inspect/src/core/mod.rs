@@ -127,5 +127,5 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     info!("decoded raw trace successfully");
     debug!("inspection took {:?}", start_time.elapsed());
 
-    Ok(InspectResult { decoded_trace: decoded_trace.clone(), _trace: trace })
+    Ok(InspectResult { decoded_trace: decoded_trace.to_owned(), _trace: trace })
 }

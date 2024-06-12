@@ -58,8 +58,7 @@ pub fn argument_heuristic(
                 state.last_instruction.input_operations.iter().find(|op| op.opcode.code == 0x35)
             {
                 // this is a bitwise mask, we can use it to determine the size of the variable
-                let (mask_size_bytes, _potential_types) =
-                    convert_bitmask(state.last_instruction.clone());
+                let (mask_size_bytes, _potential_types) = convert_bitmask(&state.last_instruction);
 
                 // yulify the calldataload operation, and find the associated argument index
                 // this MUST exist, as we have already inserted it in the CALLDATALOAD heuristic
@@ -70,7 +69,7 @@ pub fn argument_heuristic(
                     debug!(
                         "instruction {} ({}) indicates argument {} is masked to {} bytes",
                         state.last_instruction.instruction,
-                        state.last_instruction.opcode_details.clone().expect("impossible").name,
+                        state.last_instruction.opcode_details.as_ref().expect("impossible").name,
                         arg_index,
                         mask_size_bytes
                     );
@@ -194,7 +193,7 @@ pub fn argument_heuristic(
                 debug!(
                     "instruction {} ({}) indicates argument {} may be a numeric type",
                     state.last_instruction.instruction,
-                    state.last_instruction.opcode_details.clone().expect("impossible").name,
+                    state.last_instruction.opcode_details.as_ref().expect("impossible").name,
                     arg_index
                 );
 
@@ -217,7 +216,7 @@ pub fn argument_heuristic(
                 debug!(
                     "instruction {} ({}) indicates argument {} may be a bytes type",
                     state.last_instruction.instruction,
-                    state.last_instruction.opcode_details.clone().expect("impossible").name,
+                    state.last_instruction.opcode_details.as_ref().expect("impossible").name,
                     arg_index
                 );
 

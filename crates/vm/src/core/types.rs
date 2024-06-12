@@ -228,7 +228,7 @@ pub fn to_type(string: &str) -> ParamType {
 /// Convert a bitwise masking operation to a tuple containing: \
 /// 1. The size of the type being masked \
 /// 2. Potential types that the type being masked could be.
-pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
+pub fn convert_bitmask(instruction: &Instruction) -> (usize, Vec<String>) {
     let mask = instruction.output_operations[0].clone();
 
     // use 32 as the default size, as it is the default word size in the EVM
@@ -326,8 +326,8 @@ pub fn get_padding(bytes: &[u8]) -> Padding {
     // we can avoid doing a full check if any of the following are true:
     // there are no null bytes OR
     // neither first nor last byte is a null byte, it is not padded
-    if null_byte_indices.is_empty() ||
-        null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
+    if null_byte_indices.is_empty()
+        || null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
     {
         return Padding::None;
     }

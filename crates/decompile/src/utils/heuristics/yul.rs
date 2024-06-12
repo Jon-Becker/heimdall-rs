@@ -24,7 +24,7 @@ pub fn yul_heuristic(
             function.memory.insert(key, StorageFrame { operation });
             function.logic.push(format!(
                 "{}({}, {})",
-                instruction.opcode_details.clone().expect("impossible").name.to_lowercase(),
+                instruction.opcode_details.as_ref().expect("impossible").name.to_lowercase(),
                 encode_hex_reduced(key),
                 instruction.input_operations[1].yulify()
             ));
@@ -76,11 +76,11 @@ pub fn yul_heuristic(
         // CALLDATACOPY, CODECOPY, EXTCODECOPY, RETURNDATACOPY, TSTORE,
         // SSTORE, RETURN, SELFDESTRUCT, LOG0, LOG1, LOG2, LOG3, LOG4
         // we simply want to add the operation to the function's logic
-        0x37 | 0x39 | 0x3c | 0x3e | 0x55 | 0x5d | 0xf0 | 0xf1 | 0xf2 | 0xf4 | 0xf5 | 0xfa |
-        0xff | 0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA4 => {
+        0x37 | 0x39 | 0x3c | 0x3e | 0x55 | 0x5d | 0xf0 | 0xf1 | 0xf2 | 0xf4 | 0xf5 | 0xfa
+        | 0xff | 0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA4 => {
             function.logic.push(format!(
                 "{}({})",
-                instruction.opcode_details.clone().expect("impossible").name.to_lowercase(),
+                instruction.opcode_details.as_ref().expect("impossible").name.to_lowercase(),
                 instruction
                     .input_operations
                     .iter()

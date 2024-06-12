@@ -30,7 +30,7 @@ pub fn modifier_heuristic(
     let opcode_name = state
         .last_instruction
         .opcode_details
-        .clone()
+        .as_ref()
         .ok_or(Error::Eyre(eyre!("opcode_details is None")))?
         .name;
 
@@ -56,10 +56,10 @@ pub fn modifier_heuristic(
     // non-payable exactly: ISZERO(CALLVALUE())
     // TODO: in the future, i want a way to abstract this to a more general form. maybe with
     // macros(?). i.e. `iszero!(callvalue!())`
-    if function.payable &&
-        state.last_instruction.opcode == 0x57 &&
-        state.last_instruction.input_operations[1] ==
-            WrappedOpcode::new(
+    if function.payable
+        && state.last_instruction.opcode == 0x57
+        && state.last_instruction.input_operations[1]
+            == WrappedOpcode::new(
                 0x15,
                 vec![WrappedInput::Opcode(WrappedOpcode::new(0x34, vec![]))],
             )

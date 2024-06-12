@@ -45,10 +45,10 @@ pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, Error> {
 /// use heimdall_common::utils::strings::encode_hex;
 ///
 /// let bytes = vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100];
-/// let result = encode_hex(bytes);
+/// let result = encode_hex(&bytes);
 /// assert_eq!(result, "48656c6c6f20576f726c64");
 /// ```
-pub fn encode_hex(s: Vec<u8>) -> String {
+pub fn encode_hex(s: &[u8]) -> String {
     s.iter().fold(String::new(), |mut acc, b| {
         write!(acc, "{b:02x}", b = b).expect("unable to write");
         acc
@@ -330,15 +330,15 @@ pub fn tokenize(s: &str) -> Vec<String> {
         if separators.contains(&c) || c.is_whitespace() {
             // If the current token is not empty, push it to the vector
             if !token.is_empty() {
-                tokens.push(token.clone());
+                tokens.push(token.to_owned());
                 token.clear();
             }
 
             // Check if current character and last character form a compound operator (like "==",
             // ">=", "&&", "||")
             if let Some(last) = last_char {
-                if compound_operator_first_chars.contains(&last) &&
-                    (c == '=' || c == '&' || c == '|')
+                if compound_operator_first_chars.contains(&last)
+                    && (c == '=' || c == '&' || c == '|')
                 {
                     // Remove the last character as a single token
                     tokens.pop();
@@ -453,15 +453,15 @@ mod tests {
     #[test]
     fn test_encode_hex() {
         let bytes = vec![72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]; // "Hello world"
-        let result = encode_hex(bytes);
+        let result = encode_hex(&bytes);
         assert_eq!(result, "48656c6c6f20776f726c64");
 
         let bytes = vec![171, 205, 239];
-        let result = encode_hex(bytes);
+        let result = encode_hex(&bytes);
         assert_eq!(result, "abcdef");
 
         let bytes = vec![1, 35, 69];
-        let result = encode_hex(bytes);
+        let result = encode_hex(&bytes);
         assert_eq!(result, "012345");
     }
 

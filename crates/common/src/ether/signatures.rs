@@ -120,7 +120,7 @@ impl ResolveSelector for ResolvedError {
         }
 
         // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
             .map_err(|e| trace!("error storing signatures in cache: {}", e));
 
         Ok(match signature_list.len() {
@@ -207,7 +207,7 @@ impl ResolveSelector for ResolvedLog {
         }
 
         // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
             .map_err(|e| trace!("error storing signatures in cache: {}", e));
 
         Ok(match signature_list.len() {
@@ -295,7 +295,7 @@ impl ResolveSelector for ResolvedFunction {
         }
 
         // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
             .map_err(|e| trace!("error storing signatures in cache: {}", e));
 
         Ok(match signature_list.len() {
@@ -315,8 +315,8 @@ pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
 
     // prioritize signatures with less numbers
     score -= (signature.split('(').next().unwrap_or("").matches(|c: char| c.is_numeric()).count()
-        as u32) *
-        3;
+        as u32)
+        * 3;
 
     // prioritize signatures with parameters
     let num_params = signature.matches(',').count() + 1;
@@ -324,9 +324,9 @@ pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
 
     // count the number of parameters in the signature, if enabled
     if let Some(num_words) = num_words {
-        let num_dyn_params = signature.matches("bytes").count() +
-            signature.matches("string").count() +
-            signature.matches('[').count();
+        let num_dyn_params = signature.matches("bytes").count()
+            + signature.matches("string").count()
+            + signature.matches('[').count();
         let num_static_params = num_params - num_dyn_params;
 
         // reduce the score if the signature has less static parameters than there are words in the
@@ -386,7 +386,7 @@ impl TryFrom<&ResolvedFunction> for TraceFactory {
             }
 
             // add to trace and decoded string
-            trace.add_message(decode_call, 1, decoded_inputs_as_message.clone());
+            trace.add_message(decode_call, 1, decoded_inputs_as_message);
         }
 
         Ok(trace)

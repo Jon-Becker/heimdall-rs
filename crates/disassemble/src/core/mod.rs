@@ -32,7 +32,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
             pushed_bytes = match contract_bytecode
                 .get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize)
             {
-                Some(bytes) => encode_hex(bytes.to_vec()),
+                Some(bytes) => encode_hex(bytes),
                 None => break,
             };
             program_counter += byte_count_to_push as usize;
