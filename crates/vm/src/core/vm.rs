@@ -14,6 +14,8 @@ use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::sign_uint;
 
 #[cfg(feature = "step-tracing")]
+use std::time::Instant;
+#[cfg(feature = "step-tracing")]
 use tracing::trace;
 
 use super::{
@@ -28,7 +30,7 @@ use super::{
 /// The [`VM`] struct represents an EVM instance. \
 /// It contains the EVM's [`Stack`], [`Memory`], [`Storage`], and other state variables needed to
 /// emulate EVM execution.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct VM {
     pub stack: Stack,
     pub memory: Memory,
