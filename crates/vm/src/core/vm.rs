@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     ops::{Div, Rem, Shl, Shr},
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use ethers::{
@@ -13,6 +13,8 @@ use ethers::{
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::sign_uint;
 
+#[cfg(feature = "step-tracing")]
+use std::time::Instant;
 #[cfg(feature = "step-tracing")]
 use tracing::trace;
 
@@ -45,7 +47,6 @@ pub struct VM {
     pub events: Vec<Log>,
     pub returndata: Vec<u8>,
     pub exitcode: u128,
-    pub timestamp: Instant,
     pub address_access_set: HashSet<U256>,
     #[cfg(feature = "step-tracing")]
     pub operation_count: u128,
@@ -61,7 +62,6 @@ pub struct ExecutionResult {
     pub returndata: Vec<u8>,
     pub exitcode: u128,
     pub events: Vec<Log>,
-    pub runtime: f64,
     pub instruction: u128,
 }
 
@@ -135,7 +135,6 @@ impl VM {
             events: Vec::new(),
             returndata: Vec::new(),
             exitcode: 255,
-            timestamp: Instant::now(),
             address_access_set: HashSet::new(),
             #[cfg(feature = "step-tracing")]
             operation_count: 0,
@@ -244,7 +243,7 @@ impl VM {
         let opcode = self
             .bytecode
             .get((self.instruction - 1) as usize)
-            .ok_or_eyre("invalid jumpdest")?
+            .ok_or_eyre(format!("invalid jumpdest: {}", self.instruction - 1))?
             .to_owned();
         let last_instruction = self.instruction;
         self.instruction += 1;
@@ -1504,7 +1503,6 @@ impl VM {
         self.events = Vec::new();
         self.returndata = Vec::new();
         self.exitcode = 255;
-        self.timestamp = Instant::now();
     }
 
     /// Executes the code until finished
@@ -1541,7 +1539,6 @@ impl VM {
             returndata: self.returndata.to_owned(),
             exitcode: self.exitcode,
             events: self.events.clone(),
-            runtime: self.timestamp.elapsed().as_secs_f64(),
             instruction: self.instruction,
         })
     }

@@ -228,8 +228,8 @@ pub fn to_type(string: &str) -> ParamType {
 /// Convert a bitwise masking operation to a tuple containing: \
 /// 1. The size of the type being masked \
 /// 2. Potential types that the type being masked could be.
-pub fn convert_bitmask(instruction: Instruction) -> (usize, Vec<String>) {
-    let mask = instruction.output_operations[0].clone();
+pub fn convert_bitmask(instruction: &Instruction) -> (usize, Vec<String>) {
+    let mask = &instruction.output_operations[0];
 
     // use 32 as the default size, as it is the default word size in the EVM
     let mut type_byte_size = 32;

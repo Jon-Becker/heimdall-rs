@@ -186,7 +186,7 @@ impl PostprocessOrchestrator {
         });
 
         // update the state, so we can share it between functions
-        self.state = state.clone();
+        self.state = state;
 
         debug!(
             "postprocessing for '{}' completed in {:?}",
@@ -194,6 +194,6 @@ impl PostprocessOrchestrator {
             start_postprocess_time.elapsed()
         );
 
-        Ok(state)
+        Ok(self.state.clone())
     }
 }

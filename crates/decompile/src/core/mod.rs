@@ -85,7 +85,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // disassemble the contract's bytecode
     let assembly = disassemble(
         DisassemblerArgsBuilder::new()
-            .target(encode_hex(contract_bytecode))
+            .target(encode_hex(&contract_bytecode))
             .build()
             .expect("impossible case: failed to build disassembly arguments"),
     )
@@ -123,12 +123,11 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     }
 
     let overall_sym_exec_time = Instant::now();
-    for (selector, entry_point) in selectors.clone() {
+    for (selector, entry_point) in selectors {
         let start_sym_exec_time = Instant::now();
-        let mut evm_clone = evm.clone();
-        let selector_clone = selector.clone();
-        let (map, jumpdest_count) = match evm_clone.symbolic_exec_selector(
-            &selector_clone,
+        evm.reset();
+        let (map, jumpdest_count) = match evm.symbolic_exec_selector(
+            &selector,
             entry_point,
             Instant::now()
                 .checked_add(Duration::from_millis(args.timeout))
@@ -152,16 +151,15 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         .into_iter()
         .map(|(selector, trace_root)| {
             let mut analyzer = Analyzer::new(
-                analyzer_type.clone(),
+                analyzer_type,
                 AnalyzedFunction::new(
                     &selector,
                     selector == "fallback" || selector == "0x00000000",
                 ),
-                trace_root,
             );
 
             // analyze the symbolic execution trace
-            let analyzed_function = analyzer.analyze()?;
+            let analyzed_function = analyzer.analyze(trace_root)?;
 
             Ok::<_, Error>(analyzed_function)
         })
@@ -183,17 +181,16 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         let resolved_errors: HashMap<String, ResolvedError> =
             resolve_selectors(error_selectors.clone())
                 .await
-                .iter()
-                .map(|(k, v)| {
+                .into_iter()
+                .map(|(k, mut potential_values)| {
                     // sort by score, take the highest
-                    let mut potential_values = v.clone();
                     potential_values.sort_by(|a: &ResolvedError, b: &ResolvedError| {
                         let a_score = score_signature(&a.signature, None);
                         let b_score = score_signature(&b.signature, None);
                         b_score.cmp(&a_score)
                     });
 
-                    (k.clone(), potential_values.remove(0))
+                    (k, potential_values.remove(0))
                 })
                 .collect();
         debug!("resolving error signatures took {:?}", start_error_resolving_time.elapsed());
@@ -215,17 +212,16 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         let resolved_events: HashMap<String, ResolvedLog> =
             resolve_selectors(event_selectors.clone())
                 .await
-                .iter()
-                .map(|(k, v)| {
+                .into_iter()
+                .map(|(k, mut potential_values)| {
                     // sort by score, take the highest
-                    let mut potential_values = v.clone();
                     potential_values.sort_by(|a: &ResolvedLog, b: &ResolvedLog| {
                         let a_score = score_signature(&a.signature, None);
                         let b_score = score_signature(&b.signature, None);
                         b_score.cmp(&a_score)
                     });
 
-                    (k.clone(), potential_values.remove(0))
+                    (k, potential_values.remove(0))
                 })
                 .collect();
         debug!("resolving event signaturess took {:?}", start_event_resolving_time.elapsed());
@@ -257,7 +253,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         f.resolved_function = matched_resolved_functions.first().cloned();
         debug!(
             "using signature '{}' for '{}'",
-            f.resolved_function.as_ref().map(|r| r.signature.clone()).unwrap_or_default(),
+            f.resolved_function.as_ref().map(|r| &r.signature).unwrap_or(&String::new()),
             f.selector
         );
     });
@@ -275,15 +271,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     let storage_variables = states
         .iter()
         .flat_map(|s| s.storage_type_map.iter())
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .chain(
-            states
-                .iter()
-                .flat_map(|s| s.transient_type_map.iter())
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect::<HashMap<String, String>>()
-                .into_iter(),
-        )
+        .chain(states.iter().flat_map(|s| s.transient_type_map.iter()))
+        .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect::<HashMap<String, String>>();
 
     // construct the abi for the given analyzed functions

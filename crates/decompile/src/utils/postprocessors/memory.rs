@@ -74,7 +74,7 @@ pub fn memory_postprocessor(
 
                 *line = format!("{cast_type} {line}");
                 state.memory_type_map.insert(var_name.to_string(), cast_type.to_string());
-                return Ok(())
+                return Ok(());
             }
 
             // we can do some type inference here

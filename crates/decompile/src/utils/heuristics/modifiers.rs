@@ -30,7 +30,7 @@ pub fn modifier_heuristic(
     let opcode_name = state
         .last_instruction
         .opcode_details
-        .clone()
+        .as_ref()
         .ok_or(Error::Eyre(eyre!("opcode_details is None")))?
         .name;
 

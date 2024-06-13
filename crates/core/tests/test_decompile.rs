@@ -31,7 +31,7 @@ mod integration_tests {
         for line in &["function Unresolved_19045a25(uint256 arg0, uint256 arg1) public payable returns (address) {",
             " = ecrecover("] {
             println!("{line}");
-            assert!(result.source.clone().expect("decompile source is empty").contains(line));
+            assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }
     }
 
@@ -69,7 +69,7 @@ mod integration_tests {
             "function Unresolved_d0e30db0() public payable {",
             "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"] {
             println!("{line}");
-            assert!(result.source.clone().expect("decompile source is empty").contains(line));
+            assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }
     }
 
@@ -99,7 +99,7 @@ mod integration_tests {
             "function Unresolved_41161b10(uint240 arg0, address arg1) public payable returns (bool) {",
             "function Unresolved_06fdde03() public payable returns (bytes memory) {"] {
             println!("{line}");
-            assert!(result.source.clone().expect("decompile source is empty").contains(line));
+            assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }
     }
 
@@ -127,7 +127,7 @@ mod integration_tests {
             "call(gas(), mload(0x40), 0, msize(), calldatasize(), 0, 0)",
         ] {
             println!("{line}");
-            assert!(result.source.clone().expect("decompile source is empty").contains(line));
+            assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }
     }
 
@@ -150,7 +150,7 @@ mod integration_tests {
         // assert that the output is correct
         for line in &["case 0x41161b10", "case 0x06fdde03", "mstore(0, 0x01)", "return(0, 0x20)"] {
             println!("{line}");
-            assert!(result.source.clone().expect("decompile source is empty").contains(line));
+            assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }
     }
 

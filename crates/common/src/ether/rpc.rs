@@ -206,7 +206,7 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<Vec<u8>, 
         // cache the results
         store_cache(
             &format!("contract.{}.{}", &chain_id, &contract_address),
-            bytecode_as_bytes.clone().to_vec(),
+            bytecode_as_bytes.to_vec(),
             None,
         )
         .map_err(|_| error!("failed to cache bytecode for contract: {:?}", &contract_address))?;

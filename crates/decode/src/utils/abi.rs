@@ -48,7 +48,7 @@ pub fn try_decode_dynamic_parameter(
 ) -> Result<Option<AbiEncoded>, Error> {
     trace!(
         "calldata_words: {:#?}",
-        calldata_words.iter().map(|w| encode_hex(w.clone())).collect::<Vec<String>>()
+        calldata_words.iter().map(|w| encode_hex(w)).collect::<Vec<String>>()
     );
 
     // initialize a [`HashSet<usize>`] called `word_coverages` with `parameter_index`
@@ -157,7 +157,7 @@ fn try_decode_dynamic_parameter_bytes(
     // (3) calculate how many words are needed to store the encoded data with size `size`.
     let word_count_for_size = U256::from((size.as_u32() as f32 / 32f32).ceil() as u32); // wont panic unless calldata is huge
     let data_end_word_offset = data_start_word_offset + word_count_for_size;
-    trace!("with data: {:#?}", encode_hex(data_words.concat()));
+    trace!("with data: {:#?}", encode_hex(&data_words.concat()));
 
     // (4) get the last word in `data_words`, so we can perform a size check. There should be
     // `size % 32` bytes in this word, and the rest should be null bytes.
@@ -278,7 +278,7 @@ fn try_decode_dynamic_parameter_string(
     trace!(
         "with data: {:#?}",
         encode_hex(
-            calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()]
+            &calldata_words[data_start_word_offset.as_usize()..data_end_word_offset.as_usize()]
                 .concat()
         )
     );
@@ -303,7 +303,7 @@ fn try_decode_dynamic_parameter_string(
         .extend((word_offset.as_usize()..data_end_word_offset.as_usize()).collect::<Vec<usize>>());
 
     trace!("parameter {}: '{}' is string", parameter_index, word);
-    Ok(Some(AbiEncoded { ty: String::from("string"), coverages: coverages.clone() }))
+    Ok(Some(AbiEncoded { ty: String::from("string"), coverages }))
 }
 
 /// Handle determining the most potential type of an abi-encoded item.
@@ -539,7 +539,8 @@ mod tests {
             let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
                 .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
-            let coverages = abi_encoded_params.clone().map(|p| p.coverages).unwrap_or_default();
+            let coverages =
+                abi_encoded_params.as_ref().map(|p| p.coverages.to_owned()).unwrap_or_default();
             let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();
 
             println!(
@@ -594,7 +595,8 @@ mod tests {
             let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
                 .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
-            let coverages = abi_encoded_params.clone().map(|p| p.coverages).unwrap_or_default();
+            let coverages =
+                abi_encoded_params.as_ref().map(|p| p.coverages.to_owned()).unwrap_or_default();
             let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();
 
             println!(

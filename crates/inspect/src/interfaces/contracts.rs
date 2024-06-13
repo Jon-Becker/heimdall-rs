@@ -27,12 +27,12 @@ impl Contracts {
         // if skip resolving, just add the address
         if self.skip_resolving {
             self.contracts.insert(address, address.to_lower_hex());
-            return Ok(())
+            return Ok(());
         }
 
         // if alias already exists, don't overwrite
         if self.contracts.contains_key(&address) {
-            return Ok(())
+            return Ok(());
         }
 
         if !self.transpose_api_key.is_empty() {
@@ -54,19 +54,19 @@ impl Contracts {
         if self.skip_resolving {
             self.contracts
                 .extend(addresses.into_iter().map(|address| (address, address.to_lower_hex())));
-            return Ok(())
+            return Ok(());
         }
 
         // for each address, get the label
         if !self.transpose_api_key.is_empty() {
-            let transpose_api_key_clone = self.transpose_api_key.clone();
+            let transpose_api_key = self.transpose_api_key.clone();
             let handles: Vec<_> = addresses
                 .clone()
                 .into_iter()
                 .map(move |address| {
-                    let transpose_api_key_clone = transpose_api_key_clone.clone();
+                    let transpose_api_key = transpose_api_key.clone();
                     tokio::spawn(async move {
-                        get_label(&address.to_lower_hex(), &transpose_api_key_clone).await
+                        get_label(&address.to_lower_hex(), &transpose_api_key).await
                     })
                 })
                 .collect();

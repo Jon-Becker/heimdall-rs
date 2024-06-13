@@ -120,7 +120,7 @@ impl ResolveSelector for ResolvedError {
         }
 
         // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
             .map_err(|e| trace!("error storing signatures in cache: {}", e));
 
         Ok(match signature_list.len() {
@@ -207,7 +207,7 @@ impl ResolveSelector for ResolvedLog {
         }
 
         // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
             .map_err(|e| trace!("error storing signatures in cache: {}", e));
 
         Ok(match signature_list.len() {
@@ -295,7 +295,7 @@ impl ResolveSelector for ResolvedFunction {
         }
 
         // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), signature_list.clone(), None)
+        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
             .map_err(|e| trace!("error storing signatures in cache: {}", e));
 
         Ok(match signature_list.len() {
@@ -386,7 +386,7 @@ impl TryFrom<&ResolvedFunction> for TraceFactory {
             }
 
             // add to trace and decoded string
-            trace.add_message(decode_call, 1, decoded_inputs_as_message.clone());
+            trace.add_message(decode_call, 1, decoded_inputs_as_message);
         }
 
         Ok(trace)
