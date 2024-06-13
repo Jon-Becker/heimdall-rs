@@ -14,7 +14,7 @@ pub struct Constructor {
 
 pub fn parse_deployment_bytecode(input: Vec<u8>) -> Result<Constructor> {
     // convert input to a hex string
-    let input = encode_hex(input);
+    let input = encode_hex(&input);
 
     //
     let input = input.to_lowercase().replace("0x", "");

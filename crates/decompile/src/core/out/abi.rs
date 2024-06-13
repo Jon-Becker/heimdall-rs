@@ -107,7 +107,7 @@ pub fn build_abi(
                 None => (format!("CustomError_{}", error_selector.to_lower_hex()), vec![]),
             };
 
-            let error = Error { name: name.clone(), inputs };
+            let error = Error { name, inputs };
 
             abi.errors.insert(error.name.clone(), vec![error]);
         });
@@ -136,7 +136,7 @@ pub fn build_abi(
                 None => (format!("Event_{}", event_selector.to_lower_hex()), vec![]),
             };
 
-            let event = Event { name: name.clone(), inputs, anonymous: event_selector.is_zero() };
+            let event = Event { name, inputs, anonymous: event_selector.is_zero() };
 
             abi.events.insert(event.name.clone(), vec![event]);
         });

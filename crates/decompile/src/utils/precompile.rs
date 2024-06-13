@@ -12,8 +12,8 @@ use crate::interfaces::StorageFrame;
 /// TODO: move to common
 pub fn decode_precompile(
     precompile_address: U256,
-    extcalldata_memory: Vec<StorageFrame>,
-    return_data_offset: WrappedOpcode,
+    extcalldata_memory: &[StorageFrame],
+    return_data_offset: &WrappedOpcode,
 ) -> (bool, String) {
     // safely convert the precompile address to a usize.
     let address: usize = match precompile_address.try_into() {

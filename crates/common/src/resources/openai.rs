@@ -31,7 +31,7 @@ pub async fn complete(prompt: &str, api_key: &str) -> Option<String> {
     match client.completions().create(request).await {
         Ok(response) => {
             if !response.choices.is_empty() {
-                Some(response.choices[0].text.clone())
+                Some(response.choices[0].text.to_owned())
             } else {
                 None
             }

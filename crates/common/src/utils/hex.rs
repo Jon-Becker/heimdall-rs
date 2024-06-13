@@ -44,6 +44,6 @@ impl ToLowerHex for Bytes {
 
 impl ToLowerHex for Vec<u8> {
     fn to_lower_hex(&self) -> String {
-        encode_hex(self.to_vec())
+        encode_hex(self)
     }
 }

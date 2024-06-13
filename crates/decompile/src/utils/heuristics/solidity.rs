@@ -71,7 +71,7 @@ pub fn solidity_heuristic(
         // MSTORE / MSTORE8
         0x52 | 0x53 => {
             let key = instruction.inputs[0];
-            let operation = instruction.input_operations[1].clone();
+            let operation = instruction.input_operations[1].to_owned();
 
             // add the mstore to the function's memory map
             function.memory.insert(key, StorageFrame { operation });
@@ -148,8 +148,8 @@ pub fn solidity_heuristic(
             // check if the external call is a precompiled contract
             match decode_precompile(
                 instruction.inputs[1],
-                calldata.clone(),
-                instruction.input_operations[5].clone(),
+                &calldata,
+                &instruction.input_operations[5],
             ) {
                 (true, precompile_logic) => {
                     function.logic.push(precompile_logic);
@@ -181,8 +181,8 @@ pub fn solidity_heuristic(
             // check if the external call is a precompiled contract
             match decode_precompile(
                 instruction.inputs[1],
-                calldata.clone(),
-                instruction.input_operations[4].clone(),
+                &calldata,
+                &instruction.input_operations[4],
             ) {
                 (true, precompile_logic) => {
                     function.logic.push(precompile_logic);
@@ -192,7 +192,12 @@ pub fn solidity_heuristic(
                         "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
                         address,
                         modifier,
-                        instruction.opcode_details.clone().expect("impossible").name.to_lowercase(),
+                        instruction
+                            .opcode_details
+                            .as_ref()
+                            .expect("impossible")
+                            .name
+                            .to_lowercase(),
                         calldata
                             .iter()
                             .map(|x| x.operation.solidify())

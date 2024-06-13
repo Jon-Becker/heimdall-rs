@@ -58,15 +58,17 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     if args.constructor {
         debug!("extracting constructor arguments from deployment bytecode.");
         warn!("the --constructor flag is in unstable, and will be improved in future releases.");
-        let constructor = parse_deployment_bytecode(calldata.clone())?;
+        let constructor = parse_deployment_bytecode(calldata)?;
+
         debug!(
             "parsed constructor argument hex string from deployment bytecode: '{}'",
-            encode_hex(constructor.arguments.clone())
+            encode_hex(&constructor.arguments)
         );
 
         // prefix with four zero bytes to avoid selector issues
         calldata =
-            [0x00, 0x00, 0x00, 0x00].iter().chain(constructor.arguments.iter()).cloned().collect();
+            [0x00, 0x00, 0x00, 0x00].into_iter().chain(constructor.arguments.into_iter()).collect();
+
         // ensure we dont resolve signatures, this is a constructor not calldata
         args.skip_resolving = true;
     }
@@ -85,7 +87,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     }
 
     // parse the two parts of calldata, inputs and selector
-    let function_selector = encode_hex(calldata[0..4].to_owned());
+    let function_selector = encode_hex(&calldata[0..4]);
     let byte_args = &calldata[4..];
 
     // get the function signature possibilities
