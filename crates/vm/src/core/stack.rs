@@ -149,9 +149,9 @@ impl Stack {
     /// // stack is now []
     /// ```
     pub fn dup(&mut self, n: usize) -> bool {
-        match self.stack.get_mut(n - 1) {
-            Some(_) => {
-                self.stack.push_front(self.stack[n - 1].clone());
+        match self.stack.get(n - 1) {
+            Some(item) => {
+                self.stack.push_front(item.clone());
                 true
             }
             None => false,

@@ -304,8 +304,8 @@ impl TraceFactory {
         &mut self,
         parent_index: u32,
         instruction: u32,
-        name: String,
-        args: Vec<String>,
+        name: &str,
+        args: &[String],
     ) -> u32 {
         let log = format!("{}({})", name.purple(), args.join(", "));
         self.add("log", parent_index, instruction, vec![log])
@@ -487,8 +487,8 @@ mod tests {
         trace.add_emission(
             parent,
             125,
-            "ContractCreated".to_string(),
-            vec!["contractAddress: 0x0000000000000000000000000000000000000000".to_string()],
+            "ContractCreated",
+            &["contractAddress: 0x0000000000000000000000000000000000000000".to_string()],
         );
         trace.add_raw_emission(
             parent,

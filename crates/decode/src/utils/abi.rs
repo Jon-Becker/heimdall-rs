@@ -48,7 +48,7 @@ pub fn try_decode_dynamic_parameter(
 ) -> Result<Option<AbiEncoded>, Error> {
     trace!(
         "calldata_words: {:#?}",
-        calldata_words.iter().map(|w| encode_hex(&w)).collect::<Vec<String>>()
+        calldata_words.iter().map(|w| encode_hex(w)).collect::<Vec<String>>()
     );
 
     // initialize a [`HashSet<usize>`] called `word_coverages` with `parameter_index`

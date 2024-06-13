@@ -337,8 +337,8 @@ pub fn tokenize(s: &str) -> Vec<String> {
             // Check if current character and last character form a compound operator (like "==",
             // ">=", "&&", "||")
             if let Some(last) = last_char {
-                if compound_operator_first_chars.contains(&last)
-                    && (c == '=' || c == '&' || c == '|')
+                if compound_operator_first_chars.contains(&last) &&
+                    (c == '=' || c == '&' || c == '|')
                 {
                     // Remove the last character as a single token
                     tokens.pop();

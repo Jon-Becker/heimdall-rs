@@ -66,8 +66,8 @@ pub fn build_cfg(
                 .opcode_details
                 .as_ref()
                 .ok_or_eyre("failed to get opcode details")?
-                .name
-                == "JUMPDEST",
+                .name ==
+                "JUMPDEST",
         )?;
     }
 

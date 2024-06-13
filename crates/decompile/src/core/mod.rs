@@ -4,6 +4,7 @@ pub(crate) mod postprocess;
 pub(crate) mod resolve;
 
 use alloy_json_abi::JsonAbi;
+use ethers::types::H160;
 use eyre::eyre;
 use heimdall_common::{
     ether::{
@@ -71,7 +72,15 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // create a new EVM instance. we will use this for finding function selectors,
     // performing symbolic execution, and more.
-    let mut evm = VM { gas_remaining: u128::max_value(), ..Default::default() };
+    let mut evm = VM::new(
+        &contract_bytecode,
+        &[],
+        H160::default(),
+        H160::default(),
+        H160::default(),
+        0,
+        u128::max_value(),
+    );
 
     // disassemble the contract's bytecode
     let assembly = disassemble(
