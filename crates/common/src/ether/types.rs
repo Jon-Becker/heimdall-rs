@@ -15,7 +15,7 @@ pub enum Padding {
 /// Parse function parameters [`ParamType`]s from a function signature.
 ///
 /// ```
-/// use heimdall_vm::core::types::parse_function_parameters;
+/// use heimdall_common::ether::types::parse_function_parameters;
 /// use ethers::abi::ParamType;
 ///
 /// let function_signature = "foo(uint256,uint256)";
