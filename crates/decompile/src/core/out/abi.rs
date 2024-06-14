@@ -4,7 +4,10 @@ use alloy_json_abi::{Error, Event, EventParam, Function, JsonAbi, Param, StateMu
 
 use eyre::Result;
 use heimdall_common::{
-    ether::signatures::{ResolvedError, ResolvedLog},
+    ether::{
+        signatures::{ResolvedError, ResolvedLog},
+        types::{to_abi_string, to_components},
+    },
     utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
 
@@ -85,14 +88,14 @@ pub fn build_abi(
                 Some(error) => (
                     error.name.clone(),
                     error
-                        .inputs
+                        .inputs()
                         .iter()
                         .enumerate()
                         .map(|(i, input)| Param {
                             name: format!("arg{i}"),
                             internal_type: None,
-                            ty: input.clone(),
-                            components: vec![],
+                            ty: to_abi_string(input),
+                            components: to_components(input),
                         })
                         .collect(),
                 ),
@@ -113,14 +116,14 @@ pub fn build_abi(
                 Some(event) => (
                     event.name.clone(),
                     event
-                        .inputs
+                        .inputs()
                         .iter()
                         .enumerate()
                         .map(|(i, input)| EventParam {
                             name: format!("arg{i}"),
                             internal_type: None,
-                            ty: input.clone(),
-                            components: vec![],
+                            ty: to_abi_string(input),
+                            components: to_components(input),
                             indexed: false,
                         })
                         .collect(),
@@ -129,6 +132,8 @@ pub fn build_abi(
             };
 
             let event = Event { name, inputs, anonymous: event_selector.is_zero() };
+
+            println!("event: {:#?}", event);
 
             abi.events.insert(event.name.clone(), vec![event]);
         });

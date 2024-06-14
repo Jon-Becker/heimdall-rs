@@ -25,7 +25,7 @@ thiserror = "1.0.50"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 eyre = "0.6.12"
-alloy-json-abi = "0.7.4"
+alloy-json-abi = "0.7.6"
 
 [[bin]]
 name = "heimdall"
