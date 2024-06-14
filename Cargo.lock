@@ -49,9 +49,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-json-abi"
-version = "0.7.5"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c3abf6446a292e19853aaca43590eeb48bf435dfd2c74200259e8f4872f6ce3"
+checksum = "aaeaccd50238126e3a0ff9387c7c568837726ad4f4e399b528ca88104d6c25ef"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-type-parser",
@@ -61,9 +61,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-primitives"
-version = "0.7.5"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5277af0cbcc483ee6ad2c1e818090b5928d27f04fd6580680f31c1cf8068bcc2"
+checksum = "f783611babedbbe90db3478c120fb5f5daacceffc210b39adc0af4fe0da70bad"
 dependencies = [
  "alloy-rlp",
  "bytes",
@@ -93,9 +93,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-sol-type-parser"
-version = "0.7.5"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fd4783b0a5840479013e9ce960d2eb7b3be381f722e0fe3d1f7c3bb6bd4ebd"
+checksum = "baa2fbd22d353d8685bd9fee11ba2d8b5c3b1d11e56adb3265fcf1f32bfdf404"
 dependencies = [
  "winnow 0.6.13",
 ]
@@ -1978,6 +1978,7 @@ dependencies = [
 name = "heimdall-common"
 version = "0.8.2"
 dependencies = [
+ "alloy-json-abi",
  "async-openai",
  "async-recursion",
  "async-trait",

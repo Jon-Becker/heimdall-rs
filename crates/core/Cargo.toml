@@ -15,7 +15,6 @@ async-recursion = "1.0.5"
 thiserror = "1.0.50"
 clap = { workspace = true, features = ["derive"] }
 colored = "2"
-#ethers = "2.0.4"
 ethers = "2.0.14"
 fancy-regex = "0.11.0"
 heimdall-cache = { workspace = true }
@@ -32,7 +31,7 @@ derive_builder = "0.12.0"
 async-convert = "1.0.0"
 futures = "0.3.28"
 tracing = "0.1.40"
-alloy-json-abi = { version = "0.7.4", features = ["serde_json"]}
+alloy-json-abi = { version = "0.7.6", features = ["serde_json"]}
 
 # modules
 heimdall-cfg = { workspace = true }
