@@ -136,8 +136,6 @@ pub fn build_abi(
 
             let event = Event { name, inputs, anonymous: event_selector.is_zero() };
 
-            println!("event: {:#?}", event);
-
             abi.events.insert(event.name.clone(), vec![event]);
         });
 
