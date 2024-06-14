@@ -54,14 +54,17 @@ pub fn build_abi(
                     name: format!("arg{i}"),
                     internal_type: None,
                     ty: match f.resolved_function {
-                        Some(ref sig) => sig.inputs[i].clone(),
+                        Some(ref sig) => to_abi_string(&sig.inputs()[i]),
                         None => arg
                             .potential_types()
                             .first()
                             .unwrap_or(&"bytes32".to_string())
                             .to_string(),
                     },
-                    components: vec![],
+                    components: match f.resolved_function {
+                        Some(ref sig) => to_components(&sig.inputs()[i]),
+                        None => vec![],
+                    },
                 })
                 .collect(),
             outputs: f
