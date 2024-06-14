@@ -12,9 +12,8 @@ pub fn match_parameters(
     let mut matched_functions: Vec<ResolvedFunction> = Vec::new();
     for mut resolved_function in resolved_functions {
         trace!(
-            "checking function {}({}) against Unresolved_0x{}({})",
-            &resolved_function.name,
-            &resolved_function.inputs.join(","),
+            "checking function {} against Unresolved_0x{}({})",
+            &resolved_function.signature,
             &function.selector,
             &function
                 .arguments

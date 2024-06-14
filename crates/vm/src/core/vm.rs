@@ -839,9 +839,10 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                // Note: clamping to 8 words here, since we dont actually use the return data
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(8 * 32);
+                let offset: usize = offset.try_into().unwrap_or(8 * 32);
+                let size: usize = size.try_into().unwrap_or(8 * 32);
 
                 // clamp values to calldata length
                 let end_offset_clamped = (offset + size).min(self.calldata.len());
@@ -860,7 +861,13 @@ impl VM {
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.memory.store_with_opcode(dest_offset, size, &value, operation);
+                self.memory.store_with_opcode(
+                    dest_offset,
+                    size,
+                    &value,
+                    #[cfg(feature = "experimental")]
+                    operation,
+                );
             }
 
             // CODESIZE
@@ -877,9 +884,10 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                // Note: clamping to 8 words here, since we dont actually use the return data
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(8 * 32);
+                let offset: usize = offset.try_into().unwrap_or(8 * 32);
+                let size: usize = size.try_into().unwrap_or(8 * 32);
 
                 let value_offset_safe = (offset + size).min(self.bytecode.len());
                 let mut value =
@@ -895,7 +903,13 @@ impl VM {
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.memory.store_with_opcode(dest_offset, size, &value, operation);
+                self.memory.store_with_opcode(
+                    dest_offset,
+                    size,
+                    &value,
+                    #[cfg(feature = "experimental")]
+                    operation,
+                );
             }
 
             // GASPRICE
@@ -945,7 +959,13 @@ impl VM {
                     self.consume_gas(100);
                 }
 
-                self.memory.store_with_opcode(dest_offset, size, &value, operation);
+                self.memory.store_with_opcode(
+                    dest_offset,
+                    size,
+                    &value,
+                    #[cfg(feature = "experimental")]
+                    operation,
+                );
             }
 
             // RETURNDATASIZE
@@ -973,7 +993,13 @@ impl VM {
                     3 * minimum_word_size + self.memory.expansion_cost(dest_offset, size);
                 self.consume_gas(gas_cost);
 
-                self.memory.store_with_opcode(dest_offset, size, &value, operation);
+                self.memory.store_with_opcode(
+                    dest_offset,
+                    size,
+                    &value,
+                    #[cfg(feature = "experimental")]
+                    operation,
+                );
             }
 
             // EXTCODEHASH and BLOCKHASH
@@ -1042,7 +1068,13 @@ impl VM {
                 let gas_cost = self.memory.expansion_cost(offset, 32);
                 self.consume_gas(gas_cost);
 
-                self.memory.store_with_opcode(offset, 32, value.encode().as_slice(), operation);
+                self.memory.store_with_opcode(
+                    offset,
+                    32,
+                    value.encode().as_slice(),
+                    #[cfg(feature = "experimental")]
+                    operation,
+                );
             }
 
             // MSTORE8
@@ -1057,7 +1089,13 @@ impl VM {
                 let gas_cost = self.memory.expansion_cost(offset, 1);
                 self.consume_gas(gas_cost);
 
-                self.memory.store_with_opcode(offset, 1, &[value.encode()[31]], operation);
+                self.memory.store_with_opcode(
+                    offset,
+                    1,
+                    &[value.encode()[31]],
+                    #[cfg(feature = "experimental")]
+                    operation,
+                );
             }
 
             // SLOAD
@@ -1189,7 +1227,13 @@ impl VM {
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.memory.store_with_opcode(dest_offset, size, &value, operation);
+                self.memory.store_with_opcode(
+                    dest_offset,
+                    size,
+                    &value,
+                    #[cfg(feature = "experimental")]
+                    operation,
+                );
             }
 
             // PC

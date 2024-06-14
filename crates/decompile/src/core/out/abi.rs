@@ -4,7 +4,10 @@ use alloy_json_abi::{Error, Event, EventParam, Function, JsonAbi, Param, StateMu
 
 use eyre::Result;
 use heimdall_common::{
-    ether::signatures::{ResolvedError, ResolvedLog},
+    ether::{
+        signatures::{ResolvedError, ResolvedLog},
+        types::{to_abi_string, to_components},
+    },
     utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
 
@@ -51,14 +54,17 @@ pub fn build_abi(
                     name: format!("arg{i}"),
                     internal_type: None,
                     ty: match f.resolved_function {
-                        Some(ref sig) => sig.inputs[i].clone(),
+                        Some(ref sig) => to_abi_string(&sig.inputs()[i]),
                         None => arg
                             .potential_types()
                             .first()
                             .unwrap_or(&"bytes32".to_string())
                             .to_string(),
                     },
-                    components: vec![],
+                    components: match f.resolved_function {
+                        Some(ref sig) => to_components(&sig.inputs()[i]),
+                        None => vec![],
+                    },
                 })
                 .collect(),
             outputs: f
@@ -85,14 +91,14 @@ pub fn build_abi(
                 Some(error) => (
                     error.name.clone(),
                     error
-                        .inputs
+                        .inputs()
                         .iter()
                         .enumerate()
                         .map(|(i, input)| Param {
                             name: format!("arg{i}"),
                             internal_type: None,
-                            ty: input.clone(),
-                            components: vec![],
+                            ty: to_abi_string(input),
+                            components: to_components(input),
                         })
                         .collect(),
                 ),
@@ -113,14 +119,14 @@ pub fn build_abi(
                 Some(event) => (
                     event.name.clone(),
                     event
-                        .inputs
+                        .inputs()
                         .iter()
                         .enumerate()
                         .map(|(i, input)| EventParam {
                             name: format!("arg{i}"),
                             internal_type: None,
-                            ty: input.clone(),
-                            components: vec![],
+                            ty: to_abi_string(input),
+                            components: to_components(input),
                             indexed: false,
                         })
                         .collect(),

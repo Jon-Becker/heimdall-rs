@@ -163,7 +163,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
                 format!(
                     "{} arg{i}",
                     match f.resolved_function {
-                        Some(ref sig) => sig.inputs[i].clone(),
+                        Some(ref sig) => sig.inputs()[i].to_string(),
                         None => arg
                             .potential_types()
                             .first()
@@ -241,7 +241,9 @@ fn get_event_and_error_declarations(
         let (name, inputs) = match all_resolved_logs
             .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
         {
-            Some(event) => (event.name.clone(), event.inputs.clone()),
+            Some(event) => {
+                (event.name.clone(), event.inputs().iter().map(|i| i.to_string()).collect())
+            }
             None => (
                 format!(
                     "Event_{}",
@@ -271,7 +273,9 @@ fn get_event_and_error_declarations(
         let (name, inputs) = match all_resolved_errors
             .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
         {
-            Some(error) => (error.name.clone(), error.inputs.clone()),
+            Some(error) => {
+                (error.name.clone(), error.inputs().iter().map(|i| i.to_string()).collect())
+            }
             None => (
                 format!(
                     "CustomError_{}",

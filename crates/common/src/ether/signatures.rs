@@ -1,11 +1,13 @@
 use async_trait::async_trait;
-use ethers::abi::Token;
+use ethers::abi::{ParamType, Token};
 
+use eyre::Result;
 use heimdall_cache::{read_cache, store_cache};
 use tracing::trace;
 
 use crate::{
     error::Error,
+    ether::types::parse_function_parameters,
     utils::{
         http::get_json_from_url,
         io::{logging::TraceFactory, types::display},
@@ -22,6 +24,12 @@ pub struct ResolvedFunction {
     pub decoded_inputs: Option<Vec<Token>>,
 }
 
+impl ResolvedFunction {
+    pub fn inputs(&self) -> Vec<ParamType> {
+        parse_function_parameters(&self.signature).expect("invalid signature")
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedError {
     pub name: String,
@@ -29,11 +37,23 @@ pub struct ResolvedError {
     pub inputs: Vec<String>,
 }
 
+impl ResolvedError {
+    pub fn inputs(&self) -> Vec<ParamType> {
+        parse_function_parameters(&self.signature).expect("invalid signature")
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedLog {
     pub name: String,
     pub signature: String,
     pub inputs: Vec<String>,
+}
+
+impl ResolvedLog {
+    pub fn inputs(&self) -> Vec<ParamType> {
+        parse_function_parameters(&self.signature).expect("invalid signature")
+    }
 }
 
 #[async_trait]

@@ -15,7 +15,7 @@ async-openai = "0.10.0"
 clap = { workspace = true, features = ["derive"] }
 colored = "2"
 crossbeam-channel = "0.5.7"
-ethers = { version = "2.0.4", features = ["ipc", "ws"] }
+ethers = { version = "2.0.14", features = ["ipc", "ws"] }
 fancy-regex = "0.11.0"
 heimdall-cache = { workspace = true }
 indicatif = "0.17.0"
@@ -37,3 +37,4 @@ heimdall-common.workspace = true
 
 [features]
 step-tracing = []
+experimental = []
