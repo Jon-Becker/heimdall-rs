@@ -217,7 +217,7 @@ impl TryFrom<Call> for DecodedCall {
             .await?;
 
             decoded_inputs = result.decoded.decoded_inputs.clone().unwrap_or_default();
-            resolved_function = Some(result.decoded.clone());
+            resolved_function = Some(result.decoded);
         }
 
         Ok(Self {
@@ -251,7 +251,7 @@ impl TryFrom<CallResult> for DecodedCallResult {
         .await?;
 
         // get first result
-        let decoded_outputs = result.decoded.decoded_inputs.clone().unwrap_or_default();
+        let decoded_outputs = result.decoded.decoded_inputs.unwrap_or_default();
 
         Ok(Self { gas_used: value.gas_used, output: value.output, decoded_outputs })
     }
@@ -318,15 +318,15 @@ impl DecodedTransactionTrace {
     pub async fn join_logs(
         &mut self,
         decoded_logs: &mut VecDeque<DecodedLog>,
-        vm_trace: VMTrace,
+        vm_trace: &VMTrace,
         parent_address: Vec<usize>,
     ) -> Result<(), Error> {
         // Track the current depth using trace_address. Initialize with the trace_address of self.
-        let mut current_address = parent_address.clone();
+        let mut current_address = parent_address;
         let mut relative_index = 0;
 
         // Iterate over vm_trace.ops
-        for op in vm_trace.ops {
+        for op in vm_trace.ops.iter() {
             match op.op {
                 // Check if the operation is one of the LOG operations
                 ExecutedInstruction::Known(ethers::types::Opcode::LOG0) |
@@ -356,7 +356,7 @@ impl DecodedTransactionTrace {
             }
 
             // Handle subtraces if present
-            if let Some(sub) = op.sub {
+            if let Some(sub) = &op.sub {
                 current_address.push(relative_index);
                 let _ = &self.join_logs(decoded_logs, sub, current_address.clone()).await?;
                 current_address.pop();
@@ -374,7 +374,7 @@ impl DecodedTransactionTrace {
         parent_address: Vec<usize>,
     ) -> Result<(), Error> {
         // Track the current depth using trace_address. Initialize with the trace_address of self.
-        let mut current_address = parent_address.clone();
+        let mut current_address = parent_address;
         let mut relative_index = 0;
 
         // Iterate over vm_trace.ops
@@ -417,7 +417,7 @@ impl DecodedTransactionTrace {
             DecodedAction::Call(call) => trace.add_call_with_extra(
                 parent_trace_index,
                 call.gas.as_u32(),
-                contracts.get(call.to).unwrap_or(&call.to.to_lower_hex()).clone(),
+                contracts.get(call.to).cloned().unwrap_or(call.to.to_lower_hex()),
                 match call.resolved_function.as_ref() {
                     Some(f) => f.name.clone(),
                     None => "fallback".to_string(),
@@ -425,8 +425,8 @@ impl DecodedTransactionTrace {
                 match call.resolved_function.as_ref() {
                     Some(f) => f
                         .decoded_inputs
-                        .clone()
-                        .unwrap_or_default()
+                        .as_ref()
+                        .unwrap_or(&vec![])
                         .iter()
                         .map(|token| token.parameterize())
                         .collect(),
@@ -460,8 +460,8 @@ impl DecodedTransactionTrace {
                 match &self.result.as_ref() {
                     Some(DecodedRes::Create(create_result)) => contracts
                         .get(create_result.address)
-                        .unwrap_or(&create_result.address.to_lower_hex())
-                        .clone(),
+                        .cloned()
+                        .unwrap_or(create_result.address.to_lower_hex()),
                     _ => "".to_string(),
                 },
                 create.init.len().try_into().unwrap_or(0),
@@ -494,8 +494,8 @@ impl DecodedTransactionTrace {
                 trace.add_emission(
                     parent_trace_index,
                     log.log_index.unwrap_or(U256::zero()).as_u32(),
-                    event.name.clone(),
-                    event.inputs.clone(),
+                    &event.name,
+                    &event.inputs,
                 );
                 trace.add_raw_emission(
                     parent_trace_index,

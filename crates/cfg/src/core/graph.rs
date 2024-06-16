@@ -18,23 +18,22 @@ pub fn build_cfg(
 
     // add the current operations to the cfg
     for operation in &vm_trace.operations {
-        let instruction = operation.last_instruction.clone();
-
-        let opcode_name = instruction
+        let opcode_name = operation
+            .last_instruction
             .opcode_details
-            .clone()
+            .as_ref()
             .ok_or_eyre("failed to get opcode details for instruction")?
             .name;
 
         let assembly = format!(
             "{} {} {}",
-            encode_hex_reduced(U256::from(instruction.instruction)),
+            encode_hex_reduced(U256::from(operation.last_instruction.instruction)),
             opcode_name,
             if opcode_name.contains("PUSH") {
                 encode_hex_reduced(
-                    *instruction
+                    *operation
+                        .last_instruction
                         .outputs
-                        .clone()
                         .first()
                         .ok_or_eyre("failed to get output for PUSH instruction")?,
                 )
@@ -65,7 +64,7 @@ pub fn build_cfg(
                 .ok_or_eyre("failed to get first operation")?
                 .last_instruction
                 .opcode_details
-                .clone()
+                .as_ref()
                 .ok_or_eyre("failed to get opcode details")?
                 .name ==
                 "JUMPDEST",

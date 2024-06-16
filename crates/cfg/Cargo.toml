@@ -19,7 +19,7 @@ clap = { workspace = true, features = ["derive"] }
 derive_builder = "0.12.0"
 tracing = "0.1.40"
 eyre = "0.6.12"
-ethers = "2.0.4"
+ethers = "2.0.14"
 futures = "0.3.30"
 lazy_static = "1.4.0"
 petgraph = "0.6.2"

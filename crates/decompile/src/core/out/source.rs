@@ -26,8 +26,7 @@ pub fn build_source(
     storage_variables: &HashMap<String, String>,
 ) -> Result<Option<String>> {
     // we can get the AnalyzerType from the first function, since they are all the same
-    let analyzer_type =
-        functions.first().map(|f| f.analyzer_type.clone()).unwrap_or(AnalyzerType::Yul);
+    let analyzer_type = functions.first().map(|f| f.analyzer_type).unwrap_or(AnalyzerType::Yul);
     if analyzer_type == AnalyzerType::Abi {
         debug!("skipping source construction for due to {} analyzer type", analyzer_type);
         return Ok(None);
@@ -144,7 +143,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
     if let Some(state_mutability) = state_mutability.as_str() {
         function_modifiers.push(state_mutability.to_owned());
     }
-    if let Some(returns) = f.returns.clone() {
+    if let Some(returns) = f.returns.as_ref() {
         function_modifiers.push(format!("returns ({})", returns));
     }
 
@@ -164,7 +163,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
                 format!(
                     "{} arg{i}",
                     match f.resolved_function {
-                        Some(ref sig) => sig.inputs[i].clone(),
+                        Some(ref sig) => sig.inputs()[i].to_string(),
                         None => arg
                             .potential_types()
                             .first()
@@ -242,7 +241,9 @@ fn get_event_and_error_declarations(
         let (name, inputs) = match all_resolved_logs
             .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
         {
-            Some(event) => (event.name.clone(), event.inputs.clone()),
+            Some(event) => {
+                (event.name.clone(), event.inputs().iter().map(|i| i.to_string()).collect())
+            }
             None => (
                 format!(
                     "Event_{}",
@@ -272,7 +273,9 @@ fn get_event_and_error_declarations(
         let (name, inputs) = match all_resolved_errors
             .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
         {
-            Some(error) => (error.name.clone(), error.inputs.clone()),
+            Some(error) => {
+                (error.name.clone(), error.inputs().iter().map(|i| i.to_string()).collect())
+            }
             None => (
                 format!(
                     "CustomError_{}",

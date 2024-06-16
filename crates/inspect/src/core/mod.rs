@@ -105,7 +105,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
 
     if let Some(vm_trace) = block_trace.vm_trace {
         // join logs to trace
-        let _ = decoded_trace.join_logs(&mut decoded_logs, vm_trace.clone(), Vec::new()).await;
+        let _ = decoded_trace.join_logs(&mut decoded_logs, &vm_trace, Vec::new()).await;
         // build state diffs within trace
         let _ = decoded_trace.build_state_diffs(vm_trace, Vec::new()).await;
     } else {
@@ -127,5 +127,5 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     info!("decoded raw trace successfully");
     debug!("inspection took {:?}", start_time.elapsed());
 
-    Ok(InspectResult { decoded_trace: decoded_trace.clone(), _trace: trace })
+    Ok(InspectResult { decoded_trace: decoded_trace.to_owned(), _trace: trace })
 }

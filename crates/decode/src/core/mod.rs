@@ -6,12 +6,11 @@ use heimdall_common::{
     ether::{
         calldata::get_calldata_from_target,
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
+        types::parse_function_parameters,
     },
     utils::{io::logging::TraceFactory, strings::encode_hex},
 };
-use heimdall_vm::core::types::{
-    get_padding, get_potential_types_for_word, parse_function_parameters, to_type, Padding,
-};
+use heimdall_vm::core::types::{get_padding, get_potential_types_for_word, to_type, Padding};
 use tracing::{debug, info, trace, warn};
 
 use crate::{
@@ -58,15 +57,17 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     if args.constructor {
         debug!("extracting constructor arguments from deployment bytecode.");
         warn!("the --constructor flag is in unstable, and will be improved in future releases.");
-        let constructor = parse_deployment_bytecode(calldata.clone())?;
+        let constructor = parse_deployment_bytecode(calldata)?;
+
         debug!(
             "parsed constructor argument hex string from deployment bytecode: '{}'",
-            encode_hex(constructor.arguments.clone())
+            encode_hex(&constructor.arguments)
         );
 
         // prefix with four zero bytes to avoid selector issues
         calldata =
-            [0x00, 0x00, 0x00, 0x00].iter().chain(constructor.arguments.iter()).cloned().collect();
+            [0x00, 0x00, 0x00, 0x00].into_iter().chain(constructor.arguments.into_iter()).collect();
+
         // ensure we dont resolve signatures, this is a constructor not calldata
         args.skip_resolving = true;
     }
@@ -85,7 +86,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     }
 
     // parse the two parts of calldata, inputs and selector
-    let function_selector = encode_hex(calldata[0..4].to_owned());
+    let function_selector = encode_hex(&calldata[0..4]);
     let byte_args = &calldata[4..];
 
     // get the function signature possibilities

@@ -29,8 +29,8 @@ impl RangeMap {
 
         // get the memory range
         while size > 0 {
-            if let Some(memory) = self.get_by_offset(offset) {
-                memory_range.push(memory.clone());
+            if let Some(op) = self.get_by_offset(offset) {
+                memory_range.push(op.clone());
             }
             offset += 32;
             size = size.saturating_sub(32);
@@ -49,8 +49,9 @@ impl RangeMap {
     ///  - split, if our range overwrites a subset that partitions it,
     ///  - shortened, if our range overwrites such that only one "end" of it is overwritten
     pub fn write(&mut self, offset: usize, size: usize, opcode: WrappedOpcode) {
-        let range: Range<usize> = Range { start: offset, end: offset + size - 1 };
-        let incumbents: Vec<Range<usize>> = self.affected_ranges(range.clone());
+        let range: Range<usize> =
+            Range { start: offset, end: offset.saturating_add(size).saturating_sub(1) };
+        let incumbents: Vec<Range<usize>> = self.affected_ranges(&range);
 
         if incumbents.is_empty() {
             self.0.insert(range, opcode);
@@ -86,7 +87,7 @@ impl RangeMap {
                         let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
                         self.0.remove(incumbent);
                         self.0.insert(left, old_opcode.clone());
-                        self.0.insert(right, old_opcode.clone());
+                        self.0.insert(right, old_opcode);
                     } else {
                         panic!("range_map::write: impossible case");
                     }
@@ -100,8 +101,8 @@ impl RangeMap {
         self.0.keys().find(|range| range.contains(&offset))
     }
 
-    fn affected_ranges(&self, range: Range<usize>) -> Vec<Range<usize>> {
-        self.0.keys().filter(|incumbent| Self::range_collides(&range, incumbent)).cloned().collect()
+    fn affected_ranges(&self, range: &Range<usize>) -> Vec<Range<usize>> {
+        self.0.keys().filter(|incumbent| Self::range_collides(range, incumbent)).cloned().collect()
     }
 
     fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {

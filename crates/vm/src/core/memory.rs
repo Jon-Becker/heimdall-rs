@@ -1,7 +1,10 @@
+#[cfg(feature = "experimental")]
 use crate::ext::range_map::RangeMap;
 
+#[cfg(feature = "experimental")]
 use super::opcodes::WrappedOpcode;
 
+#[cfg(feature = "experimental")]
 pub type ByteTracker = RangeMap;
 
 /// The [`Memory`] struct represents the memory of an EVM.
@@ -9,6 +12,8 @@ pub type ByteTracker = RangeMap;
 pub struct Memory {
     /// Vector storing memory data
     pub memory: Vec<u8>,
+
+    #[cfg(feature = "experimental")]
     /// Byte-tracking facility, allowing bytes to be associated with the opcodes that last modified
     /// them
     pub bytes: ByteTracker,
@@ -23,7 +28,11 @@ impl Default for Memory {
 impl Memory {
     /// Creates a new [`Memory`] with an empty memory vector and empty byte tracker
     pub fn new() -> Memory {
-        Memory { memory: Vec::with_capacity(2048), bytes: ByteTracker::new() }
+        Memory {
+            memory: Vec::with_capacity(2048),
+            #[cfg(feature = "experimental")]
+            bytes: ByteTracker::new(),
+        }
     }
 
     /// Gets the current size of the memory in bytes.
@@ -103,9 +112,10 @@ impl Memory {
         offset: usize,
         size: usize,
         value: &[u8],
-        opcode: WrappedOpcode,
+        #[cfg(feature = "experimental")] opcode: WrappedOpcode,
     ) {
         self.store(offset, size, value);
+        #[cfg(feature = "experimental")]
         self.bytes.write(offset, size, opcode);
     }
 
@@ -177,6 +187,7 @@ impl Memory {
         }
     }
 
+    #[cfg(feature = "experimental")]
     /// Given an offset into memory, returns the opcode that last modified it (if it has been
     /// modified at all)
     ///

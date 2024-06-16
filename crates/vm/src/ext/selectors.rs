@@ -75,7 +75,7 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
 
                 // get the function's entry point
                 let function_entry_point =
-                    match resolve_entry_point(&evm.clone(), &function_selector) {
+                    match resolve_entry_point(&mut evm.clone(), &function_selector) {
                         0 => continue,
                         x => x,
                     };
@@ -97,8 +97,7 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
 
 /// resolve a selector's function entry point from the EVM bytecode
 // TODO: update resolve_entry_point logic to support vyper
-pub fn resolve_entry_point(evm: &VM, selector: &str) -> u128 {
-    let mut vm = evm.clone();
+pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
     let mut handled_jumps = HashSet::new();
 
     // execute the EVM call to find the entry point for the given selector
