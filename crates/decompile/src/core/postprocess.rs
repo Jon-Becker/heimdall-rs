@@ -35,6 +35,8 @@ pub(crate) struct PostprocessorState {
     pub transient_map: HashMap<String, String>,
     /// A mapping which holds inferred types for transient storage variables
     pub transient_type_map: HashMap<String, String>,
+    /// An optional field which holds the storage location if the function is a public getter
+    pub maybe_getter_for: Option<String>,
 }
 
 /// The [`PostprocessorOrchestrator`] is responsible for managing the cleanup of
@@ -137,10 +139,28 @@ impl PostprocessOrchestrator {
                     let access_range = find_balanced_encapsulator(storage_access, ('[', ']'))
                         .map_err(|e| eyre!("failed to find access range: {e}"))?;
 
+                    // update returns
+                    function.returns = Some(String::from("string memory"));
                     function.logic = vec![format!(
                         "return string(rlp.encodePacked(storage[{}]));",
                         storage_access[access_range].to_string()
                     )]
+                }
+            }
+
+            // iterate over logic, if we find a return w/ a storage variable:
+            if let Some(line) = function
+                .logic
+                .iter()
+                .find(|line| line.contains("return") && line.contains("storage"))
+            {
+                if let Some(storage_access) = STORAGE_ACCESS_REGEX.find(line).unwrap_or(None) {
+                    let storage_access = storage_access.as_str();
+                    let access_range = find_balanced_encapsulator(storage_access, ('[', ']'))
+                        .map_err(|e| eyre!("failed to find access range: {e}"))?;
+
+                    state.maybe_getter_for =
+                        Some(format!("storage[{}]", &storage_access[access_range]));
                 }
             }
         }
@@ -187,6 +207,11 @@ impl PostprocessOrchestrator {
 
         // update the state, so we can share it between functions
         self.state = state;
+
+        // if this is a getter, replace function.maybe_getter_for with the actual getter
+        if let Some(getter_for) = &self.state.maybe_getter_for {
+            function.maybe_getter_for = self.state.storage_map.get(getter_for).cloned();
+        }
 
         debug!(
             "postprocessing for '{}' completed in {:?}",
