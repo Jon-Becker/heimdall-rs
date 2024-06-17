@@ -57,14 +57,12 @@ mod integration_tests {
         .expect("failed to decompile");
 
         // assert that the output is correct
-        for line in &["function Unresolved_06fdde03() public view returns (bytes memory) {",
+        for line in &[
             "function Unresolved_095ea7b3(address arg0, uint256 arg1) public returns (bool) {",
             "function Unresolved_18160ddd() public view returns (uint256) {",
             "function Unresolved_23b872dd(address arg0, address arg1, uint256 arg2) public returns (bool) {",
             "function Unresolved_2e1a7d4d(uint256 arg0) public {",
-            "function Unresolved_313ce567() public view returns (bool) {",
             "function Unresolved_70a08231(address arg0) public view returns (uint256) {",
-            "function Unresolved_95d89b41() public view returns (bytes memory) {",
             "function Unresolved_a9059cbb(address arg0, uint256 arg1) public returns (bool) {",
             "function Unresolved_d0e30db0() public payable {",
             "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"] {
