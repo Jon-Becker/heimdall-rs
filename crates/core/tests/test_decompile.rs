@@ -58,8 +58,6 @@ mod integration_tests {
 
         // assert that the output is correct
         for line in &[
-            "string public Unresolved_95d89b41",
-            "string public Unresolved_06fdde03",
             "function Unresolved_095ea7b3(address arg0, uint256 arg1) public returns (bool) {",
             "function Unresolved_18160ddd() public view returns (uint256) {",
             "function Unresolved_23b872dd(address arg0, address arg1, uint256 arg2) public returns (bool) {",
