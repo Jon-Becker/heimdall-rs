@@ -50,6 +50,9 @@ pub struct AnalyzedFunction {
 
     /// the analyzer type used to analyze this function
     pub analyzer_type: AnalyzerType,
+
+    /// the underlying storage variable, if this is a public getter
+    pub maybe_getter_for: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -96,6 +99,7 @@ impl AnalyzedFunction {
             payable: true,
             analyzer_type: AnalyzerType::Abi,
             fallback,
+            maybe_getter_for: None,
         }
     }
 

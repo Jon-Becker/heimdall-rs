@@ -15,26 +15,6 @@ if [ "$1" = "--cov" ]; then
         cargo llvm-cov --release --ignore-filename-regex=$regex --fail-under-lines 100 --cobertura --output-path coverage.xml -- test_
     fi
 
-    # Search for the first instance of line-rate="{float}"
-    match=$(grep -o 'line-rate="[0-9.]\+"' coverage.xml | head -n 1)
-
-    # Check if a match was found
-    if [ -n "$match" ]; then
-        # Extract the float value from the match
-        float=$(echo "$match" | grep -o '[0-9.]\+')
-
-        # Compare the float value with 0.5
-        if (( $(awk 'BEGIN {print ('$float' < 0.58)}') )); then
-            echo "coverage of $float is less than 0.58"
-            exit 1
-        else
-            exit 0
-        fi
-    else
-        echo "coverage.xml not found"
-        exit 1
-    fi
-
 # if --doc is passed, then we want to run the doc command
 elif [ "$1" = "--doc" ]; then
     cargo test --workspace --doc

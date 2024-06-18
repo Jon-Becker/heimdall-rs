@@ -82,7 +82,7 @@ pub fn build_abi(
                     vec![Param {
                         name: "".to_string(),
                         internal_type: None,
-                        ty: if r == "bytes memory" { "bytes".to_string() } else { r.clone() },
+                        ty: r.replacen("memory", "", 1).trim().to_string(),
                         components: vec![],
                     }]
                 })
