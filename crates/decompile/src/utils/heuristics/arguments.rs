@@ -51,10 +51,6 @@ pub fn argument_heuristic(
                 .try_into()
                 .unwrap_or(usize::MAX);
 
-            println!("arg key: {}", arg_index);
-
-            print!("{:#?}", state.last_instruction.input_operations);
-
             function.arguments.entry(arg_index).or_insert_with(|| {
                 CalldataFrame {
                     arg_op: state.last_instruction.input_operations[0].to_string(),
