@@ -186,8 +186,8 @@ pub fn get_padding(bytes: &[u8]) -> Padding {
     // we can avoid doing a full check if any of the following are true:
     // there are no null bytes OR
     // neither first nor last byte is a null byte, it is not padded
-    if null_byte_indices.is_empty()
-        || null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
+    if null_byte_indices.is_empty() ||
+        null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
     {
         return Padding::None;
     }

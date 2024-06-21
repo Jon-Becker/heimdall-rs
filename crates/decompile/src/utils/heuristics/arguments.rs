@@ -6,7 +6,7 @@ use heimdall_vm::core::{
     types::{byte_size_to_type, convert_bitmask},
     vm::State,
 };
-use tracing::{debug, trace};
+use tracing::debug;
 
 use crate::{
     core::analyze::{AnalyzerState, AnalyzerType},
@@ -46,10 +46,14 @@ pub fn argument_heuristic(
 
         // CALLDATACOPY
         0x37 => {
-            let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4))
-                / (32 * 3)) // Accounts for dest, source and size
+            let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) /
+                (32 * 3)) // Accounts for dest, source and size
                 .try_into()
                 .unwrap_or(usize::MAX);
+
+            println!("arg key: {}", arg_index);
+
+            print!("{:#?}", state.last_instruction.input_operations);
 
             function.arguments.entry(arg_index).or_insert_with(|| {
                 CalldataFrame {
@@ -271,7 +275,7 @@ mod tests {
     use ethers::types::U256;
     use heimdall_vm::core::{
         memory::Memory,
-        opcodes::Opcode,
+        opcodes::{Opcode, WrappedInput, WrappedOpcode},
         stack::Stack,
         storage::Storage,
         vm::{Instruction, State},
@@ -294,7 +298,10 @@ mod tests {
                 opcode: 0x37,
                 inputs: vec![U256::from(160), U256::from(36), U256::from(0)],
                 outputs: vec![],
-                input_operations: vec![],
+                input_operations: vec![WrappedOpcode {
+                    opcode: Opcode::new(0x60),
+                    inputs: vec![WrappedInput::Raw(U256::from(1))],
+                }],
                 output_operations: vec![],
             },
             gas_used: 0,
