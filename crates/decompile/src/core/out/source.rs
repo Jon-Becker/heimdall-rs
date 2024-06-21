@@ -41,7 +41,7 @@ pub fn build_source(
 
     // add storage variables
     if analyzer_type == AnalyzerType::Solidity {
-        source.extend(get_storage_variables(storage_variables));
+        source.extend(get_storage_variables(storage_variables, functions));
     }
 
     // add event and error declarations
@@ -61,7 +61,7 @@ pub fn build_source(
     }
 
     // add functions
-    functions.iter().filter(|f| !f.fallback).for_each(|f| {
+    functions.iter().filter(|f| !f.fallback && f.maybe_getter_for.is_none()).for_each(|f| {
         let mut function_source = Vec::new();
 
         // get the function header
@@ -214,9 +214,31 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
 
 /// Helper function which will write the storage variable declarations for the decompiled source
 /// code.
-fn get_storage_variables(storage_variables: &HashMap<String, String>) -> Vec<String> {
-    let mut output: Vec<String> =
-        storage_variables.iter().map(|(name, typ)| format!("{} {};", typ, name)).collect();
+fn get_storage_variables(
+    storage_variables: &HashMap<String, String>,
+    functions: &[AnalyzedFunction],
+) -> Vec<String> {
+    println!("{:?}", storage_variables);
+
+    let mut output: Vec<String> = storage_variables
+        .iter()
+        .map(|(name, typ)| {
+            if let Some(f) = functions.iter().find(|f| {
+                f.maybe_getter_for.as_ref() == Some(name) && f.resolved_function.is_some()
+            }) {
+                let name = f.resolved_function.as_ref().expect("impossible").name.to_string();
+
+                // TODO: for public getters, we can use `eth_getStorageAt` to get the value
+                return format!(
+                    "{} public {};",
+                    f.returns.as_ref().unwrap_or(typ).replacen("memory", "", 1).trim(),
+                    name,
+                );
+            }
+
+            format!("{} {};", typ, name)
+        })
+        .collect();
     if !output.is_empty() {
         output.push("".to_string());
     }
