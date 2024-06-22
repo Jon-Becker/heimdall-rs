@@ -12,7 +12,7 @@ use ethers::{
     },
 };
 use heimdall_cache::{read_cache, store_cache};
-use std::{str::FromStr, time::Duration};
+use std::{io::Write, str::FromStr, time::Duration};
 use tracing::{debug, error, trace};
 
 /// Get the Provider object for RPC URL
@@ -335,7 +335,8 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
                         "failed to replay and trace transaction '{}' . does your RPC provider support it?",
                         &transaction_hash
                     );
-                    error!("error: '{}' .", e);
+                    println!("e: {:#?}", e);
+
                     return Err(backoff::Error::Transient { err: (), retry_after: None })
                 }
             };
