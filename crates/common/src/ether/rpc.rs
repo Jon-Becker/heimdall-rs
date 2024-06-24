@@ -12,7 +12,7 @@ use ethers::{
     },
 };
 use heimdall_cache::{read_cache, store_cache};
-use std::{io::Write, str::FromStr, time::Duration};
+use std::{str::FromStr, time::Duration};
 use tracing::{debug, error, trace};
 
 /// Get the Provider object for RPC URL

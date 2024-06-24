@@ -2093,6 +2093,7 @@ dependencies = [
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
+ "heimdall-decoder",
  "heimdall-disassembler",
  "heimdall-vm",
  "lazy_static",

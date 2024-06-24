@@ -14,6 +14,7 @@ exclude.workspace = true
 heimdall-config = { workspace = true }
 heimdall-common = { workspace = true }
 heimdall-cache = { workspace = true }
+heimdall-decoder = { workspace = true }
 thiserror = "1.0.50"
 clap = { workspace = true, features = ["derive"] }
 derive_builder = "0.12.0"

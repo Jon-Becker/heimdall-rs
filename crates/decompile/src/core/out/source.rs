@@ -69,9 +69,9 @@ pub fn build_source(
     functions
         .iter()
         .filter(|f| {
-            !f.fallback
-                && (analyzer_type == AnalyzerType::Yul
-                    || (f.maybe_getter_for.is_none() && !(f.pure && f.arguments.is_empty())))
+            !f.fallback &&
+                (analyzer_type == AnalyzerType::Yul ||
+                    (f.maybe_getter_for.is_none() && !f.is_constant()))
         })
         .for_each(|f| {
             let mut function_source = Vec::new();
@@ -229,9 +229,9 @@ fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
     let mut output: Vec<String> = functions
         .iter()
         .filter_map(|f| {
-            if f.pure && f.arguments.is_empty() {
+            if f.is_constant() {
                 Some(format!(
-                    "{} public constant {} = TMP;",
+                    "{} public constant {} = {};",
                     f.returns
                         .as_ref()
                         .unwrap_or(&"bytes".to_string())
@@ -240,7 +240,8 @@ fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
                     f.resolved_function
                         .as_ref()
                         .map(|x| x.name.clone())
-                        .unwrap_or("UNR".to_string())
+                        .unwrap_or(format!("Unresolved_{}", f.selector)),
+                    f.constant_value.as_ref().unwrap_or(&"0x".to_string())
                 ))
             } else {
                 None
