@@ -6,20 +6,20 @@ use crate::{
 };
 
 pub async fn get_calldata_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
-    if TRANSACTION_HASH_REGEX.is_match(target).unwrap_or(false) {
-        // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
-        let raw_transaction = get_transaction(target, rpc_url).await.map_err(|_| {
-            Error::Generic("failed to fetch transaction from RPC provider.".to_string())
-        })?;
+    // if TRANSACTION_HASH_REGEX.is_match(target).unwrap_or(false) {
+    //     // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
+    //     let raw_transaction = get_transaction(target, rpc_url).await.map_err(|_| {
+    //         Error::Generic("failed to fetch transaction from RPC provider.".to_string())
+    //     })?;
 
-        Ok(raw_transaction.input.to_vec())
-    } else if CALLDATA_REGEX.is_match(target).unwrap_or(false) {
+    //     Ok(raw_transaction.input.to_vec())
+    // } else if CALLDATA_REGEX.is_match(target).unwrap_or(false) {
         Ok(decode_hex(target)?)
-    } else {
-        Err(Error::Generic(
-            "invalid target. must be a transaction hash or calldata (bytes).".to_string(),
-        ))
-    }
+    // } else {
+    //     Err(Error::Generic(
+    //         "invalid target. must be a transaction hash or calldata (bytes).".to_string(),
+    //     ))
+    // }
 }
 
 #[cfg(test)]

@@ -22,12 +22,12 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct DecodeResult {
     pub decoded: ResolvedFunction,
-    _trace: TraceFactory,
+    //_trace: TraceFactory,
 }
 
 impl DecodeResult {
     pub fn display(&self) {
-        self._trace.display();
+        // self._trace.display();
     }
 }
 
@@ -223,5 +223,5 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     debug!("decoding calldata took {:?}", decode_start_time.elapsed());
     info!("decoded {} bytes successfully", calldata.len());
     debug!("decoding took {:?}", start_time.elapsed());
-    Ok(DecodeResult { _trace: TraceFactory::try_from(&selected_match)?, decoded: selected_match })
+    Ok(DecodeResult { /*_trace: TraceFactory::try_from(&selected_match)?,*/ decoded: selected_match })
 }
