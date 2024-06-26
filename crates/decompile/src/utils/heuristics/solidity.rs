@@ -191,13 +191,13 @@ pub fn solidity_heuristic(
                     function.logic.push(format!(
                         "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
                         address,
-                        modifier,
                         instruction
                             .opcode_details
                             .as_ref()
                             .expect("impossible")
                             .name
                             .to_lowercase(),
+                        modifier,
                         calldata
                             .iter()
                             .map(|x| x.operation.solidify())

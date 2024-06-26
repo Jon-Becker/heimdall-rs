@@ -109,7 +109,7 @@ impl VM {
             vm_trace.gas_used = vm.gas_used;
 
             // if we encounter a JUMP(I), create children taking both paths and break
-            if last_instruction.opcode == 0x57 || last_instruction.opcode == 0x56 {
+            if last_instruction.opcode == 0x57 {
                 trace!(
                     "found branch due to JUMP{} instruction at {}",
                     if last_instruction.opcode == 0x57 { "I" } else { "" },
