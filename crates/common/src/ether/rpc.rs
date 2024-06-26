@@ -330,12 +330,11 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
                 .await
             {
                 Ok(traces) => traces,
-                Err(e) => {
+                Err(_) => {
                     error!(
                         "failed to replay and trace transaction '{}' . does your RPC provider support it?",
                         &transaction_hash
                     );
-                    println!("e: {:#?}", e);
 
                     return Err(backoff::Error::Transient { err: (), retry_after: None })
                 }

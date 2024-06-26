@@ -114,6 +114,17 @@ pub fn build_source(
         source = source.replace(unresolved_name, resolved_name);
     });
 
+    // replace all storage variables w/ getters w/ their resolved names
+    functions.iter().filter(|f| f.maybe_getter_for.is_some()).for_each(|f| {
+        let getter_for_storage_variable = f.maybe_getter_for.as_ref().expect("impossible");
+        let resolved_name = f
+            .resolved_function
+            .as_ref()
+            .map(|x| x.name.clone())
+            .unwrap_or(format!("unresolved_{}", f.selector));
+        source = source.replace(getter_for_storage_variable, &resolved_name);
+    });
+
     debug!("constructing {} source took {:?}", analyzer_type, start_time.elapsed());
 
     Ok(Some(source))
@@ -240,7 +251,7 @@ fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
                     f.resolved_function
                         .as_ref()
                         .map(|x| x.name.clone())
-                        .unwrap_or(format!("Unresolved_{}", f.selector)),
+                        .unwrap_or(format!("unresolved_{}", f.selector)),
                     f.constant_value.as_ref().unwrap_or(&"0x".to_string())
                 ))
             } else {
@@ -263,10 +274,12 @@ fn get_storage_variables(
     let mut output: Vec<String> = storage_variables
         .iter()
         .map(|(name, typ)| {
-            if let Some(f) = functions.iter().find(|f| {
-                f.maybe_getter_for.as_ref() == Some(name) && f.resolved_function.is_some()
-            }) {
-                let name = f.resolved_function.as_ref().expect("impossible").name.to_string();
+            if let Some(f) = functions.iter().find(|f| f.maybe_getter_for.as_ref() == Some(name)) {
+                let name = f
+                    .resolved_function
+                    .as_ref()
+                    .map(|x| x.name.clone())
+                    .unwrap_or(format!("unresolved_{}", f.selector));
 
                 // TODO: for public getters, we can use `eth_getStorageAt` to get the value
                 return format!(
