@@ -181,7 +181,7 @@ pub fn to_type(string: &str) -> ParamType {
         string = string.replacen(&format!("[{}]", &size), "", 1);
     }
 
-    let arg_type = match string.as_str() {
+    let arg_type = match string.as_str().replace("memory", "").trim() {
         "address" => ParamType::Address,
         "bool" => ParamType::Bool,
         "string" => ParamType::String,

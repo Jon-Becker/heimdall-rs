@@ -4,15 +4,19 @@ pub(crate) mod postprocess;
 pub(crate) mod resolve;
 
 use alloy_json_abi::JsonAbi;
-use ethers::types::H160;
+use ethers::{
+    abi::{decode as abi_decode, ParamType, Token},
+    types::H160,
+};
 use eyre::eyre;
 use heimdall_common::{
     ether::{
         bytecode::get_bytecode_from_target,
         compiler::detect_compiler,
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
+        types::to_type,
     },
-    utils::strings::{encode_hex, encode_hex_reduced, StringExt},
+    utils::strings::{decode_hex, encode_hex, encode_hex_reduced, StringExt},
 };
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
 use heimdall_vm::{
@@ -160,7 +164,29 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             );
 
             // analyze the symbolic execution trace
-            let analyzed_function = analyzer.analyze(trace_root)?;
+            let mut analyzed_function = analyzer.analyze(trace_root)?;
+
+            // if the function is constant, we can get the exact val
+            if analyzed_function.is_constant() {
+                evm.reset();
+                let x = evm.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
+
+                let returns_param_type = analyzed_function
+                    .returns
+                    .as_ref()
+                    .map(|ret_type| to_type(ret_type.replace("memory", "").trim()))
+                    .unwrap_or(ParamType::Bytes);
+
+                let decoded = abi_decode(&[returns_param_type], &x.returndata)
+                    .map(|decoded| match decoded[0].clone() {
+                        Token::String(s) => format!("\"{}\"", s),
+                        Token::Uint(x) | Token::Int(x) => x.to_string(),
+                        token => format!("0x{}", token),
+                    })
+                    .unwrap_or_else(|_| encode_hex(&x.returndata));
+
+                analyzed_function.constant_value = Some(decoded);
+            }
 
             Ok::<_, Error>(analyzed_function)
         })

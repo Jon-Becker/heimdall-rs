@@ -41,6 +41,11 @@ pub fn build_source(
 
     // add storage variables
     if analyzer_type == AnalyzerType::Solidity {
+        source.extend(get_constants(functions));
+    }
+
+    // add storage variables
+    if analyzer_type == AnalyzerType::Solidity {
         source.extend(get_storage_variables(storage_variables, functions));
     }
 
@@ -61,20 +66,27 @@ pub fn build_source(
     }
 
     // add functions
-    functions.iter().filter(|f| !f.fallback && f.maybe_getter_for.is_none()).for_each(|f| {
-        let mut function_source = Vec::new();
+    functions
+        .iter()
+        .filter(|f| {
+            !f.fallback &&
+                (analyzer_type == AnalyzerType::Yul ||
+                    (f.maybe_getter_for.is_none() && !f.is_constant()))
+        })
+        .for_each(|f| {
+            let mut function_source = Vec::new();
 
-        // get the function header
-        function_source.extend(get_function_header(f));
-        function_source.extend(f.logic.clone());
-        function_source.push("}".to_string());
+            // get the function header
+            function_source.extend(get_function_header(f));
+            function_source.extend(f.logic.clone());
+            function_source.push("}".to_string());
 
-        let imbalance = get_indentation_imbalance(&function_source);
-        function_source.extend(vec!["}".to_string(); imbalance as usize]);
+            let imbalance = get_indentation_imbalance(&function_source);
+            function_source.extend(vec!["}".to_string(); imbalance as usize]);
 
-        // add the function to the source
-        source.extend(function_source);
-    });
+            // add the function to the source
+            source.extend(function_source);
+        });
     if analyzer_type == AnalyzerType::Yul {
         // add the fallback function, if it exists
         if let Some(fallback) = functions.iter().find(|f| f.fallback) {
@@ -102,6 +114,17 @@ pub fn build_source(
         source = source.replace(unresolved_name, resolved_name);
     });
 
+    // replace all storage variables w/ getters w/ their resolved names
+    functions.iter().filter(|f| f.maybe_getter_for.is_some()).for_each(|f| {
+        let getter_for_storage_variable = f.maybe_getter_for.as_ref().expect("impossible");
+        let resolved_name = f
+            .resolved_function
+            .as_ref()
+            .map(|x| x.name.clone())
+            .unwrap_or(format!("unresolved_{}", f.selector));
+        source = source.replace(getter_for_storage_variable, &resolved_name);
+    });
+
     debug!("constructing {} source took {:?}", analyzer_type, start_time.elapsed());
 
     Ok(Some(source))
@@ -126,13 +149,13 @@ fn get_source_header(analyzer_type: &AnalyzerType) -> Vec<String> {
 
 /// Helper function which will get the function header/signature for a given [`AnalyzedFunction`].
 fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
-    // get the state mutability of the function
-    let state_mutability = match f.payable {
-        true => StateMutability::Payable,
-        false => match f.pure {
-            true => StateMutability::Pure,
-            false => match f.view {
-                true => StateMutability::View,
+    // determine the state mutability of the function
+    let state_mutability = match f.pure {
+        true => StateMutability::Pure,
+        false => match f.view {
+            true => StateMutability::View,
+            false => match f.payable {
+                true => StateMutability::Payable,
                 false => StateMutability::NonPayable,
             },
         },
@@ -212,21 +235,51 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
     }
 }
 
+/// Helper function which will write constant variables to the source code.
+fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
+    let mut output: Vec<String> = functions
+        .iter()
+        .filter_map(|f| {
+            if f.is_constant() {
+                Some(format!(
+                    "{} public constant {} = {};",
+                    f.returns
+                        .as_ref()
+                        .unwrap_or(&"bytes".to_string())
+                        .replacen("memory", "", 1)
+                        .trim(),
+                    f.resolved_function
+                        .as_ref()
+                        .map(|x| x.name.clone())
+                        .unwrap_or(format!("unresolved_{}", f.selector)),
+                    f.constant_value.as_ref().unwrap_or(&"0x".to_string())
+                ))
+            } else {
+                None
+            }
+        })
+        .collect();
+    if !output.is_empty() {
+        output.push("".to_string());
+    }
+    output
+}
+
 /// Helper function which will write the storage variable declarations for the decompiled source
 /// code.
 fn get_storage_variables(
     storage_variables: &HashMap<String, String>,
     functions: &[AnalyzedFunction],
 ) -> Vec<String> {
-    println!("{:?}", storage_variables);
-
     let mut output: Vec<String> = storage_variables
         .iter()
         .map(|(name, typ)| {
-            if let Some(f) = functions.iter().find(|f| {
-                f.maybe_getter_for.as_ref() == Some(name) && f.resolved_function.is_some()
-            }) {
-                let name = f.resolved_function.as_ref().expect("impossible").name.to_string();
+            if let Some(f) = functions.iter().find(|f| f.maybe_getter_for.as_ref() == Some(name)) {
+                let name = f
+                    .resolved_function
+                    .as_ref()
+                    .map(|x| x.name.clone())
+                    .unwrap_or(format!("unresolved_{}", f.selector));
 
                 // TODO: for public getters, we can use `eth_getStorageAt` to get the value
                 return format!(

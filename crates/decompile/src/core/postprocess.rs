@@ -209,7 +209,9 @@ impl PostprocessOrchestrator {
         self.state = state;
 
         // if this is a getter, replace function.maybe_getter_for with the actual getter
-        if let Some(getter_for) = &self.state.maybe_getter_for {
+        if let Some(getter_for) =
+            self.state.maybe_getter_for.as_ref().or(function.maybe_getter_for.as_ref())
+        {
             function.maybe_getter_for = self.state.storage_map.get(getter_for).cloned();
         }
 
