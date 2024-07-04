@@ -3,7 +3,10 @@ use alloy::{
     network::Ethereum,
     providers::{ext::TraceApi, IpcConnect, Provider, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
-    rpc::types::Transaction,
+    rpc::types::{
+        trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
+        Filter, Log, Transaction,
+    },
     transports::http::Http,
 };
 use eyre::Result;
@@ -79,13 +82,45 @@ impl MultiTransportProvider {
         })
     }
 
-    pub async fn trace_replay_transaction(&self, tx_hash: &str) -> Result<Option<Transaction>> {
+    pub async fn trace_replay_transaction(
+        &self,
+        tx_hash: &str,
+        trace_type: &[TraceType],
+    ) -> Result<TraceResults> {
         let tx_hash = tx_hash.parse()?;
 
         Ok(match self {
-            Self::Ws(provider) => provider.trace_replay_transaction(tx_hash).await?,
-            Self::Ipc(provider) => provider.trace_replay_transaction(tx_hash).await?,
-            Self::Http(provider) => provider.trace_replay_transaction(tx_hash).await?,
+            Self::Ws(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
+            Self::Ipc(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
+            Self::Http(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
+        })
+    }
+
+    pub async fn trace_replay_block_transactions(
+        &self,
+        block_number: u64,
+        trace_type: &[TraceType],
+    ) -> Result<Vec<TraceResultsWithTransactionHash>> {
+        let block_number = block_number.into();
+
+        Ok(match self {
+            Self::Ws(provider) => {
+                provider.trace_replay_block_transactions(block_number, trace_type).await?
+            }
+            Self::Ipc(provider) => {
+                provider.trace_replay_block_transactions(block_number, trace_type).await?
+            }
+            Self::Http(provider) => {
+                provider.trace_replay_block_transactions(block_number, trace_type).await?
+            }
+        })
+    }
+
+    pub async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>> {
+        Ok(match self {
+            Self::Ws(provider) => provider.get_logs(filter).await?,
+            Self::Ipc(provider) => provider.get_logs(filter).await?,
+            Self::Http(provider) => provider.get_logs(filter).await?,
         })
     }
 }

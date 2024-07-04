@@ -1,6 +1,6 @@
-use ethers::types::{Bloom, Bytes, H160, H256, H64, U256};
-
 use super::strings::encode_hex;
+use alloy::primitives::{Address, FixedBytes};
+use ethers::types::{Bloom, Bytes, H160, H256, H64, U256};
 
 pub trait ToLowerHex {
     fn to_lower_hex(&self) -> String;
@@ -45,5 +45,17 @@ impl ToLowerHex for Bytes {
 impl ToLowerHex for Vec<u8> {
     fn to_lower_hex(&self) -> String {
         encode_hex(self)
+    }
+}
+
+impl ToLowerHex for FixedBytes<32> {
+    fn to_lower_hex(&self) -> String {
+        format!("{:#032x}", self)
+    }
+}
+
+impl ToLowerHex for Address {
+    fn to_lower_hex(&self) -> String {
+        format!("{:#020x}", self)
     }
 }

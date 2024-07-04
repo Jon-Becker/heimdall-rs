@@ -1,17 +1,11 @@
 use crate::{error::Error, ether::provider::MultiTransportProvider};
-use alloy::rpc::types::Transaction;
-use backoff::ExponentialBackoff;
-use ethers::{
-    core::types::Address,
-    providers::{Middleware, Provider},
-    types::{
-        BlockNumber::{self},
-        BlockTrace, Filter, FilterBlockOption, TraceType, H256,
+use alloy::{
+    eips::BlockNumberOrTag,
+    rpc::types::{
+        trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
+        Filter, FilterBlockOption, FilterSet, Log, Transaction,
     },
 };
-use heimdall_cache::{read_cache, store_cache, with_cache};
-use std::{str::FromStr, time::Duration};
-use tracing::{debug, error, trace};
 
 /// Get the chainId of the provided RPC URL
 ///
@@ -94,63 +88,17 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
 /// // let trace = get_trace("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(trace.is_ok());
 /// ```
-pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTrace, Error> {
-    backoff::future::retry(
-        ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..ExponentialBackoff::default()
-        },
-        || async {
-            trace!("fetching trace from node for transaction: '{}' .",
-                &transaction_hash);
-
-            // create new provider
-            let provider = match get_provider(rpc_url).await {
-                Ok(provider) => provider,
-                Err(_) => {
-                    error!("failed to connect to RPC provider '{}' .", &rpc_url);
-                    return Err(backoff::Error::Permanent(()))
-                }
-            };
-
-            // safely unwrap the transaction hash
-            let transaction_hash_hex = match H256::from_str(transaction_hash) {
-                Ok(transaction_hash) => transaction_hash,
-                Err(_) => {
-                    error!(
-                        "failed to parse transaction hash '{}' .",
-                        &transaction_hash
-                    );
-                    return Err(backoff::Error::Permanent(()))
-                }
-            };
-
-            // fetch the trace for the transaction
-            let block_trace = match provider
-                .trace_replay_transaction(
-                    transaction_hash_hex,
-                    vec![TraceType::StateDiff, TraceType::VmTrace, TraceType::Trace],
-                )
-                .await
-            {
-                Ok(traces) => traces,
-                Err(_) => {
-                    error!(
-                        "failed to replay and trace transaction '{}' . does your RPC provider support it?",
-                        &transaction_hash
-                    );
-
-                    return Err(backoff::Error::Transient { err: (), retry_after: None })
-                }
-            };
-
-            trace!("fetched trace for transaction '{}' .", &transaction_hash);
-
-            Ok(block_trace)
-        },
-    )
-    .await
-    .map_err(|_| Error::Generic(format!("failed to get trace for transaction: {:?}", &transaction_hash)))
+pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<TraceResults, Error> {
+    let provider = MultiTransportProvider::connect(&rpc_url)
+        .await
+        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+    provider
+        .trace_replay_transaction(
+            transaction_hash,
+            &[TraceType::Trace, TraceType::VmTrace, TraceType::StateDiff],
+        )
+        .await
+        .map_err(|e| Error::RpcError(format!("failed to get account code: {e}")))
 }
 
 /// Get all logs for the given block number
@@ -161,56 +109,26 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<BlockTra
 /// // let logs = get_block_logs(1, "https://eth.llamarpc.com").await;
 /// // assert!(logs.is_ok());
 /// ```
-pub async fn get_block_logs(
-    block_number: u64,
-    rpc_url: &str,
-) -> Result<Vec<ethers::core::types::Log>, Error> {
-    backoff::future::retry(
-        ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..ExponentialBackoff::default()
-        },
-        || async {
-            trace!("fetching logs from node for block: '{}' .", &block_number);
-
-            // create new provider
-            let provider = match get_provider(rpc_url).await {
-                Ok(provider) => provider,
-                Err(_) => {
-                    error!("failed to connect to RPC provider '{}' .", &rpc_url);
-                    return Err(backoff::Error::Permanent(()));
-                }
-            };
-
-            // fetch the logs for the block
-            let logs = match provider
-                .get_logs(&Filter {
-                    block_option: FilterBlockOption::Range {
-                        from_block: Some(BlockNumber::from(block_number)),
-                        to_block: Some(BlockNumber::from(block_number)),
-                    },
-                    address: None,
-                    topics: [None, None, None, None],
-                })
-                .await
-            {
-                Ok(logs) => logs,
-                Err(_) => {
-                    error!(
-                        "failed to fetch logs for block '{}' . does your RPC provider support it?",
-                        &block_number
-                    );
-                    return Err(backoff::Error::Transient { err: (), retry_after: None });
-                }
-            };
-
-            trace!("fetched logs for block '{}' .", &block_number);
-
-            Ok(logs)
-        },
-    )
-    .await
-    .map_err(|_| Error::Generic(format!("failed to get logs for block: {:?}", &block_number)))
+pub async fn get_block_logs(block_number: u64, rpc_url: &str) -> Result<Vec<Log>, Error> {
+    let provider = MultiTransportProvider::connect(&rpc_url)
+        .await
+        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+    provider
+        .get_logs(&Filter {
+            block_option: FilterBlockOption::Range {
+                from_block: Some(BlockNumberOrTag::from(block_number)),
+                to_block: Some(BlockNumberOrTag::from(block_number)),
+            },
+            address: FilterSet::default(),
+            topics: [
+                FilterSet::default(),
+                FilterSet::default(),
+                FilterSet::default(),
+                FilterSet::default(),
+            ],
+        })
+        .await
+        .map_err(|e| Error::RpcError(format!("failed to get logs: {e}")))
 }
 
 /// Get all traces for the given block number
@@ -224,46 +142,14 @@ pub async fn get_block_logs(
 pub async fn get_block_state_diff(
     block_number: u64,
     rpc_url: &str,
-) -> Result<Vec<BlockTrace>, Error> {
-    backoff::future::retry(
-        ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..ExponentialBackoff::default()
-        },
-        || async {
-            trace!("fetching traces from node for block: '{}' .", &block_number);
-
-            // create new provider
-            let provider = match get_provider(rpc_url).await {
-                Ok(provider) => provider,
-                Err(_) => {
-                    error!("failed to connect to RPC provider '{}' .", &rpc_url);
-                    return Err(backoff::Error::Permanent(()));
-                }
-            };
-
-            // fetch the logs for the block
-            let trace = match provider
-                .trace_replay_block_transactions(BlockNumber::from(block_number), vec![TraceType::StateDiff])
-                .await
-            {
-                Ok(trace) => trace,
-                Err(_) => {
-                    error!(
-                        "failed to fetch traces for block '{}' . does your RPC provider support it?",
-                        &block_number
-                    );
-                    return Err(backoff::Error::Transient { err: (), retry_after: None });
-                }
-            };
-
-            trace!("fetched traces for block '{}' .", &block_number);
-
-            Ok(trace)
-        },
-    )
-    .await
-    .map_err(|_| Error::Generic(format!("failed to get traces for block: {:?}", &block_number)))
+) -> Result<Vec<TraceResultsWithTransactionHash>, Error> {
+    let provider = MultiTransportProvider::connect(&rpc_url)
+        .await
+        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+    provider
+        .trace_replay_block_transactions(block_number, &[TraceType::StateDiff])
+        .await
+        .map_err(|e| Error::RpcError(format!("failed to get account code: {e}")))
 }
 
 #[cfg(test)]
