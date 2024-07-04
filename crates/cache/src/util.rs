@@ -7,7 +7,9 @@ use std::{
     process::Command,
 };
 
-use crate::error::Error;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+
+use crate::{error::Error, exists, read_cache, store_cache};
 
 /// Decode a hex string into a bytearray
 pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
@@ -28,13 +30,13 @@ pub fn prettify_bytes(bytes: u64) -> String {
         format!("{bytes} B")
     } else if bytes < 1024 * 1024 {
         let kb = bytes / 1024;
-        return format!("{kb} KB")
+        return format!("{kb} KB");
     } else if bytes < 1024 * 1024 * 1024 {
         let mb = bytes / (1024 * 1024);
-        return format!("{mb} MB")
+        return format!("{mb} MB");
     } else {
         let gb = bytes / (1024 * 1024 * 1024);
-        return format!("{gb} GB")
+        return format!("{gb} GB");
     }
 }
 

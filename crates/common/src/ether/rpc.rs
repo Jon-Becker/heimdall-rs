@@ -1,37 +1,17 @@
-use crate::{
-    error::Error,
-    ether::http_or_ws_or_ipc::{self, HttpOrWsOrIpc},
-};
+use crate::{error::Error, ether::provider::MultiTransportProvider};
+use alloy::rpc::types::Transaction;
 use backoff::ExponentialBackoff;
 use ethers::{
     core::types::Address,
     providers::{Middleware, Provider},
     types::{
         BlockNumber::{self},
-        BlockTrace, Filter, FilterBlockOption, TraceType, Transaction, H256,
+        BlockTrace, Filter, FilterBlockOption, TraceType, H256,
     },
 };
-use heimdall_cache::{read_cache, store_cache};
+use heimdall_cache::{read_cache, store_cache, with_cache};
 use std::{str::FromStr, time::Duration};
 use tracing::{debug, error, trace};
-
-/// Get the Provider object for RPC URL
-///
-/// ```no_run
-/// use heimdall_common::ether::rpc::get_provider;
-///
-/// // let provider = get_provider("https://eth.llamarpc.com").await?;
-/// // assert_eq!(provider.get_chainid().await.unwrap(), 1);
-/// ```
-pub async fn get_provider(rpc_url: &str) -> Result<Provider<HttpOrWsOrIpc>, Error> {
-    Ok(Provider::new(match http_or_ws_or_ipc::HttpOrWsOrIpc::connect(rpc_url).await {
-        Ok(provider) => provider,
-        Err(error) => {
-            error!("failed to connect to RPC provider '{}' .", &rpc_url);
-            return Err(Error::Generic(error.to_string()));
-        }
-    }))
-}
 
 /// Get the chainId of the provided RPC URL
 ///
@@ -42,56 +22,13 @@ pub async fn get_provider(rpc_url: &str) -> Result<Provider<HttpOrWsOrIpc>, Erro
 /// // assert_eq!(chain_id, 1);
 /// ```
 pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
-    backoff::future::retry(
-        ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..ExponentialBackoff::default()
-        },
-    || async {
-        trace!("checking chain id for rpc url: '{}'", &rpc_url);
-
-        // check the cache for a matching rpc url
-        let cache_key = format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-"));
-        if let Some(chain_id) = read_cache(&cache_key)
-            .map_err(|_| error!("failed to read cache for rpc url: {:?}", &rpc_url))?
-        {
-            return Ok(chain_id)
-        }
-
-        // make sure the RPC provider isn't empty
-        if rpc_url.is_empty() {
-            error!("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
-            return Err(backoff::Error::Permanent(()))
-        }
-
-        // create new provider
-        let provider = match get_provider(rpc_url).await {
-            Ok(provider) => provider,
-            Err(_) => {
-                error!("failed to connect to RPC provider '{}' .", &rpc_url);
-                return Err(backoff::Error::Permanent(()))
-            }
-        };
-
-        // fetch the chain id from the node
-        let chain_id = match provider.get_chainid().await {
-            Ok(chain_id) => chain_id,
-            Err(_) => {
-                error!("failed to fetch chain id from '{}' .", &rpc_url);
-                return Err(backoff::Error::Transient { err: (), retry_after: None })
-            }
-        };
-
-        // cache the results
-        store_cache(&cache_key, chain_id.as_u64(), None)
-            .map_err(|_| error!("failed to cache chain id for rpc url: {:?}", &rpc_url))?;
-
-        trace!("chain_id is '{}'", &chain_id);
-
-        Ok(chain_id.as_u64())
-    })
-    .await
-    .map_err(|e| Error::Generic(format!("failed to get chain id: {:?}", e)))
+    let provider = MultiTransportProvider::connect(&rpc_url)
+        .await
+        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+    provider
+        .get_chainid()
+        .await
+        .map_err(|e| Error::RpcError(format!("failed to get chain id: {e}")))
 }
 
 /// Get the latest block number of the provided RPC URL
@@ -102,44 +39,14 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
 /// // assert!(block_number > 0);
 /// ```
 pub async fn latest_block_number(rpc_url: &str) -> Result<u128, Error> {
-    backoff::future::retry(
-        ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..ExponentialBackoff::default()
-        },
-    || async {
-        trace!("checking latest block number for rpc url: '{}'", &rpc_url);
-
-        // make sure the RPC provider isn't empty
-        if rpc_url.is_empty() {
-            error!("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
-            return Err(backoff::Error::Permanent(()))
-        }
-
-        // create new provider
-        let provider = match get_provider(rpc_url).await {
-            Ok(provider) => provider,
-            Err(_) => {
-                error!("failed to connect to RPC provider '{}' .", &rpc_url);
-                return Err(backoff::Error::Permanent(()))
-            }
-        };
-
-        // fetch the latest block number from the node
-        let block_number = match provider.get_block_number().await {
-            Ok(block_number) => block_number,
-            Err(_) => {
-                error!("failed to fetch latest block number from '{}' .", &rpc_url);
-                return Err(backoff::Error::Transient { err: (), retry_after: None })
-            }
-        };
-
-        trace!("latest block number is '{}'", &block_number);
-
-        Ok(block_number.as_u64() as u128)
-    })
-    .await
-    .map_err(|e| Error::Generic(format!("failed to get latest block number: {:?}", e)))
+    let provider = MultiTransportProvider::connect(&rpc_url)
+        .await
+        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+    provider
+        .get_block_number()
+        .await
+        .map(|n| n as u128)
+        .map_err(|e| Error::RpcError(format!("failed to get block number: {e}")))
 }
 
 /// Get the bytecode of the provided contract address
@@ -151,70 +58,13 @@ pub async fn latest_block_number(rpc_url: &str) -> Result<u128, Error> {
 /// // assert!(bytecode.is_ok());
 /// ```
 pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
-    backoff::future::retry(
-        ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..ExponentialBackoff::default()
-        },
-    || async {
-        // get chain_id
-        let chain_id = chain_id(rpc_url).await.unwrap_or(1);
-
-        // check the cache for a matching address
-        if let Some(bytecode) = read_cache(&format!("contract.{}.{}", &chain_id, &contract_address))
-            .map_err(|_| error!("failed to read cache for contract: {:?}", &contract_address))?
-        {
-            debug!("found cached bytecode for '{}' .", &contract_address);
-            return Ok(bytecode)
-        }
-
-        trace!("fetching bytecode from node for contract: '{}' .", &contract_address);
-
-        // make sure the RPC provider isn't empty
-        if rpc_url.is_empty() {
-            error!("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
-            return Err(backoff::Error::Permanent(()))
-        }
-
-        // create new provider
-        let provider = match get_provider(rpc_url).await {
-            Ok(provider) => provider,
-            Err(_) => {
-                error!("failed to connect to RPC provider '{}' .", &rpc_url);
-                return Err(backoff::Error::Permanent(()))
-            }
-        };
-
-        // safely unwrap the address
-        let address = match contract_address.parse::<Address>() {
-            Ok(address) => address,
-            Err(_) => {
-                error!("failed to parse address '{}' .", &contract_address);
-                return Err(backoff::Error::Permanent(()))
-            }
-        };
-
-        // fetch the bytecode at the address
-        let bytecode_as_bytes = match provider.get_code(address, None).await {
-            Ok(bytecode) => bytecode,
-            Err(_) => {
-                error!("failed to fetch bytecode from '{}' .", &contract_address);
-                return Err(backoff::Error::Transient { err: (), retry_after: None })
-            }
-        };
-
-        // cache the results
-        store_cache(
-            &format!("contract.{}.{}", &chain_id, &contract_address),
-            bytecode_as_bytes.to_vec(),
-            None,
-        )
-        .map_err(|_| error!("failed to cache bytecode for contract: {:?}", &contract_address))?;
-
-        Ok(bytecode_as_bytes.to_vec())
-    })
-    .await
-    .map_err(|_| Error::Generic(format!("failed to get bytecode for contract: {:?}", &contract_address)))
+    let provider = MultiTransportProvider::connect(&rpc_url)
+        .await
+        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+    provider
+        .get_code_at(contract_address)
+        .await
+        .map_err(|e| Error::RpcError(format!("failed to get account code: {e}")))
 }
 
 /// Get the raw transaction data of the provided transaction hash
@@ -226,60 +76,14 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<Vec<u8>, 
 /// // assert!(bytecode.is_ok());
 /// ```
 pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Transaction, Error> {
-    backoff::future::retry(
-        ExponentialBackoff {
-            max_elapsed_time: Some(Duration::from_secs(10)),
-            ..ExponentialBackoff::default()
-        },
-    || async {
-        trace!(
-            "fetching calldata from node for transaction: '{}' .",
-            &transaction_hash
-        );
-
-        // make sure the RPC provider isn't empty
-        if rpc_url.is_empty() {
-            error!("reading on-chain data requires an RPC provider. Use `heimdall --help` for more information.");
-            return Err(backoff::Error::Permanent(()));
-        }
-
-        // create new provider
-        let provider = match get_provider(rpc_url).await {
-            Ok(provider) => provider,
-            Err(_) => {
-                error!("failed to connect to RPC provider '{}' .", &rpc_url);
-                return Err(backoff::Error::Permanent(()))
-            }
-        };
-
-        // safely unwrap the transaction hash
-        let transaction_hash_hex = match H256::from_str(transaction_hash) {
-            Ok(transaction_hash) => transaction_hash,
-            Err(_) => {
-                error!("failed to parse transaction hash '{}' .", &transaction_hash);
-                return Err(backoff::Error::Permanent(()))
-            }
-        };
-
-        // get the transaction
-        let tx = match provider.get_transaction(transaction_hash_hex).await {
-            Ok(tx) => match tx {
-                Some(tx) => tx,
-                None => {
-                    error!("transaction '{}' doesn't exist.", &transaction_hash);
-                    return Err(backoff::Error::Permanent(()))
-                }
-            },
-            Err(_) => {
-                error!("failed to fetch calldata from '{}' .", &transaction_hash);
-                return Err(backoff::Error::Transient { err: (), retry_after: None })
-            }
-        };
-
-        Ok(tx)
-    })
-    .await
-    .map_err(|_| Error::Generic(format!("failed to get transaction: {:?}", &transaction_hash)))
+    let provider = MultiTransportProvider::connect(&rpc_url)
+        .await
+        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+    provider
+        .get_transaction_by_hash(transaction_hash)
+        .await
+        .map_err(|e| Error::RpcError(format!("failed to get account code: {e}")))?
+        .ok_or_else(|| Error::RpcError("transaction not found".to_string()))
 }
 
 /// Get the raw trace data of the provided transaction hash

@@ -2,6 +2,8 @@
 pub enum Error {
     #[error("Error: {0}")]
     Generic(String),
+    #[error("RpcError: {0}")]
+    RpcError(String),
     #[error("Parse error: {0}")]
     ParseError(String),
     #[error("Filesystem error: {0}")]

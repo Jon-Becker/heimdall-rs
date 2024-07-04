@@ -15,13 +15,13 @@ async-openai = "0.10.0"
 clap = { workspace = true, features = ["derive"] }
 colored = "2"
 crossbeam-channel = "0.5.7"
-ethers = { version = "2.0.14", features = ["ipc", "ws"] }
 fancy-regex = "0.11.0"
+ethers = { version = "2.0.14", features = ["ipc", "ws"] }
 heimdall-cache = { workspace = true }
 indicatif = "0.17.0"
 lazy_static = "1.4.0"
 rand = "0.8.5"
-reqwest = { version = "0.11.11", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
@@ -34,3 +34,5 @@ thiserror = "1.0.50"
 tracing = "0.1.40"
 eyre = "0.6.12"
 alloy-json-abi = "0.7.6"
+futures = "0.3.17"
+alloy = { version = "0.1.3", features = ["full", "rpc-types-debug", "rpc-types-trace"] }
