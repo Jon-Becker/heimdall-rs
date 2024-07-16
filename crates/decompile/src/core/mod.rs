@@ -110,6 +110,7 @@ pub async fn decompile_impl(args: DecompilerArgs, address: &str) -> Result<Decom
     if compiler == heimdall_common::ether::compiler::Compiler::Proxy {
         let impl_addr = get_proxy(&args.rpc_url, address, &encode_hex(&contract_bytecode)).await;
         if let Some(impl_addr) = impl_addr {
+            info!("resolved proxy {address} to {:#020x}", impl_addr);
             contract_bytecode = get_bytecode_from_target(&format!("{:#020x}", impl_addr), &args.rpc_url)
                 .await
                 .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
