@@ -46,8 +46,42 @@ pub struct DecompileResult {
     pub abi: JsonAbi,
 }
 
-static EVIL: bool = true;
+pub async fn get_proxy(
+    rpc_url: &str,
+    target: &str, // bytecode
+    bytecode: &str,
+) -> Option<H160>
+{
+    let output = std::process::Command::new("node")
+        .arg("/home/fala/crypto/whatsabi/lib/proxy.js")
+        .arg(target)  // First argument
+        .arg(rpc_url) // Second argument
+        .arg(bytecode.to_string())
+        .output()
+        .expect("Failed to execute process");
+
+    let output_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if !output_str.is_empty() {
+        // println!("Resolved address: {}", output_str);
+        let addr = match output_str.parse::<H160>() {
+            Ok(p) => p,
+            Err(_err) => { 
+                warn!("whatsabi proxy check returned: {}", output_str);
+                return None
+            }
+        };
+        Some(addr)
+    } else {
+        None
+    }
+}
+
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
+    return decompile_impl(args, "").await;
+}
+static EVIL: bool = true;
+pub async fn decompile_impl(args: DecompilerArgs, address: &str) -> Result<DecompileResult, Error> {
     // init
     let start_time = Instant::now();
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
@@ -63,7 +97,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+    let mut contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
         .await
         .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
@@ -73,7 +107,15 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     }
 
     // perform versioning and compiler heuristics
-    let (_compiler, _version) = detect_compiler(&contract_bytecode);
+    let (compiler, _version) = detect_compiler(&contract_bytecode);
+    if compiler == heimdall_common::ether::compiler::Compiler::Proxy {
+        let impl_addr = get_proxy(&args.rpc_url, address, &encode_hex(&contract_bytecode)).await;
+        if let Some(impl_addr) = impl_addr {
+            contract_bytecode = get_bytecode_from_target(&format!("{:#020x}", impl_addr), &args.rpc_url)
+                .await
+                .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
+        }
+    };
 
     // create a new EVM instance. we will use this for finding function selectors,
     // performing symbolic execution, and more.
