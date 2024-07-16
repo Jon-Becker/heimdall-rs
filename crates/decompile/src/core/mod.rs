@@ -63,7 +63,6 @@ pub async fn get_proxy(
     let output_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     if !output_str.is_empty() {
-        // println!("Resolved address: {}", output_str);
         let addr = match output_str.parse::<H160>() {
             Ok(p) => p,
             Err(_err) => { 
