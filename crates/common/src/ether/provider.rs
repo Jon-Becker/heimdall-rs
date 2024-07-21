@@ -1,6 +1,7 @@
 //! Create a custom data transport to use with a Provider.
 use alloy::{
     network::Ethereum,
+    primitives::{Address, TxHash},
     providers::{ext::TraceApi, IpcConnect, Provider, ProviderBuilder, RootProvider, WsConnect},
     pubsub::PubSubFrontend,
     rpc::types::{
@@ -61,9 +62,7 @@ impl MultiTransportProvider {
         })
     }
 
-    pub async fn get_code_at(&self, address: &str) -> Result<Vec<u8>> {
-        let address = address.parse()?;
-
+    pub async fn get_code_at(&self, address: Address) -> Result<Vec<u8>> {
         Ok(match self {
             Self::Ws(provider) => provider.get_code_at(address).await?,
             Self::Ipc(provider) => provider.get_code_at(address).await?,
@@ -72,9 +71,7 @@ impl MultiTransportProvider {
         .to_vec())
     }
 
-    pub async fn get_transaction_by_hash(&self, tx_hash: &str) -> Result<Option<Transaction>> {
-        let tx_hash = tx_hash.parse()?;
-
+    pub async fn get_transaction_by_hash(&self, tx_hash: TxHash) -> Result<Option<Transaction>> {
         Ok(match self {
             Self::Ws(provider) => provider.get_transaction_by_hash(tx_hash).await?,
             Self::Ipc(provider) => provider.get_transaction_by_hash(tx_hash).await?,

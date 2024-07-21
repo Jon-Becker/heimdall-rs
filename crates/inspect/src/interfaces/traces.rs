@@ -3,14 +3,15 @@ use std::{
     collections::{HashSet, VecDeque},
 };
 
-use async_recursion::async_recursion;
-use ethers::{
-    abi::Token,
-    types::{
-        ActionType, Address, Bytes, Call, CallResult, CallType, Create, CreateResult,
-        ExecutedInstruction, Reward, StorageDiff, Suicide, TransactionTrace, VMTrace, U256,
+use alloy::{
+    dyn_abi::DynSolValue,
+    primitives::{Address, Bytes, U256, U64},
+    rpc::types::trace::parity::{
+        Action, CallAction, CallOutput, CallType, CreateAction, CreateOutput, RewardAction,
+        SelfdestructAction, StorageDelta, TraceOutput, TransactionTrace, VmTrace,
     },
 };
+use async_recursion::async_recursion;
 use eyre::eyre;
 use heimdall_common::{
     ether::signatures::ResolvedFunction,
@@ -36,12 +37,11 @@ use super::{contracts::Contracts, logs::DecodedLog};
 pub struct DecodedTransactionTrace {
     pub trace_address: Vec<usize>,
     pub action: DecodedAction,
-    pub action_type: ActionType,
     pub result: Option<DecodedRes>,
     pub error: Option<String>,
     pub subtraces: Vec<DecodedTransactionTrace>,
     pub logs: Vec<DecodedLog>,
-    pub diff: Vec<StorageDiff>,
+    pub diff: Vec<StorageDelta>,
 }
 
 /// Decoded Action
@@ -51,11 +51,11 @@ pub enum DecodedAction {
     /// Decoded Call
     Call(DecodedCall),
     /// Create
-    Create(Create),
+    Create(CreateAction),
     /// Suicide
-    Suicide(Suicide),
+    SelfDestruct(SelfdestructAction),
     /// Reward
-    Reward(Reward),
+    Reward(RewardAction),
 }
 
 /// Decoded Call
@@ -68,7 +68,7 @@ pub struct DecodedCall {
     /// Transferred Value
     pub value: U256,
     /// Gas
-    pub gas: U256,
+    pub gas: U64,
     /// Input data
     pub input: Bytes,
     /// The type of the call.
@@ -79,7 +79,9 @@ pub struct DecodedCall {
     pub resolved_function: Option<ResolvedFunction>,
     /// Decoded inputs
     #[serde(rename = "decodedInputs")]
-    pub decoded_inputs: Vec<Token>,
+    #[serde(skip)]
+    // TODO: dont skip
+    pub decoded_inputs: Vec<DynSolValue>,
 }
 
 /// Decoded Response
@@ -89,7 +91,7 @@ pub enum DecodedRes {
     /// Call
     Call(DecodedCallResult),
     /// Create
-    Create(CreateResult),
+    Create(CreateOutput),
     /// None
     #[default]
     None,
@@ -100,12 +102,14 @@ pub enum DecodedRes {
 pub struct DecodedCallResult {
     /// Gas used
     #[serde(rename = "gasUsed")]
-    pub gas_used: U256,
+    pub gas_used: U64,
     /// Output bytes
     pub output: Bytes,
     /// Decoded outputs
     #[serde(rename = "decodedOutputs")]
-    pub decoded_outputs: Vec<Token>,
+    #[serde(skip)]
+    // TODO: dont skip
+    pub decoded_outputs: Vec<DynSolValue>,
 }
 
 #[async_trait]
@@ -159,22 +163,21 @@ impl TryFrom<TransactionTrace> for DecodedTransactionTrace {
 
     async fn try_from(value: TransactionTrace) -> Result<Self, Self::Error> {
         let action = match value.action {
-            ethers::types::Action::Call(call) => DecodedAction::Call(
-                <DecodedCall as async_convert::TryFrom<Call>>::try_from(call).await?,
+            Action::Call(call) => DecodedAction::Call(
+                <DecodedCall as async_convert::TryFrom<CallAction>>::try_from(call).await?,
             ),
-            ethers::types::Action::Create(create) => DecodedAction::Create(create),
-            ethers::types::Action::Suicide(suicide) => DecodedAction::Suicide(suicide),
-            ethers::types::Action::Reward(reward) => DecodedAction::Reward(reward),
+            Action::Create(create) => DecodedAction::Create(create),
+            Action::Selfdestruct(suicide) => DecodedAction::SelfDestruct(suicide),
+            Action::Reward(reward) => DecodedAction::Reward(reward),
         };
 
         let result = match value.result {
             Some(res) => match res {
-                ethers::types::Res::Call(call) => Some(DecodedRes::Call(
-                    <DecodedCallResult as async_convert::TryFrom<CallResult>>::try_from(call)
+                TraceOutput::Call(call) => Some(DecodedRes::Call(
+                    <DecodedCallResult as async_convert::TryFrom<CallOutput>>::try_from(call)
                         .await?,
                 )),
-                ethers::types::Res::Create(create) => Some(DecodedRes::Create(create)),
-                ethers::types::Res::None => Some(DecodedRes::None),
+                TraceOutput::Create(create) => Some(DecodedRes::Create(create)),
             },
             None => None,
         };
@@ -182,7 +185,6 @@ impl TryFrom<TransactionTrace> for DecodedTransactionTrace {
         Ok(Self {
             trace_address: value.trace_address,
             action,
-            action_type: value.action_type,
             result,
             error: value.error,
             subtraces: Vec::new(), // we will build this later
@@ -193,10 +195,10 @@ impl TryFrom<TransactionTrace> for DecodedTransactionTrace {
 }
 
 #[async_trait]
-impl TryFrom<Call> for DecodedCall {
+impl TryFrom<CallAction> for DecodedCall {
     type Error = crate::error::Error;
 
-    async fn try_from(value: Call) -> Result<Self, Self::Error> {
+    async fn try_from(value: CallAction) -> Result<Self, Self::Error> {
         let calldata = value.input.to_string().replacen("0x", "", 1);
         let mut decoded_inputs = Vec::new();
         let mut resolved_function = None;
@@ -234,10 +236,10 @@ impl TryFrom<Call> for DecodedCall {
 }
 
 #[async_trait]
-impl TryFrom<CallResult> for DecodedCallResult {
+impl TryFrom<CallOutput> for DecodedCallResult {
     type Error = crate::error::Error;
 
-    async fn try_from(value: CallResult) -> Result<Self, Self::Error> {
+    async fn try_from(value: CallOutput) -> Result<Self, Self::Error> {
         // we can attempt to decode this as if it is calldata, we just need to add some
         // 4byte prefix.
         let output = format!("0x00000000{}", value.output.to_string().replacen("0x", "", 1));
@@ -271,7 +273,7 @@ impl DecodedTransactionTrace {
 
                 if include_inputs {
                     let _ = call.decoded_inputs.iter().map(|token| match token {
-                        Token::Address(address) => addresses.insert(*address),
+                        DynSolValue::Address(address) => addresses.insert(address.to_owned()),
                         _ => false,
                     });
                 }
@@ -279,7 +281,9 @@ impl DecodedTransactionTrace {
                     let _ = self.result.iter().map(|result| {
                         if let DecodedRes::Call(call_result) = result {
                             let _ = call_result.decoded_outputs.iter().map(|token| match token {
-                                Token::Address(address) => addresses.insert(*address),
+                                DynSolValue::Address(address) => {
+                                    addresses.insert(address.to_owned())
+                                }
                                 _ => false,
                             });
                         }
@@ -297,7 +301,7 @@ impl DecodedTransactionTrace {
                     });
                 }
             }
-            DecodedAction::Suicide(suicide) => {
+            DecodedAction::SelfDestruct(suicide) => {
                 addresses.insert(suicide.address);
                 addresses.insert(suicide.refund_address);
             }
@@ -318,7 +322,7 @@ impl DecodedTransactionTrace {
     pub async fn join_logs(
         &mut self,
         decoded_logs: &mut VecDeque<DecodedLog>,
-        vm_trace: &VMTrace,
+        vm_trace: &VmTrace,
         parent_address: Vec<usize>,
     ) -> Result<(), Error> {
         // Track the current depth using trace_address. Initialize with the trace_address of self.
@@ -327,13 +331,9 @@ impl DecodedTransactionTrace {
 
         // Iterate over vm_trace.ops
         for op in vm_trace.ops.iter() {
-            match op.op {
+            match op.op.as_deref().unwrap_or_default() {
                 // Check if the operation is one of the LOG operations
-                ExecutedInstruction::Known(ethers::types::Opcode::LOG0) |
-                ExecutedInstruction::Known(ethers::types::Opcode::LOG1) |
-                ExecutedInstruction::Known(ethers::types::Opcode::LOG2) |
-                ExecutedInstruction::Known(ethers::types::Opcode::LOG3) |
-                ExecutedInstruction::Known(ethers::types::Opcode::LOG4) => {
+                "LOG0" | "LOG1" | "LOG2" | "LOG3" | "LOG4" => {
                     // Pop the first decoded log, this is the log that corresponds to the current
                     // operation
                     let decoded_log = decoded_logs
@@ -370,7 +370,7 @@ impl DecodedTransactionTrace {
     #[async_recursion]
     pub async fn build_state_diffs(
         &mut self,
-        vm_trace: VMTrace,
+        vm_trace: VmTrace,
         parent_address: Vec<usize>,
     ) -> Result<(), Error> {
         // Track the current depth using trace_address. Initialize with the trace_address of self.
@@ -416,7 +416,7 @@ impl DecodedTransactionTrace {
         let parent_trace_index = match &self.action {
             DecodedAction::Call(call) => trace.add_call_with_extra(
                 parent_trace_index,
-                call.gas.as_u32(),
+                call.gas.try_into().unwrap_or(0),
                 contracts.get(call.to).cloned().unwrap_or(call.to.to_lower_hex()),
                 match call.resolved_function.as_ref() {
                     Some(f) => f.name.clone(),
@@ -455,7 +455,7 @@ impl DecodedTransactionTrace {
             ),
             DecodedAction::Create(create) => trace.add_creation(
                 parent_trace_index,
-                create.gas.as_u32(),
+                create.gas.try_into().unwrap_or(0),
                 "NewContract".to_string(),
                 match &self.result.as_ref() {
                     Some(DecodedRes::Create(create_result)) => contracts
@@ -466,7 +466,7 @@ impl DecodedTransactionTrace {
                 },
                 create.init.len().try_into().unwrap_or(0),
             ),
-            DecodedAction::Suicide(suicide) => trace.add_suicide(
+            DecodedAction::SelfDestruct(suicide) => trace.add_suicide(
                 parent_trace_index,
                 0,
                 suicide.address.to_lower_hex(),
@@ -476,7 +476,7 @@ impl DecodedTransactionTrace {
             DecodedAction::Reward(reward) => trace.add_call_with_extra(
                 parent_trace_index,
                 0,
-                Address::zero().to_lower_hex(),
+                Address::ZERO.to_lower_hex(),
                 "reward".to_string(),
                 vec![
                     reward.author.to_lower_hex(),
@@ -493,20 +493,20 @@ impl DecodedTransactionTrace {
                 // TODO: ResolveLog should decode raw data
                 trace.add_emission(
                     parent_trace_index,
-                    log.log_index.unwrap_or(U256::zero()).as_u32(),
+                    log.log_index.unwrap_or(0).try_into().unwrap_or_default(),
                     &event.name,
                     &event.inputs,
                 );
                 trace.add_raw_emission(
                     parent_trace_index,
-                    log.log_index.unwrap_or(U256::zero()).as_u32(),
+                    log.log_index.unwrap_or(0).try_into().unwrap_or_default(),
                     log.topics.iter().map(|topic| topic.to_lower_hex()).collect(),
                     log.data.to_lower_hex(),
                 );
             } else {
                 trace.add_raw_emission(
                     parent_trace_index,
-                    log.log_index.unwrap_or(U256::zero()).as_u32(),
+                    log.log_index.unwrap_or(0).try_into().unwrap_or_default(),
                     log.topics.iter().map(|topic| topic.to_lower_hex()).collect(),
                     log.data.to_lower_hex(),
                 );
@@ -535,7 +535,7 @@ impl DecodedTransactionTrace {
 
 fn wei_to_ether(wei: U256) -> f64 {
     // convert U256 to u64 safely
-    let wei_f64 = wei.min(U256::from(u64::MAX)).as_u64() as f64;
+    let wei_f64 = wei.min(U256::from(u64::MAX)).try_into().unwrap_or(0) as f64;
 
     // if wei = u64::MAX, log that it was truncated
     if wei_f64 == u64::MAX as f64 {

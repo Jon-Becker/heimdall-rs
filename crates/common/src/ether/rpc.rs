@@ -1,11 +1,13 @@
-use crate::{error::Error, ether::provider::MultiTransportProvider};
+use crate::ether::provider::MultiTransportProvider;
 use alloy::{
     eips::BlockNumberOrTag,
+    primitives::{Address, TxHash},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
         Filter, FilterBlockOption, FilterSet, Log, Transaction,
     },
 };
+use eyre::{OptionExt, Result};
 
 /// Get the chainId of the provided RPC URL
 ///
@@ -15,14 +17,9 @@ use alloy::{
 /// // let chain_id = chain_id("https://eth.llamarpc.com").await?;
 /// // assert_eq!(chain_id, 1);
 /// ```
-pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
-    let provider = MultiTransportProvider::connect(&rpc_url)
-        .await
-        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
-    provider
-        .get_chainid()
-        .await
-        .map_err(|e| Error::RpcError(format!("failed to get chain id: {e}")))
+pub async fn chain_id(rpc_url: &str) -> Result<u64> {
+    let provider = MultiTransportProvider::connect(rpc_url).await?;
+    provider.get_chainid().await
 }
 
 /// Get the latest block number of the provided RPC URL
@@ -32,15 +29,9 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64, Error> {
 /// // let block_number = latest_block_number("https://eth.llamarpc.com").await?;
 /// // assert!(block_number > 0);
 /// ```
-pub async fn latest_block_number(rpc_url: &str) -> Result<u128, Error> {
-    let provider = MultiTransportProvider::connect(&rpc_url)
-        .await
-        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
-    provider
-        .get_block_number()
-        .await
-        .map(|n| n as u128)
-        .map_err(|e| Error::RpcError(format!("failed to get block number: {e}")))
+pub async fn latest_block_number(rpc_url: &str) -> Result<u128> {
+    let provider = MultiTransportProvider::connect(rpc_url).await?;
+    provider.get_block_number().await.map(|n| n as u128)
 }
 
 /// Get the bytecode of the provided contract address
@@ -51,14 +42,9 @@ pub async fn latest_block_number(rpc_url: &str) -> Result<u128, Error> {
 /// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(bytecode.is_ok());
 /// ```
-pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
-    let provider = MultiTransportProvider::connect(&rpc_url)
-        .await
-        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
-    provider
-        .get_code_at(contract_address)
-        .await
-        .map_err(|e| Error::RpcError(format!("failed to get account code: {e}")))
+pub async fn get_code(contract_address: Address, rpc_url: &str) -> Result<Vec<u8>> {
+    let provider = MultiTransportProvider::connect(rpc_url).await?;
+    provider.get_code_at(contract_address).await
 }
 
 /// Get the raw transaction data of the provided transaction hash
@@ -69,15 +55,9 @@ pub async fn get_code(contract_address: &str, rpc_url: &str) -> Result<Vec<u8>, 
 /// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(bytecode.is_ok());
 /// ```
-pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Transaction, Error> {
-    let provider = MultiTransportProvider::connect(&rpc_url)
-        .await
-        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
-    provider
-        .get_transaction_by_hash(transaction_hash)
-        .await
-        .map_err(|e| Error::RpcError(format!("failed to get account code: {e}")))?
-        .ok_or_else(|| Error::RpcError("transaction not found".to_string()))
+pub async fn get_transaction(transaction_hash: TxHash, rpc_url: &str) -> Result<Transaction> {
+    let provider = MultiTransportProvider::connect(rpc_url).await?;
+    provider.get_transaction_by_hash(transaction_hash).await?.ok_or_eyre("transaction not found")
 }
 
 /// Get the raw trace data of the provided transaction hash
@@ -88,17 +68,14 @@ pub async fn get_transaction(transaction_hash: &str, rpc_url: &str) -> Result<Tr
 /// // let trace = get_trace("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(trace.is_ok());
 /// ```
-pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<TraceResults, Error> {
-    let provider = MultiTransportProvider::connect(&rpc_url)
-        .await
-        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<TraceResults> {
+    let provider = MultiTransportProvider::connect(rpc_url).await?;
     provider
         .trace_replay_transaction(
             transaction_hash,
             &[TraceType::Trace, TraceType::VmTrace, TraceType::StateDiff],
         )
         .await
-        .map_err(|e| Error::RpcError(format!("failed to get account code: {e}")))
 }
 
 /// Get all logs for the given block number
@@ -109,10 +86,8 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<TraceRes
 /// // let logs = get_block_logs(1, "https://eth.llamarpc.com").await;
 /// // assert!(logs.is_ok());
 /// ```
-pub async fn get_block_logs(block_number: u64, rpc_url: &str) -> Result<Vec<Log>, Error> {
-    let provider = MultiTransportProvider::connect(&rpc_url)
-        .await
-        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
+pub async fn get_block_logs(block_number: u64, rpc_url: &str) -> Result<Vec<Log>> {
+    let provider = MultiTransportProvider::connect(rpc_url).await?;
     provider
         .get_logs(&Filter {
             block_option: FilterBlockOption::Range {
@@ -128,7 +103,6 @@ pub async fn get_block_logs(block_number: u64, rpc_url: &str) -> Result<Vec<Log>
             ],
         })
         .await
-        .map_err(|e| Error::RpcError(format!("failed to get logs: {e}")))
 }
 
 /// Get all traces for the given block number
@@ -142,18 +116,15 @@ pub async fn get_block_logs(block_number: u64, rpc_url: &str) -> Result<Vec<Log>
 pub async fn get_block_state_diff(
     block_number: u64,
     rpc_url: &str,
-) -> Result<Vec<TraceResultsWithTransactionHash>, Error> {
-    let provider = MultiTransportProvider::connect(&rpc_url)
-        .await
-        .map_err(|_| Error::RpcError(format!("failed to connect to provider '{}'", &rpc_url)))?;
-    provider
-        .trace_replay_block_transactions(block_number, &[TraceType::StateDiff])
-        .await
-        .map_err(|e| Error::RpcError(format!("failed to get account code: {e}")))
+) -> Result<Vec<TraceResultsWithTransactionHash>> {
+    let provider = MultiTransportProvider::connect(rpc_url).await?;
+    provider.trace_replay_block_transactions(block_number, &[TraceType::StateDiff]).await
 }
 
 #[cfg(test)]
 pub mod tests {
+    use alloy::primitives::address;
+
     use crate::{ether::rpc::*, utils::hex::ToLowerHex};
 
     #[tokio::test]
@@ -183,24 +154,11 @@ pub mod tests {
             std::process::exit(0);
         });
 
-        let contract_address = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+        let contract_address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
         let bytecode =
             get_code(contract_address, &rpc_url).await.expect("get_code() returned an error!");
 
         assert!(!bytecode.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_get_code_invalid_contract_address() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
-
-        let contract_address = "0x0";
-        let bytecode = get_code(contract_address, &rpc_url).await;
-
-        assert!(bytecode.is_err())
     }
 
     #[tokio::test]
@@ -211,7 +169,7 @@ pub mod tests {
         });
 
         let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
-        let transaction = get_transaction(transaction_hash, &rpc_url)
+        let transaction = get_transaction(transaction_hash.parse().expect("invalid"), &rpc_url)
             .await
             .expect("get_transaction() returned an error!");
 
@@ -226,7 +184,8 @@ pub mod tests {
         });
 
         let transaction_hash = "0x0";
-        let transaction = get_transaction(transaction_hash, &rpc_url).await;
+        let transaction =
+            get_transaction(transaction_hash.parse().expect("invalid"), &rpc_url).await;
 
         assert!(transaction.is_err())
     }

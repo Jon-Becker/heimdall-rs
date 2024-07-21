@@ -1,4 +1,4 @@
-use ethers::prelude::U256;
+use alloy::primitives::U256;
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::ext::exec::VMTrace;

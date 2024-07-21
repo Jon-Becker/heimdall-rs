@@ -1,4 +1,7 @@
-use ethers::types::{Log, TransactionTrace, U256, U64};
+use alloy::{
+    primitives::TxHash,
+    rpc::types::{trace::parity::TransactionTrace, Log},
+};
 use eyre::eyre;
 use futures::future::try_join_all;
 use std::{collections::VecDeque, time::Instant};
@@ -32,12 +35,17 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
 
     // get calldata from RPC
     let start_fetch_time = Instant::now();
-    let transaction = get_transaction(&args.target, &args.rpc_url)
-        .await
-        .map_err(|e| Error::Eyre(eyre!("fetching transaction failed: {}", e)))?;
+    let transaction = get_transaction(
+        args.target
+            .parse::<TxHash>()
+            .map_err(|_| eyre!("invalid transaction hash: '{}'", args.target))?,
+        &args.rpc_url,
+    )
+    .await
+    .map_err(|e| Error::Eyre(eyre!("fetching transaction failed: {}", e)))?;
     debug!("fetching transaction took {:?}", start_fetch_time.elapsed());
 
-    let block_number = transaction.block_number.unwrap_or(U64::zero()).as_u64();
+    let block_number = transaction.block_number.unwrap_or(0);
 
     // get block traces
     let start_fetch_time = Instant::now();
@@ -61,27 +69,19 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     let handles =
         transaction_logs.into_iter().map(<DecodedLog as async_convert::TryFrom<Log>>::try_from);
     let mut decoded_logs = try_join_all(handles).await?;
-    decoded_logs.sort_by(|a, b| {
-        a.log_index.unwrap_or(U256::zero()).cmp(&b.log_index.unwrap_or(U256::zero()))
-    });
+    decoded_logs
+        .sort_by(|a, b| a.log_index.unwrap_or_default().cmp(&b.log_index.unwrap_or_default()));
     let mut decoded_logs = VecDeque::from(decoded_logs);
     info!("decoded {} logs successfully", decoded_logs.len());
     debug!("decoding logs took {:?}", decode_log_time.elapsed());
 
     // convert Vec<TransactionTrace> to DecodedTransactionTrace
     let _start_decode_time = Instant::now();
-    let mut decoded_trace =
-        match block_trace.trace {
-            Some(trace) => <DecodedTransactionTrace as async_convert::TryFrom<
-                Vec<TransactionTrace>,
-            >>::try_from(trace)
-            .await
-            .ok(),
-            None => None,
-        };
+    let mut decoded_trace = <DecodedTransactionTrace as async_convert::TryFrom<
+        Vec<TransactionTrace>,
+    >>::try_from(block_trace.trace)
+    .await?;
 
-    let decoded_trace =
-        decoded_trace.as_mut().ok_or(Error::Eyre(eyre!("no trace found for transaction")))?;
     trace!("resolving address contract labels");
 
     // get contracts client
@@ -116,7 +116,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     let mut trace = TraceFactory::default();
     let inspect_call = trace.add_call(
         0,
-        transaction.gas.as_u32(),
+        transaction.gas.try_into().unwrap_or_default(),
         "heimdall".to_string(),
         "inspect".to_string(),
         vec![transaction.hash.to_lower_hex()],
@@ -127,5 +127,5 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     info!("decoded raw trace successfully");
     debug!("inspection took {:?}", start_time.elapsed());
 
-    Ok(InspectResult { decoded_trace: decoded_trace.to_owned(), _trace: trace })
+    Ok(InspectResult { decoded_trace, _trace: trace })
 }

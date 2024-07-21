@@ -4,7 +4,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use ethers::prelude::U256;
+use alloy::primitives::U256;
 use eyre::{OptionExt, Result};
 
 use super::opcodes::WrappedOpcode;
@@ -49,7 +49,6 @@ impl Stack {
     /// Creates a new [`StackFrame`] with the given [`U256`] value and [`WrappedOpcode`].
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -64,7 +63,6 @@ impl Stack {
     /// Returns a [`StackFrame`] with the value and [`WrappedOpcode`] of the popped value.
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -82,7 +80,6 @@ impl Stack {
     /// values.
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -107,7 +104,6 @@ impl Stack {
     /// Swap the top value and the nth value on the stack.
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -133,7 +129,6 @@ impl Stack {
     /// Duplicate the nth value on the stack.
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -161,7 +156,6 @@ impl Stack {
     /// Peek at the top value on the stack.
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -180,7 +174,6 @@ impl Stack {
     /// gets the top n values of the stack
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -211,7 +204,6 @@ impl Stack {
     /// Get the size of the stack
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -227,7 +219,6 @@ impl Stack {
     /// Check if the stack is empty.
     ///
     /// ```
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -248,7 +239,6 @@ impl Stack {
     /// A simple hash of the stack. Used in various symbolic execution optimizations.
     ///
     /// ```no_run
-    /// use ethers::prelude::U256;
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
     ///
     /// let mut stack = Stack::new();
@@ -276,7 +266,8 @@ impl Display for Stack {
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::U256;
+
+    use alloy::primitives::U256;
 
     use crate::core::{opcodes::WrappedOpcode, stack::Stack};
 

@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand};
 use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::utils::{
     hex::ToLowerHex,
-    io::file::{write_file, write_lines_to_file},
+    io::file::write_file,
     version::{current_version, remote_version},
 };
 use heimdall_config::{config, ConfigArgs, Configuration};
@@ -272,7 +272,7 @@ async fn main() -> Result<()> {
                         .await
                         .map_err(|e| eyre!("failed to build output path: {}", e))?;
 
-                write_lines_to_file(&output_path, lines)
+                write_file(&output_path, &lines.join("\n"))
                     .map_err(|e| eyre!("failed to write dump: {}", e))?;
             }
         }

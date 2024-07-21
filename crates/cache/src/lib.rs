@@ -2,7 +2,6 @@ use clap::Parser;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
-use std::future::Future;
 
 use error::Error;
 use util::*;
@@ -216,8 +215,7 @@ pub fn delete_cache(key: &str) -> Result<(), Error> {
 #[allow(deprecated)]
 pub fn read_cache<T>(key: &str) -> Result<Option<T>, Error>
 where
-    T: 'static + DeserializeOwned,
-{
+    T: 'static + DeserializeOwned, {
     let home = home_dir().ok_or(Error::Generic(
         "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
     ))?;
@@ -240,8 +238,8 @@ where
         .map_err(|e| Error::Generic(format!("failed to deserialize cache object: {:?}", e)))?;
 
     // check if the cache has expired, if so, delete it and return None
-    if cache.expiry
-        < std::time::SystemTime::now()
+    if cache.expiry <
+        std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| Error::Generic(format!("failed to get current time: {:?}", e)))?
             .as_secs()
@@ -268,8 +266,7 @@ where
 #[allow(deprecated)]
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>) -> Result<(), Error>
 where
-    T: Serialize,
-{
+    T: Serialize, {
     let home = home_dir().ok_or(Error::Generic(
         "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
     ))?;
@@ -281,8 +278,8 @@ where
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| Error::Generic(format!("failed to get current time: {:?}", e)))?
-            .as_secs()
-            + 60 * 60 * 24 * 90,
+            .as_secs() +
+            60 * 60 * 24 * 90,
     );
 
     let cache = Cache { value, expiry };

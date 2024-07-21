@@ -1,6 +1,6 @@
 use std::{collections::HashSet, time::Instant};
 
-use ethers::abi::{decode as decode_abi, ParamType};
+use alloy_dyn_abi::DynSolType;
 use eyre::eyre;
 use heimdall_common::{
     ether::{
@@ -109,15 +109,17 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     let mut matches = potential_matches
         .iter()
         .map(|potential_match| {
-            // decode the signature into Vec<ParamType>
+            // decode the signature into Vec<DynSolType>
             let inputs = parse_function_parameters(&potential_match.signature)
                 .map_err(|e| Error::Eyre(eyre!("parsing function parameters failed: {}", e)))?;
+            let as_tuple = DynSolType::Tuple(inputs);
 
-            if let Ok(result) = decode_abi(&inputs, byte_args)
+            if let Ok(result) = as_tuple
+                .abi_decode(byte_args)
                 .map_err(|e| Error::Eyre(eyre!("decoding calldata failed: {}", e)))
             {
                 let mut found_match = potential_match.clone();
-                found_match.decoded_inputs = Some(result);
+                found_match.decoded_inputs = result.as_tuple().map(|t| t.to_vec());
                 Ok(found_match)
             } else {
                 debug!(
@@ -154,8 +156,8 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         warn!("couldn't find any resolved matches for '{}'", function_selector);
         info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
 
-        // we're going to build a Vec<ParamType> of all possible types for each
-        let mut potential_inputs: Vec<ParamType> = Vec::new();
+        // we're going to build a Vec<DynSolType> of all possible types for each
+        let mut potential_inputs: Vec<DynSolType> = Vec::new();
 
         // chunk in blocks of 32 bytes
         let calldata_words = calldata[4..].chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
@@ -207,9 +209,9 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
                 signature: format!(
                     "Unresolved_{}({})",
                     function_selector,
-                    params.iter().map(|x| x.kind.to_string()).collect::<Vec<String>>().join(", ")
+                    params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>().join(", ")
                 ),
-                inputs: params.iter().map(|x| x.kind.to_string()).collect::<Vec<String>>(),
+                inputs: params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>(),
                 decoded_inputs: Some(decoded_inputs),
             };
 

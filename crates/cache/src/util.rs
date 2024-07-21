@@ -7,9 +7,7 @@ use std::{
     process::Command,
 };
 
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-
-use crate::{error::Error, exists, read_cache, store_cache};
+use crate::error::Error;
 
 /// Decode a hex string into a bytearray
 pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {

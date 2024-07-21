@@ -1,5 +1,6 @@
-use ethers::{abi::AbiEncode, types::U256};
+use alloy::primitives::U256;
 use eyre::OptionExt;
+use heimdall_common::utils::hex::ToLowerHex;
 use heimdall_vm::core::vm::State;
 
 use crate::{
@@ -16,8 +17,8 @@ pub fn event_heuristic(
     if (0xA0..=0xA4).contains(&state.last_instruction.opcode) {
         // this should be the last event in state
         let event = state.events.last().ok_or_eyre("no events in state")?;
-        let selector = event.topics.first().unwrap_or(&U256::zero()).to_owned();
-        let anonymous = selector == U256::zero();
+        let selector = event.topics.first().unwrap_or(&U256::ZERO).to_owned();
+        let anonymous = selector == U256::ZERO;
 
         // insert this selector into events
         function.events.insert(selector);
@@ -32,8 +33,12 @@ pub fn event_heuristic(
         if analyzer_state.analyzer_type == AnalyzerType::Solidity {
             function.logic.push(format!(
                 "emit Event_{}({}{});{}",
-                &event.topics.first().unwrap_or(&U256::from(0)).encode_hex().replacen("0x", "", 1)
-                    [0..8],
+                &event
+                    .topics
+                    .first()
+                    .unwrap_or(&U256::from(0))
+                    .to_lower_hex()
+                    .replacen("0x", "", 1)[0..8],
                 event
                     .topics
                     .get(1..)

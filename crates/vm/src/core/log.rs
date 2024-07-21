@@ -1,4 +1,4 @@
-use ethers::prelude::U256;
+use alloy::primitives::U256;
 
 /// The [`Log`] struct represents a log emitted by a `LOG0-LOG4` opcode.
 #[derive(Clone, Debug)]

@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
 use crate::{ether::bytecode::remove_pushbytes_from_bytecode, utils::iter::ByteSliceExt};
-use ethers::types::Bytes;
 use tracing::{debug, trace, warn};
 
 #[derive(Debug, PartialEq, Clone)]
@@ -60,8 +59,9 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
     }
 
     // Remove `PUSHN [u8; n]` bytes so we are left with only operations
-    let pruned_bytecode = remove_pushbytes_from_bytecode(Bytes::from_iter(bytecode.iter()))
-        .expect("invalid bytecode");
+    let pruned_bytecode =
+        remove_pushbytes_from_bytecode(alloy::primitives::Bytes::from_iter(bytecode))
+            .expect("invalid bytecode");
 
     // detect minimal proxies
     if pruned_bytecode.eq(&vec![

@@ -1,5 +1,6 @@
-use ethers::types::U256;
 use std::fmt::{Display, Formatter, Result};
+
+use alloy::primitives::U256;
 
 /// An [`Opcode`] represents an Ethereum Virtual Machine (EVM) opcode. \
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -257,8 +258,9 @@ impl Display for WrappedInput {
 
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::U256;
+
     use crate::core::opcodes::Opcode;
-    use ethers::types::U256;
 
     use crate::core::opcodes::{WrappedInput, WrappedOpcode};
 

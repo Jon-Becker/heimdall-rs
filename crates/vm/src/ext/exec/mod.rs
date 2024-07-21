@@ -267,7 +267,8 @@ impl VM {
                 if !jump_taken {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction = last_instruction.inputs[0].as_u128() + 1;
+                    trace_vm.instruction =
+                        last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}

@@ -1,12 +1,7 @@
+use alloy_dyn_abi::{DynSolType, DynSolValue};
 use async_trait::async_trait;
-use ethers::abi::{ParamType, Token};
-
-use eyre::Result;
-use heimdall_cache::{read_cache, store_cache};
-use tracing::trace;
 
 use crate::{
-    error::Error,
     ether::types::parse_function_parameters,
     utils::{
         http::get_json_from_url,
@@ -14,18 +9,22 @@ use crate::{
         strings::replace_last,
     },
 };
+use eyre::{OptionExt, Result};
+use heimdall_cache::{read_cache, store_cache};
 use serde::{Deserialize, Serialize};
+use tracing::trace;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedFunction {
     pub name: String,
     pub signature: String,
     pub inputs: Vec<String>,
-    pub decoded_inputs: Option<Vec<Token>>,
+    #[serde(skip)]
+    pub decoded_inputs: Option<Vec<DynSolValue>>,
 }
 
 impl ResolvedFunction {
-    pub fn inputs(&self) -> Vec<ParamType> {
+    pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
@@ -38,7 +37,7 @@ pub struct ResolvedError {
 }
 
 impl ResolvedError {
-    pub fn inputs(&self) -> Vec<ParamType> {
+    pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
@@ -51,21 +50,21 @@ pub struct ResolvedLog {
 }
 
 impl ResolvedLog {
-    pub fn inputs(&self) -> Vec<ParamType> {
+    pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
 
 #[async_trait]
 pub trait ResolveSelector {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error>
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>>
     where
         Self: Sized;
 }
 
 #[async_trait]
 impl ResolveSelector for ResolvedError {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
         // normalize selector
         let selector = match selector.strip_prefix("0x") {
             Some(selector) => selector,
@@ -76,8 +75,7 @@ impl ResolveSelector for ResolvedError {
 
         // get cached results
         if let Some(cached_results) =
-            read_cache::<Vec<ResolvedError>>(&format!("selector.{selector}"))
-                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
+            read_cache::<Vec<ResolvedError>>(&format!("selector.{selector}"))?
         {
             match cached_results.len() {
                 0 => return Ok(None),
@@ -96,8 +94,7 @@ impl ResolveSelector for ResolvedError {
             ),
             10,
         )
-        .await
-        .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
+        .await?
         {
             Some(signatures) => signatures,
             None => return Ok(None),
@@ -110,7 +107,7 @@ impl ResolveSelector for ResolvedError {
             .and_then(|function| function.get(format!("0x{selector}")))
             .and_then(|item| item.as_array())
             .map(|array| array.to_vec())
-            .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
+            .ok_or_eyre("error parsing signatures from openchain")?;
 
         trace!("found {} possible functions for selector: {}", &results.len(), &selector);
 
@@ -152,7 +149,7 @@ impl ResolveSelector for ResolvedError {
 
 #[async_trait]
 impl ResolveSelector for ResolvedLog {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
         // normalize selector
         let selector = match selector.strip_prefix("0x") {
             Some(selector) => selector,
@@ -163,8 +160,7 @@ impl ResolveSelector for ResolvedLog {
 
         // get cached results
         if let Some(cached_results) =
-            read_cache::<Vec<ResolvedLog>>(&format!("selector.{selector}"))
-                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
+            read_cache::<Vec<ResolvedLog>>(&format!("selector.{selector}"))?
         {
             match cached_results.len() {
                 0 => return Ok(None),
@@ -183,8 +179,7 @@ impl ResolveSelector for ResolvedLog {
             ),
             10,
         )
-        .await
-        .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
+        .await?
         {
             Some(signatures) => signatures,
             None => return Ok(None),
@@ -197,7 +192,7 @@ impl ResolveSelector for ResolvedLog {
             .and_then(|function| function.get(format!("0x{selector}")))
             .and_then(|item| item.as_array())
             .map(|array| array.to_vec())
-            .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
+            .ok_or_eyre("error parsing signatures from openchain")?;
 
         trace!("found {} possible functions for selector: {}", &results.len(), &selector);
 
@@ -239,7 +234,7 @@ impl ResolveSelector for ResolvedLog {
 
 #[async_trait]
 impl ResolveSelector for ResolvedFunction {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
         // normalize selector
         let selector = match selector.strip_prefix("0x") {
             Some(selector) => selector,
@@ -250,8 +245,7 @@ impl ResolveSelector for ResolvedFunction {
 
         // get cached results
         if let Some(cached_results) =
-            read_cache::<Vec<ResolvedFunction>>(&format!("selector.{selector}"))
-                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
+            read_cache::<Vec<ResolvedFunction>>(&format!("selector.{selector}"))?
         {
             match cached_results.len() {
                 0 => return Ok(None),
@@ -270,8 +264,7 @@ impl ResolveSelector for ResolvedFunction {
             ),
             10,
         )
-        .await
-        .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
+        .await?
         {
             Some(signatures) => signatures,
             None => return Ok(None),
@@ -284,7 +277,7 @@ impl ResolveSelector for ResolvedFunction {
             .and_then(|function| function.get(format!("0x{selector}")))
             .and_then(|item| item.as_array())
             .map(|array| array.to_vec())
-            .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
+            .ok_or_eyre("error parsing signatures from openchain")?;
 
         trace!("found {} possible functions for selector: {}", &results.len(), &selector);
 
