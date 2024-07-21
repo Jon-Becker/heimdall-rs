@@ -80,7 +80,6 @@ pub struct DecodedCall {
     /// Decoded inputs
     #[serde(rename = "decodedInputs")]
     #[serde(skip)]
-    // TODO: dont skip
     pub decoded_inputs: Vec<DynSolValue>,
 }
 
@@ -108,7 +107,6 @@ pub struct DecodedCallResult {
     /// Decoded outputs
     #[serde(rename = "decodedOutputs")]
     #[serde(skip)]
-    // TODO: dont skip
     pub decoded_outputs: Vec<DynSolValue>,
 }
 
