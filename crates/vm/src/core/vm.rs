@@ -93,6 +93,7 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let vm = VM::new(
     ///     &vec![0x00],
@@ -141,6 +142,7 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
@@ -164,6 +166,7 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
@@ -201,6 +204,7 @@ impl VM {
     ///
     /// ```no_run
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
@@ -1442,6 +1446,7 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
@@ -1474,6 +1479,7 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
@@ -1509,6 +1515,7 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
@@ -1541,6 +1548,7 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
@@ -1578,6 +1586,7 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],

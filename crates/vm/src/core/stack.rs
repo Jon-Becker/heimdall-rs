@@ -50,6 +50,7 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -64,10 +65,11 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
-
+    ///
     /// let frame = stack.pop();
     /// assert_eq!(frame.unwrap().value, U256::from(0x00));
     /// ```
@@ -81,6 +83,7 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -105,6 +108,7 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -130,6 +134,7 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -157,6 +162,7 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -175,6 +181,7 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -205,6 +212,7 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -220,6 +228,7 @@ impl Stack {
     ///
     /// ```
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
@@ -240,6 +249,7 @@ impl Stack {
     ///
     /// ```no_run
     /// use heimdall_vm::core::{opcodes::WrappedOpcode, stack::Stack};
+    /// use alloy::primitives::U256;
     ///
     /// let mut stack = Stack::new();
     /// stack.push(U256::from(0x00), WrappedOpcode::default());

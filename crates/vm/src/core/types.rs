@@ -147,6 +147,7 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 ///
 /// ```
 /// use heimdall_vm::core::types::find_cast;
+/// use alloy::dyn_abi::DynSolType;
 ///
 /// let line = "uint256(0x000011)";
 /// let (range, cast_type) = find_cast(line).expect("failed to find type cast");
