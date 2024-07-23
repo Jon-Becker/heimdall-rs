@@ -1,6 +1,7 @@
 use std::{collections::HashSet, time::Instant};
 
-use alloy_dyn_abi::DynSolType;
+use alloy::primitives::Selector;
+use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType};
 use eyre::eyre;
 use heimdall_common::{
     ether::{
@@ -112,14 +113,19 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             // decode the signature into Vec<DynSolType>
             let inputs = parse_function_parameters(&potential_match.signature)
                 .map_err(|e| Error::Eyre(eyre!("parsing function parameters failed: {}", e)))?;
-            let as_tuple = DynSolType::Tuple(inputs);
+            let ty = DynSolCall::new(
+                Selector::default(),
+                inputs.to_vec(),
+                None,
+                DynSolReturns::new(Vec::new()),
+            );
 
-            if let Ok(result) = as_tuple
-                .abi_decode(byte_args)
+            if let Ok(result) = ty
+                .abi_decode_input(byte_args, true)
                 .map_err(|e| Error::Eyre(eyre!("decoding calldata failed: {}", e)))
             {
                 let mut found_match = potential_match.clone();
-                found_match.decoded_inputs = result.as_tuple().map(|t| t.to_vec());
+                found_match.decoded_inputs = Some(result);
                 Ok(found_match)
             } else {
                 debug!(
@@ -202,23 +208,21 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             potential_inputs.iter().map(|x| x.to_string()).collect::<Vec<String>>()
         );
 
-        if let Ok((decoded_inputs, params)) = try_decode(&potential_inputs, byte_args) {
-            // build a ResolvedFunction to add to matches
-            let resolved_function = ResolvedFunction {
-                name: format!("Unresolved_{}", function_selector),
-                signature: format!(
-                    "Unresolved_{}({})",
-                    function_selector,
-                    params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>().join(", ")
-                ),
-                inputs: params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>(),
-                decoded_inputs: Some(decoded_inputs),
-            };
+        let (decoded_inputs, params) = try_decode(&potential_inputs, byte_args)
+            .map_err(|e| Error::Eyre(eyre!("dynamically decoding calldata failed: {}", e)))?;
+        // build a ResolvedFunction to add to matches
+        let resolved_function = ResolvedFunction {
+            name: format!("Unresolved_{}", function_selector),
+            signature: format!(
+                "Unresolved_{}({})",
+                function_selector,
+                params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>().join(", ")
+            ),
+            inputs: params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>(),
+            decoded_inputs: Some(decoded_inputs),
+        };
 
-            matches.push(resolved_function);
-        } else {
-            return Err(Error::Eyre(eyre!("failed to dynamically decode calldata")));
-        }
+        matches.push(resolved_function);
     }
 
     let selected_match = matches.first().expect("matches is empty").clone();

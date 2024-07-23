@@ -81,7 +81,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         Address::default(),
         Address::default(),
         0,
-        u128::max_value(),
+        u128::MAX,
     );
 
     // disassemble the contract's bytecode

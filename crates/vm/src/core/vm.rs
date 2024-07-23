@@ -1595,7 +1595,7 @@ impl VM {
     pub fn call(&mut self, calldata: &[u8], value: u128) -> Result<ExecutionResult> {
         // reset the VM temp state
         self.reset();
-        self.calldata = calldata.to_owned();
+        calldata.clone_into(&mut self.calldata);
         self.value = value;
 
         self.execute()

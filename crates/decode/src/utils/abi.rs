@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use alloy::primitives::U256;
-use alloy_dyn_abi::{DynSolType, DynSolValue};
+use alloy::primitives::{Selector, U256};
+use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType, DynSolValue};
 use alloy_json_abi::Param;
 use eyre::eyre;
 use heimdall_common::utils::strings::encode_hex;
@@ -24,24 +24,24 @@ pub fn try_decode(
     byte_args: &[u8],
 ) -> Result<(Vec<DynSolValue>, Vec<Param>), Error> {
     // convert inputs to tuple
-    let ty = DynSolType::Tuple(inputs.to_vec());
+    let ty =
+        DynSolCall::new(Selector::default(), inputs.to_vec(), None, DynSolReturns::new(Vec::new()));
 
-    if let Ok(result) = ty.abi_decode(byte_args) {
-        // convert tokens to params
-        let mut params: Vec<Param> = Vec::new();
-        for (i, input) in inputs.iter().enumerate() {
-            params.push(Param {
-                ty: input.to_string(),
-                name: format!("arg{i}"),
-                components: Vec::new(),
-                internal_type: None,
-            });
-        }
-
-        return Ok((result.as_tuple().map(|t| t.to_vec()).unwrap_or_default(), params));
+    let result = ty
+        .abi_decode_input(byte_args, true)
+        .map_err(|e| Error::Eyre(eyre!("failed to decode calldata: {}", e)))?;
+    // convert tokens to params
+    let mut params: Vec<Param> = Vec::new();
+    for (i, input) in inputs.iter().enumerate() {
+        params.push(Param {
+            ty: input.to_string(),
+            name: format!("arg{i}"),
+            components: Vec::new(),
+            internal_type: None,
+        });
     }
 
-    Err(Error::Eyre(eyre!("failed to decode calldata")))
+    Ok((result, params))
 }
 
 /// Finds the offsets of all ABI-encoded items in the given calldata.

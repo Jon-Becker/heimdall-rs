@@ -262,7 +262,7 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
 
         // require() statements can include revert messages or error codes
         if condition.contains(", ") {
-            condition = condition.split(", ").collect::<Vec<&str>>()[0].to_owned();
+            condition = condition.split(", ").collect::<Vec<&str>>()[0].to_string();
         }
 
         return Some(condition.trim().to_string());

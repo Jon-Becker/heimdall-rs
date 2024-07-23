@@ -74,7 +74,7 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
         Address::default(),
         Address::default(),
         0,
-        u128::max_value(),
+        u128::MAX,
     );
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));
