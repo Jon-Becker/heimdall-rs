@@ -37,3 +37,4 @@ futures = "0.3.17"
 alloy = { version = "0.1.3", features = ["full", "rpc-types-debug", "rpc-types-trace"] }
 bytes = "1.6.1"
 alloy-dyn-abi = "0.7.7"
+tokio-retry = "0.3.0"

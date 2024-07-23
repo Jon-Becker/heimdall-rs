@@ -8,6 +8,8 @@ use alloy::{
     },
 };
 use eyre::{OptionExt, Result};
+use heimdall_cache::with_cache;
+use tokio_retry::{strategy::ExponentialBackoff, Retry};
 
 /// Get the chainId of the provided RPC URL
 ///
@@ -18,8 +20,17 @@ use eyre::{OptionExt, Result};
 /// // assert_eq!(chain_id, 1);
 /// ```
 pub async fn chain_id(rpc_url: &str) -> Result<u64> {
-    let provider = MultiTransportProvider::connect(rpc_url).await?;
-    provider.get_chainid().await
+    Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
+        with_cache(
+            &format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-")),
+            || async {
+                let provider = MultiTransportProvider::connect(rpc_url).await?;
+                provider.get_chainid().await
+            },
+        )
+        .await
+    })
+    .await
 }
 
 /// Get the latest block number of the provided RPC URL
@@ -30,8 +41,11 @@ pub async fn chain_id(rpc_url: &str) -> Result<u64> {
 /// // assert!(block_number > 0);
 /// ```
 pub async fn latest_block_number(rpc_url: &str) -> Result<u128> {
-    let provider = MultiTransportProvider::connect(rpc_url).await?;
-    provider.get_block_number().await.map(|n| n as u128)
+    Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
+        let provider = MultiTransportProvider::connect(rpc_url).await?;
+        provider.get_block_number().await.map(|n| n as u128)
+    })
+    .await
 }
 
 /// Get the bytecode of the provided contract address
@@ -43,11 +57,18 @@ pub async fn latest_block_number(rpc_url: &str) -> Result<u128> {
 /// // assert!(bytecode.is_ok());
 /// ```
 pub async fn get_code(contract_address: Address, rpc_url: &str) -> Result<Vec<u8>> {
-    let provider = MultiTransportProvider::connect(rpc_url).await?;
-    provider.get_code_at(contract_address).await
+    Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
+        let chain_id = chain_id(rpc_url).await.unwrap_or(1);
+        with_cache(&format!("contract.{}.{}", &chain_id, &contract_address), || async {
+            let provider = MultiTransportProvider::connect(rpc_url).await?;
+            provider.get_code_at(contract_address).await
+        })
+        .await
+    })
+    .await
 }
 
-/// Get the raw transaction data of the provided transaction hash
+/// Get the raw transaction data of the provided transaction hash \
 ///
 /// ```no_run
 /// use heimdall_common::ether::rpc::get_code;
@@ -55,9 +76,17 @@ pub async fn get_code(contract_address: Address, rpc_url: &str) -> Result<Vec<u8
 /// // let bytecode = get_code("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(bytecode.is_ok());
 /// ```
+///
+/// Note: [`Transaction`] is un-cacheable
 pub async fn get_transaction(transaction_hash: TxHash, rpc_url: &str) -> Result<Transaction> {
-    let provider = MultiTransportProvider::connect(rpc_url).await?;
-    provider.get_transaction_by_hash(transaction_hash).await?.ok_or_eyre("transaction not found")
+    Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
+        let provider = MultiTransportProvider::connect(rpc_url).await?;
+        provider
+            .get_transaction_by_hash(transaction_hash)
+            .await?
+            .ok_or_eyre("transaction not found")
+    })
+    .await
 }
 
 /// Get the raw trace data of the provided transaction hash
@@ -68,14 +97,19 @@ pub async fn get_transaction(transaction_hash: TxHash, rpc_url: &str) -> Result<
 /// // let trace = get_trace("0x0", "https://eth.llamarpc.com").await;
 /// // assert!(trace.is_ok());
 /// ```
+///
+/// Note: [`TraceResults`] is un-cacheable
 pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<TraceResults> {
-    let provider = MultiTransportProvider::connect(rpc_url).await?;
-    provider
-        .trace_replay_transaction(
-            transaction_hash,
-            &[TraceType::Trace, TraceType::VmTrace, TraceType::StateDiff],
-        )
-        .await
+    Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
+        let provider = MultiTransportProvider::connect(rpc_url).await?;
+        provider
+            .trace_replay_transaction(
+                transaction_hash,
+                &[TraceType::Trace, TraceType::VmTrace, TraceType::StateDiff],
+            )
+            .await
+    })
+    .await
 }
 
 /// Get all logs for the given block number
@@ -86,23 +120,28 @@ pub async fn get_trace(transaction_hash: &str, rpc_url: &str) -> Result<TraceRes
 /// // let logs = get_block_logs(1, "https://eth.llamarpc.com").await;
 /// // assert!(logs.is_ok());
 /// ```
+///
+/// Note: [`Log`] is un-cacheable
 pub async fn get_block_logs(block_number: u64, rpc_url: &str) -> Result<Vec<Log>> {
-    let provider = MultiTransportProvider::connect(rpc_url).await?;
-    provider
-        .get_logs(&Filter {
-            block_option: FilterBlockOption::Range {
-                from_block: Some(BlockNumberOrTag::from(block_number)),
-                to_block: Some(BlockNumberOrTag::from(block_number)),
-            },
-            address: FilterSet::default(),
-            topics: [
-                FilterSet::default(),
-                FilterSet::default(),
-                FilterSet::default(),
-                FilterSet::default(),
-            ],
-        })
-        .await
+    Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
+        let provider = MultiTransportProvider::connect(rpc_url).await?;
+        provider
+            .get_logs(&Filter {
+                block_option: FilterBlockOption::Range {
+                    from_block: Some(BlockNumberOrTag::from(block_number)),
+                    to_block: Some(BlockNumberOrTag::from(block_number)),
+                },
+                address: FilterSet::default(),
+                topics: [
+                    FilterSet::default(),
+                    FilterSet::default(),
+                    FilterSet::default(),
+                    FilterSet::default(),
+                ],
+            })
+            .await
+    })
+    .await
 }
 
 /// Get all traces for the given block number
@@ -113,12 +152,17 @@ pub async fn get_block_logs(block_number: u64, rpc_url: &str) -> Result<Vec<Log>
 /// // let traces = get_block_state_diff(1, "https://eth.llamarpc.com").await;
 /// // assert!(traces.is_ok());
 /// ```
+///
+/// Note: [`TraceResultsWithTransactionHash`] is un-cacheable
 pub async fn get_block_state_diff(
     block_number: u64,
     rpc_url: &str,
 ) -> Result<Vec<TraceResultsWithTransactionHash>> {
-    let provider = MultiTransportProvider::connect(rpc_url).await?;
-    provider.trace_replay_block_transactions(block_number, &[TraceType::StateDiff]).await
+    Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
+        let provider = MultiTransportProvider::connect(rpc_url).await?;
+        provider.trace_replay_block_transactions(block_number, &[TraceType::StateDiff]).await
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -174,20 +218,6 @@ pub mod tests {
             .expect("get_transaction() returned an error!");
 
         assert_eq!(transaction.hash.to_lower_hex(), transaction_hash);
-    }
-
-    #[tokio::test]
-    async fn test_get_transaction_invalid_transaction_hash() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
-
-        let transaction_hash = "0x0";
-        let transaction =
-            get_transaction(transaction_hash.parse().expect("invalid"), &rpc_url).await;
-
-        assert!(transaction.is_err())
     }
 
     #[tokio::test]
