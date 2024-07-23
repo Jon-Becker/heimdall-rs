@@ -1,10 +1,10 @@
 use std::{collections::VecDeque, ops::Range};
 
-use alloy::dyn_abi::DynSolType;
+use alloy::{dyn_abi::DynSolType, sol_types::SolValue};
 use eyre::{eyre, Result};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
-    utils::{hex::ToLowerHex, strings::find_balanced_encapsulator},
+    utils::strings::{encode_hex, find_balanced_encapsulator},
 };
 
 use super::{opcodes::WrappedInput, vm::Instruction};
@@ -99,9 +99,11 @@ pub fn convert_bitmask(instruction: &Instruction) -> (usize, Vec<String>) {
             WrappedInput::Opcode(opcode) => {
                 if !(opcode.opcode.name == "CALLDATALOAD" || opcode.opcode.name == "CALLDATACOPY") {
                     if mask.opcode.name == "AND" {
-                        type_byte_size = instruction.inputs[i].to_lower_hex().matches("ff").count();
+                        type_byte_size =
+                            encode_hex(&instruction.inputs[i].abi_encode()).matches("ff").count();
                     } else if mask.opcode.name == "OR" {
-                        type_byte_size = instruction.inputs[i].to_lower_hex().matches("00").count();
+                        type_byte_size =
+                            encode_hex(&instruction.inputs[i].abi_encode()).matches("00").count();
                     }
                 }
             }
