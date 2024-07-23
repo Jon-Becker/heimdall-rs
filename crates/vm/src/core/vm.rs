@@ -738,8 +738,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
 
                 let data = self.memory.read(offset, size);
                 let result = keccak256(data);
@@ -1038,9 +1038,7 @@ impl VM {
             // MLOAD
             0x51 => {
                 let i = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let i: usize = i.try_into().unwrap_or(usize::MAX);
+                let i: usize = i.try_into().unwrap_or(32 * 32);
 
                 let result = U256::from_be_slice(self.memory.read(i, 32).as_slice());
 
@@ -1057,7 +1055,7 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, 32);
@@ -1078,7 +1076,7 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(64 * 32);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, 1);
@@ -1203,9 +1201,10 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                // Note: clamping to 8 words here, since we dont actually use the return data
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(32 * 32);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
                 let value_offset_safe = (offset + size)
                     .min(self.memory.size().try_into().expect("failed to convert u128 to usize"));
 
@@ -1297,8 +1296,8 @@ impl VM {
                     self.stack.pop_n(topic_count as usize).iter().map(|x| x.value).collect();
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
 
                 let data = self.memory.read(offset, size);
 
@@ -1349,8 +1348,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, size);
@@ -1388,8 +1387,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
 
                 self.exit(1, self.memory.read(offset, size));
             }
