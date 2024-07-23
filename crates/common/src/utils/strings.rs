@@ -1,12 +1,7 @@
-use std::{fmt::Write, ops::Range};
-
-use ethers::{
-    abi::AbiEncode,
-    prelude::{I256, U256},
-};
+use alloy::primitives::{I256, U256};
+use eyre::{bail, eyre, Result};
 use fancy_regex::Regex;
-
-use crate::{constants::REDUCE_HEX_REGEX, error::Error};
+use std::{fmt::Write, ops::Range};
 
 /// Converts a signed integer into an unsigned integer
 pub fn sign_uint(unsigned: U256) -> I256 {
@@ -22,7 +17,7 @@ pub fn sign_uint(unsigned: U256) -> I256 {
 /// let result = decode_hex(hex).expect("should decode hex");
 /// assert_eq!(result, vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]);
 /// ```
-pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, Error> {
+pub fn decode_hex(mut s: &str) -> Result<Vec<u8>> {
     // normalize
     s = s.trim_start_matches("0x");
 
@@ -32,11 +27,9 @@ pub fn decode_hex(mut s: &str) -> Result<Vec<u8>, Error> {
 
     (0..s.len())
         .step_by(2)
-        .map(|i| {
-            u8::from_str_radix(&s[i..i + 2], 16)
-                .map_err(|e| Error::ParseError(format!("failed to parse hex string: {}", e)))
-        })
-        .collect()
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
+        .collect::<Result<Vec<u8>, _>>()
+        .map_err(|_| eyre!("invalid hex string: {}", s))
 }
 
 /// Encodes a vector of bytes into a hex string
@@ -58,16 +51,26 @@ pub fn encode_hex(s: &[u8]) -> String {
 /// Encodes a U256 into a hex string, removing leading zeros
 ///
 /// ```
-/// use ethers::types::U256;
 /// use heimdall_common::utils::strings::encode_hex_reduced;
+/// use alloy::primitives::U256;
 ///
-/// let u256 = U256::max_value();
-/// let result = encode_hex_reduced(u256);
+/// let result = encode_hex_reduced(U256::MAX);
 /// assert_eq!(result, "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 /// ```
 pub fn encode_hex_reduced(s: U256) -> String {
     if s > U256::from(0) {
-        REDUCE_HEX_REGEX.replace(&s.encode_hex(), "0x").to_string()
+        format!(
+            "0x{}",
+            s.to_le_bytes_vec()
+                .iter()
+                .rev()
+                .skip_while(|b| **b == 0)
+                .fold(String::new(), |mut acc, b| {
+                    write!(acc, "{:02x}", b).expect("unable to write");
+                    acc
+                })
+                .trim_start_matches("00")
+        )
     } else {
         String::from("0")
     }
@@ -82,11 +85,10 @@ pub fn encode_hex_reduced(s: U256) -> String {
 /// let result = hex_to_ascii(hex).expect("should decode hex");
 /// assert_eq!(result, "Hello World");
 /// ```
-pub fn hex_to_ascii(s: &str) -> Result<String, Error> {
+pub fn hex_to_ascii(s: &str) -> Result<String> {
     let mut result = String::new();
     for i in 0..s.len() / 2 {
-        let byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16)
-            .map_err(|e| Error::ParseError(format!("failed to parse hex string: {}", e)))?;
+        let byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16)?;
         result.push(byte as char);
     }
 
@@ -125,7 +127,7 @@ pub fn replace_last(s: &str, old: &str, new: &str) -> String {
 /// let condition = &s[result];
 /// assert_eq!(condition, "World");
 /// ```
-pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> Result<Range<usize>, Error> {
+pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> Result<Range<usize>> {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -146,10 +148,7 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> Result<Range<
     }
 
     if !(open == close && end > start && open > 0) {
-        return Err(Error::ParseError(format!(
-            "string '{}' doesn't contain balanced encapsulator {}{}.",
-            s, encap.0, encap.1
-        )));
+        bail!("string '{}' doesn't contain balanced encapsulator {}{}.", s, encap.0, encap.1);
     }
 
     Ok(start + 1..end)
@@ -165,10 +164,7 @@ pub fn find_balanced_encapsulator(s: &str, encap: (char, char)) -> Result<Range<
 /// assert_eq!(result, (7..12));
 /// assert_eq!(&s[result], "World");
 /// ```
-pub fn find_balanced_encapsulator_backwards(
-    s: &str,
-    encap: (char, char),
-) -> Result<Range<usize>, Error> {
+pub fn find_balanced_encapsulator_backwards(s: &str, encap: (char, char)) -> Result<Range<usize>> {
     let mut open = 0;
     let mut close = 0;
     let mut start = 0;
@@ -189,10 +185,7 @@ pub fn find_balanced_encapsulator_backwards(
     }
 
     if !(open == close && end > start && open > 0) {
-        return Err(Error::ParseError(format!(
-            "string '{}' doesn't contain balanced encapsulator {}{}.",
-            s, encap.0, encap.1
-        )));
+        bail!("string '{}' doesn't contain balanced encapsulator {}{}.", s, encap.0, encap.1);
     }
 
     Ok(s.len() - end..s.len() - start - 1)
@@ -269,7 +262,7 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
 
         // require() statements can include revert messages or error codes
         if condition.contains(", ") {
-            condition = condition.split(", ").collect::<Vec<&str>>()[0].to_owned();
+            condition = condition.split(", ").collect::<Vec<&str>>()[0].to_string();
         }
 
         return Some(condition.trim().to_string());
@@ -416,7 +409,6 @@ pub fn classify_token(token: &str) -> TokenType {
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::{I256, U256};
 
     use crate::utils::strings::*;
 
@@ -424,15 +416,15 @@ mod tests {
     fn test_sign_uint() {
         let unsigned = U256::from(10);
         let signed = sign_uint(unsigned);
-        assert_eq!(signed, I256::from(10));
+        assert_eq!(signed, I256::try_from(10).expect("invalid"));
 
         let unsigned = U256::from(0);
         let signed = sign_uint(unsigned);
-        assert_eq!(signed, I256::from(0));
+        assert_eq!(signed, I256::try_from(0).expect("invalid"));
 
         let unsigned = U256::from(1000);
         let signed = sign_uint(unsigned);
-        assert_eq!(signed, I256::from(1000));
+        assert_eq!(signed, I256::try_from(1000).expect("invalid"));
     }
 
     #[test]

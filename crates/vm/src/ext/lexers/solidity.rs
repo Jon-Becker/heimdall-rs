@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use ethers::types::U256;
+use alloy::primitives::U256;
 use heimdall_common::{
     constants::{MEMLEN_REGEX, WORD_REGEX},
     utils::strings::encode_hex_reduced,
@@ -418,11 +418,12 @@ impl WrappedInput {
 
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::U256;
+
     use crate::{
         core::opcodes::{Opcode, WrappedInput, WrappedOpcode},
         ext::lexers::solidity::is_ext_call_precompile,
     };
-    use ethers::types::U256;
 
     #[test]
     fn test_is_ext_call_precompile() {

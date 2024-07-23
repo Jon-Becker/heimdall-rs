@@ -3,16 +3,18 @@ pub(crate) mod out;
 pub(crate) mod postprocess;
 pub(crate) mod resolve;
 
+use alloy::primitives::Address;
+use alloy_dyn_abi::{DynSolType, DynSolValue};
 use alloy_json_abi::JsonAbi;
-use ethers::types::H160;
 use eyre::eyre;
 use heimdall_common::{
     ether::{
         bytecode::get_bytecode_from_target,
         compiler::detect_compiler,
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
+        types::to_type,
     },
-    utils::strings::{encode_hex, encode_hex_reduced, StringExt},
+    utils::strings::{decode_hex, encode_hex, encode_hex_reduced, StringExt},
 };
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
 use heimdall_vm::{
@@ -75,11 +77,11 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     let mut evm = VM::new(
         &contract_bytecode,
         &[],
-        H160::default(),
-        H160::default(),
-        H160::default(),
+        Address::default(),
+        Address::default(),
+        Address::default(),
         0,
-        u128::max_value(),
+        u128::MAX,
     );
 
     // disassemble the contract's bytecode
@@ -152,14 +154,35 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         .map(|(selector, trace_root)| {
             let mut analyzer = Analyzer::new(
                 analyzer_type,
-                AnalyzedFunction::new(
-                    &selector,
-                    selector == "fallback" || selector == "0x00000000",
-                ),
+                AnalyzedFunction::new(&selector, selector == "fallback"),
             );
 
             // analyze the symbolic execution trace
-            let analyzed_function = analyzer.analyze(trace_root)?;
+            let mut analyzed_function = analyzer.analyze(trace_root)?;
+
+            // if the function is constant, we can get the exact val
+            if analyzed_function.is_constant() && !analyzed_function.fallback {
+                evm.reset();
+                let x = evm.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
+
+                let returns_param_type = analyzed_function
+                    .returns
+                    .as_ref()
+                    .map(|ret_type| to_type(ret_type.replace("memory", "").trim()))
+                    .unwrap_or(DynSolType::Bytes);
+
+                let decoded = returns_param_type
+                    .abi_decode(&x.returndata)
+                    .map(|decoded| match decoded {
+                        DynSolValue::String(s) => format!("\"{}\"", s),
+                        DynSolValue::Uint(x, _) => x.to_string(),
+                        DynSolValue::Int(x, _) => x.to_string(),
+                        token => format!("0x{:?}", token),
+                    })
+                    .unwrap_or_else(|_| encode_hex(&x.returndata));
+
+                analyzed_function.constant_value = Some(decoded);
+            }
 
             Ok::<_, Error>(analyzed_function)
         })

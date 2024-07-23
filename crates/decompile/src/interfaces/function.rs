@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use ethers::types::U256;
+use alloy::primitives::U256;
 use heimdall_common::ether::signatures::ResolvedFunction;
 use heimdall_vm::core::{opcodes::WrappedOpcode, types::byte_size_to_type};
 
@@ -53,6 +53,9 @@ pub struct AnalyzedFunction {
 
     /// the underlying storage variable, if this is a public getter
     pub maybe_getter_for: Option<String>,
+
+    /// optional constant value for this function
+    pub constant_value: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -100,7 +103,13 @@ impl AnalyzedFunction {
             analyzer_type: AnalyzerType::Abi,
             fallback,
             maybe_getter_for: None,
+            constant_value: None,
         }
+    }
+
+    /// Whether this is a constant or not
+    pub fn is_constant(&self) -> bool {
+        self.pure && self.arguments.is_empty()
     }
 
     /// Gets the inputs for a range of memory

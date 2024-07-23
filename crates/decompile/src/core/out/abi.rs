@@ -27,12 +27,12 @@ pub fn build_abi(
     // add functions
     functions.iter().for_each(|f| {
         // determine the state mutability of the function
-        let state_mutability = match f.payable {
-            true => StateMutability::Payable,
-            false => match f.pure {
-                true => StateMutability::Pure,
-                false => match f.view {
-                    true => StateMutability::View,
+        let state_mutability = match f.pure {
+            true => StateMutability::Pure,
+            false => match f.view {
+                true => StateMutability::View,
+                false => match f.payable {
+                    true => StateMutability::Payable,
                     false => StateMutability::NonPayable,
                 },
             },

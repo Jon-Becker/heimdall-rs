@@ -1,4 +1,4 @@
-use ethers::types::U256;
+use alloy::primitives::U256;
 use heimdall_vm::core::opcodes::WrappedOpcode;
 
 use crate::interfaces::StorageFrame;

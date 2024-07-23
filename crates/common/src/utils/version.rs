@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::error::Error;
+use eyre::Result;
 
 use super::http::get_json_from_url;
 
@@ -29,7 +29,7 @@ pub fn current_version() -> Version {
 }
 
 /// get the latest version from github
-pub async fn remote_version() -> Result<Version, Error> {
+pub async fn remote_version() -> Result<Version> {
     // get the latest release from github
     let remote_repository_url =
         "https://api.github.com/repos/Jon-Becker/heimdall-rs/releases/latest";
@@ -45,7 +45,7 @@ pub async fn remote_version() -> Result<Version, Error> {
                 let minor = version_parts[1].parse::<u32>().unwrap_or(0);
                 let patch = version_parts[2].parse::<u32>().unwrap_or(0);
 
-                return Ok(Version { major, minor, patch })
+                return Ok(Version { major, minor, patch });
             }
         }
     }

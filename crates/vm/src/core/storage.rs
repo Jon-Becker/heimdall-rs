@@ -1,14 +1,16 @@
 use std::collections::{HashMap, HashSet};
 
+use alloy::primitives::U256;
+
 /// The [`Storage`] struct represents the storage of a contract. \
 /// \
 /// We keep track of the storage as a HashMap, as well as a HashSet of keys that have been accessed
 /// for gas calculation purposes.
 #[derive(Clone, Debug)]
 pub struct Storage {
-    pub storage: HashMap<[u8; 32], [u8; 32]>,
-    pub transient: HashMap<[u8; 32], [u8; 32]>,
-    access_set: HashSet<[u8; 32]>,
+    pub storage: HashMap<U256, U256>,
+    pub transient: HashMap<U256, U256>,
+    access_set: HashSet<U256>,
 }
 
 impl Default for Storage {
@@ -22,6 +24,7 @@ impl Storage {
     ///
     /// ```
     /// use heimdall_vm::core::storage::Storage;
+    /// use alloy::primitives::U256;
     ///
     /// let storage = Storage::new();
     /// ```
@@ -33,13 +36,14 @@ impl Storage {
     ///
     /// ```
     /// use heimdall_vm::core::storage::Storage;
+    /// use alloy::primitives::U256;
     ///
     /// let mut storage = Storage::new();
-    /// storage.store([1u8; 32], [2u8; 32]);
+    /// storage.store(U256::from(1), U256::from(2));
     ///
-    /// assert_eq!(storage.storage.get(&[1u8; 32]), Some(&[2u8; 32]));
+    /// assert_eq!(storage.storage.get(&U256::from(1)), Some(&U256::from(2)));
     /// ```
-    pub fn store(&mut self, key: [u8; 32], value: [u8; 32]) {
+    pub fn store(&mut self, key: U256, value: U256) {
         self.access_set.insert(key);
 
         self.storage.insert(key, value);
@@ -49,13 +53,14 @@ impl Storage {
     ///
     /// ```
     /// use heimdall_vm::core::storage::Storage;
+    /// use alloy::primitives::U256;
     ///
     /// let mut storage = Storage::new();
-    /// storage.tstore([1u8; 32], [2u8; 32]);
+    /// storage.tstore(U256::from(1), U256::from(1));
     ///
-    /// assert_eq!(storage.transient.get(&[1u8; 32]), Some(&[2u8; 32]));
+    /// assert_eq!(storage.transient.get(&U256::from(1)), Some(&U256::from(1)));
     /// ```
-    pub fn tstore(&mut self, key: [u8; 32], value: [u8; 32]) {
+    pub fn tstore(&mut self, key: U256, value: U256) {
         self.access_set.insert(key);
 
         self.transient.insert(key, value);
@@ -65,19 +70,20 @@ impl Storage {
     ///
     /// ```
     /// use heimdall_vm::core::storage::Storage;
+    /// use alloy::primitives::U256;
     ///
     /// let mut storage = Storage::new();
-    /// storage.store([1u8; 32], [2u8; 32]);
+    /// storage.store(U256::from(1), U256::from(1));
     ///
-    /// assert_eq!(storage.load([1u8; 32]), [2u8; 32]);
+    /// assert_eq!(storage.load(U256::from(1)), U256::from(1));
     /// ```
-    pub fn load(&mut self, key: [u8; 32]) -> [u8; 32] {
+    pub fn load(&mut self, key: U256) -> U256 {
         self.access_set.insert(key);
 
         // return the value associated with the key, with a null word if it doesn't exist
         match self.storage.get(&key) {
             Some(value) => *value,
-            None => [0u8; 32],
+            None => U256::ZERO,
         }
     }
 
@@ -85,17 +91,18 @@ impl Storage {
     ///
     /// ```
     /// use heimdall_vm::core::storage::Storage;
+    /// use alloy::primitives::U256;
     ///
     /// let mut storage = Storage::new();
-    /// storage.tstore([1u8; 32], [2u8; 32]);
+    /// storage.tstore(U256::from(1), U256::from(1));
     ///
-    /// assert_eq!(storage.tload([1u8; 32]), [2u8; 32]);
+    /// assert_eq!(storage.tload(U256::from(1)), U256::from(1));
     /// ```
-    pub fn tload(&mut self, key: [u8; 32]) -> [u8; 32] {
+    pub fn tload(&mut self, key: U256) -> U256 {
         // return the value associated with the key, with a null word if it doesn't exist
         match self.transient.get(&key) {
             Some(value) => *value,
-            None => [0u8; 32],
+            None => U256::ZERO,
         }
     }
 
@@ -103,21 +110,22 @@ impl Storage {
     ///
     /// ```
     /// use heimdall_vm::core::storage::Storage;
+    /// use alloy::primitives::U256;
     ///
     /// let mut storage = Storage::new();
     ///
-    /// // key `[1u8; 32]` is not warm, so the cost should be 2100
-    /// assert_eq!(storage.access_cost([1u8; 32]), 2100);
-    /// storage.store([1u8; 32], [2u8; 32]);
+    /// // key `U256::from(1)` is not warm, so the cost should be 2100
+    /// assert_eq!(storage.access_cost(U256::from(1)), 2100);
+    /// storage.store(U256::from(1), U256::from(1));
     ///
-    /// // key `[1u8; 32]` is warm, so the cost should be 100
-    /// assert_eq!(storage.access_cost([1u8; 32]), 100);
+    /// // key `U256::from(1)` is warm, so the cost should be 100
+    /// assert_eq!(storage.access_cost(U256::from(1)), 100);
     /// ```
-    pub fn access_cost(&mut self, key: [u8; 32]) -> u128 {
+    pub fn access_cost(&mut self, key: U256) -> u128 {
         if self.access_set.contains(&key) {
             100
         } else {
-            self.access_set.insert(key);
+            self.access_set.insert(key.to_owned());
             2100
         }
     }
@@ -126,18 +134,19 @@ impl Storage {
     ///
     /// ```
     /// use heimdall_vm::core::storage::Storage;
+    /// use alloy::primitives::U256;
     ///
     /// let mut storage = Storage::new();
     ///
-    /// // value `[0u8; 32]` is zero, i.e. clearing a key, so the cost should be 2900 + self.access_cost(key)
-    /// assert_eq!(storage.storage_cost([1u8; 32], [0u8; 32]), 5000);
-    /// storage.store([1u8; 32], [2u8; 32]);
+    /// // value `U256::from(1)` is zero, i.e. clearing a key, so the cost should be 2900 + self.access_cost(key)
+    /// assert_eq!(storage.storage_cost(U256::from(1), U256::ZERO), 5000);
+    /// storage.store(U256::from(1), U256::from(1));
     ///
-    /// // value `[2u8; 32]` is not zero, so the cost should be 20000 + self.access_cost(key)
-    /// assert_eq!(storage.storage_cost([1u8; 32], [2u8; 32]), 20100);
+    /// // value `U256::from(1)` is not zero, so the cost should be 20000 + self.access_cost(key)
+    /// assert_eq!(storage.storage_cost(U256::from(1), U256::from(2)), 20100);
     /// ```
-    pub fn storage_cost(&mut self, key: [u8; 32], value: [u8; 32]) -> u128 {
-        if value == [0u8; 32] {
+    pub fn storage_cost(&mut self, key: U256, value: U256) -> u128 {
+        if value == U256::ZERO {
             2900 + self.access_cost(key)
         } else {
             20000 + self.access_cost(key)
@@ -147,183 +156,59 @@ impl Storage {
 
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::U256;
+
     use crate::core::storage::Storage;
 
     #[test]
     fn test_sstore_sload() {
         let mut storage = Storage::new();
 
-        storage.store(
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1,
-            ],
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1,
-            ],
-        );
-        assert_eq!(
-            storage.load([
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1
-            ]),
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1
-            ]
-        );
+        storage.store(U256::from(1), U256::from(1));
+        assert_eq!(storage.load(U256::from(1),), U256::from(1),);
 
-        storage.store(
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 255,
-            ],
-            [
-                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5, 6,
-                7, 8, 2, 1,
-            ],
-        );
-        assert_eq!(
-            storage.load([
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 255
-            ]),
-            [
-                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5, 6,
-                7, 8, 2, 1
-            ],
-        );
+        storage.store(U256::from(256), U256::MAX);
+        assert_eq!(storage.load(U256::from(256)), U256::MAX,);
 
-        assert_eq!(
-            storage.load([
-                255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 255
-            ]),
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0
-            ]
-        );
+        assert_eq!(storage.load(U256::from(2)), U256::ZERO,);
     }
 
     #[test]
     fn test_storage_access_cost_cold() {
         let mut storage = Storage::new();
-        assert_eq!(
-            storage.access_cost([
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1
-            ]),
-            2100
-        );
+        assert_eq!(storage.access_cost(U256::from(1)), 2100);
     }
 
     #[test]
     fn test_storage_access_cost_warm() {
         let mut storage = Storage::new();
-        storage.load([
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 1,
-        ]);
-        assert_eq!(
-            storage.access_cost([
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1
-            ]),
-            100
-        );
+        storage.load(U256::from(1));
+        assert_eq!(storage.access_cost(U256::from(1)), 100);
     }
 
     #[test]
     fn test_storage_storage_cost_cold() {
         let mut storage = Storage::new();
-        assert_eq!(
-            storage.storage_cost(
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 1
-                ],
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 1
-                ]
-            ),
-            22100
-        );
+        assert_eq!(storage.storage_cost(U256::from(1), U256::from(1),), 22100);
     }
 
     #[test]
     fn test_storage_storage_cost_cold_zero() {
         let mut storage = Storage::new();
-        assert_eq!(
-            storage.storage_cost(
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 1
-                ],
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0
-                ]
-            ),
-            5000
-        );
+        assert_eq!(storage.storage_cost(U256::from(1), U256::ZERO,), 5000);
     }
 
     #[test]
     fn test_storage_storage_cost_warm() {
         let mut storage = Storage::new();
-        storage.store(
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1,
-            ],
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1,
-            ],
-        );
-        assert_eq!(
-            storage.storage_cost(
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 1
-                ],
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 1
-                ]
-            ),
-            20100
-        );
+        storage.store(U256::from(1), U256::from(1));
+        assert_eq!(storage.storage_cost(U256::from(1), U256::from(1),), 20100);
     }
 
     #[test]
     fn test_storage_storage_cost_warm_zero() {
         let mut storage = Storage::new();
-        storage.store(
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1,
-            ],
-            [
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1,
-            ],
-        );
-        assert_eq!(
-            storage.storage_cost(
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 1
-                ],
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0
-                ]
-            ),
-            3000
-        );
+        storage.store(U256::from(1), U256::from(1));
+        assert_eq!(storage.storage_cost(U256::from(1), U256::ZERO,), 3000);
     }
 }

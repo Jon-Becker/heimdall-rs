@@ -1,8 +1,5 @@
-use ethers::{
-    abi::{decode, ParamType},
-    types::U256,
-};
-
+use alloy::primitives::U256;
+use alloy_dyn_abi::{DynSolType, DynSolValue};
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::core::vm::State;
 
@@ -191,13 +188,13 @@ pub fn solidity_heuristic(
                     function.logic.push(format!(
                         "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
                         address,
-                        modifier,
                         instruction
                             .opcode_details
                             .as_ref()
                             .expect("impossible")
                             .name
                             .to_lowercase(),
+                        modifier,
                         calldata
                             .iter()
                             .map(|x| x.operation.solidify())
@@ -228,8 +225,11 @@ pub fn solidity_heuristic(
             // handle case with error string abiencoded
             if revert_data.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
                 let revert_string = match revert_data.get(4..) {
-                    Some(hex_data) => match decode(&[ParamType::String], hex_data) {
-                        Ok(revert) => revert[0].to_string(),
+                    Some(hex_data) => match DynSolType::String.abi_decode(hex_data) {
+                        Ok(revert) => match revert {
+                            DynSolValue::String(revert) => revert,
+                            _ => "decoding error".to_string(),
+                        },
                         Err(_) => "decoding error".to_string(),
                     },
                     None => "decoding error".to_string(),
@@ -260,10 +260,10 @@ pub fn solidity_heuristic(
             else if !revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
                 let custom_error_placeholder = match revert_data.get(0..4) {
                     Some(selector) => {
-                        function.errors.insert(U256::from(selector));
+                        function.errors.insert(U256::from_be_slice(selector));
                         format!(
                             "CustomError_{}()",
-                            encode_hex_reduced(U256::from(selector)).replacen("0x", "", 1)
+                            encode_hex_reduced(U256::from_be_slice(selector)).replacen("0x", "", 1)
                         )
                     }
                     None => "()".to_string(),

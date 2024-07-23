@@ -1,41 +1,32 @@
+use crate::utils::strings::decode_hex;
+
 use super::rpc::get_code;
-use crate::{
-    constants::{ADDRESS_REGEX, BYTECODE_REGEX},
-    utils::strings::decode_hex,
-    Error,
-};
-use ethers::types::Bytes;
-use eyre::Result;
+use alloy::primitives::{bytes::Bytes, Address};
+use eyre::{eyre, Result};
 use std::fs;
-use tracing::error;
 
-/// Given a target, determines whether it is a contract address, bytecode, or file path, and returns
-/// the bytecode for the target.
-pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
-    if ADDRESS_REGEX.is_match(target).unwrap_or(false) {
-        // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
-        get_code(target, rpc_url).await.map_err(|e| {
-            Error::Generic(format!("failed to fetch bytecode from RPC provider: {}", e))
-        })
-    } else if BYTECODE_REGEX.is_match(target).unwrap_or(false) {
-        Ok(decode_hex(target)?)
-    } else {
-        // Target is a file path, so we need to read the bytecode from the file.
-        let contents = fs::read_to_string(target).map_err(|e| {
-            error!("failed to open file '{}' .", &target);
-            Error::FilesystemError(e)
-        })?;
+/// Given a target from the CLI, return bytecode of the target.
+/// TODO: this can probably be a trait method so we can do something like target.try_get_bytecode()
+/// TODO: move to CLI, since its only used in CLI
+pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>> {
+    // If the target is an address, fetch the bytecode from the RPC provider.
+    if let Ok(address) = target.parse::<Address>() {
+        return get_code(address, rpc_url).await;
+    }
 
-        let contents = contents.replace('\n', "");
-        if BYTECODE_REGEX.is_match(&contents).unwrap_or(false) && contents.len() % 2 == 0 {
-            Ok(decode_hex(&contents)?)
-        } else {
-            error!("file '{}' doesn't contain valid bytecode.", &target);
-            return Err(Error::ParseError(format!(
-                "file '{}' doesn't contain valid bytecode.",
-                &target
-            )));
+    // If the target is not an address, it could be bytecode or a file path.
+    if let Ok(bytecode) = decode_hex(target) {
+        return Ok(bytecode);
+    }
+
+    // Assuming the target is a file path.
+    match fs::read_to_string(target) {
+        Ok(contents) => {
+            let cleaned_contents = contents.replace('\n', "");
+            decode_hex(&cleaned_contents)
+                .map_err(|_| eyre!("invalid target: file does not contain valid bytecode"))
         }
+        Err(_) => Err(eyre!("invalid target")),
     }
 }
 
@@ -45,7 +36,7 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec
 /// For example:
 ///   0x6060 (PUSH1 0x60) would become 0x60 (PUSH1).
 ///   0x60806040 (PUSH1 0x60 PUSH1 0x40) would become 0x60 0x60 (PUSH1 PUSH1).
-pub fn remove_pushbytes_from_bytecode(bytecode: Bytes) -> Result<Bytes> {
+pub fn remove_pushbytes_from_bytecode(bytecode: alloy::primitives::Bytes) -> Result<Bytes> {
     let push_range = 0x5f..=0x7f;
     let mut pruned = Vec::new();
 
@@ -65,26 +56,30 @@ pub fn remove_pushbytes_from_bytecode(bytecode: Bytes) -> Result<Bytes> {
 
 #[cfg(test)]
 mod tests {
+    use alloy::hex::FromHex;
+
     use super::*;
-    use ethers::types::Bytes;
-    use std::{fs, str::FromStr};
+    use std::fs;
 
     #[test]
     fn test_remove_pushbytes_from_bytecode() {
-        let bytecode = Bytes::from_str("0x6040").unwrap();
+        let bytecode = alloy::primitives::Bytes::from_hex("0x6040").expect("invalid");
         let pruned = remove_pushbytes_from_bytecode(bytecode).unwrap();
-        assert_eq!(pruned, Bytes::from_str("0x60").unwrap());
+        assert_eq!(pruned.to_vec(), alloy::primitives::Bytes::from_hex("0x60").expect("invalid"));
 
-        let bytecode = Bytes::from_str("0x60406080").unwrap();
+        let bytecode = alloy::primitives::Bytes::from_hex("0x60406080").expect("invalid");
         let pruned = remove_pushbytes_from_bytecode(bytecode).unwrap();
-        assert_eq!(pruned, Bytes::from_str("0x6060").unwrap());
+        assert_eq!(pruned.to_vec(), alloy::primitives::Bytes::from_hex("0x6060").expect("invalid"));
 
-        let bytecode = Bytes::from_str(
+        let bytecode = alloy::primitives::Bytes::from_hex(
             "0x604060807f2222222222222222222222222222222222222222222222222222222222222222",
         )
-        .unwrap();
+        .expect("invalid");
         let pruned = remove_pushbytes_from_bytecode(bytecode).unwrap();
-        assert_eq!(pruned, Bytes::from_str("0x60607f").unwrap());
+        assert_eq!(
+            pruned.to_vec(),
+            alloy::primitives::Bytes::from_hex("0x60607f").expect("invalid")
+        );
     }
 
     #[tokio::test]

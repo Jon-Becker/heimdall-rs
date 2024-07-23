@@ -1,9 +1,6 @@
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Expression(Token);
-
-#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Token {
     Literal(String),
     Variable(String),

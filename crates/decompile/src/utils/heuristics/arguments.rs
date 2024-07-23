@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
-use ethers::types::U256;
-
+use alloy::primitives::U256;
+use eyre::eyre;
+use heimdall_common::utils::strings::find_balanced_encapsulator;
 use heimdall_vm::core::{
     types::{byte_size_to_type, convert_bitmask},
     vm::State,
@@ -11,7 +12,7 @@ use tracing::debug;
 use crate::{
     core::analyze::{AnalyzerState, AnalyzerType},
     interfaces::{AnalyzedFunction, CalldataFrame, TypeHeuristic},
-    utils::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2},
+    utils::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, STORAGE_ACCESS_REGEX},
     Error,
 };
 
@@ -26,9 +27,10 @@ pub fn argument_heuristic(
             // calculate the argument index, with the 4byte signature padding removed
             // for example, CALLDATALOAD(4) -> (4-4)/32 = 0
             //              CALLDATALOAD(36) -> (36-4)/32 = 1
-            let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) / 32)
-                .try_into()
-                .unwrap_or(usize::MAX);
+            let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) /
+                U256::from(32))
+            .try_into()
+            .unwrap_or(usize::MAX);
 
             // insert only if this argument is not already in the hashmap
             function.arguments.entry(arg_index).or_insert_with(|| {
@@ -147,10 +149,16 @@ pub fn argument_heuristic(
             {
                 function.returns = Some(String::from("address"));
             }
-            // if the size of returndata is > 32, it must be a bytes memory return.
-            // it could be a struct, but we cant really determine that from the bytecode
+            // if the size of returndata is > 32, it must be a bytes or string return.
             else if size > 32 {
-                function.returns = Some(String::from("bytes memory"));
+                // some hardcoded function selectors where the return type is known to be a string
+                if ["06fdde03", "95d89b41", "6a98de4c", "9d2b0822", "1a0d4bca"]
+                    .contains(&function.selector.as_str())
+                {
+                    function.returns = Some(String::from("string memory"));
+                } else {
+                    function.returns = Some(String::from("bytes memory"));
+                }
             } else {
                 // attempt to find a return type within the return memory operations
                 let byte_size = match AND_BITMASK_REGEX
@@ -180,6 +188,20 @@ pub fn argument_heuristic(
                 // convert the cast size to a string
                 let (_, cast_types) = byte_size_to_type(byte_size);
                 function.returns = Some(cast_types[0].to_string());
+            }
+
+            // check if this is a state getter
+            if function.arguments.is_empty() {
+                if let Some(storage_access) =
+                    STORAGE_ACCESS_REGEX.find(&return_memory_operations_solidified).unwrap_or(None)
+                {
+                    let storage_access = storage_access.as_str();
+                    let access_range = find_balanced_encapsulator(storage_access, ('[', ']'))
+                        .map_err(|e| eyre!("failed to find access range: {e}"))?;
+
+                    function.maybe_getter_for =
+                        Some(format!("storage[{}]", &storage_access[access_range]));
+                }
             }
 
             debug!(
