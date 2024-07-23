@@ -1,4 +1,7 @@
-use ethers::types::{Diff, H160, H256};
+use alloy::{
+    primitives::{Address, FixedBytes},
+    rpc::types::trace::parity::Delta,
+};
 use eyre::eyre;
 use futures::future::try_join_all;
 use heimdall_common::{
@@ -11,11 +14,12 @@ use tracing::{debug, info};
 
 use crate::{error::Error, interfaces::DumpArgs};
 
-pub async fn dump(args: DumpArgs) -> Result<HashMap<H256, H256>, Error> {
+pub async fn dump(args: DumpArgs) -> Result<HashMap<FixedBytes<32>, FixedBytes<32>>, Error> {
     let start_time = Instant::now();
     let storage = Arc::new(Mutex::new(HashMap::new()));
     let completed_count = Arc::new(Mutex::new(0));
-    let target = args.target.parse::<H160>().map_err(|e| eyre!("invalid target address: {e}"))?;
+    let target =
+        args.target.parse::<Address>().map_err(|e| eyre!("invalid target address: {e}"))?;
 
     // build block range
     let start_block = args.from_block;
@@ -43,19 +47,19 @@ pub async fn dump(args: DumpArgs) -> Result<HashMap<H256, H256>, Error> {
             // update storage
             let mut storage = storage.lock().await;
             block_trace.iter().for_each(|trace| {
-                if let Some(diff) = trace.state_diff.as_ref() {
+                if let Some(diff) = trace.full_trace.state_diff.as_ref() {
                     diff.0
                         .iter()
                         .filter(|(addr, _)| addr == &&target)
                         .flat_map(|(_, value)| value.storage.iter())
                         .for_each(|(slot, diff)| match diff {
-                            Diff::Born(v) => {
+                            Delta::Added(v) => {
                                 storage.insert(*slot, v.to_owned());
                             }
-                            Diff::Changed(v) => {
+                            Delta::Changed(v) => {
                                 storage.insert(*slot, v.to);
                             }
-                            Diff::Died(_) => {
+                            Delta::Removed(_) => {
                                 storage.remove(slot);
                             }
                             _ => {}

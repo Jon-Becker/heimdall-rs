@@ -158,9 +158,7 @@ mod tests {
         let data = &[1, 2, 3, 4, 5];
         let delimiter = &[3, 4];
 
-        let mut expected: Vec<&[u8]> = vec![];
-        expected.push(&[1, 2]);
-        expected.push(&[5]);
+        let expected: Vec<&[u8]> = vec![&[1, 2], &[5]];
 
         assert_eq!(data.split_by_slice(delimiter), expected);
     }
@@ -170,10 +168,7 @@ mod tests {
         let data = &[1, 2, 3, 2, 3, 4];
         let delimiter = &[2, 3];
 
-        let mut expected: Vec<&[u8]> = vec![];
-        expected.push(&[1]);
-        expected.push(&[]);
-        expected.push(&[4]);
+        let expected: Vec<&[u8]> = vec![&[1], &[], &[4]];
 
         assert_eq!(data.split_by_slice(delimiter), expected);
     }
@@ -183,9 +178,7 @@ mod tests {
         let data = &[1, 2, 3, 4, 5];
         let delimiter = &[1, 2];
 
-        let mut expected: Vec<&[u8]> = vec![];
-        expected.push(&[]);
-        expected.push(&[3, 4, 5]);
+        let expected: Vec<&[u8]> = vec![&[], &[3, 4, 5]];
 
         assert_eq!(data.split_by_slice(delimiter), expected);
     }

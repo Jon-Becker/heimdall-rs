@@ -1,5 +1,3 @@
-use crate::error::Error;
-
 use std::{
     env,
     fs::File,
@@ -7,6 +5,8 @@ use std::{
     path::Path,
     process::Command,
 };
+
+use eyre::Result;
 
 /// Convert a long path to a short path.
 ///
@@ -33,35 +33,17 @@ pub fn short_path(path: &str) -> String {
 /// let contents = "Hello, World!";
 /// let result = write_file(path, contents);
 /// ```
-pub fn write_file(path_str: &str, contents: &str) -> Result<(), Error> {
+pub fn write_file(path_str: &str, contents: &str) -> Result<()> {
     let path = Path::new(path_str);
 
-    if let Some(prefix) = path.parent() {
-        std::fs::create_dir_all(prefix)?;
-    } else {
-        return Err(Error::FilesystemError(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Unable to create directory",
-        )));
-    }
+    // Create the directory if it doesn't exist
+    std::fs::create_dir_all(
+        path.parent().ok_or_else(|| eyre::eyre!("unable to create directory"))?,
+    )?;
 
     let mut file = File::create(path)?;
     file.write_all(contents.as_bytes())?;
 
-    Ok(())
-}
-
-/// Write contents to a file on the disc
-///
-/// ```no_run
-/// use heimdall_common::utils::io::file::write_lines_to_file;
-///
-/// let path = "/tmp/test.txt";
-/// let contents = vec![String::from("Hello"), String::from("World!")];
-/// let result = write_lines_to_file(path, contents);
-/// ```
-pub fn write_lines_to_file(_path: &str, contents: Vec<String>) -> Result<(), Error> {
-    write_file(_path, &contents.join("\n"))?;
     Ok(())
 }
 
@@ -73,10 +55,9 @@ pub fn write_lines_to_file(_path: &str, contents: Vec<String>) -> Result<(), Err
 /// let path = "/tmp/test.txt";
 /// let contents = read_file(path);
 /// ```
-pub fn read_file(path: &str) -> Result<String, Error> {
+pub fn read_file(path: &str) -> Result<String> {
     let path = Path::new(path);
-    let mut file = File::open(path)
-        .map_err(|e| Error::FilesystemError(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+    let mut file = File::open(path)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     Ok(contents)

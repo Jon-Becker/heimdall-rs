@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
-use ethers::types::U256;
-
+use alloy::primitives::U256;
 use eyre::eyre;
 use heimdall_common::utils::strings::find_balanced_encapsulator;
 use heimdall_vm::core::{
@@ -28,9 +27,10 @@ pub fn argument_heuristic(
             // calculate the argument index, with the 4byte signature padding removed
             // for example, CALLDATALOAD(4) -> (4-4)/32 = 0
             //              CALLDATALOAD(36) -> (36-4)/32 = 1
-            let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) / 32)
-                .try_into()
-                .unwrap_or(usize::MAX);
+            let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) /
+                U256::from(32))
+            .try_into()
+            .unwrap_or(usize::MAX);
 
             // insert only if this argument is not already in the hashmap
             function.arguments.entry(arg_index).or_insert_with(|| {

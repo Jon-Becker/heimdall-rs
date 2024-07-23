@@ -1,5 +1,8 @@
+use alloy::{
+    primitives::{Address, Bytes, B256},
+    rpc::types::Log,
+};
 use async_convert::{async_trait, TryFrom};
-use ethers::types::{Address, Bytes, Log, H256, U256, U64};
 use heimdall_common::{
     ether::signatures::{ResolveSelector, ResolvedLog},
     utils::{env::get_env, hex::ToLowerHex},
@@ -17,7 +20,7 @@ pub struct DecodedLog {
     /// (In solidity: The first topic is the hash of the signature of the event
     /// (e.g. `Deposit(address,bytes32,uint256)`), except you declared the event
     /// with the anonymous specifier.)
-    pub topics: Vec<H256>,
+    pub topics: Vec<B256>,
 
     /// Data
     pub data: Bytes,
@@ -30,43 +33,31 @@ pub struct DecodedLog {
     /// Block Hash
     #[serde(rename = "blockHash")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub block_hash: Option<H256>,
+    pub block_hash: Option<B256>,
 
     /// Block Number
     #[serde(rename = "blockNumber")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub block_number: Option<U64>,
+    pub block_number: Option<u64>,
 
     /// Transaction Hash
     #[serde(rename = "transactionHash")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction_hash: Option<H256>,
+    pub transaction_hash: Option<B256>,
 
     /// Transaction Index
     #[serde(rename = "transactionIndex")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction_index: Option<U64>,
+    pub transaction_index: Option<u64>,
 
     /// Integer of the log index position in the block. None if it's a pending log.
     #[serde(rename = "logIndex")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_index: Option<U256>,
-
-    /// Integer of the transactions index position log was created from.
-    /// None when it's a pending log.
-    #[serde(rename = "transactionLogIndex")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction_log_index: Option<U256>,
-
-    /// Log Type
-    #[serde(rename = "logType")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_type: Option<String>,
+    pub log_index: Option<u64>,
 
     /// True when the log was removed, due to a chain reorganization.
     /// false if it's a valid log.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub removed: Option<bool>,
+    pub removed: bool,
 }
 
 #[async_trait]
@@ -81,7 +72,7 @@ impl TryFrom<Log> for DecodedLog {
             .unwrap_or(false);
 
         if !skip_resolving {
-            let signature = match value.topics.first() {
+            let signature = match value.topics().first() {
                 Some(topic) => {
                     let topic = topic.to_lower_hex();
                     Some(topic)
@@ -102,16 +93,14 @@ impl TryFrom<Log> for DecodedLog {
         }
 
         Ok(Self {
-            address: value.address,
-            topics: value.topics,
-            data: value.data,
+            address: value.address(),
+            topics: value.topics().to_vec(),
+            data: value.data().clone().data,
             block_hash: value.block_hash,
             block_number: value.block_number,
             transaction_hash: value.transaction_hash,
             transaction_index: value.transaction_index,
             log_index: value.log_index,
-            transaction_log_index: value.transaction_log_index,
-            log_type: value.log_type,
             removed: value.removed,
             resolved_event: resolved_logs.first().cloned(),
         })

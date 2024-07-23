@@ -6,9 +6,9 @@ use heimdall_common::{
 
 #[derive(Debug, Clone)]
 pub struct Constructor {
-    pub constructor: Vec<u8>,
-    pub contract: Vec<u8>,
-    pub metadata: Vec<u8>,
+    pub _constructor: Vec<u8>,
+    pub _contract: Vec<u8>,
+    pub _metadata: Vec<u8>,
     pub arguments: Vec<u8>,
 }
 
@@ -55,9 +55,9 @@ pub fn parse_deployment_bytecode(input: Vec<u8>) -> Result<Constructor> {
     let arguments = &input[(contract_offset + contract_length) as usize..];
 
     Ok(Constructor {
-        constructor: decode_hex(constructor)?,
-        contract: decode_hex(contract)?,
-        metadata: decode_hex(metadata)?,
+        _constructor: decode_hex(constructor)?,
+        _contract: decode_hex(contract)?,
+        _metadata: decode_hex(metadata)?,
         arguments: decode_hex(arguments)?,
     })
 }

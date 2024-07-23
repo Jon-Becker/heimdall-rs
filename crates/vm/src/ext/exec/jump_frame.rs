@@ -1,4 +1,4 @@
-use ethers::types::U256;
+use alloy::primitives::U256;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct JumpFrame {

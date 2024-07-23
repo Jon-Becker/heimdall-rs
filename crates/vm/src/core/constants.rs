@@ -1,6 +1,6 @@
+use alloy::primitives::U256;
 use std::str::FromStr;
 
-use ethers::types::U256;
 use lazy_static::lazy_static;
 
 lazy_static! {

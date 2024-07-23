@@ -1,5 +1,6 @@
-use ethers::types::U256;
 use std::fmt::{Display, Formatter, Result};
+
+use alloy::primitives::U256;
 
 /// An [`Opcode`] represents an Ethereum Virtual Machine (EVM) opcode. \
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -205,8 +206,9 @@ impl WrappedOpcode {
     ///
     /// ```
     /// use heimdall_vm::core::opcodes::*;
+    /// use alloy::primitives::U256;
     ///
-    /// let opcode = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(1.into()), WrappedInput::Raw(2.into())]);
+    /// let opcode = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(U256::from(1)), WrappedInput::Raw(U256::from(1))]);
     /// assert_eq!(opcode.depth(), 1);
     /// ```
     pub fn depth(&self) -> u32 {
@@ -220,8 +222,9 @@ impl WrappedInput {
     ///
     /// ```
     /// use heimdall_vm::core::opcodes::*;
+    /// use alloy::primitives::U256;
     ///
-    /// let opcode = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(1.into()), WrappedInput::Raw(2.into())]);
+    /// let opcode = WrappedOpcode::new(0x01, vec![WrappedInput::Raw(U256::from(1)), WrappedInput::Raw(U256::from(1))]);
     /// assert_eq!(opcode.depth(), 1);
     ///
     /// let input = WrappedInput::Opcode(opcode);
@@ -257,8 +260,9 @@ impl Display for WrappedInput {
 
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::U256;
+
     use crate::core::opcodes::Opcode;
-    use ethers::types::U256;
 
     use crate::core::opcodes::{WrappedInput, WrappedOpcode};
 

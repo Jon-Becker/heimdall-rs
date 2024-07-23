@@ -95,7 +95,7 @@ mod integration_tests {
         // assert that the output is correct
         for line in &["function Unresolved_2fa61cd8(address arg0) public view returns (uint16) {",
             "function Unresolved_41161b10(uint240 arg0, address arg1) public payable returns (bool) {",
-            "constant Unresolved_06fdde03"] {
+            "constant unresolved_06fdde03"] {
             println!("{line}");
             assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }

@@ -1,6 +1,6 @@
 pub(crate) mod graph;
 
-use ethers::types::H160;
+use alloy::primitives::Address;
 use eyre::eyre;
 use heimdall_common::{
     ether::{bytecode::get_bytecode_from_target, compiler::detect_compiler},
@@ -70,11 +70,11 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
     let mut evm = VM::new(
         &contract_bytecode,
         &[],
-        H160::default(),
-        H160::default(),
-        H160::default(),
+        Address::default(),
+        Address::default(),
+        Address::default(),
         0,
-        u128::max_value(),
+        u128::MAX,
     );
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));

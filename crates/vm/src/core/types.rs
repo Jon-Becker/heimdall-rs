@@ -1,8 +1,11 @@
 use std::{collections::VecDeque, ops::Range};
 
-use ethers::abi::{AbiEncode, ParamType};
+use alloy::{dyn_abi::DynSolType, sol_types::SolValue};
 use eyre::{eyre, Result};
-use heimdall_common::{constants::TYPE_CAST_REGEX, utils::strings::find_balanced_encapsulator};
+use heimdall_common::{
+    constants::TYPE_CAST_REGEX,
+    utils::strings::{encode_hex, find_balanced_encapsulator},
+};
 
 use super::{opcodes::WrappedInput, vm::Instruction};
 
@@ -14,8 +17,8 @@ pub enum Padding {
 }
 
 /// A helper function used by [`extract_types_from_string`] that converts a string type to a
-/// ParamType. For example, "address" will be converted to [`ParamType::Address`].
-pub fn to_type(string: &str) -> ParamType {
+/// DynSolType. For example, "address" will be converted to [`DynSolType::Address`].
+pub fn to_type(string: &str) -> DynSolType {
     let is_array = string.ends_with(']');
     let mut array_size: VecDeque<Option<usize>> = VecDeque::new();
     let mut string = string.to_string();
@@ -24,7 +27,7 @@ pub fn to_type(string: &str) -> ParamType {
     while string.ends_with(']') {
         let array_range = match find_balanced_encapsulator(&string, ('[', ']')) {
             Ok(range) => range,
-            Err(_) => return ParamType::Bytes, // default to bytes if invalid
+            Err(_) => return DynSolType::Bytes, // default to bytes if invalid
         };
 
         let size = string[array_range].to_string();
@@ -38,23 +41,23 @@ pub fn to_type(string: &str) -> ParamType {
     }
 
     let arg_type = match string.as_str() {
-        "address" => ParamType::Address,
-        "bool" => ParamType::Bool,
-        "string" => ParamType::String,
-        "bytes" => ParamType::Bytes,
+        "address" => DynSolType::Address,
+        "bool" => DynSolType::Bool,
+        "string" => DynSolType::String,
+        "bytes" => DynSolType::Bytes,
         _ => {
             if let Some(stripped) = string.strip_prefix("uint") {
                 let size = stripped.parse::<usize>().unwrap_or(256);
-                ParamType::Uint(size)
+                DynSolType::Uint(size)
             } else if let Some(stripped) = string.strip_prefix("int") {
                 let size = stripped.parse::<usize>().unwrap_or(256);
-                ParamType::Int(size)
+                DynSolType::Int(size)
             } else if let Some(stripped) = string.strip_prefix("bytes") {
                 let size = stripped.parse::<usize>().unwrap_or(32);
-                ParamType::FixedBytes(size)
+                DynSolType::FixedBytes(size)
             } else {
                 // default to bytes if invalid
-                ParamType::Bytes
+                DynSolType::Bytes
             }
         }
     };
@@ -68,9 +71,9 @@ pub fn to_type(string: &str) -> ParamType {
             if let Some(size) =
                 array_size.pop_front().expect("impossible case: failed to pop from array_size")
             {
-                arg_type = ParamType::FixedArray(Box::new(arg_type), size);
+                arg_type = DynSolType::FixedArray(Box::new(arg_type), size);
             } else {
-                arg_type = ParamType::Array(Box::new(arg_type));
+                arg_type = DynSolType::Array(Box::new(arg_type));
             }
         }
 
@@ -96,9 +99,11 @@ pub fn convert_bitmask(instruction: &Instruction) -> (usize, Vec<String>) {
             WrappedInput::Opcode(opcode) => {
                 if !(opcode.opcode.name == "CALLDATALOAD" || opcode.opcode.name == "CALLDATACOPY") {
                     if mask.opcode.name == "AND" {
-                        type_byte_size = instruction.inputs[i].encode_hex().matches("ff").count();
+                        type_byte_size =
+                            encode_hex(&instruction.inputs[i].abi_encode()).matches("ff").count();
                     } else if mask.opcode.name == "OR" {
-                        type_byte_size = instruction.inputs[i].encode_hex().matches("00").count();
+                        type_byte_size =
+                            encode_hex(&instruction.inputs[i].abi_encode()).matches("00").count();
                     }
                 }
             }
@@ -142,15 +147,15 @@ pub fn byte_size_to_type(byte_size: usize) -> (usize, Vec<String>) {
 ///
 /// ```
 /// use heimdall_vm::core::types::find_cast;
-/// use ethers::abi::ParamType;
+/// use alloy::dyn_abi::DynSolType;
 ///
 /// let line = "uint256(0x000011)";
 /// let (range, cast_type) = find_cast(line).expect("failed to find type cast");
 /// assert_eq!(range, 8..16);
 /// assert_eq!(&line[range], "0x000011");
-/// assert_eq!(cast_type, ParamType::Uint(256));
+/// assert_eq!(cast_type, DynSolType::Uint(256));
 /// ```
-pub fn find_cast(line: &str) -> Result<(Range<usize>, ParamType)> {
+pub fn find_cast(line: &str) -> Result<(Range<usize>, DynSolType)> {
     // find the start of the cast
     match TYPE_CAST_REGEX.find(line).expect("Failed to find type cast.") {
         Some(m) => {
@@ -253,7 +258,6 @@ pub fn get_potential_types_for_word(word: &[u8]) -> (usize, Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethers::abi::ParamType;
     use heimdall_common::{ether::types::parse_function_parameters, utils::strings::decode_hex};
 
     #[test]
@@ -261,7 +265,7 @@ mod tests {
         let solidity_type = "test(uint256)".to_string();
         let param_type =
             parse_function_parameters(&solidity_type).expect("failed to parse function parameters");
-        assert_eq!(param_type, vec![ParamType::Uint(256)]);
+        assert_eq!(param_type, vec![DynSolType::Uint(256)]);
     }
 
     #[test]
@@ -269,7 +273,7 @@ mod tests {
         let solidity_type = "test(uint256,string)".to_string();
         let param_type =
             parse_function_parameters(&solidity_type).expect("failed to parse function parameters");
-        assert_eq!(param_type, vec![ParamType::Uint(256), ParamType::String]);
+        assert_eq!(param_type, vec![DynSolType::Uint(256), DynSolType::String]);
     }
 
     #[test]
@@ -280,9 +284,9 @@ mod tests {
         assert_eq!(
             param_type,
             vec![
-                ParamType::Uint(256),
-                ParamType::Array(Box::new(ParamType::String)),
-                ParamType::Uint(256)
+                DynSolType::Uint(256),
+                DynSolType::Array(Box::new(DynSolType::String)),
+                DynSolType::Uint(256)
             ]
         );
     }
@@ -295,9 +299,9 @@ mod tests {
         assert_eq!(
             param_type,
             vec![
-                ParamType::Uint(256),
-                ParamType::FixedArray(Box::new(ParamType::String), 2),
-                ParamType::Uint(256)
+                DynSolType::Uint(256),
+                DynSolType::FixedArray(Box::new(DynSolType::String), 2),
+                DynSolType::Uint(256)
             ]
         );
     }
@@ -311,17 +315,17 @@ mod tests {
         assert_eq!(
             param_type,
             vec![
-                ParamType::Uint(256),
-                ParamType::String,
-                ParamType::Tuple(vec![
-                    ParamType::Address,
-                    ParamType::Address,
-                    ParamType::Uint(24),
-                    ParamType::Address,
-                    ParamType::Uint(256),
-                    ParamType::Uint(256),
-                    ParamType::Uint(256),
-                    ParamType::Uint(160)
+                DynSolType::Uint(256),
+                DynSolType::String,
+                DynSolType::Tuple(vec![
+                    DynSolType::Address,
+                    DynSolType::Address,
+                    DynSolType::Uint(24),
+                    DynSolType::Address,
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(160)
                 ])
             ]
         );
@@ -335,15 +339,15 @@ mod tests {
             parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            vec![ParamType::Tuple(vec![
-                ParamType::Address,
-                ParamType::Address,
-                ParamType::Uint(24),
-                ParamType::Address,
-                ParamType::Uint(256),
-                ParamType::Uint(256),
-                ParamType::Uint(256),
-                ParamType::Uint(160)
+            vec![DynSolType::Tuple(vec![
+                DynSolType::Address,
+                DynSolType::Address,
+                DynSolType::Uint(24),
+                DynSolType::Address,
+                DynSolType::Uint(256),
+                DynSolType::Uint(256),
+                DynSolType::Uint(256),
+                DynSolType::Uint(160)
             ])]
         );
     }
@@ -356,15 +360,15 @@ mod tests {
             parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            vec![ParamType::Array(Box::new(ParamType::Tuple(vec![
-                ParamType::Address,
-                ParamType::Address,
-                ParamType::Uint(24),
-                ParamType::Address,
-                ParamType::Uint(256),
-                ParamType::Uint(256),
-                ParamType::Uint(256),
-                ParamType::Uint(160)
+            vec![DynSolType::Array(Box::new(DynSolType::Tuple(vec![
+                DynSolType::Address,
+                DynSolType::Address,
+                DynSolType::Uint(24),
+                DynSolType::Address,
+                DynSolType::Uint(256),
+                DynSolType::Uint(256),
+                DynSolType::Uint(256),
+                DynSolType::Uint(160)
             ])))]
         );
     }
@@ -377,16 +381,16 @@ mod tests {
             parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            vec![ParamType::FixedArray(
-                Box::new(ParamType::Tuple(vec![
-                    ParamType::Address,
-                    ParamType::Address,
-                    ParamType::Uint(24),
-                    ParamType::Address,
-                    ParamType::Uint(256),
-                    ParamType::Uint(256),
-                    ParamType::Uint(256),
-                    ParamType::Uint(160)
+            vec![DynSolType::FixedArray(
+                Box::new(DynSolType::Tuple(vec![
+                    DynSolType::Address,
+                    DynSolType::Address,
+                    DynSolType::Uint(24),
+                    DynSolType::Address,
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(160)
                 ])),
                 2
             )]
@@ -400,17 +404,17 @@ mod tests {
             parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(
             param_type,
-            vec![ParamType::Tuple(vec![
-                ParamType::Address,
-                ParamType::Address,
-                ParamType::Uint(24),
-                ParamType::Address,
-                ParamType::Uint(256),
-                ParamType::Array(Box::new(ParamType::Tuple(vec![
-                    ParamType::Uint(256),
-                    ParamType::Uint(256)
+            vec![DynSolType::Tuple(vec![
+                DynSolType::Address,
+                DynSolType::Address,
+                DynSolType::Uint(24),
+                DynSolType::Address,
+                DynSolType::Uint(256),
+                DynSolType::Array(Box::new(DynSolType::Tuple(vec![
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(256)
                 ]))),
-                ParamType::Uint(160)
+                DynSolType::Uint(160)
             ])]
         );
     }
@@ -423,47 +427,47 @@ mod tests {
         assert_eq!(
             param_type,
             vec![
-                ParamType::Tuple(vec![
-                    ParamType::Tuple(vec![
-                        ParamType::Address,
-                        ParamType::Address,
-                        ParamType::Array(Box::new(ParamType::Tuple(vec![
-                            ParamType::Uint(8),
-                            ParamType::Address,
-                            ParamType::Uint(256),
-                            ParamType::Uint(256),
-                            ParamType::Uint(256)
+                DynSolType::Tuple(vec![
+                    DynSolType::Tuple(vec![
+                        DynSolType::Address,
+                        DynSolType::Address,
+                        DynSolType::Array(Box::new(DynSolType::Tuple(vec![
+                            DynSolType::Uint(8),
+                            DynSolType::Address,
+                            DynSolType::Uint(256),
+                            DynSolType::Uint(256),
+                            DynSolType::Uint(256)
                         ]))),
-                        ParamType::Array(Box::new(ParamType::Tuple(vec![
-                            ParamType::Uint(8),
-                            ParamType::Address,
-                            ParamType::Uint(256),
-                            ParamType::Uint(256),
-                            ParamType::Uint(256),
-                            ParamType::Address
+                        DynSolType::Array(Box::new(DynSolType::Tuple(vec![
+                            DynSolType::Uint(8),
+                            DynSolType::Address,
+                            DynSolType::Uint(256),
+                            DynSolType::Uint(256),
+                            DynSolType::Uint(256),
+                            DynSolType::Address
                         ]))),
-                        ParamType::Uint(8),
-                        ParamType::Uint(256),
-                        ParamType::Uint(256),
-                        ParamType::FixedBytes(32),
-                        ParamType::Uint(256),
-                        ParamType::FixedBytes(32),
-                        ParamType::Uint(256)
+                        DynSolType::Uint(8),
+                        DynSolType::Uint(256),
+                        DynSolType::Uint(256),
+                        DynSolType::FixedBytes(32),
+                        DynSolType::Uint(256),
+                        DynSolType::FixedBytes(32),
+                        DynSolType::Uint(256)
                     ]),
-                    ParamType::Uint(120),
-                    ParamType::Uint(120),
-                    ParamType::Bytes,
-                    ParamType::Bytes
+                    DynSolType::Uint(120),
+                    DynSolType::Uint(120),
+                    DynSolType::Bytes,
+                    DynSolType::Bytes
                 ]),
-                ParamType::Array(Box::new(ParamType::Tuple(vec![
-                    ParamType::Uint(256),
-                    ParamType::Uint(8),
-                    ParamType::Uint(256),
-                    ParamType::Uint(256),
-                    ParamType::Array(Box::new(ParamType::FixedBytes(32)))
+                DynSolType::Array(Box::new(DynSolType::Tuple(vec![
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(8),
+                    DynSolType::Uint(256),
+                    DynSolType::Uint(256),
+                    DynSolType::Array(Box::new(DynSolType::FixedBytes(32)))
                 ]))),
-                ParamType::FixedBytes(32),
-                ParamType::Address
+                DynSolType::FixedBytes(32),
+                DynSolType::Address
             ]
         );
     }
@@ -562,55 +566,55 @@ mod tests {
     #[test]
     fn test_to_type_address() {
         let input = "address";
-        assert_eq!(super::to_type(input), ParamType::Address);
+        assert_eq!(super::to_type(input), DynSolType::Address);
     }
 
     #[test]
     fn test_to_type_bool() {
         let input = "bool";
-        assert_eq!(super::to_type(input), ParamType::Bool);
+        assert_eq!(super::to_type(input), DynSolType::Bool);
     }
 
     #[test]
     fn test_to_type_string() {
         let input = "string";
-        assert_eq!(super::to_type(input), ParamType::String);
+        assert_eq!(super::to_type(input), DynSolType::String);
     }
 
     #[test]
     fn test_to_type_bytes() {
         let input = "bytes";
-        assert_eq!(super::to_type(input), ParamType::Bytes);
+        assert_eq!(super::to_type(input), DynSolType::Bytes);
     }
 
     #[test]
     fn test_to_type_uint256() {
         let input = "uint256";
-        assert_eq!(super::to_type(input), ParamType::Uint(256));
+        assert_eq!(super::to_type(input), DynSolType::Uint(256));
     }
 
     #[test]
     fn test_to_type_int() {
         let input = "int256";
-        assert_eq!(super::to_type(input), ParamType::Int(256));
+        assert_eq!(super::to_type(input), DynSolType::Int(256));
     }
 
     #[test]
     fn test_to_type_bytes1() {
         let input = "bytes1";
-        assert_eq!(super::to_type(input), ParamType::FixedBytes(1));
+        assert_eq!(super::to_type(input), DynSolType::FixedBytes(1));
     }
 
     #[test]
     fn test_to_type_uint() {
         let input = "uint";
-        assert_eq!(super::to_type(input), ParamType::Uint(256));
+        assert_eq!(super::to_type(input), DynSolType::Uint(256));
     }
 
     #[test]
     fn test_to_type_array() {
         let input = "uint8[]";
-        assert_eq!(super::to_type(input), ParamType::Array(Box::new(ParamType::Uint(8))));
+        assert_eq!(super::to_type(input), DynSolType::Array(Box::new(DynSolType::Uint(8))));
     }
 
     #[test]
@@ -618,14 +622,14 @@ mod tests {
         let input = "uint8[][]";
         assert_eq!(
             super::to_type(input),
-            ParamType::Array(Box::new(ParamType::Array(Box::new(ParamType::Uint(8)))))
+            DynSolType::Array(Box::new(DynSolType::Array(Box::new(DynSolType::Uint(8)))))
         );
     }
 
     #[test]
     fn test_to_type_fixed_array() {
         let input = "uint8[2]";
-        assert_eq!(super::to_type(input), ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2));
+        assert_eq!(super::to_type(input), DynSolType::FixedArray(Box::new(DynSolType::Uint(8)), 2));
     }
 
     #[test]
@@ -633,8 +637,8 @@ mod tests {
         let input = "uint8[2][2]";
         assert_eq!(
             super::to_type(input),
-            ParamType::FixedArray(
-                Box::new(ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2)),
+            DynSolType::FixedArray(
+                Box::new(DynSolType::FixedArray(Box::new(DynSolType::Uint(8)), 2)),
                 2
             )
         );
@@ -645,9 +649,9 @@ mod tests {
         let input = "uint8[2][3][2]";
         assert_eq!(
             super::to_type(input),
-            ParamType::FixedArray(
-                Box::new(ParamType::FixedArray(
-                    Box::new(ParamType::FixedArray(Box::new(ParamType::Uint(8)), 2)),
+            DynSolType::FixedArray(
+                Box::new(DynSolType::FixedArray(
+                    Box::new(DynSolType::FixedArray(Box::new(DynSolType::Uint(8)), 2)),
                     3
                 )),
                 2

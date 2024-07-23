@@ -2,24 +2,8 @@ use fancy_regex::Regex;
 use lazy_static::lazy_static;
 
 lazy_static! {
-
-    /// The following regex is used to validate Ethereum addresses.
-    pub static ref ADDRESS_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]{40}$").expect("failed to compile regex");
-
-    /// The following regex is used to validate Ethereum transaction hashes.
-    pub static ref TRANSACTION_HASH_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]{64}$").expect("failed to compile regex");
-
-    /// The following regex is used to validate raw bytecode files as targets.
-    pub static ref BYTECODE_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]*$").expect("failed to compile regex");
-
-    /// The following regex is used to validate raw calldata
-    pub static ref CALLDATA_REGEX: Regex = Regex::new(r"^(0x)?[0-9a-fA-F]*$").expect("failed to compile regex");
-
     /// The following regex is used to extract constructor bytecode information
     pub static ref CONSTRUCTOR_REGEX: Regex = Regex::new(r"(?:5b)?(?:60([a-f0-9]{2})|61([a-f0-9_]{4})|62([a-f0-9_]{6}))80(?:60([a-f0-9]{2})|61([a-f0-9_]{4})|62([a-f0-9_]{6}))6000396000f3fe").expect("failed to compile regex");
-
-    /// The following regex is used to reduce null byte prefixes
-    pub static ref REDUCE_HEX_REGEX: Regex = Regex::new(r"^0x(00)*").expect("failed to compile regex");
 
     /// The following regex is used as a search pattern for words
     pub static ref WORD_REGEX: Regex = Regex::new(r"0x[0-9a-fA-F]{0,64}").expect("failed to compile regex");
