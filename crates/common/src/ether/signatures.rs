@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use eyre::{OptionExt, Result};
-use heimdall_cache::{store_cache, with_cache};
+use heimdall_cache::with_cache;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
@@ -266,10 +266,6 @@ impl ResolveSelector for ResolvedFunction {
                     decoded_inputs: None,
                 });
             }
-
-            // cache the results
-            let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
-                .map_err(|e| trace!("error storing signatures in cache: {}", e));
 
             Ok(match signature_list.len() {
                 0 => None,
