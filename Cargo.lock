@@ -1934,6 +1934,7 @@ version = "0.8.3"
 dependencies = [
  "alloy",
  "alloy-json-abi",
+ "async-trait",
  "clap",
  "colored",
  "eyre",

@@ -1,73 +1,23 @@
-pub(crate) mod log_args;
+pub(crate) mod args;
 pub(crate) mod output;
 
+use args::{Arguments, Subcommands};
+use clap::Parser;
 use eyre::{eyre, Result};
-use log_args::LogArgs;
+use heimdall_cache::cache;
 use output::{build_output_path, print_with_less};
 use tracing::info;
 
-use clap::{Parser, Subcommand};
-
-use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::utils::{
     hex::ToLowerHex,
     io::file::write_file,
     version::{current_version, remote_nightly_version, remote_version},
 };
-use heimdall_config::{config, ConfigArgs, Configuration};
+use heimdall_config::{config, Configuration};
 use heimdall_core::{
-    heimdall_cfg::{cfg, CFGArgs},
-    heimdall_decoder::{decode, DecodeArgs},
-    heimdall_decompiler::{decompile, DecompilerArgs},
-    heimdall_disassembler::{disassemble, DisassemblerArgs},
-    heimdall_dump::{dump, DumpArgs},
-    heimdall_inspect::{inspect, InspectArgs},
+    heimdall_cfg::cfg, heimdall_decoder::decode, heimdall_decompiler::decompile,
+    heimdall_disassembler::disassemble, heimdall_dump::dump, heimdall_inspect::inspect,
 };
-
-#[derive(Debug, Parser)]
-#[clap(name = "heimdall", author = "Jonathan Becker <jonathan@jbecker.dev>", version)]
-pub struct Arguments {
-    #[clap(subcommand)]
-    pub sub: Subcommands,
-
-    #[clap(flatten)]
-    logs: LogArgs,
-}
-
-#[derive(Debug, Subcommand)]
-#[clap(
-    about = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis.",
-    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki"
-)]
-#[allow(clippy::large_enum_variant)]
-pub enum Subcommands {
-    #[clap(name = "disassemble", about = "Disassemble EVM bytecode to assembly")]
-    Disassemble(DisassemblerArgs),
-
-    #[clap(name = "decompile", about = "Decompile EVM bytecode to Solidity")]
-    Decompile(DecompilerArgs),
-
-    #[clap(name = "cfg", about = "Generate a visual control flow graph for EVM bytecode")]
-    CFG(CFGArgs),
-
-    #[clap(name = "decode", about = "Decode calldata into readable types")]
-    Decode(DecodeArgs),
-
-    #[clap(name = "config", about = "Display and edit the current configuration")]
-    Config(ConfigArgs),
-
-    #[clap(name = "cache", about = "Manage heimdall-rs' cached files")]
-    Cache(CacheArgs),
-
-    #[clap(name = "dump", about = "Dump the value of all storage slots accessed by a contract")]
-    Dump(DumpArgs),
-
-    #[clap(
-        name = "inspect",
-        about = "Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more"
-    )]
-    Inspect(InspectArgs),
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {

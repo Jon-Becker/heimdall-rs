@@ -1,4 +1,6 @@
 use clap::Parser;
+use eyre::Result;
+use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
 
 #[derive(Debug, Clone, Parser)]
@@ -46,6 +48,12 @@ pub struct DisassemblerArgsBuilder {
 
     /// The output directory to write the output to or 'print' to print to the console
     output: Option<String>,
+}
+
+impl DisassemblerArgs {
+    pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
+        get_bytecode_from_target(&self.target, &self.rpc_url).await
+    }
 }
 
 impl Default for DisassemblerArgsBuilder {

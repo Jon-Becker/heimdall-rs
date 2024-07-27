@@ -5,9 +5,7 @@ use alloy::primitives::{bytes::Bytes, Address};
 use eyre::{eyre, Result};
 use std::fs;
 
-/// Given a target from the CLI, return bytecode of the target.
-/// TODO: this can probably be a trait method so we can do something like target.try_get_bytecode()
-/// TODO: move to CLI, since its only used in CLI
+/// Given a target, return bytecode of the target.
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>> {
     // If the target is an address, fetch the bytecode from the RPC provider.
     if let Ok(address) = target.parse::<Address>() {

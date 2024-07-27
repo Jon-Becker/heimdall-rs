@@ -5,7 +5,6 @@ use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType};
 use eyre::eyre;
 use heimdall_common::{
     ether::{
-        calldata::get_calldata_from_target,
         signatures::{score_signature, ResolveSelector, ResolvedFunction},
         types::parse_function_parameters,
     },
@@ -44,7 +43,8 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
-    let mut calldata = get_calldata_from_target(&args.target, &args.rpc_url)
+    let mut calldata = args
+        .get_calldata()
         .await
         .map_err(|e| Error::FetchError(format!("fetching target calldata failed: {}", e)))?;
     debug!("fetching target calldata took {:?}", start_fetch_time.elapsed());

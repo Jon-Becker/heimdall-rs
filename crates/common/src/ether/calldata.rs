@@ -3,7 +3,7 @@ use crate::utils::strings::decode_hex;
 use alloy::primitives::TxHash;
 use eyre::{bail, eyre, Result};
 
-/// Given a target from the CLI, return calldata of the target.
+/// Given a target, return calldata of the target.
 pub async fn get_calldata_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>> {
     // If the target is a transaction hash, fetch the calldata from the RPC provider.
     if let Ok(address) = target.parse::<TxHash>() {
