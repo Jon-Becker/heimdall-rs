@@ -25,7 +25,7 @@ pub fn build_abi(
     let mut abi = JsonAbi::new();
 
     // add functions
-    functions.iter().for_each(|f| {
+    functions.iter().filter(|f| !f.fallback).for_each(|f| {
         // determine the state mutability of the function
         let state_mutability = match f.pure {
             true => StateMutability::Pure,

@@ -17,8 +17,8 @@ heimdall-cache = { workspace = true }
 thiserror = "1.0.50"
 clap = { workspace = true, features = ["derive"] }
 derive_builder = "0.12.0"
-ethers = "2.0.14"
 tracing = "0.1.40"
 eyre = "0.6.12"
 tokio = { version = "1", features = ["full"] }
 futures = "0.3.30"
+alloy = { version = "0.1.3", features = ["full", "rpc-types-debug", "rpc-types-trace"] }

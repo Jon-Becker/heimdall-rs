@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use ethers::types::U256;
+use alloy::primitives::U256;
 use heimdall_common::ether::signatures::ResolvedFunction;
 use heimdall_vm::core::{opcodes::WrappedOpcode, types::byte_size_to_type};
 

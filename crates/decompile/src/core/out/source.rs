@@ -378,7 +378,7 @@ fn get_event_and_error_declarations(
 }
 
 /// Helper function which will indent the source code.
-fn indent_source(source: &mut Vec<String>) {
+fn indent_source(source: &mut [String]) {
     let mut indentation_level = 0;
     for line in source.iter_mut() {
         if line.trim().starts_with('}') {
@@ -400,7 +400,7 @@ fn indent_source(source: &mut Vec<String>) {
 
 /// Helper function which returns the imbalance of the source code's indentation. For example, if we
 /// are missing 3 closing brackets, this function will return 3.
-fn get_indentation_imbalance(source: &Vec<String>) -> i32 {
+fn get_indentation_imbalance(source: &[String]) -> i32 {
     let mut indentation_level = 0;
     for line in source.iter() {
         if line.trim().starts_with('}') {

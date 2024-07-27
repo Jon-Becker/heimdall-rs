@@ -3,11 +3,9 @@ pub(crate) mod out;
 pub(crate) mod postprocess;
 pub(crate) mod resolve;
 
+use alloy::primitives::Address;
+use alloy_dyn_abi::{DynSolType, DynSolValue};
 use alloy_json_abi::JsonAbi;
-use ethers::{
-    abi::{decode as abi_decode, ParamType, Token},
-    types::H160,
-};
 use eyre::eyre;
 use heimdall_common::{
     ether::{
@@ -50,7 +48,7 @@ pub async fn get_proxy(
     rpc_url: &str,
     target: &str, // bytecode
     bytecode: &str,
-) -> Option<H160>
+) -> Option<Address>
 {
     let output = std::process::Command::new("node")
         .arg("/home/fala/crypto/whatsabi/lib/proxy.js")
@@ -63,7 +61,7 @@ pub async fn get_proxy(
     let output_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     if !output_str.is_empty() {
-        let addr = match output_str.parse::<H160>() {
+        let addr = match output_str.parse::<Address>() {
             Ok(p) => p,
             Err(_err) => { 
                 warn!("whatsabi proxy check returned: {}", output_str);
@@ -122,11 +120,11 @@ pub async fn decompile_impl(args: DecompilerArgs, address: &str) -> Result<Decom
     let mut evm = VM::new(
         &contract_bytecode,
         &[],
-        H160::default(),
-        H160::default(),
-        H160::default(),
+        Address::default(),
+        Address::default(),
+        Address::default(),
         0,
-        u128::max_value(),
+        u128::MAX,
     );
 
     // disassemble the contract's bytecode
@@ -199,17 +197,14 @@ pub async fn decompile_impl(args: DecompilerArgs, address: &str) -> Result<Decom
         .map(|(selector, trace_root)| {
             let mut analyzer = Analyzer::new(
                 analyzer_type,
-                AnalyzedFunction::new(
-                    &selector,
-                    selector == "fallback" || selector == "0x00000000",
-                ),
+                AnalyzedFunction::new(&selector, selector == "fallback"),
             );
 
             // analyze the symbolic execution trace
             let mut analyzed_function = analyzer.analyze(trace_root)?;
 
             // if the function is constant, we can get the exact val
-            if analyzed_function.is_constant() {
+            if analyzed_function.is_constant() && !analyzed_function.fallback {
                 evm.reset();
                 let x = evm.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
 
@@ -217,13 +212,15 @@ pub async fn decompile_impl(args: DecompilerArgs, address: &str) -> Result<Decom
                     .returns
                     .as_ref()
                     .map(|ret_type| to_type(ret_type.replace("memory", "").trim()))
-                    .unwrap_or(ParamType::Bytes);
+                    .unwrap_or(DynSolType::Bytes);
 
-                let decoded = abi_decode(&[returns_param_type], &x.returndata)
-                    .map(|decoded| match decoded[0].clone() {
-                        Token::String(s) => format!("\"{}\"", s),
-                        Token::Uint(x) | Token::Int(x) => x.to_string(),
-                        token => format!("0x{}", token),
+                let decoded = returns_param_type
+                    .abi_decode(&x.returndata)
+                    .map(|decoded| match decoded {
+                        DynSolValue::String(s) => format!("\"{}\"", s),
+                        DynSolValue::Uint(x, _) => x.to_string(),
+                        DynSolValue::Int(x, _) => x.to_string(),
+                        token => format!("0x{:?}", token),
                     })
                     .unwrap_or_else(|_| encode_hex(&x.returndata));
 

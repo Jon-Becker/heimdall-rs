@@ -4,12 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use ethers::{
-    abi::AbiEncode,
-    prelude::U256,
-    types::{H160, I256},
-    utils::keccak256,
-};
+use alloy::primitives::{keccak256, Address, I256, U256};
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::sign_uint;
 
@@ -38,9 +33,9 @@ pub struct VM {
     pub instruction: u128,
     pub bytecode: Vec<u8>,
     pub calldata: Vec<u8>,
-    pub address: H160,
-    pub origin: H160,
-    pub caller: H160,
+    pub address: Address,
+    pub origin: Address,
+    pub caller: Address,
     pub value: u128,
     pub gas_remaining: u128,
     pub gas_used: u128,
@@ -98,14 +93,14 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -113,9 +108,9 @@ impl VM {
     pub fn new(
         bytecode: &[u8],
         calldata: &[u8],
-        address: H160,
-        origin: H160,
-        caller: H160,
+        address: Address,
+        origin: Address,
+        caller: Address,
         value: u128,
         gas_limit: u128,
     ) -> VM {
@@ -147,14 +142,14 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -171,14 +166,14 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -209,14 +204,14 @@ impl VM {
     ///
     /// ```no_run
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -359,7 +354,7 @@ impl VM {
                 let numerator = self.stack.pop()?;
                 let denominator = self.stack.pop()?;
 
-                let mut result = U256::zero();
+                let mut result = U256::ZERO;
                 if !denominator.value.is_zero() {
                     result = numerator.value.div(denominator.value);
                 }
@@ -380,7 +375,7 @@ impl VM {
                 let numerator = self.stack.pop()?;
                 let denominator = self.stack.pop()?;
 
-                let mut result = I256::zero();
+                let mut result = I256::ZERO;
                 if !denominator.value.is_zero() {
                     result = sign_uint(numerator.value).div(sign_uint(denominator.value));
                 }
@@ -402,7 +397,7 @@ impl VM {
                 let a = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
 
-                let mut result = U256::zero();
+                let mut result = U256::ZERO;
                 if !modulus.value.is_zero() {
                     result = a.value.rem(modulus.value);
                 }
@@ -423,7 +418,7 @@ impl VM {
                 let a = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
 
-                let mut result = I256::zero();
+                let mut result = I256::ZERO;
                 if !modulus.value.is_zero() {
                     result = sign_uint(a.value).rem(sign_uint(modulus.value));
                 }
@@ -446,7 +441,7 @@ impl VM {
                 let b = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
 
-                let mut result = U256::zero();
+                let mut result = U256::ZERO;
                 if !modulus.value.is_zero() {
                     result = a.value.overflowing_add(b.value).0.rem(modulus.value);
                 }
@@ -468,7 +463,7 @@ impl VM {
                 let b = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
 
-                let mut result = U256::zero();
+                let mut result = U256::ZERO;
                 if !modulus.value.is_zero() {
                     result = a.value.overflowing_mul(b.value).0.rem(modulus.value);
                 }
@@ -500,7 +495,7 @@ impl VM {
                 }
 
                 // consume dynamic gas
-                let exponent_byte_size = exponent.value.bits() / 8;
+                let exponent_byte_size = exponent.value.bit_len() / 8;
                 let gas_cost = 50 * exponent_byte_size;
                 self.consume_gas(gas_cost as u128);
 
@@ -530,7 +525,7 @@ impl VM {
 
                 match a.lt(&b) {
                     true => self.stack.push(U256::from(1u8), operation),
-                    false => self.stack.push(U256::zero(), operation),
+                    false => self.stack.push(U256::ZERO, operation),
                 }
             }
 
@@ -541,7 +536,7 @@ impl VM {
 
                 match a.gt(&b) {
                     true => self.stack.push(U256::from(1u8), operation),
-                    false => self.stack.push(U256::zero(), operation),
+                    false => self.stack.push(U256::ZERO, operation),
                 }
             }
 
@@ -552,7 +547,7 @@ impl VM {
 
                 match sign_uint(a).lt(&sign_uint(b)) {
                     true => self.stack.push(U256::from(1u8), operation),
-                    false => self.stack.push(U256::zero(), operation),
+                    false => self.stack.push(U256::ZERO, operation),
                 }
             }
 
@@ -563,7 +558,7 @@ impl VM {
 
                 match sign_uint(a).gt(&sign_uint(b)) {
                     true => self.stack.push(U256::from(1u8), operation),
-                    false => self.stack.push(U256::zero(), operation),
+                    false => self.stack.push(U256::ZERO, operation),
                 }
             }
 
@@ -574,7 +569,7 @@ impl VM {
 
                 match a.eq(&b) {
                     true => self.stack.push(U256::from(1u8), operation),
-                    false => self.stack.push(U256::zero(), operation),
+                    false => self.stack.push(U256::ZERO, operation),
                 }
             }
 
@@ -584,7 +579,7 @@ impl VM {
 
                 match a.eq(&U256::from(0u8)) {
                     true => self.stack.push(U256::from(1u8), operation),
-                    false => self.stack.push(U256::zero(), operation),
+                    false => self.stack.push(U256::ZERO, operation),
                 }
             }
 
@@ -663,7 +658,7 @@ impl VM {
                 let a = self.stack.pop()?.value;
 
                 if b >= U256::from(32u32) {
-                    self.stack.push(U256::zero(), operation)
+                    self.stack.push(U256::ZERO, operation)
                 } else {
                     let result =
                         a / (U256::from(256u32).pow(U256::from(31u32) - b)) % U256::from(256u32);
@@ -679,7 +674,7 @@ impl VM {
 
                 // if shift is greater than 255, result is 0
                 let result =
-                    if a.value > U256::from(255u8) { U256::zero() } else { b.value.shl(a.value) };
+                    if a.value > U256::from(255u8) { U256::ZERO } else { b.value.shl(a.value) };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -699,7 +694,7 @@ impl VM {
 
                 // if shift is greater than 255, result is 0
                 let result =
-                    if a.value > U256::from(255u8) { U256::zero() } else { b.value.shr(a.value) };
+                    if a.value > U256::from(255u8) { U256::ZERO } else { b.value.shr(a.value) };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -720,7 +715,7 @@ impl VM {
                 // convert a to usize
                 let usize_a: usize = a.value.try_into().unwrap_or(usize::MAX);
 
-                let mut result = I256::zero();
+                let mut result = I256::ZERO;
                 if !b.value.is_zero() {
                     result = sign_uint(b.value).shr(usize_a);
                 }
@@ -743,8 +738,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
 
                 let data = self.memory.read(offset, size);
                 let result = keccak256(data);
@@ -754,15 +749,15 @@ impl VM {
                 let gas_cost = 6 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.stack.push(U256::from(result), operation);
+                self.stack.push(U256::try_from(result)?, operation);
             }
 
             // ADDRESS
             0x30 => {
                 let mut result = [0u8; 32];
-                result[12..].copy_from_slice(&self.address.0);
+                result[12..].copy_from_slice(self.address.as_ref());
 
-                self.stack.push(U256::from(result), operation);
+                self.stack.push(U256::from_be_bytes(result), operation);
             }
 
             // BALANCE
@@ -785,17 +780,17 @@ impl VM {
             0x32 => {
                 // convert self.origin to U256
                 let mut result = [0u8; 32];
-                result[12..].copy_from_slice(&self.origin.0);
+                result[12..].copy_from_slice(self.origin.as_ref());
 
-                self.stack.push(U256::from(result), operation);
+                self.stack.push(U256::from_be_bytes(result), operation);
             }
 
             // CALLER
             0x33 => {
                 let mut result = [0u8; 32];
-                result[12..].copy_from_slice(&self.caller.0);
+                result[12..].copy_from_slice(self.caller.as_ref());
 
-                self.stack.push(U256::from(result), operation);
+                self.stack.push(U256::from_be_bytes(result), operation);
             }
 
             // CALLVALUE
@@ -817,9 +812,9 @@ impl VM {
                         value[..self.calldata.len() - i].copy_from_slice(&self.calldata[i..]);
                     }
 
-                    U256::from(value)
+                    U256::from_be_bytes(value)
                 } else {
-                    U256::from(&self.calldata[i..i + 32])
+                    U256::from_be_slice(&self.calldata[i..i + 32])
                 };
 
                 self.stack.push(result, operation);
@@ -1014,7 +1009,7 @@ impl VM {
                     self.consume_gas(100);
                 }
 
-                self.stack.push(U256::zero(), operation);
+                self.stack.push(U256::ZERO, operation);
             }
 
             // COINBASE
@@ -1043,11 +1038,9 @@ impl VM {
             // MLOAD
             0x51 => {
                 let i = self.stack.pop()?.value;
+                let i: usize = i.try_into().unwrap_or(32 * 32);
 
-                // Safely convert U256 to usize
-                let i: usize = i.try_into().unwrap_or(usize::MAX);
-
-                let result = U256::from(self.memory.read(i, 32).as_slice());
+                let result = U256::from_be_slice(self.memory.read(i, 32).as_slice());
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(i, 32);
@@ -1062,7 +1055,7 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, 32);
@@ -1071,7 +1064,7 @@ impl VM {
                 self.memory.store_with_opcode(
                     offset,
                     32,
-                    value.encode().as_slice(),
+                    &value.to_be_bytes_vec(),
                     #[cfg(feature = "experimental")]
                     operation,
                 );
@@ -1083,7 +1076,7 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(64 * 32);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, 1);
@@ -1092,7 +1085,7 @@ impl VM {
                 self.memory.store_with_opcode(
                     offset,
                     1,
-                    &[value.encode()[31]],
+                    &[value.to_be_bytes_vec()[31]],
                     #[cfg(feature = "experimental")]
                     operation,
                 );
@@ -1103,10 +1096,10 @@ impl VM {
                 let key = self.stack.pop()?.value;
 
                 // consume dynamic gas
-                let gas_cost = self.storage.access_cost(key.into());
+                let gas_cost = self.storage.access_cost(key);
                 self.consume_gas(gas_cost);
 
-                self.stack.push(U256::from(self.storage.load(key.into())), operation)
+                self.stack.push(U256::from(self.storage.load(key)), operation)
             }
 
             // SSTORE
@@ -1115,10 +1108,10 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // consume dynamic gas
-                let gas_cost = self.storage.storage_cost(key.into(), value.into());
+                let gas_cost = self.storage.storage_cost(key, value);
                 self.consume_gas(gas_cost);
 
-                self.storage.store(key.into(), value.into());
+                self.storage.store(key, value);
             }
 
             // JUMP
@@ -1191,14 +1184,14 @@ impl VM {
             // TLOAD
             0x5C => {
                 let key = self.stack.pop()?.value;
-                self.stack.push(U256::from(self.storage.tload(key.into())), operation)
+                self.stack.push(U256::from(self.storage.tload(key)), operation)
             }
 
             // TSTORE
             0x5D => {
                 let key = self.stack.pop()?.value;
                 let value = self.stack.pop()?.value;
-                self.storage.tstore(key.into(), value.into());
+                self.storage.tstore(key, value);
             }
 
             // MCOPY
@@ -1208,9 +1201,10 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                // Note: clamping to 8 words here, since we dont actually use the return data
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(32 * 32);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
                 let value_offset_safe = (offset + size)
                     .min(self.memory.size().try_into().expect("failed to convert u128 to usize"));
 
@@ -1253,7 +1247,7 @@ impl VM {
 
             // PUSH0
             0x5f => {
-                self.stack.push(U256::zero(), operation);
+                self.stack.push(U256::ZERO, operation);
             }
 
             // PUSH1 -> PUSH32
@@ -1267,12 +1261,12 @@ impl VM {
                 self.instruction += num_bytes;
 
                 // update the operation's inputs
-                let new_operation_inputs = vec![WrappedInput::Raw(U256::from(bytes))];
+                let new_operation_inputs = vec![WrappedInput::Raw(U256::from_be_slice(bytes))];
 
                 operation.inputs = new_operation_inputs;
 
                 // Push the bytes to the stack
-                self.stack.push(U256::from(bytes), operation);
+                self.stack.push(U256::from_be_slice(bytes), operation);
             }
 
             // DUP1 -> DUP16
@@ -1302,8 +1296,8 @@ impl VM {
                     self.stack.pop_n(topic_count as usize).iter().map(|x| x.value).collect();
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
 
                 let data = self.memory.read(offset, size);
 
@@ -1354,8 +1348,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, size);
@@ -1393,8 +1387,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let size: usize = size.try_into().unwrap_or(32 * 32);
 
                 self.exit(1, self.memory.read(offset, size));
             }
@@ -1451,14 +1445,14 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -1484,14 +1478,14 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -1520,14 +1514,14 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -1553,14 +1547,14 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -1591,14 +1585,14 @@ impl VM {
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
-    /// use ethers::types::H160;
+    /// use alloy::primitives::Address;
     ///
     /// let mut vm = VM::new(
     ///     &vec![0x00],
     ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<H160>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<H160>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
+    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
     ///     0,
     ///     1000000000000000000,
     /// );
@@ -1609,7 +1603,7 @@ impl VM {
     pub fn call(&mut self, calldata: &[u8], value: u128) -> Result<ExecutionResult> {
         // reset the VM temp state
         self.reset();
-        self.calldata = calldata.to_owned();
+        calldata.clone_into(&mut self.calldata);
         self.value = value;
 
         self.execute()
@@ -1621,7 +1615,6 @@ mod tests {
 
     use std::str::FromStr;
 
-    use ethers::{prelude::U256, types::H160};
     use heimdall_common::utils::strings::decode_hex;
 
     use super::*;
@@ -1633,14 +1626,14 @@ mod tests {
             &decode_hex("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
                 .expect("failed to decode calldata"),
             "0x6865696d64616c6c000000000061646472657373"
-                .parse::<H160>()
-                .expect("failed to parse H160"),
+                .parse::<Address>()
+                .expect("failed to parse Address"),
             "0x6865696d64616c6c0000000000006f726967696e"
-                .parse::<H160>()
-                .expect("failed to parse H160"),
+                .parse::<Address>()
+                .expect("failed to parse Address"),
             "0x6865696d64616c6c00000000000063616c6c6572"
-                .parse::<H160>()
-                .expect("failed to parse H160"),
+                .parse::<Address>()
+                .expect("failed to parse Address"),
             0,
             9999999999,
         )

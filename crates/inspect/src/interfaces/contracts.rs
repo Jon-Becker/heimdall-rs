@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use ethers::types::Address;
+use alloy::primitives::Address;
 use futures::future::try_join_all;
 
 use crate::{error::Error, InspectArgs};

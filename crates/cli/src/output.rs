@@ -1,10 +1,8 @@
 use std::{env, io::Write};
 
+use alloy::primitives::{Address, TxHash};
 use eyre::{eyre, Result};
-use heimdall_common::{
-    constants::{ADDRESS_REGEX, TRANSACTION_HASH_REGEX},
-    ether::rpc,
-};
+use heimdall_common::ether::rpc;
 
 /// build a standardized output path for the given parameters. follows the following cases:
 /// - if `output` is `print`, return `None`
@@ -26,9 +24,7 @@ pub async fn build_output_path(
             .into_string()
             .map_err(|_| eyre!("Unable to get current working directory"))?;
 
-        if ADDRESS_REGEX.is_match(target).unwrap_or(false) ||
-            TRANSACTION_HASH_REGEX.is_match(target).unwrap_or(false)
-        {
+        if target.parse::<Address>().is_ok() || target.parse::<TxHash>().is_ok() {
             let chain_id =
                 rpc::chain_id(rpc_url).await.map_err(|_| eyre!("Unable to get chain id"))?;
             return Ok(format!("{}/output/{}/{}/{}", cwd, chain_id, target, filename));

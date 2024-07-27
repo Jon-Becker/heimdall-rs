@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ethers::types::U256;
+use alloy::primitives::U256;
 use heimdall_common::constants::{MEMORY_REGEX, STORAGE_REGEX};
 use tracing::trace;
 

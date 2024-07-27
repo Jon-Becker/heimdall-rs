@@ -1,25 +1,24 @@
 use super::rpc::get_transaction;
-use crate::{
-    constants::{CALLDATA_REGEX, TRANSACTION_HASH_REGEX},
-    utils::strings::decode_hex,
-    Error,
-};
+use crate::utils::strings::decode_hex;
+use alloy::primitives::TxHash;
+use eyre::{bail, eyre, Result};
 
-pub async fn get_calldata_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>, Error> {
-    // if TRANSACTION_HASH_REGEX.is_match(target).unwrap_or(false) {
-    //     // Target is a contract address, so we need to fetch the bytecode from the RPC provider.
-    //     let raw_transaction = get_transaction(target, rpc_url).await.map_err(|_| {
-    //         Error::Generic("failed to fetch transaction from RPC provider.".to_string())
-    //     })?;
+/// Given a target from the CLI, return calldata of the target.
+pub async fn get_calldata_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>> {
+    // If the target is not a transaction hash, it could be calldata.
+    if let Ok(calldata) = decode_hex(target) {
+        return Ok(calldata);
+    }
+    // If the target is a transaction hash, fetch the calldata from the RPC provider.
+    if let Ok(address) = target.parse::<TxHash>() {
+        return get_transaction(address, rpc_url)
+            .await
+            .map(|tx| tx.input.to_vec())
+            .map_err(|_| eyre!("failed to fetch transaction from RPC provider"));
+    }
 
-    //     Ok(raw_transaction.input.to_vec())
-    // } else if CALLDATA_REGEX.is_match(target).unwrap_or(false) {
-        Ok(decode_hex(target)?)
-    // } else {
-    //     Err(Error::Generic(
-    //         "invalid target. must be a transaction hash or calldata (bytes).".to_string(),
-    //     ))
-    // }
+
+    bail!("invalid target: must be a transaction hash or calldata (bytes)");
 }
 
 #[cfg(test)]

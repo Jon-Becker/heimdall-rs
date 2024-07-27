@@ -1,12 +1,7 @@
+use alloy_dyn_abi::{DynSolType, DynSolValue};
 use async_trait::async_trait;
-use ethers::abi::{ParamType, Token};
-
-use eyre::Result;
-use heimdall_cache::{read_cache, store_cache};
-use tracing::trace;
 
 use crate::{
-    error::Error,
     ether::types::parse_function_parameters,
     utils::{
         http::get_json_from_url,
@@ -14,18 +9,22 @@ use crate::{
         strings::replace_last,
     },
 };
+use eyre::{OptionExt, Result};
+use heimdall_cache::with_cache;
 use serde::{Deserialize, Serialize};
+use tracing::trace;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedFunction {
     pub name: String,
     pub signature: String,
     pub inputs: Vec<String>,
-    pub decoded_inputs: Option<Vec<Token>>,
+    #[serde(skip)]
+    pub decoded_inputs: Option<Vec<DynSolValue>>,
 }
 
 impl ResolvedFunction {
-    pub fn inputs(&self) -> Vec<ParamType> {
+    pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
@@ -38,7 +37,7 @@ pub struct ResolvedError {
 }
 
 impl ResolvedError {
-    pub fn inputs(&self) -> Vec<ParamType> {
+    pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
@@ -51,14 +50,14 @@ pub struct ResolvedLog {
 }
 
 impl ResolvedLog {
-    pub fn inputs(&self) -> Vec<ParamType> {
+    pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
 
 #[async_trait]
 pub trait ResolveSelector {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error>
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>>
     where
         Self: Sized;
 }
@@ -90,29 +89,16 @@ fn load_data(path: &str) -> std::io::Result<std::collections::HashMap<String, Ve
 
 #[async_trait]
 impl ResolveSelector for ResolvedError {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
-        // normalize selector
-        let selector = match selector.strip_prefix("0x") {
-            Some(selector) => selector,
-            None => selector,
-        };
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
+        with_cache(&format!("selector.{selector}"), || async {
+            // normalize selector
+            let selector = match selector.strip_prefix("0x") {
+                Some(selector) => selector,
+                None => selector,
+            };
 
-        trace!("resolving error selector {}", &selector);
+            trace!("resolving error selector {}", &selector);
 
-        // get cached results
-        if let Some(cached_results) =
-            read_cache::<Vec<ResolvedError>>(&format!("selector.{selector}"))
-                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
-        {
-            match cached_results.len() {
-                0 => return Ok(None),
-                _ => {
-                    trace!("found cached results for selector: {}", &selector);
-                    return Ok(Some(cached_results));
-                }
-            }
-        }
-       
             // get function possibilities from openchain
             let signatures = match get_json_from_url(
                 &format!(
@@ -121,8 +107,7 @@ impl ResolveSelector for ResolvedError {
                 ),
                 10,
             )
-            .await
-            .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
+            .await?
             {
                 Some(signatures) => signatures,
                 None => return Ok(None),
@@ -135,11 +120,11 @@ impl ResolveSelector for ResolvedError {
                 .and_then(|function| function.get(format!("0x{selector}")))
                 .and_then(|item| item.as_array())
                 .map(|array| array.to_vec())
-                .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
+                .ok_or_eyre("error parsing signatures from openchain")?;
 
             trace!("found {} possible functions for selector: {}", &results.len(), &selector);
 
-        let mut signature_list: Vec<ResolvedError> = Vec::new();
+            let mut signature_list: Vec<ResolvedError> = Vec::new();
 
             for signature in results {
                 // get the function text signature and unwrap it into a string
@@ -162,130 +147,99 @@ impl ResolveSelector for ResolvedError {
                         .map(|input| input.to_string())
                         .collect(),
                 });
-        }
+            }
 
-        // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
-            .map_err(|e| trace!("error storing signatures in cache: {}", e));
-
-        Ok(match signature_list.len() {
-            0 => None,
-            _ => Some(signature_list),
+            Ok(match signature_list.len() {
+                0 => None,
+                _ => Some(signature_list),
+            })
         })
+        .await
     }
 }
 
 #[async_trait]
 impl ResolveSelector for ResolvedLog {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
-        // normalize selector
-        let selector = match selector.strip_prefix("0x") {
-            Some(selector) => selector,
-            None => selector,
-        };
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
+        with_cache(&format!("selector.{selector}"), || async {
+            // normalize selector
+            let selector = match selector.strip_prefix("0x") {
+                Some(selector) => selector,
+                None => selector,
+            };
 
-        trace!("resolving event selector {}", &selector);
+            trace!("resolving event selector {}", &selector);
 
-        // get cached results
-        if let Some(cached_results) =
-            read_cache::<Vec<ResolvedLog>>(&format!("selector.{selector}"))
-                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
-        {
-            match cached_results.len() {
-                0 => return Ok(None),
-                _ => {
-                    trace!("found cached results for selector: {}", &selector);
-                    return Ok(Some(cached_results));
-                }
-            }
-        }
-
-        // get function possibilities from openchain
-        let signatures = match get_json_from_url(
-            &format!(
+            // get function possibilities from openchain
+            let signatures = match get_json_from_url(
+                &format!(
                 "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&event=0x{}",
                 &selector
             ),
-            10,
-        )
-        .await
-        .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
-        {
-            Some(signatures) => signatures,
-            None => return Ok(None),
-        };
-
-        // convert the serde value into a vec of possible functions
-        let results = signatures
-            .get("result")
-            .and_then(|result| result.get("event"))
-            .and_then(|function| function.get(format!("0x{selector}")))
-            .and_then(|item| item.as_array())
-            .map(|array| array.to_vec())
-            .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
-
-        trace!("found {} possible functions for selector: {}", &results.len(), &selector);
-
-        let mut signature_list: Vec<ResolvedLog> = Vec::new();
-
-        for signature in results {
-            // get the function text signature and unwrap it into a string
-            let text_signature = match signature.get("name") {
-                Some(text_signature) => text_signature.to_string().replace('"', ""),
-                None => continue,
+                10,
+            )
+            .await?
+            {
+                Some(signatures) => signatures,
+                None => return Ok(None),
             };
 
-            // safely split the text signature into name and inputs
-            let function_parts = match text_signature.split_once('(') {
-                Some(function_parts) => function_parts,
-                None => continue,
-            };
+            // convert the serde value into a vec of possible functions
+            let results = signatures
+                .get("result")
+                .and_then(|result| result.get("event"))
+                .and_then(|function| function.get(format!("0x{selector}")))
+                .and_then(|item| item.as_array())
+                .map(|array| array.to_vec())
+                .ok_or_eyre("error parsing signatures from openchain")?;
 
-            signature_list.push(ResolvedLog {
-                name: function_parts.0.to_string(),
-                signature: text_signature.to_string(),
-                inputs: replace_last(function_parts.1, ")", "")
-                    .split(',')
-                    .map(|input| input.to_string())
-                    .collect(),
-            });
-        }
+            trace!("found {} possible functions for selector: {}", &results.len(), &selector);
 
-        // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
-            .map_err(|e| trace!("error storing signatures in cache: {}", e));
+            let mut signature_list: Vec<ResolvedLog> = Vec::new();
 
-        Ok(match signature_list.len() {
-            0 => None,
-            _ => Some(signature_list),
+            for signature in results {
+                // get the function text signature and unwrap it into a string
+                let text_signature = match signature.get("name") {
+                    Some(text_signature) => text_signature.to_string().replace('"', ""),
+                    None => continue,
+                };
+
+                // safely split the text signature into name and inputs
+                let function_parts = match text_signature.split_once('(') {
+                    Some(function_parts) => function_parts,
+                    None => continue,
+                };
+
+                signature_list.push(ResolvedLog {
+                    name: function_parts.0.to_string(),
+                    signature: text_signature.to_string(),
+                    inputs: replace_last(function_parts.1, ")", "")
+                        .split(',')
+                        .map(|input| input.to_string())
+                        .collect(),
+                });
+            }
+
+            Ok(match signature_list.len() {
+                0 => None,
+                _ => Some(signature_list),
+            })
         })
+        .await
     }
 }
 
 #[async_trait]
 impl ResolveSelector for ResolvedFunction {
-    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>, Error> {
-        // normalize selector
-        let selector = match selector.strip_prefix("0x") {
-            Some(selector) => selector,
-            None => selector,
-        };
+    async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
+        with_cache(&format!("selector.{selector}"), || async {
+            // normalize selector
+            let selector = match selector.strip_prefix("0x") {
+                Some(selector) => selector,
+                None => selector,
+            };
 
-        trace!("resolving function selector {}", &selector);
-
-        // get cached results
-        if let Some(cached_results) =
-            read_cache::<Vec<ResolvedFunction>>(&format!("selector.{selector}"))
-                .map_err(|e| Error::Generic(format!("error reading cache: {}", e)))?
-        {
-            match cached_results.len() {
-                0 => return Ok(None),
-                _ => {
-                    trace!("found cached results for selector: {}", &selector);
-                    return Ok(Some(cached_results));
-                }
-            }
-        }
+            trace!("resolving function selector {}", &selector);
 
          let mut signature_list: Vec<ResolvedFunction> = Vec::new();
         // get signatures from local map
@@ -321,8 +275,7 @@ impl ResolveSelector for ResolvedFunction {
                 ),
                 10,
             )
-            .await
-            .map_err(|e| Error::Generic(format!("error fetching signatures from openchain: {}", e)))?
+            .await?
             {
                 Some(signatures) => signatures,
                 None => return Ok(None),
@@ -335,7 +288,7 @@ impl ResolveSelector for ResolvedFunction {
                 .and_then(|function| function.get(format!("0x{selector}")))
                 .and_then(|item| item.as_array())
                 .map(|array| array.to_vec())
-                .ok_or_else(|| Error::Generic("error parsing signatures from openchain".to_string()))?;
+                .ok_or_eyre("error parsing signatures from openchain")?;
 
             trace!("found {} possible functions for selector: {}", &results.len(), &selector);
 
@@ -364,14 +317,12 @@ impl ResolveSelector for ResolvedFunction {
             }
         }
 
-        // cache the results
-        let _ = store_cache(&format!("selector.{selector}"), &signature_list, None)
-            .map_err(|e| trace!("error storing signatures in cache: {}", e));
-
-        Ok(match signature_list.len() {
-            0 => None,
-            _ => Some(signature_list),
+            Ok(match signature_list.len() {
+                0 => None,
+                _ => Some(signature_list),
+            })
         })
+        .await
     }
 }
 

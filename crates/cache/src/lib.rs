@@ -296,6 +296,35 @@ where
     Ok(())
 }
 
+/// Takes in an &str and an async function that returns a Result<T, E> where T is ser/de
+/// and E is an error type. \
+/// If the key exists in the cache, it will return the value, otherwise it will call the function
+/// and store the result in the cache, returning the value.
+pub async fn with_cache<T, F, Fut>(key: &str, func: F) -> eyre::Result<T>
+where
+    T: 'static + Serialize + DeserializeOwned + Send + Sync,
+    F: FnOnce() -> Fut + Send,
+    Fut: std::future::Future<Output = Result<T, eyre::Report>> + Send, {
+    // Try to read from cache
+    match read_cache::<T>(key) {
+        Ok(Some(cached_value)) => {
+            tracing::debug!("cache hit for key: '{}'", key);
+            Ok(cached_value)
+        }
+        Ok(None) | Err(_) => {
+            tracing::debug!("cache miss for key: '{}'", key);
+
+            // If cache read fails or returns None, execute the function
+            let value = func().await?;
+
+            // Store the result in the cache
+            store_cache(key, &value, None)?;
+
+            Ok(value)
+        }
+    }
+}
+
 /// Cache subcommand handler
 #[allow(deprecated)]
 pub fn cache(args: CacheArgs) -> Result<(), Error> {
