@@ -12,7 +12,7 @@ use heimdall_cache::{cache, CacheArgs};
 use heimdall_common::utils::{
     hex::ToLowerHex,
     io::file::write_file,
-    version::{current_version, remote_version},
+    version::{current_version, remote_nightly_version, remote_version},
 };
 use heimdall_config::{config, ConfigArgs, Configuration};
 use heimdall_core::{
@@ -77,8 +77,12 @@ async fn main() -> Result<()> {
     let _ = args.logs.init_tracing();
 
     // spawn a new tokio runtime to get remote version while the main runtime is running
-    let remote_ver = tokio::task::spawn(remote_version()).await??;
     let current_version = current_version();
+    let remote_ver = if current_version.is_nightly() {
+        tokio::task::spawn(remote_nightly_version()).await??
+    } else {
+        tokio::task::spawn(remote_version()).await??
+    };
 
     let configuration =
         Configuration::load().map_err(|e| eyre!("failed to load configuration: {}", e))?;
@@ -337,7 +341,10 @@ async fn main() -> Result<()> {
     }
 
     // check if the version is up to date
-    if remote_ver.gt(&current_version) {
+    if current_version.is_nightly() && current_version.ne(&remote_ver) {
+        info!("great news! A new nightly build is available!");
+        info!("you can update now by running: `bifrost +nightly`");
+    } else if remote_ver.gt(&current_version) {
         info!("great news! An update is available!");
         info!("you can update now by running: `bifrost --version {}`", remote_ver);
     }
