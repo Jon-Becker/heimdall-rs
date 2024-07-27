@@ -1,5 +1,7 @@
 use clap::Parser;
 use derive_builder::Builder;
+use eyre::Result;
+use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
 
 #[derive(Debug, Clone, Parser, Builder)]
@@ -45,6 +47,12 @@ pub struct DecompilerArgs {
     /// The timeout for each function's symbolic execution in milliseconds.
     #[clap(long, short, default_value = "10000", hide_default_value = true)]
     pub timeout: u64,
+}
+
+impl DecompilerArgs {
+    pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
+        get_bytecode_from_target(&self.target, &self.rpc_url).await
+    }
 }
 
 impl DecompilerArgsBuilder {
