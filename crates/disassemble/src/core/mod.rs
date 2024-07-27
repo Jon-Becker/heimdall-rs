@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crate::{error::Error, interfaces::DisassemblerArgs};
 use eyre::eyre;
-use heimdall_common::{ether::bytecode::get_bytecode_from_target, utils::strings::encode_hex};
+use heimdall_common::utils::strings::encode_hex;
 use heimdall_vm::core::opcodes::Opcode;
 use tracing::{debug, info};
 
@@ -14,9 +14,8 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
-        .await
-        .map_err(|e| eyre!("fetching target bytecode failed: {}", e))?;
+    let contract_bytecode =
+        args.get_bytecode().await.map_err(|e| eyre!("fetching target bytecode failed: {}", e))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
 
     // iterate over the bytecode, disassembling each instruction

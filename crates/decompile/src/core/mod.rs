@@ -9,7 +9,6 @@ use alloy_json_abi::JsonAbi;
 use eyre::eyre;
 use heimdall_common::{
     ether::{
-        bytecode::get_bytecode_from_target,
         compiler::detect_compiler,
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
         types::to_type,
@@ -60,7 +59,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
-    let contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+    let contract_bytecode = args
+        .get_bytecode()
         .await
         .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());

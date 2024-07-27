@@ -1,7 +1,13 @@
-//! clap [Args](clap::Args) for logging configuration.
-// Mostly taken from [reth](https://github.com/paradigmxyz/reth)
+use clap::{Parser, Subcommand};
 
 use clap::{ArgAction, Args, ValueEnum};
+use heimdall_cache::CacheArgs;
+use heimdall_config::ConfigArgs;
+use heimdall_core::{
+    heimdall_cfg::CFGArgs, heimdall_decoder::DecodeArgs, heimdall_decompiler::DecompilerArgs,
+    heimdall_disassembler::DisassemblerArgs, heimdall_dump::DumpArgs,
+    heimdall_inspect::InspectArgs,
+};
 use heimdall_tracing::{
     tracing_subscriber::filter::Directive, FileWorkerGuard, HeimdallTracer, LayerInfo, LogFormat,
     Tracer,
@@ -11,6 +17,51 @@ use std::{
     str::FromStr,
 };
 use tracing::{level_filters::LevelFilter, Level};
+
+#[derive(Debug, Parser)]
+#[clap(name = "heimdall", author = "Jonathan Becker <jonathan@jbecker.dev>", version)]
+pub struct Arguments {
+    #[clap(subcommand)]
+    pub sub: Subcommands,
+
+    #[clap(flatten)]
+    pub logs: LogArgs,
+}
+
+#[derive(Debug, Subcommand)]
+#[clap(
+    about = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis.",
+    after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki"
+)]
+#[allow(clippy::large_enum_variant)]
+pub enum Subcommands {
+    #[clap(name = "disassemble", about = "Disassemble EVM bytecode to assembly")]
+    Disassemble(DisassemblerArgs),
+
+    #[clap(name = "decompile", about = "Decompile EVM bytecode to Solidity")]
+    Decompile(DecompilerArgs),
+
+    #[clap(name = "cfg", about = "Generate a visual control flow graph for EVM bytecode")]
+    CFG(CFGArgs),
+
+    #[clap(name = "decode", about = "Decode calldata into readable types")]
+    Decode(DecodeArgs),
+
+    #[clap(name = "config", about = "Display and edit the current configuration")]
+    Config(ConfigArgs),
+
+    #[clap(name = "cache", about = "Manage heimdall-rs' cached files")]
+    Cache(CacheArgs),
+
+    #[clap(name = "dump", about = "Dump the value of all storage slots accessed by a contract")]
+    Dump(DumpArgs),
+
+    #[clap(
+        name = "inspect",
+        about = "Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more"
+    )]
+    Inspect(InspectArgs),
+}
 
 /// The log configuration.
 #[derive(Debug, Args)]
