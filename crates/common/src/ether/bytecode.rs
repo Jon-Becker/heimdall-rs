@@ -9,14 +9,14 @@ use std::fs;
 /// TODO: this can probably be a trait method so we can do something like target.try_get_bytecode()
 /// TODO: move to CLI, since its only used in CLI
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>> {
-    // If the target is an address, fetch the bytecode from the RPC provider.
-    if let Ok(address) = target.parse::<Address>() {
-        return get_code(address, rpc_url).await;
-    }
-
     // If the target is not an address, it could be bytecode or a file path.
     if let Ok(bytecode) = decode_hex(target) {
         return Ok(bytecode);
+    }
+
+    // If the target is an address, fetch the bytecode from the RPC provider.
+    if let Ok(address) = target.parse::<Address>() {
+        return get_code(address, rpc_url).await;
     }
 
     // Assuming the target is a file path.
