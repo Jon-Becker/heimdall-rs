@@ -32,9 +32,8 @@ impl MultiTransportProvider {
             return Err(eyre::eyre!("No RPC URL provided"));
         }
 
-        let url = Url::from_str(rpc_url)?;
-
         let this = if rpc_url.to_lowercase().contains("http") {
+            let url = Url::from_str(rpc_url)?;
             Self::Http(ProviderBuilder::new().on_http(url))
         } else if rpc_url.to_lowercase().contains("ws") {
             let ws = WsConnect::new(rpc_url);
