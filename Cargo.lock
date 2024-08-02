@@ -2046,6 +2046,7 @@ dependencies = [
  "heimdall-common",
  "heimdall-config",
  "heimdall-vm",
+ "serde_json",
  "thiserror",
  "tracing",
 ]
@@ -2122,6 +2123,7 @@ dependencies = [
  "heimdall-config",
  "heimdall-decoder",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",
