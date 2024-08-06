@@ -11,6 +11,9 @@ keywords.workspace = true
 exclude.workspace = true
 bench = false
 
+[lib]
+bench = false
+
 [dependencies]
 async-openai = "0.10.0"
 clap = { workspace = true, features = ["derive"] }

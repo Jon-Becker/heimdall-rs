@@ -9,6 +9,8 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
+
+[lib]
 bench = false
 
 [dependencies]
