@@ -18,8 +18,9 @@ use crate::{
     },
 };
 use eyre::{OptionExt, Result};
+use hashbrown::HashMap;
 use heimdall_common::utils::strings::decode_hex;
-use std::{collections::HashMap, time::Instant};
+use std::time::Instant;
 use tracing::{trace, warn};
 
 #[derive(Clone, Debug, Default)]

@@ -1,4 +1,5 @@
-use std::{collections::HashSet, time::Instant};
+use hashbrown::HashSet;
+use std::time::Instant;
 
 use alloy::primitives::Selector;
 use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType};

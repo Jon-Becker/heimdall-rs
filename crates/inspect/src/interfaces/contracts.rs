@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 use alloy::primitives::Address;
 use futures::future::try_join_all;

@@ -1,5 +1,5 @@
+use hashbrown::{HashMap, HashSet};
 use std::{
-    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
     time::Instant,
 };

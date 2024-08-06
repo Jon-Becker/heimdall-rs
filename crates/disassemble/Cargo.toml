@@ -9,6 +9,10 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
+bench = false
+
+[lib]
+bench = false
 
 [dependencies]
 heimdall-config = { workspace = true }

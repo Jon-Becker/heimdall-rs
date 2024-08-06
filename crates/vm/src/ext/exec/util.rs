@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use alloy::primitives::U256;
 use heimdall_common::constants::{MEMORY_REGEX, STORAGE_REGEX};
