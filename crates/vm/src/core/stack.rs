@@ -1,11 +1,12 @@
 use std::{
     collections::VecDeque,
     fmt::Display,
-    hash::{Hash, Hasher},
+    hash::{BuildHasher, Hash},
 };
 
 use alloy::primitives::U256;
 use eyre::{OptionExt, Result};
+use hashbrown::hash_map::DefaultHashBuilder;
 
 use super::opcodes::WrappedOpcode;
 
@@ -258,9 +259,7 @@ impl Stack {
     /// assert_eq!(stack.hash(), 0x00);
     /// ```
     pub fn hash(&self) -> u64 {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        self.stack.hash(&mut hasher);
-        hasher.finish()
+        DefaultHashBuilder::default().hash_one(&self.stack)
     }
 }
 

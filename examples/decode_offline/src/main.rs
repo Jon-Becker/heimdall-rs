@@ -1,7 +1,7 @@
 use heimdall_decoder::{decode, DecodeArgsBuilder};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use serde_yaml;
 use serde::{Deserialize, Serialize};
 

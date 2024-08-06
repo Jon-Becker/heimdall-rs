@@ -7,6 +7,7 @@ use alloy::primitives::Address;
 use alloy_dyn_abi::{DynSolType, DynSolValue};
 use alloy_json_abi::JsonAbi;
 use eyre::eyre;
+use hashbrown::HashMap;
 use heimdall_common::{
     ether::{
         compiler::detect_compiler,
@@ -20,10 +21,7 @@ use heimdall_vm::{
     core::vm::VM,
     ext::selectors::{find_function_selectors, resolve_selectors},
 };
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use crate::{
     core::{

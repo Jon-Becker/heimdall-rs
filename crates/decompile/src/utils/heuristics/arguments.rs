@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use alloy::primitives::U256;
 use eyre::eyre;

@@ -1,7 +1,5 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::Instant,
-};
+use hashbrown::{HashMap, HashSet};
+use std::time::Instant;
 
 use alloy_json_abi::StateMutability;
 

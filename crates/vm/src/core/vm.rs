@@ -1,5 +1,5 @@
+use hashbrown::HashSet;
 use std::{
-    collections::HashSet,
     ops::{Div, Rem, Shl, Shr},
     time::{SystemTime, UNIX_EPOCH},
 };

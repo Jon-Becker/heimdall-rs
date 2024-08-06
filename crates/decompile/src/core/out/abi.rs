@@ -1,4 +1,5 @@
-use std::{collections::HashMap, time::Instant};
+use hashbrown::HashMap;
+use std::time::Instant;
 
 use alloy_json_abi::{Error, Event, EventParam, Function, JsonAbi, Param, StateMutability};
 

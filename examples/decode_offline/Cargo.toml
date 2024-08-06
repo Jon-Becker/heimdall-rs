@@ -11,3 +11,4 @@ heimdall-decoder = { git = "https://github.com/Jon-Becker/heimdall-rs.git", tag 
 serde = "1.0.196"
 serde_yaml = "0.9.31"
 tokio = "1.35.1"
+hashbrown = "0.14.5"

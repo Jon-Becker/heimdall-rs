@@ -1,7 +1,5 @@
-use std::{
-    borrow::BorrowMut,
-    collections::{HashSet, VecDeque},
-};
+use hashbrown::HashSet;
+use std::{borrow::BorrowMut, collections::VecDeque};
 
 use alloy::{
     dyn_abi::DynSolValue,

@@ -1,4 +1,5 @@
-use std::{collections::HashMap, time::Instant};
+use hashbrown::HashMap;
+use std::time::Instant;
 
 use eyre::eyre;
 use heimdall_common::utils::strings::find_balanced_encapsulator;
