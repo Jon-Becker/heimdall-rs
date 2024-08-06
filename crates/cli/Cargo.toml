@@ -32,3 +32,4 @@ async-trait = "0.1.51"
 [[bin]]
 name = "heimdall"
 path = "src/main.rs"
+bench = false
