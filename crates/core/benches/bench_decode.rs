@@ -12,7 +12,7 @@ fn test_decode(c: &mut Criterion) {
     ];
 
     for (name, calldata) in calldatas.into_iter() {
-        group.sample_size(500);
+        group.sample_size(10000);
         group.bench_with_input(BenchmarkId::from_parameter(name), &calldata, |b, c| {
             b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
                 let start = std::time::Instant::now();

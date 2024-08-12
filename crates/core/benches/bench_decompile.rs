@@ -14,7 +14,7 @@ fn test_decompile(c: &mut Criterion) {
 
     // output yul
     for (name, contract) in contracts.into_iter() {
-        group.sample_size(100);
+        group.sample_size(500);
         group.bench_with_input(
             BenchmarkId::from_parameter(format!("yul_{}", name)),
             &contract,

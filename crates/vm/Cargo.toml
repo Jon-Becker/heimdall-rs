@@ -9,7 +9,6 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
-bench = false
 
 [lib]
 bench = false
@@ -43,3 +42,19 @@ hashbrown = "0.14.5"
 [features]
 step-tracing = []
 experimental = []
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
+memory-stats = "1.0.0"
+
+[[bench]]
+name = "bench_erc20_transfer"
+harness = false
+
+[[bench]]
+name = "bench_fib"
+harness = false
+
+[[bench]]
+name = "bench_ten_thousand_hashes"
+harness = false
