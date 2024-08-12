@@ -10,6 +10,9 @@ repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
 
+[lib]
+bench = false
+
 [dependencies]
 async-openai = "0.10.0"
 clap = { workspace = true, features = ["derive"] }
