@@ -13,11 +13,13 @@ use std::time::Instant;
 #[cfg(feature = "step-tracing")]
 use tracing::trace;
 
+use crate::core::opcodes::OpCodeInfo;
+
 use super::{
     constants::{COINBASE_ADDRESS, CREATE2_ADDRESS, CREATE_ADDRESS},
     log::Log,
     memory::Memory,
-    opcodes::{Opcode, WrappedInput, WrappedOpcode},
+    opcodes::{WrappedInput, WrappedOpcode},
     stack::Stack,
     storage::Storage,
 };
@@ -80,7 +82,6 @@ pub struct State {
 pub struct Instruction {
     pub instruction: u128,
     pub opcode: u8,
-    pub opcode_details: Option<Opcode>,
     pub inputs: Vec<U256>,
     pub outputs: Vec<U256>,
     pub input_operations: Vec<WrappedOpcode>,
@@ -226,7 +227,6 @@ impl VM {
             return Ok(Instruction {
                 instruction: self.instruction,
                 opcode: 0xff,
-                opcode_details: None,
                 inputs: Vec::new(),
                 outputs: Vec::new(),
                 input_operations: Vec::new(),
@@ -250,14 +250,14 @@ impl VM {
         let start_time = Instant::now();
 
         // add the opcode to the trace
-        let opcode_details = Opcode::new(opcode);
-        let input_frames = self.stack.peek_n(opcode_details.inputs as usize);
+        let opcode_info = OpCodeInfo::from(opcode);
+        let input_frames = self.stack.peek_n(opcode_info.inputs() as usize);
         let input_operations =
             input_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
         let inputs = input_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
 
         // Consume the minimum gas for the opcode
-        let gas_cost = opcode_details.mingas;
+        let gas_cost = opcode_info.min_gas();
         self.consume_gas(gas_cost.into());
 
         // convert inputs to WrappedInputs
@@ -271,7 +271,7 @@ impl VM {
         #[cfg(feature = "step-tracing")]
         trace!(
             pc = self.instruction - 1,
-            opcode = opcode_details.name,
+            opcode = opcode_info.name(),
             inputs = ?inputs
                 .iter()
                 .map(|x| format!("{:#x}", x))
@@ -287,7 +287,6 @@ impl VM {
                 return Ok(Instruction {
                     instruction: last_instruction,
                     opcode,
-                    opcode_details: Some(opcode_details),
                     inputs,
                     outputs: Vec::new(),
                     input_operations,
@@ -304,8 +303,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -322,8 +321,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -340,8 +339,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -361,8 +360,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&denominator.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -382,8 +381,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&denominator.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&denominator.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -404,8 +403,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&modulus.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -425,8 +424,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&modulus.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&modulus.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -448,8 +447,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -470,8 +469,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -488,8 +487,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&exponent.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&exponent.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -592,8 +591,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -610,8 +609,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -628,8 +627,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -645,7 +644,7 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) {
+                if (0x5f..=0x7f).contains(&a.operation.opcode) {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
 
@@ -678,8 +677,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -698,8 +697,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -722,8 +721,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode.code) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode.code)
+                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
+                    (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -1133,7 +1132,6 @@ impl VM {
                     return Ok(Instruction {
                         instruction: last_instruction,
                         opcode,
-                        opcode_details: Some(opcode_details),
                         inputs,
                         outputs: Vec::new(),
                         input_operations,
@@ -1166,7 +1164,6 @@ impl VM {
                         return Ok(Instruction {
                             instruction: last_instruction,
                             opcode,
-                            opcode_details: Some(opcode_details),
                             inputs,
                             outputs: Vec::new(),
                             input_operations,
@@ -1400,7 +1397,7 @@ impl VM {
         }
 
         // get outputs
-        let output_frames = self.stack.peek_n(opcode_details.outputs as usize);
+        let output_frames = self.stack.peek_n(opcode_info.outputs() as usize);
         let output_operations =
             output_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
         let outputs = output_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
@@ -1409,7 +1406,7 @@ impl VM {
         #[cfg(feature = "step-tracing")]
         trace!(
             pc = self.instruction - 1,
-            opcode = opcode_details.name,
+            opcode = opcode_info.name(),
             outputs = ?outputs
                 .iter()
                 .map(|x| format!("{:#x}", x))
@@ -1432,7 +1429,6 @@ impl VM {
         Ok(Instruction {
             instruction: last_instruction,
             opcode,
-            opcode_details: Some(opcode_details),
             inputs,
             outputs,
             input_operations,

@@ -1,7 +1,9 @@
-use eyre::eyre;
-use heimdall_vm::core::{
-    opcodes::{WrappedInput, WrappedOpcode},
-    vm::State,
+use heimdall_vm::{
+    core::{
+        opcodes::{OpCodeInfo, JUMPI},
+        vm::State,
+    },
+    w_callvalue, w_iszero,
 };
 use tracing::debug;
 
@@ -27,12 +29,7 @@ pub fn modifier_heuristic(
     state: &State,
     _: &mut AnalyzerState,
 ) -> Result<(), Error> {
-    let opcode_name = state
-        .last_instruction
-        .opcode_details
-        .as_ref()
-        .ok_or(Error::Eyre(eyre!("opcode_details is None")))?
-        .name;
+    let opcode_name = OpCodeInfo::from(state.last_instruction.opcode).name();
 
     // if any instruction is non-pure, the function is non-pure
     if function.pure && NON_PURE_OPCODES.contains(&state.last_instruction.opcode) {
@@ -54,15 +51,9 @@ pub fn modifier_heuristic(
 
     // if the instruction is a JUMPI with non-zero CALLVALUE requirement, the function is
     // non-payable exactly: ISZERO(CALLVALUE())
-    // TODO: in the future, i want a way to abstract this to a more general form. maybe with
-    // macros(?). i.e. `iszero!(callvalue!())`
     if function.payable &&
-        state.last_instruction.opcode == 0x57 &&
-        state.last_instruction.input_operations[1] ==
-            WrappedOpcode::new(
-                0x15,
-                vec![WrappedInput::Opcode(WrappedOpcode::new(0x34, vec![]))],
-            )
+        state.last_instruction.opcode == JUMPI &&
+        state.last_instruction.input_operations[1] == w_iszero!(w_callvalue!())
     {
         debug!(
             "conditional at instruction {} indicates a non-payable function",
