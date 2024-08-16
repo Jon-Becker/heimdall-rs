@@ -7,7 +7,10 @@ use heimdall_common::{
     utils::strings::{encode_hex, find_balanced_encapsulator},
 };
 
-use super::{opcodes::WrappedInput, vm::Instruction};
+use super::{
+    opcodes::{WrappedInput, AND, CALLDATACOPY, CALLDATALOAD, OR},
+    vm::Instruction,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Padding {
@@ -97,11 +100,11 @@ pub fn convert_bitmask(instruction: &Instruction) -> (usize, Vec<String>) {
         match input {
             WrappedInput::Raw(_) => continue,
             WrappedInput::Opcode(opcode) => {
-                if !(opcode.opcode.name == "CALLDATALOAD" || opcode.opcode.name == "CALLDATACOPY") {
-                    if mask.opcode.name == "AND" {
+                if !(opcode.opcode == CALLDATALOAD || opcode.opcode == CALLDATACOPY) {
+                    if mask.opcode == AND {
                         type_byte_size =
                             encode_hex(&instruction.inputs[i].abi_encode()).matches("ff").count();
-                    } else if mask.opcode.name == "OR" {
+                    } else if mask.opcode == OR {
                         type_byte_size =
                             encode_hex(&instruction.inputs[i].abi_encode()).matches("00").count();
                     }

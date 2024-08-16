@@ -2170,6 +2170,7 @@ dependencies = [
  "indicatif",
  "lazy_static",
  "memory-stats",
+ "paste",
  "rand",
  "reqwest 0.11.27",
  "serde",

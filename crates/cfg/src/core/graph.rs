@@ -1,7 +1,10 @@
 use alloy::primitives::U256;
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::encode_hex_reduced;
-use heimdall_vm::ext::exec::VMTrace;
+use heimdall_vm::{
+    core::opcodes::{OpCodeInfo, JUMPDEST},
+    ext::exec::VMTrace,
+};
 use petgraph::{matrix_graph::NodeIndex, Graph};
 
 /// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
@@ -18,12 +21,7 @@ pub fn build_cfg(
 
     // add the current operations to the cfg
     for operation in &vm_trace.operations {
-        let opcode_name = operation
-            .last_instruction
-            .opcode_details
-            .as_ref()
-            .ok_or_eyre("failed to get opcode details for instruction")?
-            .name;
+        let opcode_name = OpCodeInfo::from(operation.last_instruction.opcode).name();
 
         let assembly = format!(
             "{} {} {}",
@@ -63,11 +61,8 @@ pub fn build_cfg(
                 .first()
                 .ok_or_eyre("failed to get first operation")?
                 .last_instruction
-                .opcode_details
-                .as_ref()
-                .ok_or_eyre("failed to get opcode details")?
-                .name ==
-                "JUMPDEST",
+                .opcode ==
+                JUMPDEST,
         )?;
     }
 
