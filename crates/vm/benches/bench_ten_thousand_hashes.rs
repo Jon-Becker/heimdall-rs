@@ -4,10 +4,10 @@ use heimdall_common::utils::strings::decode_hex;
 use heimdall_vm::core::vm::VM;
 use tokio::runtime::Runtime;
 
-fn test_fib(c: &mut Criterion) {
+fn test_ten_thousand_hashes(c: &mut Criterion) {
     let mut group = c.benchmark_group("heimdall_vm");
 
-    group.sample_size(500);
+    group.sample_size(100);
     group.bench_function(BenchmarkId::from_parameter("ten_thousand_hashes"), |b| {
         b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
             // build the evm
@@ -33,5 +33,5 @@ fn test_fib(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, test_fib);
+criterion_group!(benches, test_ten_thousand_hashes);
 criterion_main!(benches);
