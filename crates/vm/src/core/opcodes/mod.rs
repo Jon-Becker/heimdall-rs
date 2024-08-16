@@ -1,3 +1,5 @@
+//! Mostly adapted from https://github.com/bluealloy/revm
+
 mod wrapped;
 use paste::paste;
 pub use wrapped::*;
