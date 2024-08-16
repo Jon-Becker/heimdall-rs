@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::{error::Error, interfaces::DisassemblerArgs};
 use eyre::eyre;
 use heimdall_common::utils::strings::encode_hex;
-use heimdall_vm::core::opcodes::OpCodeInfo;
+use heimdall_vm::core::opcodes::opcode_name;
 use tracing::{debug, info};
 
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
@@ -45,7 +45,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
                 } else {
                     format!("{:06x}", program_counter)
                 },
-                OpCodeInfo::from(opcode).name(),
+                opcode_name(opcode),
                 pushed_bytes
             )
             .as_str(),

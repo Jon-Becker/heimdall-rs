@@ -4,7 +4,7 @@ use alloy::primitives::U256;
 use eyre::eyre;
 use heimdall_common::utils::strings::find_balanced_encapsulator;
 use heimdall_vm::core::{
-    opcodes::{OpCodeInfo, CALLDATALOAD, ISZERO},
+    opcodes::{opcode_name, CALLDATALOAD, ISZERO},
     types::{byte_size_to_type, convert_bitmask},
     vm::State,
 };
@@ -72,7 +72,7 @@ pub fn argument_heuristic(
                     debug!(
                         "instruction {} ({}) indicates argument {} is masked to {} bytes",
                         state.last_instruction.instruction,
-                        OpCodeInfo::from(state.last_instruction.opcode).name(),
+                        opcode_name(state.last_instruction.opcode),
                         arg_index,
                         mask_size_bytes
                     );
@@ -216,7 +216,7 @@ pub fn argument_heuristic(
                 debug!(
                     "instruction {} ({}) indicates argument {} may be a numeric type",
                     state.last_instruction.instruction,
-                    OpCodeInfo::from(state.last_instruction.opcode).name(),
+                    opcode_name(state.last_instruction.opcode),
                     arg_index
                 );
 
@@ -239,7 +239,7 @@ pub fn argument_heuristic(
                 debug!(
                     "instruction {} ({}) indicates argument {} may be a bytes type",
                     state.last_instruction.instruction,
-                    OpCodeInfo::from(state.last_instruction.opcode).name(),
+                    opcode_name(state.last_instruction.opcode),
                     arg_index
                 );
 
@@ -262,7 +262,7 @@ pub fn argument_heuristic(
                     debug!(
                         "instruction {} ({}) indicates argument {} may be a boolean",
                         state.last_instruction.instruction,
-                        OpCodeInfo::from(state.last_instruction.opcode).name(),
+                        opcode_name(state.last_instruction.opcode),
                         arg_index
                     );
 

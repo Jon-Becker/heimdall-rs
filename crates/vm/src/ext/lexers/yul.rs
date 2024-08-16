@@ -1,6 +1,6 @@
 use heimdall_common::utils::strings::encode_hex_reduced;
 
-use crate::core::opcodes::{OpCodeInfo, WrappedInput, WrappedOpcode, PUSH0};
+use crate::core::opcodes::{opcode_name, WrappedInput, WrappedOpcode, PUSH0};
 
 impl WrappedOpcode {
     /// Returns a WrappedOpcode's yul representation.
@@ -12,7 +12,7 @@ impl WrappedOpcode {
         } else {
             format!(
                 "{}({})",
-                OpCodeInfo::from(self.opcode).name().to_lowercase(),
+                opcode_name(self.opcode).to_lowercase(),
                 self.inputs.iter().map(|input| input._yulify()).collect::<Vec<String>>().join(", ")
             )
         }
