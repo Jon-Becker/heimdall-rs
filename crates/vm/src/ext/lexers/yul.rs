@@ -31,6 +31,10 @@ impl WrappedInput {
             WrappedInput::Opcode(opcode) => {
                 solidified_wrapped_input.push_str(&opcode.yulify());
             }
+            WrappedInput::Precompile(precompile) => {
+                // TODO: implement ToSolidity for Precompile
+                solidified_wrapped_input.push_str(&precompile.to_string());
+            }
         }
 
         solidified_wrapped_input

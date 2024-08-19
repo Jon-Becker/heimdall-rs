@@ -98,7 +98,6 @@ pub fn convert_bitmask(instruction: &Instruction) -> (usize, Vec<String>) {
     // determine which input contains the bitmask
     for (i, input) in mask.inputs.iter().enumerate() {
         match input {
-            WrappedInput::Raw(_) => continue,
             WrappedInput::Opcode(opcode) => {
                 if !(opcode.opcode == CALLDATALOAD || opcode.opcode == CALLDATACOPY) {
                     if mask.opcode == AND {
@@ -110,6 +109,7 @@ pub fn convert_bitmask(instruction: &Instruction) -> (usize, Vec<String>) {
                     }
                 }
             }
+            _ => continue,
         };
     }
 
@@ -189,8 +189,8 @@ pub fn get_padding(bytes: &[u8]) -> Padding {
     // we can avoid doing a full check if any of the following are true:
     // there are no null bytes OR
     // neither first nor last byte is a null byte, it is not padded
-    if null_byte_indices.is_empty() ||
-        null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
+    if null_byte_indices.is_empty()
+        || null_byte_indices[0] != 0 && null_byte_indices[null_byte_indices.len() - 1] != size - 1
     {
         return Padding::None;
     }

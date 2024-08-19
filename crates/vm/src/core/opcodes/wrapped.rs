@@ -1,6 +1,6 @@
 use alloy::primitives::U256;
 
-use crate::core::opcodes::OpCodeInfo;
+use crate::core::opcodes::{OpCodeInfo, PrecompileInfo};
 
 /// A WrappedInput can contain either a raw U256 value or a WrappedOpcode
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -9,6 +9,8 @@ pub enum WrappedInput {
     Raw(U256),
     /// An opcode input
     Opcode(WrappedOpcode),
+    /// A precompile input
+    Precompile(WrappedPrecompile),
 }
 
 /// A WrappedOpcode is an Opcode with its inputs wrapped in a WrappedInput
@@ -36,6 +38,31 @@ impl std::fmt::Display for WrappedOpcode {
     }
 }
 
+/// A WrappedPrecompile is a Precompile with its inputs wrapped in a WrappedInput
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct WrappedPrecompile {
+    pub precompile: u8,
+    pub inputs: Vec<WrappedInput>,
+}
+
+impl WrappedPrecompile {
+    /// Returns the maximum recursion depth of its inputs
+    pub fn depth(&self) -> u32 {
+        self.inputs.iter().map(|x| x.depth()).max().unwrap_or(0) + 1
+    }
+}
+
+impl std::fmt::Display for WrappedPrecompile {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}({})",
+            PrecompileInfo::from(self.precompile).name(),
+            self.inputs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")
+        )
+    }
+}
+
 impl WrappedInput {
     /// Returns the depth of the input \
     ///
@@ -44,16 +71,14 @@ impl WrappedInput {
         match self {
             WrappedInput::Raw(_) => 0,
             WrappedInput::Opcode(opcode) => opcode.depth(),
+            WrappedInput::Precompile(precompile) => precompile.depth(),
         }
     }
 }
 
 impl std::fmt::Display for WrappedInput {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            WrappedInput::Raw(u256) => write!(f, "{u256}"),
-            WrappedInput::Opcode(opcode) => write!(f, "{opcode}"),
-        }
+        write!(f, "{self}")
     }
 }
 

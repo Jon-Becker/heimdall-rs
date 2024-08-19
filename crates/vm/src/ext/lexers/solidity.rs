@@ -219,8 +219,8 @@ impl WrappedOpcode {
                                 .push_str(format!("arg{}", (slot - 4) / 32).as_str());
                         }
                         Err(_) => {
-                            if solidified_slot.contains("0x04 + ") ||
-                                solidified_slot.contains("+ 0x04")
+                            if solidified_slot.contains("0x04 + ")
+                                || solidified_slot.contains("+ 0x04")
                             {
                                 solidified_wrapped_opcode.push_str(
                                     solidified_slot
@@ -416,6 +416,10 @@ impl WrappedInput {
                 } else {
                     solidified_wrapped_input.push_str(solidified_opcode.as_str());
                 }
+            }
+            WrappedInput::Precompile(precompile) => {
+                // TODO: implement ToSolidity for Precompile
+                solidified_wrapped_input.push_str(&precompile.to_string());
             }
         }
 

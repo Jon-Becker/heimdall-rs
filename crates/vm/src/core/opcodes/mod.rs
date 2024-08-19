@@ -1,10 +1,12 @@
 //! Mostly adapted from https://github.com/bluealloy/revm
 
+mod precompile;
 mod wrapped;
 use paste::paste;
+pub use precompile::*;
 pub use wrapped::*;
 
-/// Information about opcode, such as name, and stack inputs and outputs.
+/// Information about an opcode, such as name, and stack inputs and outputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OpCodeInfo {
     /// Name
