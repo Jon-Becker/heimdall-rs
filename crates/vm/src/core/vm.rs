@@ -712,7 +712,7 @@ impl VM {
                 let b = self.stack.pop()?;
 
                 // convert a to usize
-                let usize_a: usize = a.value.try_into().unwrap_or(usize::MAX);
+                let usize_a: usize = a.value.try_into()?;
 
                 let mut result = I256::ZERO;
                 if !b.value.is_zero() {
@@ -737,8 +737,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(32 * 32);
-                let size: usize = size.try_into().unwrap_or(32 * 32);
+                let offset: usize = offset.try_into()?;
+                let size: usize = size.try_into()?;
 
                 let data = self.memory.read(offset, size);
                 let result = keccak256(data);
@@ -802,7 +802,7 @@ impl VM {
                 let i = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let i: usize = i.try_into().unwrap_or(usize::MAX);
+                let i: usize = i.try_into()?;
 
                 let result = if i + 32 > self.calldata.len() {
                     let mut value = [0u8; 32];
@@ -834,9 +834,9 @@ impl VM {
 
                 // Safely convert U256 to usize
                 // Note: clamping to 8 words here, since we dont actually use the return data
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(8 * 32);
-                let offset: usize = offset.try_into().unwrap_or(8 * 32);
-                let size: usize = size.try_into().unwrap_or(8 * 32);
+                let dest_offset: usize = dest_offset.try_into()?;
+                let offset: usize = offset.try_into()?;
+                let size: usize = size.try_into()?;
 
                 // clamp values to calldata length
                 let end_offset_clamped = (offset + size).min(self.calldata.len());
@@ -879,9 +879,9 @@ impl VM {
 
                 // Safely convert U256 to usize
                 // Note: clamping to 8 words here, since we dont actually use the return data
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(8 * 32);
-                let offset: usize = offset.try_into().unwrap_or(8 * 32);
-                let size: usize = size.try_into().unwrap_or(8 * 32);
+                let dest_offset: usize = dest_offset.try_into()?;
+                let offset: usize = offset.try_into()?;
+                let size: usize = size.try_into()?;
 
                 let value_offset_safe = (offset + size).min(self.bytecode.len());
                 let mut value =
@@ -935,8 +935,8 @@ impl VM {
 
                 // Safely convert U256 to usize
                 // Note: clamping to 8 words here, since we dont actually use the return data
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(32 * 8);
-                let size: usize = size.try_into().unwrap_or(32 * 8);
+                let dest_offset: usize = dest_offset.try_into()?;
+                let size: usize = size.try_into()?;
 
                 let mut value = Vec::with_capacity(size);
                 value.fill(0xff);
@@ -975,8 +975,8 @@ impl VM {
 
                 // Safely convert U256 to usize
                 // Note: clamping to 8 words here, since we dont actually use the return data
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(32 * 8);
-                let size: usize = size.try_into().unwrap_or(32 * 8);
+                let dest_offset: usize = dest_offset.try_into()?;
+                let size: usize = size.try_into()?;
 
                 let mut value = Vec::with_capacity(size);
                 value.fill(0xff);
@@ -1037,7 +1037,7 @@ impl VM {
             // MLOAD
             0x51 => {
                 let i = self.stack.pop()?.value;
-                let i: usize = i.try_into().unwrap_or(32 * 32);
+                let i: usize = i.try_into()?;
 
                 let result = U256::from_be_slice(self.memory.read(i, 32).as_slice());
 
@@ -1054,7 +1054,7 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(32 * 32);
+                let offset: usize = offset.try_into()?;
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, 32);
@@ -1075,7 +1075,7 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(64 * 32);
+                let offset: usize = offset.try_into()?;
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, 1);
@@ -1118,7 +1118,7 @@ impl VM {
                 let pc = self.stack.pop()?.value;
 
                 // Safely convert U256 to u128
-                let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
+                let pc: u128 = pc.try_into()?;
 
                 // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
                 if (pc <=
@@ -1148,7 +1148,7 @@ impl VM {
                 let condition = self.stack.pop()?.value;
 
                 // Safely convert U256 to u128
-                let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
+                let pc: u128 = pc.try_into()?;
 
                 if !condition.eq(&U256::from(0u8)) {
                     // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
@@ -1199,9 +1199,9 @@ impl VM {
 
                 // Safely convert U256 to usize
                 // Note: clamping to 8 words here, since we dont actually use the return data
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(32 * 32);
-                let offset: usize = offset.try_into().unwrap_or(32 * 32);
-                let size: usize = size.try_into().unwrap_or(32 * 32);
+                let dest_offset: usize = dest_offset.try_into()?;
+                let offset: usize = offset.try_into()?;
+                let size: usize = size.try_into()?;
                 let value_offset_safe = (offset + size)
                     .min(self.memory.size().try_into().expect("failed to convert u128 to usize"));
 
@@ -1293,8 +1293,8 @@ impl VM {
                     self.stack.pop_n(topic_count as usize).iter().map(|x| x.value).collect();
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(32 * 32);
-                let size: usize = size.try_into().unwrap_or(32 * 32);
+                let offset: usize = offset.try_into()?;
+                let size: usize = size.try_into()?;
 
                 let data = self.memory.read(offset, size);
 
@@ -1345,8 +1345,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(32 * 32);
-                let size: usize = size.try_into().unwrap_or(32 * 32);
+                let offset: usize = offset.try_into()?;
+                let size: usize = size.try_into()?;
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, size);
@@ -1384,8 +1384,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(32 * 32);
-                let size: usize = size.try_into().unwrap_or(32 * 32);
+                let offset: usize = offset.try_into()?;
+                let size: usize = size.try_into()?;
 
                 self.exit(1, self.memory.read(offset, size));
             }

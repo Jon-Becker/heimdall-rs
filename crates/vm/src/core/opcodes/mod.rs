@@ -75,7 +75,7 @@ impl OpCodeInfo {
 impl From<u8> for OpCodeInfo {
     #[inline]
     fn from(opcode: u8) -> Self {
-        OPCODE_INFO_JUMPTABLE[opcode as usize].unwrap_or(OpCodeInfo {
+        OPCODE_INFO_TABLE[opcode as usize].unwrap_or(OpCodeInfo {
             name: "unknown",
             inputs: 0,
             outputs: 0,
@@ -269,7 +269,7 @@ macro_rules! opcodes {
         )*
 
         /// Maps each opcode to its info.
-        pub const OPCODE_INFO_JUMPTABLE: [Option<OpCodeInfo>; 256] = {
+        pub const OPCODE_INFO_TABLE: [Option<OpCodeInfo>; 256] = {
             let mut map = [None; 256];
             let mut prev: u8 = 0;
             $(
@@ -287,7 +287,22 @@ macro_rules! opcodes {
             let _ = prev;
             map
         };
+
+        /// Maps each opcode to its name. (So we dont need to load [`OpCodeInfo`] to get the name)
+        pub const OPCODE_NAME_TABLE: [&'static str; 256] = {
+            let mut map = ["unknown"; 256];
+            $(
+                map[$val] = stringify!($name);
+            )*
+            map
+        };
     }
+}
+
+/// Get the name of an opcode.
+#[inline]
+pub fn opcode_name(opcode: u8) -> &'static str {
+    OPCODE_NAME_TABLE[opcode as usize]
 }
 
 opcodes! {

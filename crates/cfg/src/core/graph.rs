@@ -2,7 +2,7 @@ use alloy::primitives::U256;
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::{
-    core::opcodes::{OpCodeInfo, JUMPDEST},
+    core::opcodes::{opcode_name, JUMPDEST},
     ext::exec::VMTrace,
 };
 use petgraph::{matrix_graph::NodeIndex, Graph};
@@ -21,7 +21,7 @@ pub fn build_cfg(
 
     // add the current operations to the cfg
     for operation in &vm_trace.operations {
-        let opcode_name = OpCodeInfo::from(operation.last_instruction.opcode).name();
+        let opcode_name = opcode_name(operation.last_instruction.opcode);
 
         let assembly = format!(
             "{} {} {}",

@@ -1,6 +1,6 @@
 use alloy::primitives::U256;
 
-use crate::core::opcodes::OpCodeInfo;
+use crate::core::opcodes::opcode_name;
 
 /// A WrappedInput can contain either a raw U256 value or a WrappedOpcode
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -30,7 +30,7 @@ impl std::fmt::Display for WrappedOpcode {
         write!(
             f,
             "{}({})",
-            OpCodeInfo::from(self.opcode).name(),
+            opcode_name(self.opcode),
             self.inputs.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ")
         )
     }
