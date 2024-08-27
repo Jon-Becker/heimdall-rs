@@ -13,7 +13,7 @@ fn test_cfg(c: &mut Criterion) {
     ];
 
     for (name, contract) in contracts.into_iter() {
-        group.sample_size(100);
+        group.sample_size(500);
         group.bench_with_input(BenchmarkId::from_parameter(name), &contract, |b, c| {
             b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
                 let start = std::time::Instant::now();

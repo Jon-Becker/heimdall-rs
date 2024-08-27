@@ -7,9 +7,9 @@ use alloy::primitives::Address;
 use alloy_dyn_abi::{DynSolType, DynSolValue};
 use alloy_json_abi::JsonAbi;
 use eyre::eyre;
+use hashbrown::HashMap;
 use heimdall_common::{
     ether::{
-        bytecode::get_bytecode_from_target,
         compiler::detect_compiler,
         signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
         types::to_type,
@@ -21,10 +21,7 @@ use heimdall_vm::{
     core::vm::VM,
     ext::selectors::{find_function_selectors, resolve_selectors},
 };
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use crate::{
     core::{
@@ -94,7 +91,8 @@ pub async fn decompile_impl(args: DecompilerArgs, address: &str) -> Result<Decom
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
-    let mut contract_bytecode = get_bytecode_from_target(&args.target, &args.rpc_url)
+    let mut contract_bytecode = args
+        .get_bytecode()
         .await
         .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
@@ -109,7 +107,7 @@ pub async fn decompile_impl(args: DecompilerArgs, address: &str) -> Result<Decom
         let impl_addr = get_proxy(&args.rpc_url, address, &encode_hex(&contract_bytecode)).await;
         if let Some(impl_addr) = impl_addr {
             info!("resolved proxy {address} to {:#020x}", impl_addr);
-            contract_bytecode = get_bytecode_from_target(&format!("{:#020x}", impl_addr), &args.rpc_url)
+            contract_bytecode = heimdall_common::ether::bytecode::get_bytecode_from_target(&format!("{:#020x}", impl_addr), &args.rpc_url)
                 .await
                 .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
         }

@@ -4,11 +4,13 @@ use alloy::{
 };
 use eyre::eyre;
 use futures::future::try_join_all;
+use hashbrown::HashMap;
 use heimdall_common::{
     ether::rpc::{get_block_state_diff, latest_block_number},
     utils::time::{calculate_eta, format_eta},
 };
-use std::{collections::HashMap, sync::Arc, time::Instant};
+
+use std::{sync::Arc, time::Instant};
 use tokio::sync::{Mutex, Semaphore};
 use tracing::{debug, info};
 

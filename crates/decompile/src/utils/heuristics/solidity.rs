@@ -1,7 +1,7 @@
 use alloy::primitives::U256;
 use alloy_dyn_abi::{DynSolType, DynSolValue};
 use heimdall_common::utils::strings::encode_hex_reduced;
-use heimdall_vm::core::vm::State;
+use heimdall_vm::core::{opcodes::opcode_name, vm::State};
 
 use crate::{
     core::analyze::AnalyzerState,
@@ -188,12 +188,7 @@ pub fn solidity_heuristic(
                     function.logic.push(format!(
                         "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
                         address,
-                        instruction
-                            .opcode_details
-                            .as_ref()
-                            .expect("impossible")
-                            .name
-                            .to_lowercase(),
+                        opcode_name(instruction.opcode).to_lowercase(),
                         modifier,
                         calldata
                             .iter()

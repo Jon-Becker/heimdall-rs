@@ -1,9 +1,10 @@
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use alloy::primitives::U256;
 use eyre::eyre;
 use heimdall_common::utils::strings::find_balanced_encapsulator;
 use heimdall_vm::core::{
+    opcodes::{opcode_name, CALLDATALOAD, ISZERO},
     types::{byte_size_to_type, convert_bitmask},
     vm::State,
 };
@@ -57,7 +58,7 @@ pub fn argument_heuristic(
             // if this is a bitwise mask operation on CALLDATALOAD, we can use it to determine the
             // size (and consequently type) of the variable
             if let Some(calldataload_op) =
-                state.last_instruction.input_operations.iter().find(|op| op.opcode.code == 0x35)
+                state.last_instruction.input_operations.iter().find(|op| op.opcode == CALLDATALOAD)
             {
                 // this is a bitwise mask, we can use it to determine the size of the variable
                 let (mask_size_bytes, _potential_types) = convert_bitmask(&state.last_instruction);
@@ -71,7 +72,7 @@ pub fn argument_heuristic(
                     debug!(
                         "instruction {} ({}) indicates argument {} is masked to {} bytes",
                         state.last_instruction.instruction,
-                        state.last_instruction.opcode_details.as_ref().expect("impossible").name,
+                        opcode_name(state.last_instruction.opcode),
                         arg_index,
                         mask_size_bytes
                     );
@@ -120,14 +121,14 @@ pub fn argument_heuristic(
             }
 
             // if the any input op is ISZERO(x), this is a boolean return
-            if return_memory_operations.iter().any(|x| x.operation.opcode.name == "ISZERO") {
+            if return_memory_operations.iter().any(|x| x.operation.opcode == ISZERO) {
                 function.returns = Some(String::from("bool"));
             }
             // if the input op is any of the following, it is a uint256 return
             // this is because these push numeric values onto the stack
             else if return_memory_operations.iter().any(|x| {
                 [0x31, 0x34, 0x3a, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x58, 0x5a]
-                    .contains(&x.operation.opcode.code)
+                    .contains(&x.operation.opcode)
             }) {
                 function.returns = Some(String::from("uint256"));
             }
@@ -135,7 +136,7 @@ pub fn argument_heuristic(
             // this is because these push address values onto the stack
             else if return_memory_operations
                 .iter()
-                .any(|x| [0x30, 0x32, 0x33, 0x41].contains(&x.operation.opcode.code))
+                .any(|x| [0x30, 0x32, 0x33, 0x41].contains(&x.operation.opcode))
             {
                 function.returns = Some(String::from("address"));
             }
@@ -215,7 +216,7 @@ pub fn argument_heuristic(
                 debug!(
                     "instruction {} ({}) indicates argument {} may be a numeric type",
                     state.last_instruction.instruction,
-                    state.last_instruction.opcode_details.as_ref().expect("impossible").name,
+                    opcode_name(state.last_instruction.opcode),
                     arg_index
                 );
 
@@ -238,7 +239,7 @@ pub fn argument_heuristic(
                 debug!(
                     "instruction {} ({}) indicates argument {} may be a bytes type",
                     state.last_instruction.instruction,
-                    state.last_instruction.opcode_details.as_ref().expect("impossible").name,
+                    opcode_name(state.last_instruction.opcode),
                     arg_index
                 );
 
@@ -250,7 +251,7 @@ pub fn argument_heuristic(
         0x15 => {
             // if this is a boolean check on CALLDATALOAD, we can add boolean to the potential types
             if let Some(calldataload_op) =
-                state.last_instruction.input_operations.iter().find(|op| op.opcode.code == 0x35)
+                state.last_instruction.input_operations.iter().find(|op| op.opcode == CALLDATALOAD)
             {
                 // yulify the calldataload operation, and find the associated argument index
                 // this MUST exist, as we have already inserted it in the CALLDATALOAD heuristic
@@ -261,7 +262,7 @@ pub fn argument_heuristic(
                     debug!(
                         "instruction {} ({}) indicates argument {} may be a boolean",
                         state.last_instruction.instruction,
-                        state.last_instruction.opcode_details.clone().expect("impossible").name,
+                        opcode_name(state.last_instruction.opcode),
                         arg_index
                     );
 

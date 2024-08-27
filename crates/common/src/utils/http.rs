@@ -17,7 +17,7 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 /// // get_json_from_url(url, timeout).await;
 /// ```
 pub async fn get_json_from_url(url: &str, timeout: u64) -> Result<Option<Value>, reqwest::Error> {
-    _get_json_from_url(url, 0, 5, timeout).await
+    _get_json_from_url(url, 0, 2, timeout).await
 }
 
 #[async_recursion]

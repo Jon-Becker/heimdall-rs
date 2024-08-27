@@ -1,5 +1,7 @@
 use clap::Parser;
 use derive_builder::Builder;
+use eyre::Result;
+use heimdall_common::ether::calldata::get_calldata_from_target;
 use heimdall_config::parse_url_arg;
 
 #[derive(Debug, Clone, Parser, Builder)]
@@ -41,6 +43,12 @@ pub struct DecodeArgs {
     /// Whether to skip resolving selectors. Heimdall will attempt to guess types.
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
+}
+
+impl DecodeArgs {
+    pub async fn get_calldata(&self) -> Result<Vec<u8>> {
+        get_calldata_from_target(&self.target, &self.rpc_url).await
+    }
 }
 
 impl DecodeArgsBuilder {

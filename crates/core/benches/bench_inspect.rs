@@ -11,7 +11,7 @@ fn test_inspect(c: &mut Criterion) {
     ];
 
     for (name, txid) in txids.into_iter() {
-        group.sample_size(20);
+        group.sample_size(100);
         group.bench_with_input(BenchmarkId::from_parameter(name), &txid, |b, c| {
             b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
                 let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {

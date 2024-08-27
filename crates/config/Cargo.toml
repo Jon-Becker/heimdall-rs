@@ -10,6 +10,9 @@ repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
 
+[lib]
+bench = false
+
 [dependencies]
 heimdall-common = { workspace = true }
 clap = { workspace = true, features = ["derive"] }

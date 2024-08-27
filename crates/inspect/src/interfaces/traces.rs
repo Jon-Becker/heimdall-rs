@@ -1,7 +1,5 @@
-use std::{
-    borrow::BorrowMut,
-    collections::{HashSet, VecDeque},
-};
+use hashbrown::HashSet;
+use std::{borrow::BorrowMut, collections::VecDeque};
 
 use alloy::{
     dyn_abi::DynSolValue,
@@ -14,7 +12,7 @@ use alloy::{
 use async_recursion::async_recursion;
 use eyre::eyre;
 use heimdall_common::{
-    ether::signatures::ResolvedFunction,
+    ether::{signatures::ResolvedFunction, types::DynSolValueExt},
     utils::{
         env::get_env,
         hex::ToLowerHex,
@@ -22,6 +20,7 @@ use heimdall_common::{
     },
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tracing::trace;
 
 use async_convert::{async_trait, TryFrom};
@@ -78,9 +77,10 @@ pub struct DecodedCall {
     #[serde(rename = "resolvedFunction")]
     pub resolved_function: Option<ResolvedFunction>,
     /// Decoded inputs
-    #[serde(rename = "decodedInputs")]
     #[serde(skip)]
     pub decoded_inputs: Vec<DynSolValue>,
+    #[serde(rename = "decodedInputs")]
+    decoded_inputs_serializeable: Vec<Value>,
 }
 
 /// Decoded Response
@@ -105,9 +105,10 @@ pub struct DecodedCallResult {
     /// Output bytes
     pub output: Bytes,
     /// Decoded outputs
-    #[serde(rename = "decodedOutputs")]
     #[serde(skip)]
     pub decoded_outputs: Vec<DynSolValue>,
+    #[serde(rename = "decodedOutputs")]
+    decoded_outputs_serializeable: Vec<Value>,
 }
 
 #[async_trait]
@@ -228,6 +229,7 @@ impl TryFrom<CallAction> for DecodedCall {
             input: value.input,
             call_type: value.call_type,
             resolved_function,
+            decoded_inputs_serializeable: decoded_inputs.iter().map(|v| v.serialize()).collect(),
             decoded_inputs,
         })
     }
@@ -253,7 +255,12 @@ impl TryFrom<CallOutput> for DecodedCallResult {
         // get first result
         let decoded_outputs = result.decoded.decoded_inputs.unwrap_or_default();
 
-        Ok(Self { gas_used: value.gas_used, output: value.output, decoded_outputs })
+        Ok(Self {
+            gas_used: value.gas_used,
+            output: value.output,
+            decoded_outputs_serializeable: decoded_outputs.iter().map(|v| v.serialize()).collect(),
+            decoded_outputs,
+        })
     }
 }
 

@@ -19,7 +19,7 @@ pub fn sign_uint(unsigned: U256) -> I256 {
 /// ```
 pub fn decode_hex(mut s: &str) -> Result<Vec<u8>> {
     // normalize
-    s = s.trim_start_matches("0x");
+    s = s.trim_start_matches("0x").trim();
 
     if s.is_empty() {
         return Ok(vec![]);

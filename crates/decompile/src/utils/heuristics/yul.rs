@@ -1,5 +1,5 @@
 use heimdall_common::utils::strings::encode_hex_reduced;
-use heimdall_vm::core::vm::State;
+use heimdall_vm::core::{opcodes::opcode_name, vm::State};
 
 use crate::{
     core::analyze::AnalyzerState,
@@ -24,7 +24,7 @@ pub fn yul_heuristic(
             function.memory.insert(key, StorageFrame { operation });
             function.logic.push(format!(
                 "{}({}, {})",
-                instruction.opcode_details.as_ref().expect("impossible").name.to_lowercase(),
+                opcode_name(instruction.opcode).to_lowercase(),
                 encode_hex_reduced(key),
                 instruction.input_operations[1].yulify()
             ));
@@ -80,7 +80,7 @@ pub fn yul_heuristic(
         0xff | 0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA4 => {
             function.logic.push(format!(
                 "{}({})",
-                instruction.opcode_details.as_ref().expect("impossible").name.to_lowercase(),
+                opcode_name(instruction.opcode).to_lowercase(),
                 instruction
                     .input_operations
                     .iter()

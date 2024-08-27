@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use alloy::primitives::{Selector, U256};
 use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType, DynSolValue};

@@ -1,4 +1,5 @@
-use std::{collections::HashMap, ops::Range};
+use hashbrown::HashMap;
+use std::ops::Range;
 
 use crate::core::opcodes::WrappedOpcode;
 
@@ -117,7 +118,8 @@ impl RangeMap {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, ops::Range};
+    use hashbrown::HashMap;
+    use std::ops::Range;
 
     use crate::{core::opcodes::WrappedOpcode, ext::range_map::RangeMap};
 

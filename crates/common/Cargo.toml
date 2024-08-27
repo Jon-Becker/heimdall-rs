@@ -10,6 +10,9 @@ repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
 
+[lib]
+bench = false
+
 [dependencies]
 async-openai = "0.10.0"
 clap = { workspace = true, features = ["derive"] }
@@ -38,3 +41,4 @@ alloy = { version = "0.1.3", features = ["full", "rpc-types-debug", "rpc-types-t
 bytes = "1.6.1"
 alloy-dyn-abi = "0.7.7"
 tokio-retry = "0.3.0"
+hashbrown = "0.14.5"

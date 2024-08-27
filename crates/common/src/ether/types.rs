@@ -1,8 +1,9 @@
-use alloy_dyn_abi::DynSolType;
+use alloy_dyn_abi::{DynSolType, DynSolValue};
 use alloy_json_abi::Param;
+use serde_json::{Map, Number, Value};
 use std::collections::VecDeque;
 
-use crate::utils::strings::find_balanced_encapsulator;
+use crate::utils::{hex::ToLowerHex, strings::find_balanced_encapsulator};
 use eyre::Result;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -249,6 +250,41 @@ pub fn to_components(param_type: &DynSolType) -> Vec<Param> {
             })
             .collect::<Vec<_>>(),
         _ => vec![],
+    }
+}
+
+/// an extension on DynSolValue which allows serialization to a string
+pub trait DynSolValueExt {
+    fn serialize(&self) -> Value;
+}
+
+impl DynSolValueExt for DynSolValue {
+    fn serialize(&self) -> Value {
+        match self {
+            DynSolValue::Address(addr) => Value::String(addr.to_lower_hex()),
+            DynSolValue::Bool(b) => Value::Bool(*b),
+            DynSolValue::String(s) => Value::String(s.to_owned()),
+            DynSolValue::Bytes(b) => {
+                Value::Array(b.iter().map(|b| Value::Number(Number::from(*b))).collect())
+            }
+            DynSolValue::Uint(u, _) => Value::String(u.to_lower_hex()),
+            DynSolValue::Int(i, _) => Value::String(i.to_lower_hex()),
+            DynSolValue::FixedBytes(b, _) => {
+                Value::Array(b.iter().map(|b| Value::Number(Number::from(*b))).collect())
+            }
+            DynSolValue::Array(arr) => Value::Array(arr.iter().map(|v| v.serialize()).collect()),
+            DynSolValue::FixedArray(arr) => {
+                Value::Array(arr.iter().map(|v| v.serialize()).collect())
+            }
+            DynSolValue::Tuple(t) => {
+                let mut map = Map::new();
+                for (i, v) in t.iter().enumerate() {
+                    map.insert(format!("component{}", i), v.serialize());
+                }
+                Value::Object(map)
+            }
+            _ => Value::Null,
+        }
     }
 }
 

@@ -1,18 +1,18 @@
 use heimdall_common::utils::strings::encode_hex_reduced;
 
-use crate::core::opcodes::{WrappedInput, WrappedOpcode};
+use crate::core::opcodes::{opcode_name, WrappedInput, WrappedOpcode, PUSH0};
 
 impl WrappedOpcode {
     /// Returns a WrappedOpcode's yul representation.
     pub fn yulify(&self) -> String {
-        if self.opcode.name == "PUSH0" {
+        if self.opcode == PUSH0 {
             "0".to_string()
-        } else if self.opcode.name.starts_with("PUSH") {
+        } else if (0x5f..=0x7f).contains(&self.opcode) {
             self.inputs[0]._yulify()
         } else {
             format!(
                 "{}({})",
-                self.opcode.name.to_lowercase(),
+                opcode_name(self.opcode).to_lowercase(),
                 self.inputs.iter().map(|input| input._yulify()).collect::<Vec<String>>().join(", ")
             )
         }
