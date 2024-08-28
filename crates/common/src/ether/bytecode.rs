@@ -7,14 +7,14 @@ use std::fs;
 
 /// Given a target, return bytecode of the target.
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>> {
-    // If the target is not an address, it could be bytecode or a file path.
-    if let Ok(bytecode) = decode_hex(target) {
-        return Ok(bytecode);
-    }
-
     // If the target is an address, fetch the bytecode from the RPC provider.
     if let Ok(address) = target.parse::<Address>() {
         return get_code(address, rpc_url).await;
+    }
+
+    // If the target is not an address, it could be bytecode or a file path.
+    if let Ok(bytecode) = decode_hex(target) {
+        return Ok(bytecode);
     }
 
     // Assuming the target is a file path.
