@@ -33,6 +33,15 @@ pub async fn dump(args: DumpArgs) -> Result<HashMap<FixedBytes<32>, FixedBytes<3
     let block_count = block_range.end() - block_range.start() + 1;
     debug!("dumping storage from block range: {:?}", block_range);
 
+    // a quick check to see if the rpc supports trace_ namespace
+    // TODO: dump support via `debug_traceBlockByNumber` w/ prestateTracer as another option
+    let _ = get_block_state_diff(
+        (*block_range.start()).try_into().expect("block number overflow"),
+        &args.rpc_url,
+    )
+    .await
+    .map_err(|_| eyre!("failed to `trace_replayBlockTransactions`. does your rpc support it?"))?;
+
     // create a semaphore with the correct number of permits
     let semaphore = Arc::new(Semaphore::new(args.threads));
     let handles = block_range.map(|block_number| {
