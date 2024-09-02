@@ -8,14 +8,15 @@
 
 ## Overview
 
-Heimdall is an advanced EVM smart contract toolkit specializing in bytecode analysis. Heimdall is written in Rust and is designed to be fast, modular, and more accurate than other existing tools.
+Heimdall is an advanced EVM smart contract toolkit specializing in bytecode analysis and extracting information from unverified contracts. Heimdall is written in Rust and is designed to be fast, modular, and more accurate than other existing tools.
 
 Currently, Heimdall supports the following operations:
  * EVM Bytecode Disassembly
  * EVM Smart-Contract Control Flow Graph Generation
  * EVM Smart-Contract Decompilation
  * Smart-Contract Storage Dumping
- * Transaction Calldata Decoding
+ * Raw Transaction Calldata Decoding
+ * Raw Transaction Trace Decoding
 
 ## Installation & Usage
 
@@ -47,10 +48,6 @@ _Having trouble? Check out the [Troubleshooting](https://jbecker.dev/r/heimdall-
 
 Documentation for all of heimdall-rs is available in the [wiki](https://jbecker.dev/r/heimdall-rs/wiki).
 
-## Examples
-
-Examples for heimdall-rs modules are available in the [wiki](https://jbecker.dev/r/heimdall-rs/wiki/examples).
-
 ## Contributing
 
 If you'd like to contribute to Heimdall or add a module, please open a pull-request with your changes, as well as detailed information on what is changed, added, or improved.
@@ -63,6 +60,15 @@ If you've found an issue or have a question, please open an issue [here](https:/
 
 ## Credits
 
-- Jonathan Becker \<<jonathan@jbecker.dev>>
+Heimdall is a research-based toolkit created and maintained by [Jonathan Becker](https://jbecker.dev). A full list of our 20+ contributors can be found in the sidebar.
 
-A list of all [contributors](https://jbecker.dev/r/heimdall-rs/wiki/contributors) can be found in the wiki.
+If interested in the research behind Heimdall, check out some of my [publications](https://jbecker.dev/research).
+
+## Academic Citations
+
+Heimdall has been cited in the following academic papers & theses:
+
+- [Extraction, indexing and analysis of Ethereum smart contracts data](https://webthesis.biblio.polito.it/28450/1/tesi.pdf) - Masters Thesis, Davide Aimar, Politecnico di Torino, 2023.
+- [From Bytecode to Safety - Decompiling Smart Contracts for Vulnerability Analysis](https://lnu.diva-portal.org/smash/get/diva2:1864948/FULLTEXT01.pdf) - Bachelors Thesis, Malek Darwish, Linnaeus University, 2024.
+
+If you have used or plan to use Heimdall in your research, please reach out to me via [email](mailto:jonathan@jbecker.dev) or [Twitter](https://x.com/BeckerrJon)! I'd love to hear about what you're using heimdall for :)
