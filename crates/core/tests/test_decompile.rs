@@ -153,6 +153,28 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn test_decompile_abi_arr() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        let result = decompile(DecompilerArgs {
+            target: String::from("0x4018693062eeaa805ac1b1948271abdd9125984f"),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+        })
+        .await
+        .expect("failed to decompile");
+    }
+
+    #[tokio::test]
     #[ignore]
     async fn heavy_integration_test() {
         let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
