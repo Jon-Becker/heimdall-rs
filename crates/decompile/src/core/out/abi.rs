@@ -1,3 +1,4 @@
+use alloy_dyn_abi::DynSolType;
 use hashbrown::HashMap;
 use std::time::Instant;
 
@@ -63,7 +64,9 @@ pub fn build_abi(
                     name: format!("arg{i}"),
                     internal_type: None,
                     ty: match f.resolved_function {
-                        Some(ref sig) => to_abi_string(&sig.inputs()[i]),
+                        Some(ref sig) => {
+                            to_abi_string(sig.inputs().get(i).unwrap_or(&DynSolType::Bytes))
+                        }
                         None => arg
                             .potential_types()
                             .first()
@@ -71,7 +74,9 @@ pub fn build_abi(
                             .to_string(),
                     },
                     components: match f.resolved_function {
-                        Some(ref sig) => to_components(&sig.inputs()[i]),
+                        Some(ref sig) => {
+                            to_components(sig.inputs().get(i).unwrap_or(&DynSolType::Bytes))
+                        }
                         None => vec![],
                     },
                 })

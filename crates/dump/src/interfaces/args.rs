@@ -27,11 +27,11 @@ pub struct DumpArgs {
     pub threads: usize,
 
     /// The block number to start dumping from.
-    #[clap(long, default_value = "0", hide_default_value = true)]
+    #[clap(long, short, default_value = "0", hide_default_value = true, alias = "start_block")]
     pub from_block: u128,
 
     /// The block number to stop dumping at.
-    #[clap(long)]
+    #[clap(long, short, alias = "end_block")]
     pub to_block: Option<u128>,
 
     /// The name for the output file
