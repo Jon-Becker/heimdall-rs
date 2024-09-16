@@ -68,6 +68,7 @@ If interested in the research behind Heimdall, check out some of my [publication
 
 Heimdall has been cited in the following academic papers & theses:
 
+- [Midas: Mining Profitable Exploits in On-Chain Smart Contracts via Feedback-Driven Fuzzing and Differential Analysis](https://doi.org/10.1145/3650212.3680321) - Research Article, Mingxi Ye, Xingwei Lin, Yuhong Nan, Jiajing Wu, and Zibin Zheng, ISSTA 2024.
 - [Extraction, indexing and analysis of Ethereum smart contracts data](https://webthesis.biblio.polito.it/28450/1/tesi.pdf) - Masters Thesis, Davide Aimar, Politecnico di Torino, 2023.
 - [From Bytecode to Safety - Decompiling Smart Contracts for Vulnerability Analysis](https://lnu.diva-portal.org/smash/get/diva2:1864948/FULLTEXT01.pdf) - Bachelors Thesis, Malek Darwish, Linnaeus University, 2024.
 
