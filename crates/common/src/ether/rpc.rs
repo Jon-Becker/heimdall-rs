@@ -172,6 +172,20 @@ pub mod tests {
     use crate::{ether::rpc::*, utils::hex::ToLowerHex};
 
     #[tokio::test]
+    async fn test_chain_id_56() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        let rpc_url = "/srv/bsc/geth.fast/geth.ipc";
+        let rpc_chain_id = chain_id(&rpc_url).await.expect("chain_id() returned an error!");
+
+        assert_eq!(rpc_chain_id, 56);
+    }
+
+
+    #[tokio::test]
     async fn test_chain_id() {
         let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
             println!("RPC_URL not set, skipping test");

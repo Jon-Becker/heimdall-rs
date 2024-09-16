@@ -24,6 +24,14 @@ pub fn match_parameters(
         );
         // skip checking if length of parameters list is less than the resolved functions inputs
         resolved_function.inputs.retain(|x| !x.is_empty());
+        // let mut confusing_bytes = false;
+        // for (_index, input) in resolved_function.inputs.iter().enumerate() {
+        //     if input.contains("[]") {
+        //         trace!("oh, confused bytes!");
+        //         confusing_bytes = true;
+        //     }
+        // }
+
         if resolved_function.inputs.len() < function.arguments.len() {
             continue;
         }

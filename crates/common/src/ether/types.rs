@@ -3,7 +3,7 @@ use alloy_json_abi::Param;
 use serde_json::{Map, Number, Value};
 use std::collections::VecDeque;
 
-use crate::utils::{hex::ToLowerHex, strings::find_balanced_encapsulator};
+use crate::utils::strings::find_balanced_encapsulator;
 use eyre::Result;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -261,14 +261,14 @@ pub trait DynSolValueExt {
 impl DynSolValueExt for DynSolValue {
     fn serialize(&self) -> Value {
         match self {
-            DynSolValue::Address(addr) => Value::String(addr.to_lower_hex()),
+            DynSolValue::Address(addr) => Value::String(addr.to_string()),
             DynSolValue::Bool(b) => Value::Bool(*b),
             DynSolValue::String(s) => Value::String(s.to_owned()),
             DynSolValue::Bytes(b) => {
                 Value::Array(b.iter().map(|b| Value::Number(Number::from(*b))).collect())
             }
-            DynSolValue::Uint(u, _) => Value::String(u.to_lower_hex()),
-            DynSolValue::Int(i, _) => Value::String(i.to_lower_hex()),
+            DynSolValue::Uint(u, _) => Value::String(u.to_string()),
+            DynSolValue::Int(i, _) => Value::String(i.to_string()),
             DynSolValue::FixedBytes(b, _) => {
                 Value::Array(b.iter().map(|b| Value::Number(Number::from(*b))).collect())
             }
