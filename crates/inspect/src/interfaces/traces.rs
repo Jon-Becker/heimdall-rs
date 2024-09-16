@@ -225,7 +225,7 @@ impl TryFrom<CallAction> for DecodedCall {
             from: value.from,
             to: value.to,
             value: value.value,
-            gas: value.gas,
+            gas: alloy::primitives::U64::from(value.gas),
             input: value.input,
             call_type: value.call_type,
             resolved_function,
@@ -256,7 +256,7 @@ impl TryFrom<CallOutput> for DecodedCallResult {
         let decoded_outputs = result.decoded.decoded_inputs.unwrap_or_default();
 
         Ok(Self {
-            gas_used: value.gas_used,
+            gas_used: alloy::primitives::U64::from(value.gas_used),
             output: value.output,
             decoded_outputs_serializeable: decoded_outputs.iter().map(|v| v.serialize()).collect(),
             decoded_outputs,
