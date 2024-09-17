@@ -156,8 +156,8 @@ impl Analyzer {
         }
 
         // check if the ending brackets are needed
-        if analyzer_state.jumped_conditional.is_some() &&
-            analyzer_state.conditional_stack.contains(
+        if analyzer_state.jumped_conditional.is_some()
+            && analyzer_state.conditional_stack.contains(
                 analyzer_state
                     .jumped_conditional
                     .as_ref()
@@ -166,8 +166,8 @@ impl Analyzer {
         {
             // remove the conditional
             for (i, conditional) in analyzer_state.conditional_stack.iter().enumerate() {
-                if conditional ==
-                    analyzer_state.jumped_conditional.as_ref().expect(
+                if conditional
+                    == analyzer_state.jumped_conditional.as_ref().expect(
                         "impossible case: should have short-circuited in previous conditional",
                     )
                 {
