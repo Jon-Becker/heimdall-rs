@@ -69,13 +69,11 @@ pub fn jump_stack_depth_less_than_max_stack_depth(
 /// If the stack contains more than 16 of the same item (with the same sources), it is considered a
 /// loop.
 pub fn stack_contains_too_many_of_the_same_item(stack: &Stack) -> bool {
-    if stack.size() > 16
-        && stack.stack.iter().any(|frame| {
-            let solidified_frame_source = frame.operation.solidify();
-            stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count()
-                >= 16
-        })
-    {
+    if stack.size() > 16 && stack.stack.iter().any(|frame| {
+        let solidified_frame_source = frame.operation.solidify();
+        stack.stack.iter().filter(|f| f.operation.solidify() == solidified_frame_source).count() >=
+            16
+    }) {
         trace!("jump matches loop-detection heuristic: 'stack_contains_too_many_of_the_same_item'",);
         return true;
     }
