@@ -107,12 +107,12 @@ impl RangeMap {
     }
 
     fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {
-        !(incoming.start <= incumbent.start &&
-            incoming.end < incumbent.end &&
-            incoming.end < incumbent.start ||
-            incoming.start > incumbent.start &&
-                incoming.end >= incumbent.end &&
-                incoming.start > incumbent.end)
+        !(incoming.start <= incumbent.start
+            && incoming.end < incumbent.end
+            && incoming.end < incumbent.start
+            || incoming.start > incumbent.start
+                && incoming.end >= incumbent.end
+                && incoming.start > incumbent.end)
     }
 }
 

@@ -93,46 +93,46 @@ impl Display for Version {
 impl Version {
     /// greater than
     pub fn gt(&self, other: &Version) -> bool {
-        self.major > other.major ||
-            (self.major == other.major && self.minor > other.minor) ||
-            (self.major == other.major && self.minor == other.minor && self.patch > other.patch)
+        self.major > other.major
+            || (self.major == other.major && self.minor > other.minor)
+            || (self.major == other.major && self.minor == other.minor && self.patch > other.patch)
     }
 
     /// greater than or equal to
     pub fn gte(&self, other: &Version) -> bool {
-        self.major > other.major ||
-            (self.major == other.major && self.minor > other.minor) ||
-            (self.major == other.major && self.minor == other.minor && self.patch >= other.patch)
+        self.major > other.major
+            || (self.major == other.major && self.minor > other.minor)
+            || (self.major == other.major && self.minor == other.minor && self.patch >= other.patch)
     }
 
     /// less than
     pub fn lt(&self, other: &Version) -> bool {
-        self.major < other.major ||
-            (self.major == other.major && self.minor < other.minor) ||
-            (self.major == other.major && self.minor == other.minor && self.patch < other.patch)
+        self.major < other.major
+            || (self.major == other.major && self.minor < other.minor)
+            || (self.major == other.major && self.minor == other.minor && self.patch < other.patch)
     }
 
     /// less than or equal to
     pub fn lte(&self, other: &Version) -> bool {
-        self.major < other.major ||
-            (self.major == other.major && self.minor < other.minor) ||
-            (self.major == other.major && self.minor == other.minor && self.patch <= other.patch)
+        self.major < other.major
+            || (self.major == other.major && self.minor < other.minor)
+            || (self.major == other.major && self.minor == other.minor && self.patch <= other.patch)
     }
 
     #[allow(clippy::should_implement_trait)]
     pub fn eq(&self, other: &Version) -> bool {
-        self.major == other.major &&
-            self.minor == other.minor &&
-            self.patch == other.patch &&
-            self.channel == other.channel
+        self.major == other.major
+            && self.minor == other.minor
+            && self.patch == other.patch
+            && self.channel == other.channel
     }
 
     /// not equal to
     pub fn ne(&self, other: &Version) -> bool {
-        self.major != other.major ||
-            self.minor != other.minor ||
-            self.patch != other.patch ||
-            self.channel != other.channel
+        self.major != other.major
+            || self.minor != other.minor
+            || self.patch != other.patch
+            || self.channel != other.channel
     }
 
     /// if the version is a nightly version

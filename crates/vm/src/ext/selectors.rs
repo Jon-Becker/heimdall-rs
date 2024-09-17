@@ -113,10 +113,10 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
             let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
 
-            if jump_condition.contains(selector) &&
-                jump_condition.contains("msg.data[0]") &&
-                jump_condition.contains(" == ") &&
-                jump_taken == 1
+            if jump_condition.contains(selector)
+                && jump_condition.contains("msg.data[0]")
+                && jump_condition.contains(" == ")
+                && jump_taken == 1
             {
                 return call.last_instruction.inputs[0].try_into().unwrap_or(0);
             } else if jump_taken == 1 {
@@ -142,7 +142,8 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
 /// Resolve a list of selectors to their function signatures.
 pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
 where
-    T: ResolveSelector + Send + Clone + 'static, {
+    T: ResolveSelector + Send + Clone + 'static,
+{
     // short-circuit if there are no selectors
     if selectors.is_empty() {
         return HashMap::new();

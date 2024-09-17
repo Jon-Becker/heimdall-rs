@@ -130,8 +130,8 @@ impl PostprocessOrchestrator {
         // Note: this can't be done with a postprocessor because it needs all lines
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
             // check for RLP encoding. very naive check, but it works for now
-            if function.logic.iter().any(|line| line.contains("0x0100 *")) &&
-                function.logic.iter().any(|line| line.contains("0x01) &"))
+            if function.logic.iter().any(|line| line.contains("0x0100 *"))
+                && function.logic.iter().any(|line| line.contains("0x01) &"))
             {
                 // find any storage accesses
                 let joined = function.logic.join(" ");
