@@ -748,7 +748,7 @@ impl VM {
                 let gas_cost = 6 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.stack.push(U256::try_from(result)?, operation);
+                self.stack.push(U256::from_be_bytes(result.0), operation);
             }
 
             // ADDRESS

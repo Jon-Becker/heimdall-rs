@@ -246,6 +246,7 @@ impl TraceFactory {
         self.add("call", parent_index, instruction, vec![title, returns])
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_call_with_extra(
         &mut self,
         parent_index: u32,

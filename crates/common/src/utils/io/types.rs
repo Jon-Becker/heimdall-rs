@@ -11,7 +11,7 @@ pub fn display(inputs: Vec<DynSolValue>, prefix: &str) -> Vec<String> {
     for input in inputs {
         match input {
             DynSolValue::Address(val) => {
-                output.push(format!("{prefix}{} {}", "address".blue(), val.to_string()))
+                output.push(format!("{prefix}{} {}", "address".blue(), val))
             }
             DynSolValue::Int(val, _) => {
                 output.push(format!("{prefix}{} {}", "int    ".blue(), val))
@@ -28,7 +28,7 @@ pub fn display(inputs: Vec<DynSolValue>, prefix: &str) -> Vec<String> {
                 }
             }
             DynSolValue::FixedBytes(val, _) => {
-                output.push(format!("{prefix}{} {}", "bytes  ".blue(), val.to_string()));
+                output.push(format!("{prefix}{} {}", "bytes  ".blue(), val));
             }
             DynSolValue::Bytes(val) => {
                 // chunk val into 32-byte chunks
@@ -85,7 +85,7 @@ pub trait Parameterize {
 impl Parameterize for DynSolValue {
     fn parameterize(&self) -> String {
         match self {
-            DynSolValue::Address(val) => format!("address: {}", val.to_string()),
+            DynSolValue::Address(val) => format!("address: {}", val),
             DynSolValue::Int(val, _) => format!("int: {}", val),
             DynSolValue::Uint(val, _) => format!("uint: {}", val),
             DynSolValue::String(val) => format!("string: {}", val),
