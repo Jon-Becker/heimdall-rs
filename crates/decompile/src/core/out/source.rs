@@ -67,9 +67,9 @@ pub fn build_source(
     functions
         .iter()
         .filter(|f| {
-            !f.fallback &&
-                (analyzer_type == AnalyzerType::Yul ||
-                    (f.maybe_getter_for.is_none() && !f.is_constant()))
+            !f.fallback
+                && (analyzer_type == AnalyzerType::Yul
+                    || (f.maybe_getter_for.is_none() && !f.is_constant()))
         })
         .for_each(|f| {
             let mut function_source = Vec::new();

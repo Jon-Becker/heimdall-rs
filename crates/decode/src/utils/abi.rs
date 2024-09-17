@@ -185,8 +185,8 @@ fn try_decode_dynamic_parameter_bytes(
     // (5) we've covered all words from `data_start_word_offset` to `data_end_word_offset`,
     // so add them to `word_coverages`.
     coverages.extend(
-        (word_offset.try_into().unwrap_or(usize::MAX)..
-            data_end_word_offset.try_into().unwrap_or(usize::MAX))
+        (word_offset.try_into().unwrap_or(usize::MAX)
+            ..data_end_word_offset.try_into().unwrap_or(usize::MAX))
             .collect::<Vec<usize>>(),
     );
 
@@ -195,6 +195,7 @@ fn try_decode_dynamic_parameter_bytes(
 }
 
 /// Handle ABI-encoded bytes
+#[allow(clippy::too_many_arguments)]
 fn try_decode_dynamic_parameter_array(
     parameter_index: usize,
     calldata_words: &[Vec<u8>],
@@ -210,8 +211,8 @@ fn try_decode_dynamic_parameter_array(
 
     // (1) join all words from `data_start_word_offset` to `data_end_word_offset`. This is where
     // the encoded data may be stored.
-    let data_words = &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..
-        data_end_word_offset.try_into().unwrap_or(usize::MAX)];
+    let data_words = &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)
+        ..data_end_word_offset.try_into().unwrap_or(usize::MAX)];
     trace!("potential array items: {:#?}", data_words);
 
     // (2) first, check if this is a `string` type, since some string encodings may appear to be
@@ -233,8 +234,8 @@ fn try_decode_dynamic_parameter_array(
     // `word_coverages` with the indices of all words from `data_start_word_offset` to
     // `data_end_word_offset`, since we've now covered all words in the ABI-encoded type.
     coverages.extend(
-        (word_offset.try_into().unwrap_or(usize::MAX)..
-            data_end_word_offset.try_into().unwrap_or(usize::MAX))
+        (word_offset.try_into().unwrap_or(usize::MAX)
+            ..data_end_word_offset.try_into().unwrap_or(usize::MAX))
             .collect::<Vec<usize>>(),
     );
 
@@ -259,6 +260,7 @@ fn try_decode_dynamic_parameter_array(
 }
 
 /// Determine if the given word is an abi-encoded string.
+#[allow(clippy::too_many_arguments)]
 fn try_decode_dynamic_parameter_string(
     data_words: &[Vec<u8>],
     parameter_index: usize,
@@ -294,8 +296,8 @@ fn try_decode_dynamic_parameter_string(
     trace!(
         "with data: {:#?}",
         encode_hex(
-            &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..
-                data_end_word_offset.try_into().unwrap_or(usize::MAX)]
+            &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)
+                ..data_end_word_offset.try_into().unwrap_or(usize::MAX)]
                 .concat()
         )
     );
@@ -319,8 +321,8 @@ fn try_decode_dynamic_parameter_string(
     // (5) we've covered all words from `data_start_word_offset` to `data_end_word_offset`,
     // so add them to `word_coverages`.
     coverages.extend(
-        (word_offset.try_into().unwrap_or(usize::MAX)..
-            data_end_word_offset.try_into().unwrap_or(usize::MAX))
+        (word_offset.try_into().unwrap_or(usize::MAX)
+            ..data_end_word_offset.try_into().unwrap_or(usize::MAX))
             .collect::<Vec<usize>>(),
     );
 
