@@ -52,9 +52,9 @@ pub fn memory_postprocessor(
 
         // infer the type from args and vars in the expression
         for (var, var_type) in state.memory_type_map.iter() {
-            if line.contains(var)
-                && !state.memory_type_map.contains_key(&var_name)
-                && !var_type.is_empty()
+            if line.contains(var) &&
+                !state.memory_type_map.contains_key(&var_name) &&
+                !var_type.is_empty()
             {
                 *line = format!("{var_type} {line}");
                 state.memory_type_map.insert(var_name.to_string(), var_type.to_string());
@@ -78,8 +78,8 @@ pub fn memory_postprocessor(
             }
 
             // we can do some type inference here
-            if ["+", "-", "/", "*", "int", ">=", "<="].iter().any(|op| line.contains(op))
-                || assignment[1].replace(';', "").parse::<i64>().is_ok()
+            if ["+", "-", "/", "*", "int", ">=", "<="].iter().any(|op| line.contains(op)) ||
+                assignment[1].replace(';', "").parse::<i64>().is_ok()
             {
                 *line = format!("uint256 {line}");
                 state.memory_type_map.insert(var_name.to_string(), "uint256".to_string());
