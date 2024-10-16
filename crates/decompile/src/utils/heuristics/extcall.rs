@@ -1,6 +1,9 @@
 use alloy::primitives::U256;
 use alloy_dyn_abi::{DynSolType, DynSolValue};
-use heimdall_common::utils::strings::encode_hex_reduced;
+use heimdall_common::utils::{
+    hex::ToLowerHex,
+    strings::{encode_hex, encode_hex_reduced},
+};
 use heimdall_vm::core::{opcodes::opcode_name, vm::State};
 
 use crate::{
@@ -21,7 +24,12 @@ pub fn extcall_heuristic(
             let gas = format!("gas: {}", instruction.input_operations[0].solidify());
             let address = instruction.input_operations[1].solidify();
             let value = format!("value: {}", instruction.input_operations[2].solidify());
-            let calldata = function.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
+            let memory = function.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
+            let extcalldata = memory
+                .iter()
+                .map(|x| x.value.to_lower_hex().trim_start_matches("0x").to_owned())
+                .collect::<Vec<String>>()
+                .join("");
 
             // build the modifier w/ gas and value
             let modifier = format!("{{ {}, {} }}", gas, value);
@@ -29,7 +37,7 @@ pub fn extcall_heuristic(
             // check if the external call is a precompiled contract
             match decode_precompile(
                 instruction.inputs[1],
-                &calldata,
+                &memory,
                 &instruction.input_operations[5],
             ) {
                 (true, precompile_logic) => {
@@ -38,13 +46,7 @@ pub fn extcall_heuristic(
                 _ => {
                     function.logic.push(format!(
                         "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
-                        address,
-                        modifier,
-                        calldata
-                            .iter()
-                            .map(|x| x.operation.solidify())
-                            .collect::<Vec<String>>()
-                            .join(", ")
+                        address, modifier, extcalldata
                     ));
                 }
             }
@@ -54,7 +56,12 @@ pub fn extcall_heuristic(
         0xfa | 0xf4 => {
             let gas = format!("gas: {}", instruction.input_operations[0].solidify());
             let address = instruction.input_operations[1].solidify();
-            let calldata = function.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
+            let memory = function.get_memory_range(instruction.inputs[2], instruction.inputs[3]);
+            let extcalldata = memory
+                .iter()
+                .map(|x| x.value.to_lower_hex().trim_start_matches("0x").to_owned())
+                .collect::<Vec<String>>()
+                .join("");
 
             // build the modifier w/ gas
             let modifier = format!("{{ {} }}", gas);
@@ -62,7 +69,7 @@ pub fn extcall_heuristic(
             // check if the external call is a precompiled contract
             match decode_precompile(
                 instruction.inputs[1],
-                &calldata,
+                &memory,
                 &instruction.input_operations[4],
             ) {
                 (true, precompile_logic) => {
@@ -74,11 +81,7 @@ pub fn extcall_heuristic(
                         address,
                         opcode_name(instruction.opcode).to_lowercase(),
                         modifier,
-                        calldata
-                            .iter()
-                            .map(|x| x.operation.solidify())
-                            .collect::<Vec<String>>()
-                            .join(", ")
+                        extcalldata
                     ));
                 }
             }

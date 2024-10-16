@@ -68,10 +68,11 @@ pub fn solidity_heuristic(
         // MSTORE / MSTORE8
         0x52 | 0x53 => {
             let key = instruction.inputs[0];
+            let value = instruction.inputs[1];
             let operation = instruction.input_operations[1].to_owned();
 
             // add the mstore to the function's memory map
-            function.memory.insert(key, StorageFrame { operation });
+            function.memory.insert(key, StorageFrame { operation, value });
             function.logic.push(format!(
                 "memory[{}] = {};",
                 encode_hex_reduced(key),
@@ -95,10 +96,10 @@ pub fn solidity_heuristic(
 
             // perform a series of checks to determine if the condition
             // is added by the compiler and can be ignored
-            if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
-                VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
-                (conditional.replace('!', "") == "success") ||
-                (conditional == "!msg.value")
+            if (conditional.contains("msg.data.length") && conditional.contains("0x04"))
+                || VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false)
+                || (conditional.replace('!', "") == "success")
+                || (conditional == "!msg.value")
             {
                 return Ok(());
             }
