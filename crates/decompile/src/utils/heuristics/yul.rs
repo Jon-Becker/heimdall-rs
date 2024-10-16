@@ -18,10 +18,11 @@ pub fn yul_heuristic(
         // MSTORE / MSTORE8
         0x52 | 0x53 => {
             let key = instruction.inputs[0];
+            let value = instruction.inputs[1];
             let operation = instruction.input_operations[1].clone();
 
             // add the mstore to the function's memory map
-            function.memory.insert(key, StorageFrame { operation });
+            function.memory.insert(key, StorageFrame { operation, value });
             function.logic.push(format!(
                 "{}({}, {})",
                 opcode_name(instruction.opcode).to_lowercase(),

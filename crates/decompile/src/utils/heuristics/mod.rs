@@ -5,6 +5,7 @@ use crate::{core::analyze::AnalyzerState, interfaces::AnalyzedFunction, Error};
 // import heuristics
 mod arguments;
 mod events;
+mod extcall;
 mod modifiers;
 mod solidity;
 mod yul;
@@ -12,6 +13,7 @@ mod yul;
 // re-export heuristics
 pub use arguments::argument_heuristic;
 pub use events::event_heuristic;
+pub use extcall::extcall_heuristic;
 pub use modifiers::modifier_heuristic;
 pub use solidity::solidity_heuristic;
 pub use yul::yul_heuristic;
