@@ -6,8 +6,8 @@ use tracing::debug;
 use crate::{
     interfaces::AnalyzedFunction,
     utils::heuristics::{
-        argument_heuristic, event_heuristic, modifier_heuristic, solidity_heuristic, yul_heuristic,
-        Heuristic,
+        argument_heuristic, event_heuristic, extcall_heuristic, modifier_heuristic,
+        solidity_heuristic, yul_heuristic, Heuristic,
     },
     Error,
 };
@@ -85,6 +85,7 @@ impl Analyzer {
                 self.heuristics.push(Heuristic::new(solidity_heuristic));
                 self.heuristics.push(Heuristic::new(argument_heuristic));
                 self.heuristics.push(Heuristic::new(modifier_heuristic));
+                self.heuristics.push(Heuristic::new(extcall_heuristic));
             }
             AnalyzerType::Yul => {
                 self.heuristics.push(Heuristic::new(event_heuristic));
@@ -156,8 +157,8 @@ impl Analyzer {
         }
 
         // check if the ending brackets are needed
-        if analyzer_state.jumped_conditional.is_some()
-            && analyzer_state.conditional_stack.contains(
+        if analyzer_state.jumped_conditional.is_some() &&
+            analyzer_state.conditional_stack.contains(
                 analyzer_state
                     .jumped_conditional
                     .as_ref()
@@ -166,8 +167,8 @@ impl Analyzer {
         {
             // remove the conditional
             for (i, conditional) in analyzer_state.conditional_stack.iter().enumerate() {
-                if conditional
-                    == analyzer_state.jumped_conditional.as_ref().expect(
+                if conditional ==
+                    analyzer_state.jumped_conditional.as_ref().expect(
                         "impossible case: should have short-circuited in previous conditional",
                     )
                 {
