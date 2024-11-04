@@ -14,6 +14,7 @@ mod integration_tests {
             constructor: false,
             truncate_calldata: false,
             skip_resolving: false,
+            raw: false,
         };
         let _ = heimdall_decoder::decode(args).await;
     }
@@ -29,6 +30,7 @@ mod integration_tests {
             constructor: false,
             truncate_calldata: false,
             skip_resolving: false,
+            raw: false,
         };
         let _ = heimdall_decoder::decode(args).await;
     }
