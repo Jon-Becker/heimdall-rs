@@ -3,7 +3,7 @@ use eyre::eyre;
 use heimdall_common::utils::{hex::ToLowerHex, sync::blocking_await};
 use heimdall_vm::{
     core::{opcodes::opcode_name, vm::State},
-    w_gas,
+    w_gas, w_push0,
 };
 
 use crate::{
@@ -30,13 +30,14 @@ pub fn extcall_heuristic(
                 .collect::<Vec<String>>()
                 .join("");
 
+            let extcalldata_clone = extcalldata.clone();
             let decoded = blocking_await(move || {
                 let rt = tokio::runtime::Runtime::new().expect("failed to get runtime");
 
                 rt.block_on(async {
                     decode(
                         DecodeArgsBuilder::new()
-                            .target(extcalldata)
+                            .target(extcalldata_clone)
                             .raw(true)
                             .build()
                             .expect("Failed to build DecodeArgs"),
@@ -44,7 +45,7 @@ pub fn extcall_heuristic(
                     .await
                 })
             })
-            .map_err(|e| eyre!("Failed to decode extcalldata: {}", e))?;
+            .ok();
 
             // build modifiers
             // - if gas is just the default (GAS()), we don't need to include it
@@ -53,7 +54,7 @@ pub fn extcall_heuristic(
             if instruction.input_operations[0] != w_gas!() {
                 modifiers.push(format!("gas: {}", instruction.input_operations[0].solidify()));
             }
-            if instruction.inputs[2] != U256::ZERO {
+            if instruction.input_operations[2] != w_push0!() {
                 modifiers.push(format!("value: {}", instruction.input_operations[2].solidify()));
             }
             let modifier = if modifiers.is_empty() {
@@ -68,13 +69,20 @@ pub fn extcall_heuristic(
             {
                 function.logic.push(precompile_logic);
             } else {
-                function.logic.push(format!(
-                    "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
-                    address,
-                    modifier,
-                    decoded.decoded.name,
-                    opcode_name(instruction.opcode).to_lowercase(),
-                ));
+                if let Some(decoded) = decoded {
+                    function.logic.push(format!(
+                        "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
+                        address,
+                        modifier,
+                        decoded.decoded.name,
+                        opcode_name(instruction.opcode).to_lowercase(),
+                    ));
+                } else {
+                    function.logic.push(format!(
+                        "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
+                        address, modifier, extcalldata
+                    ));
+                }
             }
         }
 
@@ -89,13 +97,14 @@ pub fn extcall_heuristic(
                 .collect::<Vec<String>>()
                 .join("");
 
+            let extcalldata_clone = extcalldata.clone();
             let decoded = blocking_await(move || {
                 let rt = tokio::runtime::Runtime::new().expect("failed to get runtime");
 
                 rt.block_on(async {
                     decode(
                         DecodeArgsBuilder::new()
-                            .target(extcalldata)
+                            .target(extcalldata_clone)
                             .raw(true)
                             .build()
                             .expect("Failed to build DecodeArgs"),
@@ -103,7 +112,7 @@ pub fn extcall_heuristic(
                     .await
                 })
             })
-            .map_err(|e| eyre!("Failed to decode extcalldata: {}", e))?;
+            .ok();
 
             // build the modifier w/ gas
             // if the modifier is just the default (GAS()), we don't need to include it
@@ -119,13 +128,23 @@ pub fn extcall_heuristic(
             {
                 function.logic.push(precompile_logic);
             } else {
-                function.logic.push(format!(
-                    "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
-                    address,
-                    modifier,
-                    decoded.decoded.name,
-                    opcode_name(instruction.opcode).to_lowercase(),
-                ));
+                if let Some(decoded) = decoded {
+                    function.logic.push(format!(
+                        "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
+                        address,
+                        modifier,
+                        decoded.decoded.name,
+                        opcode_name(instruction.opcode).to_lowercase(),
+                    ));
+                } else {
+                    function.logic.push(format!(
+                        "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
+                        address,
+                        opcode_name(instruction.opcode).to_lowercase(),
+                        modifier,
+                        extcalldata
+                    ));
+                }
             }
         }
 
@@ -136,4 +155,3 @@ pub fn extcall_heuristic(
 }
 
 // TODO: handle skip_resolving (need to fix in inspect mod too)
-// TODO: handle case where decoding fails
