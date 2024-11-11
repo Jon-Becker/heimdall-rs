@@ -37,7 +37,7 @@ tracing = "0.1.40"
 eyre = "0.6.12"
 alloy-json-abi = "0.8.3"
 futures = "0.3.17"
-alloy = { version = "0.3.3", features = ["full", "rpc-types-debug", "rpc-types-trace"] }
+alloy = { version = "0.4.2", features = ["full", "rpc-types-debug", "rpc-types-trace"] }
 bytes = "1.6.1"
 alloy-dyn-abi = "0.8.3"
 tokio-retry = "0.3.0"
