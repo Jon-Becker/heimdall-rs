@@ -7,7 +7,8 @@ use eyre::{bail, eyre, Result};
 pub async fn get_calldata_from_target(target: &str, raw: bool, rpc_url: &str) -> Result<Vec<u8>> {
     // If the target is a transaction hash, fetch the calldata from the RPC provider.
     if let Ok(address) = target.parse::<TxHash>() {
-        // if raw is true, the user specified that the target is raw calldata. skip fetching the transaction.
+        // if raw is true, the user specified that the target is raw calldata. skip fetching the
+        // transaction.
         if !raw {
             return get_transaction(address, rpc_url)
                 .await

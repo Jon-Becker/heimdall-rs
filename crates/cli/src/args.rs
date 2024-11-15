@@ -4,7 +4,7 @@ use clap::{ArgAction, Args, ValueEnum};
 use heimdall_cache::CacheArgs;
 use heimdall_config::ConfigArgs;
 use heimdall_core::{
-    heimdall_cfg::CFGArgs, heimdall_decoder::DecodeArgs, heimdall_decompiler::DecompilerArgs,
+    heimdall_cfg::CfgArgs, heimdall_decoder::DecodeArgs, heimdall_decompiler::DecompilerArgs,
     heimdall_disassembler::DisassemblerArgs, heimdall_dump::DumpArgs,
     heimdall_inspect::InspectArgs,
 };
@@ -42,7 +42,7 @@ pub enum Subcommands {
     Decompile(DecompilerArgs),
 
     #[clap(name = "cfg", about = "Generate a visual control flow graph for EVM bytecode")]
-    CFG(CFGArgs),
+    Cfg(CfgArgs),
 
     #[clap(name = "decode", about = "Decode calldata into readable types")]
     Decode(DecodeArgs),

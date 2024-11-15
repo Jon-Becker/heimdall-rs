@@ -44,7 +44,8 @@ pub struct DecodeArgs {
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
 
-    /// Whether to treat the target as a raw calldata string. Useful if the target is exactly 32 bytes.
+    /// Whether to treat the target as a raw calldata string. Useful if the target is exactly 32
+    /// bytes.
     #[clap(long, short)]
     pub raw: bool,
 }

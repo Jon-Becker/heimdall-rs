@@ -18,6 +18,7 @@ pub struct Stack {
 }
 
 /// The [`StackFrame`] struct represents a single frame on the stack.
+///
 /// It holds a [`U256`] value and the [`WrappedOpcode`] that pushed it onto the stack. \
 /// \
 /// By doing this, we can keep track of the source of each value on the stack in a recursive manner.

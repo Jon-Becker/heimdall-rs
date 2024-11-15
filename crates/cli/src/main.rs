@@ -160,7 +160,7 @@ async fn main() -> Result<()> {
             result.display()
         }
 
-        Subcommands::CFG(mut cmd) => {
+        Subcommands::Cfg(mut cmd) => {
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
                 cmd.rpc_url = configuration.rpc_url;

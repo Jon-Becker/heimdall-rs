@@ -1,10 +1,9 @@
-use alloy::primitives::U256;
-use eyre::eyre;
 use heimdall_common::utils::{hex::ToLowerHex, sync::blocking_await};
 use heimdall_vm::{
     core::{opcodes::opcode_name, vm::State},
     w_gas, w_push0,
 };
+use tracing::trace;
 
 use crate::{
     core::analyze::AnalyzerState, interfaces::AnalyzedFunction,
@@ -24,11 +23,27 @@ pub fn extcall_heuristic(
         0xf1 | 0xf2 => {
             let address = instruction.input_operations[1].solidify();
             let memory = function.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
+
             let extcalldata = memory
                 .iter()
-                .map(|x| x.value.to_lower_hex().trim_start_matches("0x").to_owned())
+                .map(|x| x.value.to_lower_hex().to_owned())
                 .collect::<Vec<String>>()
                 .join("");
+            let gas_solidified = instruction.input_operations[0].solidify();
+            let value_solidified = instruction.input_operations[2].solidify();
+
+            // if gas is 2,300, this is a value transfer
+            if gas_solidified.contains("0x08fc") {
+                trace!(
+                    "instruction {} ({}) with 2300 gas indicates a value transfer",
+                    instruction.instruction,
+                    opcode_name(instruction.opcode)
+                );
+                function
+                    .logic
+                    .push(format!("address({}).transfer({});", address, value_solidified));
+                return Ok(());
+            }
 
             let extcalldata_clone = extcalldata.clone();
             let decoded = blocking_await(move || {
@@ -52,10 +67,18 @@ pub fn extcall_heuristic(
             // - if value is just the default (0), we don't need to include it
             let mut modifiers = vec![];
             if instruction.input_operations[0] != w_gas!() {
-                modifiers.push(format!("gas: {}", instruction.input_operations[0].solidify()));
+                modifiers.push(format!("gas: {}", gas_solidified));
             }
             if instruction.input_operations[2] != w_push0!() {
-                modifiers.push(format!("value: {}", instruction.input_operations[2].solidify()));
+                // if the value is just a hex string, we can parse it as ether for readability
+                if let Ok(value) =
+                    u128::from_str_radix(value_solidified.trim_start_matches("0x"), 16)
+                {
+                    let ether_value = value as f64 / 10_f64.powi(18);
+                    modifiers.push(format!("value: {} ether", ether_value));
+                } else {
+                    modifiers.push(format!("value: {}", value_solidified));
+                }
             }
             let modifier = if modifiers.is_empty() {
                 "".to_string()
@@ -68,21 +91,19 @@ pub fn extcall_heuristic(
                 decode_precompile(instruction.inputs[1], &memory, &instruction.input_operations[5])
             {
                 function.logic.push(precompile_logic);
+            } else if let Some(decoded) = decoded {
+                function.logic.push(format!(
+                    "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
+                    address,
+                    modifier,
+                    decoded.decoded.name,
+                    opcode_name(instruction.opcode).to_lowercase(),
+                ));
             } else {
-                if let Some(decoded) = decoded {
-                    function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
-                        address,
-                        modifier,
-                        decoded.decoded.name,
-                        opcode_name(instruction.opcode).to_lowercase(),
-                    ));
-                } else {
-                    function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
-                        address, modifier, extcalldata
-                    ));
-                }
+                function.logic.push(format!(
+                    "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
+                    address, modifier, extcalldata
+                ));
             }
         }
 
@@ -127,24 +148,22 @@ pub fn extcall_heuristic(
                 decode_precompile(instruction.inputs[1], &memory, &instruction.input_operations[4])
             {
                 function.logic.push(precompile_logic);
+            } else if let Some(decoded) = decoded {
+                function.logic.push(format!(
+                    "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
+                    address,
+                    modifier,
+                    decoded.decoded.name,
+                    opcode_name(instruction.opcode).to_lowercase(),
+                ));
             } else {
-                if let Some(decoded) = decoded {
-                    function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
-                        address,
-                        modifier,
-                        decoded.decoded.name,
-                        opcode_name(instruction.opcode).to_lowercase(),
-                    ));
-                } else {
-                    function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
-                        address,
-                        opcode_name(instruction.opcode).to_lowercase(),
-                        modifier,
-                        extcalldata
-                    ));
-                }
+                function.logic.push(format!(
+                    "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
+                    address,
+                    opcode_name(instruction.opcode).to_lowercase(),
+                    modifier,
+                    extcalldata
+                ));
             }
         }
 

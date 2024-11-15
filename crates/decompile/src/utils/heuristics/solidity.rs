@@ -96,10 +96,10 @@ pub fn solidity_heuristic(
 
             // perform a series of checks to determine if the condition
             // is added by the compiler and can be ignored
-            if (conditional.contains("msg.data.length") && conditional.contains("0x04"))
-                || VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false)
-                || (conditional.replace('!', "") == "success")
-                || (conditional == "!msg.value")
+            if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
+                VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
+                (conditional.replace('!', "") == "success") ||
+                (conditional == "!msg.value")
             {
                 return Ok(());
             }
