@@ -23,7 +23,6 @@ pub fn extcall_heuristic(
         0xf1 | 0xf2 => {
             let address = instruction.input_operations[1].solidify();
             let memory = function.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
-
             let extcalldata = memory
                 .iter()
                 .map(|x| x.value.to_lower_hex().to_owned())
@@ -101,8 +100,11 @@ pub fn extcall_heuristic(
                 ));
             } else {
                 function.logic.push(format!(
-                    "(bool success, bytes memory ret0) = address({}).call{}(abi.encode({}));",
-                    address, modifier, extcalldata
+                    "(bool success, bytes memory ret0) = address({}).Unresolved_{}{}(...); // {}",
+                    address,
+                    extcalldata.get(2..10).unwrap_or(""),
+                    modifier,
+                    opcode_name(instruction.opcode).to_lowercase(),
                 ));
             }
         }
@@ -158,11 +160,11 @@ pub fn extcall_heuristic(
                 ));
             } else {
                 function.logic.push(format!(
-                    "(bool success, bytes memory ret0) = address({}).{}{}(abi.encode({}));",
+                    "(bool success, bytes memory ret0) = address({}).Unresolved_{}{}(...); // {}",
                     address,
-                    opcode_name(instruction.opcode).to_lowercase(),
+                    extcalldata.get(2..10).unwrap_or(""),
                     modifier,
-                    extcalldata
+                    opcode_name(instruction.opcode).to_lowercase(),
                 ));
             }
         }
