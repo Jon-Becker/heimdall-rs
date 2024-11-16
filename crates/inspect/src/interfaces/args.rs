@@ -39,7 +39,7 @@ pub struct InspectArgs {
     pub skip_resolving: bool,
 
     /// Path to an optional ABI file to use for resolving errors, functions, and events.
-    #[clap(long, short, default_value = "", hide_default_value = true)]
+    #[clap(long, short, default_value = None, hide_default_value = true)]
     pub abi: Option<String>,
 }
 
