@@ -48,6 +48,10 @@ pub struct DecodeArgs {
     /// bytes.
     #[clap(long, short)]
     pub raw: bool,
+
+    /// Path to an optional ABI file to use for resolving errors, functions, and events.
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub abi: Option<String>,
 }
 
 impl DecodeArgs {
@@ -68,6 +72,7 @@ impl DecodeArgsBuilder {
             truncate_calldata: Some(false),
             skip_resolving: Some(false),
             raw: Some(false),
+            abi: Some(None),
         }
     }
 }

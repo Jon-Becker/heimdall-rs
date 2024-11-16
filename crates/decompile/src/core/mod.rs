@@ -11,7 +11,10 @@ use hashbrown::HashMap;
 use heimdall_common::{
     ether::{
         compiler::detect_compiler,
-        signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
+        signatures::{
+            cache_signatures_from_abi, score_signature, ResolvedError, ResolvedFunction,
+            ResolvedLog,
+        },
         types::to_type,
     },
     utils::strings::{decode_hex, encode_hex, encode_hex_reduced, StringExt},
@@ -54,6 +57,12 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         )));
     }
     let analyzer_type = AnalyzerType::from_args(args.include_solidity, args.include_yul);
+
+    // parse and cache signatures from the ABI, if provided
+    if let Some(abi_path) = args.abi.as_ref() {
+        cache_signatures_from_abi(abi_path.into())
+            .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
+    }
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
