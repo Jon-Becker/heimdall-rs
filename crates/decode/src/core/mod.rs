@@ -6,7 +6,9 @@ use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType};
 use eyre::eyre;
 use heimdall_common::{
     ether::{
-        signatures::{score_signature, ResolveSelector, ResolvedFunction},
+        signatures::{
+            cache_signatures_from_abi, score_signature, ResolveSelector, ResolvedFunction,
+        },
         types::parse_function_parameters,
     },
     utils::{io::logging::TraceFactory, strings::encode_hex},
@@ -40,6 +42,12 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         return Err(Error::Eyre(
             eyre!("OpenAI API key is required for explaining calldata. Use `heimdall decode --help` for more information.".to_string()),
         ));
+    }
+
+    // parse and cache signatures from the ABI, if provided
+    if let Some(abi_path) = args.abi.as_ref() {
+        cache_signatures_from_abi(abi_path.into())
+            .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
     }
 
     // get the bytecode from the target

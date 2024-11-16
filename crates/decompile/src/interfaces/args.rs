@@ -47,6 +47,10 @@ pub struct DecompilerArgs {
     /// The timeout for each function's symbolic execution in milliseconds.
     #[clap(long, short, default_value = "10000", hide_default_value = true)]
     pub timeout: u64,
+
+    /// Path to an optional ABI file to use for resolving errors, functions, and events.
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub abi: Option<String>,
 }
 
 impl DecompilerArgs {
@@ -67,6 +71,7 @@ impl DecompilerArgsBuilder {
             output: Some(String::new()),
             name: Some(String::new()),
             timeout: Some(10000),
+            abi: Some(None),
         }
     }
 }
