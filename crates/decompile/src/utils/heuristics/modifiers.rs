@@ -38,9 +38,9 @@ pub fn modifier_heuristic(
 
     // if the instruction is a JUMPI with non-zero CALLVALUE requirement, the function is
     // non-payable exactly: ISZERO(CALLVALUE())
-    if function.payable &&
-        state.last_instruction.opcode == JUMPI &&
-        state.last_instruction.input_operations[1] == w_iszero!(w_callvalue!())
+    if function.payable
+        && state.last_instruction.opcode == JUMPI
+        && state.last_instruction.input_operations[1] == w_iszero!(w_callvalue!())
     {
         debug!(
             "conditional at instruction {} indicates a non-payable function",
