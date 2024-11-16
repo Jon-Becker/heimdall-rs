@@ -12,8 +12,8 @@ pub fn variable_postprocessor(
         .chain(state.transient_map.iter())
         .for_each(|(variable, expr)| {
             // skip exprs that are already variables
-            if !expr.contains(' ') &&
-                ["store", "tstore", "transient", "storage", "var"]
+            if !expr.contains(' ')
+                && ["store", "tstore", "transient", "storage", "var"]
                     .iter()
                     .any(|x| expr.starts_with(x))
             {
