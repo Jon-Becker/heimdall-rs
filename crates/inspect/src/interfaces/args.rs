@@ -37,6 +37,10 @@ pub struct InspectArgs {
     /// Whether to skip resolving function selectors and contract labels.
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
+
+    /// Path to an optional ABI file to use for resolving errors, functions, and events.
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub abi: Option<String>,
 }
 
 impl InspectArgsBuilder {
@@ -49,6 +53,7 @@ impl InspectArgsBuilder {
             name: Some(String::new()),
             output: Some(String::from("output")),
             skip_resolving: Some(false),
+            abi: Some(None),
         }
     }
 }

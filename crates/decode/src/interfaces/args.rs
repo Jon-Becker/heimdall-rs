@@ -43,6 +43,10 @@ pub struct DecodeArgs {
     /// Whether to skip resolving selectors. Heimdall will attempt to guess types.
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
+
+    /// Path to an optional ABI file to use for resolving errors, functions, and events.
+    #[clap(long, short, default_value = "", hide_default_value = true)]
+    pub abi: Option<String>,
 }
 
 impl DecodeArgs {
@@ -62,6 +66,7 @@ impl DecodeArgsBuilder {
             constructor: Some(false),
             truncate_calldata: Some(false),
             skip_resolving: Some(false),
+            abi: Some(None),
         }
     }
 }

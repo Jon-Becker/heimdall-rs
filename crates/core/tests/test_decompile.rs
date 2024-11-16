@@ -23,6 +23,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            abi: None,
         })
         .await
         .expect("failed to decompile");
@@ -52,6 +53,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            abi: None,
         })
         .await
         .expect("failed to decompile");
@@ -88,6 +90,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            abi: None,
         })
         .await
         .expect("failed to decompile");
@@ -112,7 +115,8 @@ mod integration_tests {
             include_yul: true,
             output: String::from(""),
             name: String::from(""),
-            timeout: 10000,
+            timeout: 10000,            abi: None,
+
         })
         .await
         .expect("failed to decompile");
@@ -140,7 +144,8 @@ mod integration_tests {
             include_yul: true,
             output: String::from(""),
             name: String::from(""),
-            timeout: 10000,
+            timeout: 10000,            abi: None,
+
         })
         .await
         .expect("failed to decompile");
@@ -163,7 +168,8 @@ mod integration_tests {
             include_yul: false,
             output: String::from(""),
             name: String::from(""),
-            timeout: 10000,
+            timeout: 10000,            abi: None,
+
         })
         .await
         .expect("failed to decompile");
