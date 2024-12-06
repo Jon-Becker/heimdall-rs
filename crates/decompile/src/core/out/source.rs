@@ -67,9 +67,9 @@ pub fn build_source(
     functions
         .iter()
         .filter(|f| {
-            !f.fallback &&
-                (analyzer_type == AnalyzerType::Yul ||
-                    (f.maybe_getter_for.is_none() && !f.is_constant()))
+            !f.fallback
+                && (analyzer_type == AnalyzerType::Yul
+                    || (f.maybe_getter_for.is_none() && !f.is_constant()))
         })
         .for_each(|f| {
             let mut function_source = Vec::new();
@@ -174,29 +174,35 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
         None => format!("Unresolved_{}", f.selector),
     };
 
-    let function_signature = format!(
-        "{}({}) {}",
-        function_name,
-        f.sorted_arguments()
-            .iter()
-            .enumerate()
-            .map(|(i, (_, arg))| {
-                format!(
-                    "{} arg{i}",
-                    match f.resolved_function {
-                        Some(ref sig) => sig.inputs()[i].to_string(),
-                        None => arg
-                            .potential_types()
-                            .first()
-                            .unwrap_or(&"bytes32".to_string())
-                            .to_string(),
-                    }
-                )
-            })
-            .collect::<Vec<String>>()
-            .join(", "),
-        function_modifiers.join(" ")
-    );
+    let function_signature = match f.resolved_function {
+        Some(ref sig) => format!(
+            "{}({}) {}",
+            function_name,
+            sig.inputs()
+                .iter()
+                .enumerate()
+                .map(|(i, arg)| { format!("{} arg{i}", arg.to_string()) })
+                .collect::<Vec<String>>()
+                .join(", "),
+            function_modifiers.join(" ")
+        ),
+        None => format!(
+            "{}({}) {}",
+            function_name,
+            f.sorted_arguments()
+                .iter()
+                .enumerate()
+                .map(|(i, (_, arg))| {
+                    format!(
+                        "{} arg{i}",
+                        arg.potential_types().first().unwrap_or(&"bytes32".to_string()).to_string()
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join(", "),
+            function_modifiers.join(" ")
+        ),
+    };
 
     match f.analyzer_type {
         AnalyzerType::Solidity => {

@@ -41,9 +41,22 @@ pub fn extcall_heuristic<'a>(
                         instruction.instruction,
                         opcode_name(instruction.opcode)
                     );
-                    function
-                        .logic
-                        .push(format!("address({}).transfer({});", address, value_solidified));
+                    function.logic.push(format!(
+                        "(bool success, bytes memory ret0) = address({}).transfer({});",
+                        address, value_solidified
+                    ));
+                    return Ok(());
+                }
+                if extcalldata.is_empty() {
+                    trace!(
+                        "instruction {} ({}) with no calldata indicates a value transfer",
+                        instruction.instruction,
+                        opcode_name(instruction.opcode)
+                    );
+                    function.logic.push(format!(
+                        "(bool success, bytes memory ret0) = address({}).transfer({});",
+                        address, value_solidified
+                    ));
                     return Ok(());
                 }
 
