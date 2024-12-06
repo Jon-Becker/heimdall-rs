@@ -1,5 +1,5 @@
 use futures::future::BoxFuture;
-use heimdall_common::utils::{hex::ToLowerHex, sync::blocking_await};
+use heimdall_common::utils::hex::ToLowerHex;
 use heimdall_vm::{
     core::{opcodes::opcode_name, vm::State},
     w_gas, w_push0,
@@ -48,20 +48,14 @@ pub fn extcall_heuristic<'a>(
                 }
 
                 let extcalldata_clone = extcalldata.clone();
-                let decoded = blocking_await(move || {
-                    let rt = tokio::runtime::Runtime::new().expect("failed to get runtime");
-
-                    rt.block_on(async {
-                        decode(
-                            DecodeArgsBuilder::new()
-                                .target(extcalldata_clone)
-                                .raw(true)
-                                .build()
-                                .expect("Failed to build DecodeArgs"),
-                        )
-                        .await
-                    })
-                })
+                let decoded = decode(
+                    DecodeArgsBuilder::new()
+                        .target(extcalldata_clone)
+                        .raw(true)
+                        .build()
+                        .expect("Failed to build DecodeArgs"),
+                )
+                .await
                 .ok();
 
                 // build modifiers
@@ -129,20 +123,14 @@ pub fn extcall_heuristic<'a>(
                     .join("");
 
                 let extcalldata_clone = extcalldata.clone();
-                let decoded = blocking_await(move || {
-                    let rt = tokio::runtime::Runtime::new().expect("failed to get runtime");
-
-                    rt.block_on(async {
-                        decode(
-                            DecodeArgsBuilder::new()
-                                .target(extcalldata_clone)
-                                .raw(true)
-                                .build()
-                                .expect("Failed to build DecodeArgs"),
-                        )
-                        .await
-                    })
-                })
+                let decoded = decode(
+                    DecodeArgsBuilder::new()
+                        .target(extcalldata_clone)
+                        .raw(true)
+                        .build()
+                        .expect("Failed to build DecodeArgs"),
+                )
+                .await
                 .ok();
 
                 // build the modifier w/ gas
