@@ -1,5 +1,8 @@
+use std::fmt::format;
+
+use alloy::primitives::U256;
 use futures::future::BoxFuture;
-use heimdall_common::utils::hex::ToLowerHex;
+use heimdall_common::utils::{hex::ToLowerHex, strings::encode_hex_reduced};
 use heimdall_vm::{
     core::{opcodes::opcode_name, vm::State},
     w_gas, w_push0,
@@ -162,17 +165,31 @@ pub fn extcall_heuristic<'a>(
                 ) {
                     function.logic.push(precompile_logic);
                 } else if let Some(decoded) = decoded {
+                    let start_slot = instruction.inputs[2] + U256::from(4);
+
                     function.logic.push(format!(
                         "(bool success, bytes memory ret0) = address({}).{}{}({}); // {}",
                         address,
                         modifier,
                         decoded.decoded.name,
-                        decoded.decoded.inputs.join(", "),
+                        decoded
+                            .decoded
+                            .inputs
+                            .iter()
+                            .enumerate()
+                            .map(|(i, _)| {
+                                format!(
+                                    "memory[{}]",
+                                    encode_hex_reduced(start_slot + U256::from(i * 32))
+                                )
+                            })
+                            .collect::<Vec<String>>()
+                            .join(", "),
                         opcode_name(instruction.opcode).to_lowercase(),
                     ));
                 } else {
                     function.logic.push(format!(
-                    "(bool success, bytes memory ret0) = address({}).Unresolved_{}{}(msg.data[{}:{}]); // {}",
+                    "(bool success, bytes memory ret0) = address({}).Unresolved_{}{}(memory[{}:{}]); // {}",
                     address,
                     extcalldata.get(2..10).unwrap_or(""),
                     modifier,
