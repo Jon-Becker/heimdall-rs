@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use alloy::primitives::U256;
 use futures::future::BoxFuture;
 use heimdall_common::utils::{hex::ToLowerHex, strings::encode_hex_reduced};

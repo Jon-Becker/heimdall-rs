@@ -67,9 +67,9 @@ pub fn build_source(
     functions
         .iter()
         .filter(|f| {
-            !f.fallback
-                && (analyzer_type == AnalyzerType::Yul
-                    || (f.maybe_getter_for.is_none() && !f.is_constant()))
+            !f.fallback &&
+                (analyzer_type == AnalyzerType::Yul ||
+                    (f.maybe_getter_for.is_none() && !f.is_constant()))
         })
         .for_each(|f| {
             let mut function_source = Vec::new();
@@ -195,7 +195,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
                 .map(|(i, (_, arg))| {
                     format!(
                         "{} arg{i}",
-                        arg.potential_types().first().unwrap_or(&"bytes32".to_string()).to_string()
+                        arg.potential_types().first().unwrap_or(&"bytes32".to_string())
                     )
                 })
                 .collect::<Vec<String>>()
