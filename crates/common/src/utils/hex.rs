@@ -1,5 +1,5 @@
 use super::strings::encode_hex;
-use alloy::primitives::{Address, Bytes, FixedBytes, I256, U256};
+use alloy::primitives::{Address, Bytes, FixedBytes, U256};
 
 /// A convenience function which encodes a given EVM type into a sized, lowercase hex string.
 pub trait ToLowerHex {
@@ -20,13 +20,7 @@ impl ToLowerHex for bytes::Bytes {
 
 impl ToLowerHex for U256 {
     fn to_lower_hex(&self) -> String {
-        format!("{:#032x}", self)
-    }
-}
-
-impl ToLowerHex for I256 {
-    fn to_lower_hex(&self) -> String {
-        format!("{:#032x}", self)
+        encode_hex(&self.to_be_bytes_vec())
     }
 }
 

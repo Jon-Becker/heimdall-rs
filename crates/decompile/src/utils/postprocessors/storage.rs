@@ -64,8 +64,8 @@ pub fn storage_postprocessor(
     }
 
     // if there is an assignment to a memory variable, save it to variable_map
-    if (line.trim().starts_with("store_") || line.trim().starts_with("storage_map_"))
-        && line.contains(" = ")
+    if (line.trim().starts_with("store_") || line.trim().starts_with("storage_map_")) &&
+        line.contains(" = ")
     {
         let assignment: Vec<String> =
             line.split(" = ").collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();

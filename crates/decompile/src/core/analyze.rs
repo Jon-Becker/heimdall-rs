@@ -1,13 +1,14 @@
 use std::{fmt::Display, time::Instant};
 
+use futures::future::BoxFuture;
 use heimdall_vm::ext::exec::VMTrace;
 use tracing::debug;
 
 use crate::{
     interfaces::AnalyzedFunction,
     utils::heuristics::{
-        argument_heuristic, event_heuristic, modifier_heuristic, solidity_heuristic, yul_heuristic,
-        Heuristic,
+        argument_heuristic, event_heuristic, extcall_heuristic, modifier_heuristic,
+        solidity_heuristic, yul_heuristic, Heuristic,
     },
     Error,
 };
@@ -85,6 +86,7 @@ impl Analyzer {
                 self.heuristics.push(Heuristic::new(solidity_heuristic));
                 self.heuristics.push(Heuristic::new(argument_heuristic));
                 self.heuristics.push(Heuristic::new(modifier_heuristic));
+                self.heuristics.push(Heuristic::new(extcall_heuristic));
             }
             AnalyzerType::Yul => {
                 self.heuristics.push(Heuristic::new(event_heuristic));
@@ -103,7 +105,7 @@ impl Analyzer {
     }
 
     /// Performs analysis
-    pub fn analyze(&mut self, trace_root: VMTrace) -> Result<AnalyzedFunction, Error> {
+    pub async fn analyze(&mut self, trace_root: VMTrace) -> Result<AnalyzedFunction, Error> {
         debug!(
             "analzying symbolic execution trace for '{}' with the {} analyzer",
             self.function.selector, self.typ
@@ -122,7 +124,7 @@ impl Analyzer {
         };
 
         // Perform analysis
-        self.analyze_inner(&trace_root, &mut analyzer_state)?;
+        self.analyze_inner(&trace_root, &mut analyzer_state).await?;
 
         debug!(
             "analysis for '{}' completed in {:?}",
@@ -134,51 +136,52 @@ impl Analyzer {
     }
 
     /// Inner analysis implementation
-    fn analyze_inner(
-        &mut self,
-        branch: &VMTrace,
-        analyzer_state: &mut AnalyzerState,
-    ) -> Result<(), Error> {
-        // reset jumped conditional, we dont propagate conditionals across branches
-        analyzer_state.jumped_conditional = None;
+    fn analyze_inner<'a>(
+        &'a mut self,
+        branch: &'a VMTrace,
+        analyzer_state: &'a mut AnalyzerState,
+    ) -> BoxFuture<'a, Result<(), Error>> {
+        Box::pin(async move {
+            // reset jumped conditional, we dont propagate conditionals across branches
+            analyzer_state.jumped_conditional = None;
 
-        // for each operation in the current trace branch, peform analysis with registerred
-        // heuristics
-        for operation in &branch.operations {
-            for heuristic in &self.heuristics {
-                heuristic.run(&mut self.function, operation, analyzer_state)?;
-            }
-        }
-
-        // recurse into the children of the current trace branch
-        for child in &branch.children {
-            self.analyze_inner(child, analyzer_state)?;
-        }
-
-        // check if the ending brackets are needed
-        if analyzer_state.jumped_conditional.is_some()
-            && analyzer_state.conditional_stack.contains(
-                analyzer_state
-                    .jumped_conditional
-                    .as_ref()
-                    .expect("impossible case: should have short-circuited in previous conditional"),
-            )
-        {
-            // remove the conditional
-            for (i, conditional) in analyzer_state.conditional_stack.iter().enumerate() {
-                if conditional
-                    == analyzer_state.jumped_conditional.as_ref().expect(
-                        "impossible case: should have short-circuited in previous conditional",
-                    )
-                {
-                    analyzer_state.conditional_stack.remove(i);
-                    break;
+            // for each operation in the current trace branch, peform analysis with registerred
+            // heuristics
+            for operation in &branch.operations {
+                for heuristic in &self.heuristics {
+                    heuristic.run(&mut self.function, operation, analyzer_state).await?;
                 }
             }
 
-            self.function.logic.push("}".to_string());
-        }
+            // recurse into the children of the current trace branch
+            for child in &branch.children {
+                self.analyze_inner(child, analyzer_state).await?;
+            }
 
-        Ok(())
+            // check if the ending brackets are needed
+            if analyzer_state.jumped_conditional.is_some() &&
+                analyzer_state.conditional_stack.contains(
+                    analyzer_state.jumped_conditional.as_ref().expect(
+                        "impossible case: should have short-circuited in previous conditional",
+                    ),
+                )
+            {
+                // remove the conditional
+                for (i, conditional) in analyzer_state.conditional_stack.iter().enumerate() {
+                    if conditional ==
+                        analyzer_state.jumped_conditional.as_ref().expect(
+                            "impossible case: should have short-circuited in previous conditional",
+                        )
+                    {
+                        analyzer_state.conditional_stack.remove(i);
+                        break;
+                    }
+                }
+
+                self.function.logic.push("}".to_string());
+            }
+
+            Ok(())
+        })
     }
 }

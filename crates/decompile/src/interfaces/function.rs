@@ -61,6 +61,7 @@ pub struct AnalyzedFunction {
 #[derive(Clone, Debug)]
 pub struct StorageFrame {
     pub operation: WrappedOpcode,
+    pub value: U256,
 }
 
 #[derive(Clone, Debug)]

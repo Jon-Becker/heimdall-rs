@@ -156,21 +156,21 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     info!("symbolically executed {} selectors", symbolic_execution_maps.len());
 
     let start_analysis_time = Instant::now();
-    let mut analyzed_functions = symbolic_execution_maps
-        .into_iter()
-        .map(|(selector, trace_root)| {
+    let handles = symbolic_execution_maps.into_iter().map(|(selector, trace_root)| {
+        let mut evm_clone = evm.clone();
+        async move {
             let mut analyzer = Analyzer::new(
                 analyzer_type,
                 AnalyzedFunction::new(&selector, selector == "fallback"),
             );
 
             // analyze the symbolic execution trace
-            let mut analyzed_function = analyzer.analyze(trace_root)?;
+            let mut analyzed_function = analyzer.analyze(trace_root).await?;
 
             // if the function is constant, we can get the exact val
             if analyzed_function.is_constant() && !analyzed_function.fallback {
-                evm.reset();
-                let x = evm.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
+                evm_clone.reset();
+                let x = evm_clone.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
 
                 let returns_param_type = analyzed_function
                     .returns
@@ -192,8 +192,9 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             }
 
             Ok::<_, Error>(analyzed_function)
-        })
-        .collect::<Result<Vec<AnalyzedFunction>, Error>>()?;
+        }
+    });
+    let mut analyzed_functions = futures::future::try_join_all(handles).await?;
 
     debug!("analyzing symbolic execution results took {:?}", start_analysis_time.elapsed());
     info!("analyzed {} symbolic execution traces", analyzed_functions.len());

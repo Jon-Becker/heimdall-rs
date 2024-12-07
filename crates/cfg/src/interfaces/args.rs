@@ -10,8 +10,8 @@ use heimdall_config::parse_url_arg;
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
     override_usage = "heimdall cfg <TARGET> [OPTIONS]"
 )]
-pub struct CFGArgs {
-    /// The target to generate a CFG for, either a file, bytecode, contract address, or ENS name.
+pub struct CfgArgs {
+    /// The target to generate a Cfg for, either a file, bytecode, contract address, or ENS name.
     #[clap(required = true)]
     pub target: String,
 
@@ -42,13 +42,13 @@ pub struct CFGArgs {
     pub timeout: u64,
 }
 
-impl CFGArgs {
+impl CfgArgs {
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
         get_bytecode_from_target(&self.target, &self.rpc_url).await
     }
 }
 
-impl CFGArgsBuilder {
+impl CfgArgsBuilder {
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),

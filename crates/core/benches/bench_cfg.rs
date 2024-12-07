@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use heimdall_cfg::{cfg, CFGArgsBuilder};
+use heimdall_cfg::{cfg, CfgArgsBuilder};
 use tokio::runtime::Runtime;
 
 fn test_cfg(c: &mut Criterion) {
@@ -17,10 +17,10 @@ fn test_cfg(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(name), &contract, |b, c| {
             b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
                 let start = std::time::Instant::now();
-                let args = CFGArgsBuilder::new()
+                let args = CfgArgsBuilder::new()
                     .target(c.to_string())
                     .build()
-                    .expect("Failed to build CFGArgs");
+                    .expect("Failed to build CfgArgs");
                 let _ = cfg(args).await;
                 start.elapsed()
             });

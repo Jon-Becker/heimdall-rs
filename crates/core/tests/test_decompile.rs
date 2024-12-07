@@ -168,7 +168,8 @@ mod integration_tests {
             include_yul: false,
             output: String::from(""),
             name: String::from(""),
-            timeout: 10000,            abi: None,
+            timeout: 10000,
+            abi: None,
 
         })
         .await

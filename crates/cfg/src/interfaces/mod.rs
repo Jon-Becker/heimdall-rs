@@ -1,4 +1,4 @@
 mod args;
 
 // re-export the public interface
-pub use args::{CFGArgs, CFGArgsBuilder};
+pub use args::{CfgArgs, CfgArgsBuilder};
