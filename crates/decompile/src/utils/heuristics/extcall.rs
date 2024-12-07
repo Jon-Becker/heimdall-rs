@@ -16,7 +16,7 @@ use heimdall_decoder::{decode, DecodeArgsBuilder};
 pub fn extcall_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
-    _: &'a mut AnalyzerState,
+    analyzer_state: &'a mut AnalyzerState,
 ) -> BoxFuture<'a, Result<(), Error>> {
     Box::pin(async move {
         let instruction = &state.last_instruction;
@@ -66,6 +66,7 @@ pub fn extcall_heuristic<'a>(
                     DecodeArgsBuilder::new()
                         .target(extcalldata_clone)
                         .raw(true)
+                        .skip_resolving(analyzer_state.skip_resolving)
                         .build()
                         .expect("Failed to build DecodeArgs"),
                 )
@@ -156,6 +157,7 @@ pub fn extcall_heuristic<'a>(
                     DecodeArgsBuilder::new()
                         .target(extcalldata_clone)
                         .raw(true)
+                        .skip_resolving(analyzer_state.skip_resolving)
                         .build()
                         .expect("Failed to build DecodeArgs"),
                 )
@@ -219,5 +221,3 @@ pub fn extcall_heuristic<'a>(
         Ok(())
     })
 }
-
-// TODO: handle skip_resolving (need to fix in inspect mod too)

@@ -161,6 +161,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         async move {
             let mut analyzer = Analyzer::new(
                 analyzer_type,
+                args.skip_resolving,
                 AnalyzedFunction::new(&selector, selector == "fallback"),
             );
 
