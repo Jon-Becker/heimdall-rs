@@ -163,10 +163,11 @@ pub fn extcall_heuristic<'a>(
                     function.logic.push(precompile_logic);
                 } else if let Some(decoded) = decoded {
                     function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
+                        "(bool success, bytes memory ret0) = address({}).{}{}({}); // {}",
                         address,
                         modifier,
                         decoded.decoded.name,
+                        decoded.decoded.inputs.join(", "),
                         opcode_name(instruction.opcode).to_lowercase(),
                     ));
                 } else {
