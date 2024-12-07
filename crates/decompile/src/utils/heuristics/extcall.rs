@@ -106,11 +106,26 @@ pub fn extcall_heuristic<'a>(
                 ) {
                     function.logic.push(precompile_logic);
                 } else if let Some(decoded) = decoded {
+                    let start_slot = instruction.inputs[3] + U256::from(4);
+
                     function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({}).{}{}(...); // {}",
+                        "(bool success, bytes memory ret0) = address({}).{}{}({}); // {}",
                         address,
                         modifier,
                         decoded.decoded.name,
+                        decoded
+                            .decoded
+                            .inputs
+                            .iter()
+                            .enumerate()
+                            .map(|(i, _)| {
+                                format!(
+                                    "memory[{}]",
+                                    encode_hex_reduced(start_slot + U256::from(i * 32))
+                                )
+                            })
+                            .collect::<Vec<String>>()
+                            .join(", "),
                         opcode_name(instruction.opcode).to_lowercase(),
                     ));
                 } else {
