@@ -50,12 +50,23 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
-    // for now, we only support one of these at a time
+    // validate arguments
     if args.include_solidity && args.include_yul {
         return Err(Error::Eyre(eyre!(
             "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
         )));
     }
+    if args.llm_postprocess && args.openai_api_key.is_empty() {
+        return Err(Error::Eyre(eyre!(
+                "llm postprocessing requires an openai API key. please provide one using the '--openai-api-key' flag."
+            )));
+    }
+    if !args.include_solidity && args.llm_postprocess {
+        return Err(Error::Eyre(eyre!(
+            "llm postprocessing requires including solidity source code. please enable the '--include-sol' flag."
+        )));
+    }
+
     let analyzer_type = AnalyzerType::from_args(args.include_solidity, args.include_yul);
 
     // parse and cache signatures from the ABI, if provided
@@ -314,7 +325,10 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         &all_resolved_errors,
         &all_resolved_events,
         &storage_variables,
-    )?;
+        args.llm_postprocess,
+        args.openai_api_key,
+    )
+    .await?;
 
     debug!("decompilation took {:?}", start_time.elapsed());
 

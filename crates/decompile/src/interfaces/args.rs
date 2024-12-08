@@ -51,6 +51,14 @@ pub struct DecompilerArgs {
     /// Path to an optional ABI file to use for resolving errors, functions, and events.
     #[clap(long, short, default_value = None, hide_default_value = true)]
     pub abi: Option<String>,
+
+    /// Whether to post-process the output using a LLM.
+    #[clap(long, short)]
+    pub llm_postprocess: bool,
+
+    /// Your OpenAI API key, used for explaining calldata.
+    #[clap(long, default_value = "", hide_default_value = true)]
+    pub openai_api_key: String,
 }
 
 impl DecompilerArgs {
@@ -72,6 +80,8 @@ impl DecompilerArgsBuilder {
             name: Some(String::new()),
             timeout: Some(10000),
             abi: Some(None),
+            llm_postprocess: Some(false),
+            openai_api_key: Some(String::new()),
         }
     }
 }
