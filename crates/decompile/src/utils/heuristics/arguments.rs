@@ -30,8 +30,8 @@ pub fn argument_heuristic<'a>(
                 // calculate the argument index, with the 4byte signature padding removed
                 // for example, CALLDATALOAD(4) -> (4-4)/32 = 0
                 //              CALLDATALOAD(36) -> (36-4)/32 = 1
-                let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) /
-                    U256::from(32))
+                let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4))
+                    / U256::from(32))
                 .try_into()
                 .unwrap_or(usize::MAX);
 
@@ -216,7 +216,6 @@ pub fn argument_heuristic<'a>(
             0x02 | 0x04 | 0x05 | 0x06 | 0x07 | 0x08 | 0x09 | 0x0b | 0x10 | 0x11 | 0x12 | 0x13 => {
                 // check if this instruction is operating on a known argument.
                 // if it is, add 'integer' to the list of heuristics
-                // TODO: we probably want to use an enum for heuristics
                 if let Some((arg_index, frame)) =
                     function.arguments.iter_mut().find(|(_, frame)| {
                         state
@@ -241,7 +240,6 @@ pub fn argument_heuristic<'a>(
             0x18 | 0x1a | 0x1b | 0x1c | 0x1d | 0x20 => {
                 // check if this instruction is operating on a known argument.
                 // if it is, add 'bytes' to the list of heuristics
-                // TODO: we probably want to use an enum for heuristics
                 if let Some((arg_index, frame)) =
                     function.arguments.iter_mut().find(|(_, frame)| {
                         state
