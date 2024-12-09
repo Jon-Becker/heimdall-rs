@@ -122,7 +122,16 @@ pub async fn build_source(
                     debug!("llm postprocessing 0x{} source", f.selector);
 
                     let postprocessed_source =
-                        annotate_function(&function_source.join("\n"), &openai_api_key).await?;
+                        annotate_function(&function_source.join("\n"), &openai_api_key)
+                            .await
+                            .map_err(|e| {
+                                debug!(
+                                    "llm postprocessing 0x{} source failed: {:?}",
+                                    f.selector, e
+                                );
+                                e
+                            })
+                            .ok();
 
                     debug!(
                         "llm postprocessing 0x{} source took {:?}",
@@ -131,8 +140,10 @@ pub async fn build_source(
                     );
 
                     // replace the function source with the postprocessed source
-                    function_source =
-                        postprocessed_source.split('\n').map(|x| x.to_string()).collect();
+                    if let Some(postprocessed_source) = postprocessed_source {
+                        function_source =
+                            postprocessed_source.split('\n').map(|x| x.to_string()).collect();
+                    }
                 }
 
                 Ok::<Vec<String>, eyre::Report>(function_source)
