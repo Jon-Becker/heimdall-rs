@@ -76,6 +76,11 @@ async fn main() -> Result<()> {
                 cmd.rpc_url = configuration.rpc_url;
             }
 
+            // if the user has not specified a openai api key, use the default
+            if cmd.openai_api_key.as_str() == "" {
+                cmd.openai_api_key = configuration.openai_api_key;
+            }
+
             // if the user has passed an output filename, override the default filename
             let mut abi_filename: String = "abi.json".to_string();
             let mut decompiled_output_filename: String = "decompiled".to_string();
