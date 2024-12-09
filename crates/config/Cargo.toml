@@ -1,0 +1,24 @@
+[package]
+name = "heimdall-config"
+description = "Configuration management for Heimdall."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+exclude.workspace = true
+
+[lib]
+bench = false
+
+[dependencies]
+heimdall-common = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+mesc = { version = "0.2.0" }
+serde = { version = "1.0", features = ["derive"] }
+toml = { version = "0.7.6" }
+thiserror = "1.0.50"
+serial_test = "3.0.0"
+tracing = "0.1.40"

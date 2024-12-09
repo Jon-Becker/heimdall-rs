@@ -4,9 +4,8 @@ members = [
     "dump",
     "decode",
     "decode_offline",
-    "snapshot",
     "decompile",
     "disassemble",
-    "inspect"
+    "inspect",
 ]
-version = "0.7.3"
+version = "0.8.5"

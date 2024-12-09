@@ -1,45 +1,55 @@
 name: heavy integration
 
 on:
-    schedule:
-        # Runs at 10PM utc
-        - cron: "0 22 * * *"
-    workflow_dispatch:
+  schedule:
+    # Runs at 10PM utc
+    - cron: "0 22 * * *"
+  workflow_dispatch:
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-    cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 env:
-    CARGO_TERM_COLOR: always
+  CARGO_TERM_COLOR: always
 
 jobs:
-    heavy-integration:
-        name: heavy (long-running) integration tests
-        runs-on: ubuntu-latest
-        timeout-minutes: 120
+  heavy-integration:
+    name: heavy (long-running) integration tests
+    runs-on: buildjet-16vcpu-ubuntu-2204
+    timeout-minutes: 120
 
-        steps:
-            - uses: actions/checkout@v3
-            - uses: dtolnay/rust-toolchain@stable
-            - uses: taiki-e/install-action@nextest
-            - name: Run Tests
-              run: |
-                  cargo nextest r --no-fail-fast --release --nocapture -- --ignored
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - name: Fetch Dataset
+        run: |
+          # download from https://jbecker.dev/data/largest1k.tar.gz
+          wget https://jbecker.dev/data/largest1k.tar.gz
 
-    # If any of the jobs fail, this will create a high-priority issue to signal so.
-    issue:
-        name: Open an issue
-        runs-on: ubuntu-latest
-        needs: heavy-integration
-        if: ${{ failure() }}
-        steps:
-            - uses: actions/checkout@v4
-            - uses: JasonEtco/create-an-issue@v2
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  WORKFLOW_URL: |
-                      ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-              with:
-                  update_existing: true
-                  filename: .github/INTEGRATION_FAILURE.md
+          # extract the dataset
+          tar -xvf largest1k.tar.gz
+      - name: Run Tests
+        env:
+          RPC_URL: ${{ secrets.RPC_URL }}
+          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
+        run: |
+          cargo nextest r --no-fail-fast --release --nocapture -- --ignored
+
+  # If any of the jobs fail, this will create a high-priority issue to signal so.
+  issue:
+    name: Open an issue
+    runs-on: buildjet-16vcpu-ubuntu-2204
+    needs: heavy-integration
+    if: ${{ failure() }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JasonEtco/create-an-issue@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_URL: |
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          update_existing: true
+          filename: .github/INTEGRATION_FAILURE.md

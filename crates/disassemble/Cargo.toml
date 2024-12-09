@@ -1,0 +1,24 @@
+[package]
+name = "heimdall-disassembler"
+description = "Disassembles EVM bytecode to assembly"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+exclude.workspace = true
+
+[lib]
+bench = false
+
+[dependencies]
+heimdall-config = { workspace = true }
+heimdall-common = { workspace = true }
+heimdall-cache = { workspace = true }
+thiserror = "1.0.50"
+clap = { workspace = true, features = ["derive"] }
+eyre = "0.6.12"
+tracing = "0.1.40"
+heimdall-vm.workspace = true

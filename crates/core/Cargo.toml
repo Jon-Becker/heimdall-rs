@@ -1,0 +1,69 @@
+[package]
+name = "heimdall-core"
+description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+exclude.workspace = true
+
+[lib]
+bench = false
+
+[dependencies]
+async-recursion = "1.0.5"
+thiserror = "1.0.50"
+clap = { workspace = true, features = ["derive"] }
+colored = "2"
+fancy-regex = "0.11.0"
+heimdall-cache = { workspace = true }
+heimdall-common = { workspace = true }
+heimdall-config = { workspace = true }
+indicatif = "0.17.0"
+lazy_static = "1.4.0"
+petgraph = "0.6.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+strsim = "0.10.0"
+tokio = { version = "1", features = ["full"] }
+derive_builder = "0.12.0"
+async-convert = "1.0.0"
+futures = "0.3.28"
+tracing = "0.1.40"
+alloy-json-abi = { version = "0.7.6", features = ["serde_json"]}
+
+# modules
+heimdall-cfg = { workspace = true }
+heimdall-dump = { workspace = true }
+heimdall-decoder = { workspace = true }
+heimdall-inspect = { workspace = true }
+heimdall-decompiler = { workspace = true }
+heimdall-disassembler = { workspace = true }
+
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
+memory-stats = "1.0.0"
+
+[[bench]]
+name = "bench_cfg"
+harness = false
+
+[[bench]]
+name = "bench_decode"
+harness = false
+
+[[bench]]
+name = "bench_decompile"
+harness = false
+
+[[bench]]
+name = "bench_disassemble"
+harness = false
+
+[[bench]]
+name = "bench_inspect"
+harness = false

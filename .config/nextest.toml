@@ -1,2 +1,6 @@
 [profile.default]
 retries = { backoff = "exponential", count = 2, delay = "2s", jitter = true }
+
+[[profile.default.overrides]]
+filter = 'test(heavy_integration_test)'
+retries = 0

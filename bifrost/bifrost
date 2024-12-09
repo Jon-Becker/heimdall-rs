@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+#!/bin/bash
+
 set -e
 
 BIFROST_PATH=${BIFROST_PATH:-"$HOME/.bifrost"}
@@ -9,6 +11,8 @@ main() {
     requires_cmd git
     requires_cmd curl
     requires_cmd cargo
+    ensure_apt_package "libssl-dev"
+    ensure_apt_package "build-essential"
 
     # parsing parameters
     while [[ $1 ]]; do
@@ -65,7 +69,8 @@ main() {
     # clone heimdall-rs and cd into it
     cd $BUILD_PATH
     echo "bifrost: cloning 'Jon-Becker/heimdall-rs'."
-    ensure git clone "https://github.com/Jon-Becker/heimdall-rs" > /dev/null 2>&1
+    # git clone, but only include the "Resolving deltas: ..." and "Receiving objects: ..." lines
+    ensure git clone "https://github.com/Jon-Becker/heimdall-rs" --progress 2>&1 | grep -E "Resolving deltas:|Receiving objects:"
     cd "heimdall-rs"
     ensure git fetch origin
 
@@ -124,13 +129,6 @@ main() {
         # make the binary executable
         ensure chmod +x heimdall
     else
-
-        # get current package version
-        VERSION=$(grep -m1 "version" Cargo.toml | sed -E 's/.*([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-
-        # remove periods from version and cast as int
-        VERSION=$(echo $VERSION | sed -E 's/\.//g')
-
         # if nightly, we need to update cargo.toml versions (hacky lol)
         if [ -n "$NIGHTLY_CHANNEL" ]; then
             find . -name 'Cargo.toml' -type f | while read -r file; do
@@ -138,14 +136,18 @@ main() {
             done
         fi
 
-        # if VERSION > 0.6.0 (60), use the new build system
-        if [ $VERSION -ge 60 ]; then
-            RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./cli --bins --locked --force --root $BIFROST_PATH
-        else
-            # using legacy build system
-            echo "bifrost: installing with old build system."
+        # try-catch build system
+        {
+            {
+                RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true cargo install --path ./crates/cli --bins --locked --force --root $BIFROST_PATH
+            } || {
+                echo "bifrost: falling back to 0.6.0 >= version < 0.8.0 build system."
+                RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true cargo install --path ./cli --bins --locked --force --root $BIFROST_PATH
+            }
+        } || {
+            echo "bifrost: falling back to old legacy system."
             RUSTFLAGS="-C target-cpu=native -C codegen-units=1" CARGO_PROFILE_RELEASE_LTO=true ensure cargo install --path ./heimdall --locked --force --root $BIFROST_PATH
-        fi
+        }
     fi
 
     echo "bifrost: installation complete."
@@ -202,6 +204,22 @@ EOF
 # ensure runs a command and exits if it fails
 ensure() {
     if ! "$@"; then echo "bifrost: required command '$*' failed."; exit 1; fi
+}
+
+# ensure an apt package is installed
+ensure_apt_package() {
+    # if we are not on a linux system, return success
+    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
+        return
+    fi
+
+    # if the package is not installed, install it
+    if ! dpkg -l | grep -q $1; then
+        echo "bifrost: installing $1."
+        ensure sudo apt-get install -y $1
+    else
+        echo "bifrost: $1 is already installed."
+    fi
 }
 
 # command_exists checks if a command exists

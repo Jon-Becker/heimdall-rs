@@ -1,8 +1,60 @@
 [workspace]
 members = [
-    "common",
-    "config",
-    "core",
-    "cli",
+    "crates/disassemble",
+    "crates/decompile",
+    "crates/tracing",
+    "crates/inspect",
+    "crates/decode",
+    "crates/common",
+    "crates/config",
+    "crates/cache",
+    "crates/core",
+    "crates/dump",
+    "crates/cli",
+    "crates/cfg",
+    "crates/vm",
 ]
-version = "0.7.3"
+
+# Explicitly set the resolver to version 2, which is the default for packages with edition >= 2021
+# https://doc.rust-lang.org/edition-guide/rust-2021/default-cargo-resolver.html
+resolver = "2"
+
+[profile.release]
+strip = "debuginfo"
+lto = "fat"
+codegen-units = 1
+incremental = false
+
+[profile.dev]
+strip = "none"
+lto = "thin"
+debug = true
+
+[workspace.package]
+version = "0.8.5"
+edition = "2021"
+license = "MIT"
+rust-version = "1.79"
+homepage = "https://heimdall.rs"
+repository = "https://github.com/Jon-Becker/heimdall-rs"
+keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
+exclude = [".github/"]
+
+[workspace.dependencies]
+heimdall-core = { path = "crates/core" }
+heimdall-cache = { path = "crates/cache" }
+heimdall-cli = { path = "crates/cli" }
+heimdall-common = { path = "crates/common" }
+heimdall-config = { path = "crates/config" }
+heimdall-tracing = { path = "crates/tracing" }
+
+# core mods
+heimdall-cfg = { path = "crates/cfg" }
+heimdall-dump = { path = "crates/dump" }
+heimdall-inspect = { path = "crates/inspect" }
+heimdall-decoder = { path = "crates/decode" }
+heimdall-decompiler = { path = "crates/decompile" }
+heimdall-disassembler = { path = "crates/disassemble" }
+heimdall-vm = { path = "crates/vm" }
+
+clap = "4"

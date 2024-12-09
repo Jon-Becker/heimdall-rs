@@ -1,0 +1,65 @@
+[package]
+name = "heimdall-vm"
+description = "Specialized EVM for Heimdall's symbolic execution engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+exclude.workspace = true
+
+[lib]
+bench = false
+
+[dependencies]
+async-openai = "0.10.0"
+clap = { workspace = true, features = ["derive"] }
+colored = "2"
+crossbeam-channel = "0.5.7"
+fancy-regex = "0.11.0"
+heimdall-cache = { workspace = true }
+indicatif = "0.17.0"
+lazy_static = "1.4.0"
+rand = "0.8.5"
+reqwest = { version = "0.11.11", features = ["blocking"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+strsim = "0.10.0"
+async-recursion = "1.0.5"
+async-trait = "0.1.51"
+chrono = "0.4.31"
+backoff = { version = "0.4.0", features = ["tokio"] }
+thiserror = "1.0.50"
+tracing = "0.1.40"
+eyre = "0.6.12"
+heimdall-common.workspace = true
+alloy = { version = "0.3.3", features = [
+    "full",
+    "rpc-types-debug",
+    "rpc-types-trace",
+] }
+hashbrown = "0.14.5"
+paste = "1.0.15"
+
+[features]
+step-tracing = []
+experimental = []
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
+memory-stats = "1.0.0"
+
+[[bench]]
+name = "bench_erc20_transfer"
+harness = false
+
+[[bench]]
+name = "bench_fib"
+harness = false
+
+[[bench]]
+name = "bench_ten_thousand_hashes"
+harness = false
