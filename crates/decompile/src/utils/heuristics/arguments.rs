@@ -30,8 +30,8 @@ pub fn argument_heuristic<'a>(
                 // calculate the argument index, with the 4byte signature padding removed
                 // for example, CALLDATALOAD(4) -> (4-4)/32 = 0
                 //              CALLDATALOAD(36) -> (36-4)/32 = 1
-                let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4))
-                    / U256::from(32))
+                let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) /
+                    U256::from(32))
                 .try_into()
                 .unwrap_or(usize::MAX);
 
