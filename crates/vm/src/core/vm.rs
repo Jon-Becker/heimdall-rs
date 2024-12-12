@@ -1153,7 +1153,7 @@ impl VM {
                 if !condition.eq(&U256::from(0u8)) {
                     // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
                     // destination)
-                    if (pc <=
+                    if (pc <
                         self.bytecode
                             .len()
                             .try_into()
