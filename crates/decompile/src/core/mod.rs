@@ -94,7 +94,7 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
     let mut contract_bytecode = args
         .get_bytecode()
         .await
-        .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
+        .map_err(|e| Error::FetchError(format!("fetching target bytecode failed for address {address}, target: {:?}: {}", args.target, e)))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
 
     if contract_bytecode.is_empty() {
