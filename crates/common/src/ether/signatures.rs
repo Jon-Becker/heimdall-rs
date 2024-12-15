@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use alloy_dyn_abi::{DynSolType, DynSolValue};
+use alloy_json_abi::JsonAbi;
 use async_trait::async_trait;
 
 use crate::{
@@ -10,9 +13,9 @@ use crate::{
     },
 };
 use eyre::{OptionExt, Result};
-use heimdall_cache::with_cache;
+use heimdall_cache::{store_cache, with_cache};
 use serde::{Deserialize, Serialize};
-use tracing::trace;
+use tracing::{debug, trace};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedFunction {
@@ -324,6 +327,56 @@ impl ResolveSelector for ResolvedFunction {
         })
         .await
     }
+}
+
+/// Given the path to an ABI file, parses all [`ResolvedFunction`]s, [`ResolvedError`]s, and
+/// [`ResolvedLog`]s from the ABI and saves them to the cache.
+pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
+    let abi = std::fs::read_to_string(&path)?;
+    let json_abi = JsonAbi::from_json_str(&abi)?;
+
+    debug!("caching signatures from abi: {}", path.display());
+
+    json_abi.functions().for_each(|function| {
+        let selector = function.selector().to_string().trim_start_matches("0x").to_string();
+        let inputs: Vec<String> = function.inputs.iter().map(|input| input.ty.clone()).collect();
+
+        let resolved_function = ResolvedFunction {
+            name: function.name.clone(),
+            signature: function.signature(),
+            inputs,
+            decoded_inputs: None,
+        };
+
+        store_cache(&format!("selector.{selector}"), Some(vec![resolved_function]), None).ok();
+    });
+    json_abi.events().for_each(|event| {
+        let selector = event.selector().to_string().trim_start_matches("0x").to_string();
+        let inputs: Vec<String> = event.inputs.iter().map(|input| input.ty.clone()).collect();
+
+        let resolved_log =
+            ResolvedLog { name: event.name.clone(), signature: event.signature(), inputs };
+
+        store_cache(&format!("selector.{selector}"), Some(vec![resolved_log]), None).ok();
+    });
+    json_abi.errors().for_each(|error| {
+        let selector = error.selector().to_string().trim_start_matches("0x").to_string();
+        let inputs: Vec<String> = error.inputs.iter().map(|input| input.ty.clone()).collect();
+
+        let resolved_error =
+            ResolvedError { name: error.name.clone(), signature: error.signature(), inputs };
+
+        store_cache(&format!("selector.{selector}"), Some(vec![resolved_error]), None).ok();
+    });
+
+    debug!(
+        "cached {} functions, {} logs, and {} errors from provided abi",
+        json_abi.functions().count(),
+        json_abi.events().count(),
+        json_abi.errors().count(),
+    );
+
+    Ok(())
 }
 
 pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {

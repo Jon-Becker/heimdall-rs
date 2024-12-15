@@ -1,11 +1,13 @@
+use futures::future::join_all;
 use hashbrown::{HashMap, HashSet};
 use std::time::Instant;
 
 use alloy_json_abi::StateMutability;
 
-use eyre::Result;
+use eyre::{OptionExt, Result};
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
+    resources::openai::complete_chat,
     utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
 
@@ -14,14 +16,40 @@ use tracing::debug;
 use crate::{
     core::analyze::AnalyzerType,
     interfaces::AnalyzedFunction,
-    utils::constants::{DECOMPILED_SOURCE_HEADER_SOL, DECOMPILED_SOURCE_HEADER_YUL},
+    utils::constants::{
+        DECOMPILED_SOURCE_HEADER_SOL, DECOMPILED_SOURCE_HEADER_YUL, LLM_POSTPROCESSING_PROMPT,
+    },
 };
 
-pub fn build_source(
+async fn annotate_function(source: &str, openai_api_key: &str) -> Result<String> {
+    let annotated =
+        complete_chat(&LLM_POSTPROCESSING_PROMPT.replace("{source}", source), openai_api_key)
+            .await
+            .ok_or_eyre("failed to llm postprocess function")?;
+
+    // get the code from the response (remove the code block)
+    let annotated = annotated
+        .split("```")
+        .nth(1)
+        .expect("failed to get code from response")
+        .trim()
+        .to_string()
+        .replace("solidity", "");
+
+    if annotated.contains("{{code}}") {
+        return Err(eyre::eyre!("failed to postprocess function"));
+    }
+
+    Ok(annotated)
+}
+
+pub async fn build_source(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
     storage_variables: &HashMap<String, String>,
+    llm_postprocess: bool,
+    openai_api_key: String,
 ) -> Result<Option<String>> {
     // we can get the AnalyzerType from the first function, since they are all the same
     let analyzer_type = functions.first().map(|f| f.analyzer_type).unwrap_or(AnalyzerType::Yul);
@@ -64,27 +92,74 @@ pub fn build_source(
     }
 
     // add functions
-    functions
+    let futures: Vec<_> = functions
         .iter()
         .filter(|f| {
             !f.fallback &&
                 (analyzer_type == AnalyzerType::Yul ||
                     (f.maybe_getter_for.is_none() && !f.is_constant()))
         })
-        .for_each(|f| {
-            let mut function_source = Vec::new();
+        .map(|f| {
+            let f = f.clone(); // Ensure `Function` is cloneable, or adjust as needed.
+            let openai_api_key = openai_api_key.clone();
 
-            // get the function header
-            function_source.extend(get_function_header(f));
-            function_source.extend(f.logic.clone());
-            function_source.push("}".to_string());
+            // Spawn each function processing on a separate task.
+            tokio::task::spawn(async move {
+                let mut function_source = Vec::new();
 
-            let imbalance = get_indentation_imbalance(&function_source);
-            function_source.extend(vec!["}".to_string(); imbalance as usize]);
+                // get the function header
+                function_source.extend(get_function_header(&f));
+                function_source.extend(f.logic.clone());
+                function_source.push("}".to_string());
 
-            // add the function to the source
-            source.extend(function_source);
-        });
+                let imbalance = get_indentation_imbalance(&function_source);
+                function_source.extend(vec!["}".to_string(); imbalance as usize]);
+
+                if llm_postprocess {
+                    // postprocess the source code
+                    let postprocess_start = Instant::now();
+
+                    debug!("llm postprocessing 0x{} source", f.selector);
+
+                    let postprocessed_source =
+                        annotate_function(&function_source.join("\n"), &openai_api_key)
+                            .await
+                            .map_err(|e| {
+                                debug!(
+                                    "llm postprocessing 0x{} source failed: {:?}",
+                                    f.selector, e
+                                );
+                                e
+                            })
+                            .ok();
+
+                    debug!(
+                        "llm postprocessing 0x{} source took {:?}",
+                        f.selector,
+                        postprocess_start.elapsed()
+                    );
+
+                    // replace the function source with the postprocessed source
+                    if let Some(postprocessed_source) = postprocessed_source {
+                        function_source =
+                            postprocessed_source.split('\n').map(|x| x.to_string()).collect();
+                    }
+                }
+
+                Ok::<Vec<String>, eyre::Report>(function_source)
+            })
+        })
+        .collect();
+
+    // Await all tasks to complete
+    let results = join_all(futures).await;
+
+    // Combine all the results into one single vector
+    for res in results {
+        let function_source = res??;
+        source.extend(function_source);
+    }
+
     if analyzer_type == AnalyzerType::Yul {
         // add the fallback function, if it exists
         if let Some(fallback) = functions.iter().find(|f| f.fallback) {
@@ -174,29 +249,35 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
         None => format!("Unresolved_{}", f.selector),
     };
 
-    let function_signature = format!(
-        "{}({}) {}",
-        function_name,
-        f.sorted_arguments()
-            .iter()
-            .enumerate()
-            .map(|(i, (_, arg))| {
-                format!(
-                    "{} arg{i}",
-                    match f.resolved_function {
-                        Some(ref sig) => sig.inputs()[i].to_string(),
-                        None => arg
-                            .potential_types()
-                            .first()
-                            .unwrap_or(&"bytes32".to_string())
-                            .to_string(),
-                    }
-                )
-            })
-            .collect::<Vec<String>>()
-            .join(", "),
-        function_modifiers.join(" ")
-    );
+    let function_signature = match f.resolved_function {
+        Some(ref sig) => format!(
+            "{}({}) {}",
+            function_name,
+            sig.inputs()
+                .iter()
+                .enumerate()
+                .map(|(i, arg)| { format!("{} arg{i}", arg.to_string()) })
+                .collect::<Vec<String>>()
+                .join(", "),
+            function_modifiers.join(" ")
+        ),
+        None => format!(
+            "{}({}) {}",
+            function_name,
+            f.sorted_arguments()
+                .iter()
+                .enumerate()
+                .map(|(i, (_, arg))| {
+                    format!(
+                        "{} arg{i}",
+                        arg.potential_types().first().unwrap_or(&"bytes32".to_string())
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join(", "),
+            function_modifiers.join(" ")
+        ),
+    };
 
     match f.analyzer_type {
         AnalyzerType::Solidity => {
@@ -387,7 +468,7 @@ fn indent_source(source: &mut [String]) {
         for _ in 0..indentation_level {
             new_line.push_str("    ");
         }
-        new_line.push_str(line);
+        new_line.push_str(line.trim_start());
         *line = new_line;
 
         if line.trim().ends_with('{') {

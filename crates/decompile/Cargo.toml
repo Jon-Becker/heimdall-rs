@@ -30,8 +30,13 @@ fancy-regex = "0.11.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 alloy-dyn-abi = "0.8.3"
-alloy = { version = "0.4.2", features = ["full", "rpc-types-debug", "rpc-types-trace"] }
+alloy = { version = "0.4.2", features = [
+    "full",
+    "rpc-types-debug",
+    "rpc-types-trace",
+] }
 hashbrown = "0.14.5"
+tokio = { version = "1", features = ["full"] }
 
 heimdall-disassembler.workspace = true
 heimdall-vm.workspace = true

@@ -14,54 +14,40 @@ pub fn decode_precompile(
     precompile_address: U256,
     extcalldata_memory: &[StorageFrame],
     return_data_offset: &WrappedOpcode,
-) -> (bool, String) {
+) -> Option<String> {
     // safely convert the precompile address to a usize.
     let address: usize = match precompile_address.try_into() {
         Ok(x) => x,
         Err(_) => usize::MAX,
     };
-    let mut is_ext_call_precompile = false;
-    let mut ext_call_logic = String::new();
-
     match address {
-        1 => {
-            is_ext_call_precompile = true;
-            ext_call_logic = format!(
-                "address memory[{}] = ecrecover({});",
-                return_data_offset.solidify(),
-                extcalldata_memory
-                    .iter()
-                    .map(|x| x.operation.solidify())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
-        }
-        2 => {
-            is_ext_call_precompile = true;
-            ext_call_logic = format!(
-                "bytes memory[{}] = sha256({});",
-                return_data_offset.solidify(),
-                extcalldata_memory
-                    .iter()
-                    .map(|x| x.operation.solidify())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
-        }
-        3 => {
-            is_ext_call_precompile = true;
-            ext_call_logic = format!(
-                "bytes memory[{}] = ripemd160({});",
-                return_data_offset.solidify(),
-                extcalldata_memory
-                    .iter()
-                    .map(|x| x.operation.solidify())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            );
-        }
-        _ => {}
+        1 => Some(format!(
+            "address memory[{}] = ecrecover({});",
+            return_data_offset.solidify(),
+            extcalldata_memory
+                .iter()
+                .map(|x| x.operation.solidify())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )),
+        2 => Some(format!(
+            "bytes memory[{}] = sha256({});",
+            return_data_offset.solidify(),
+            extcalldata_memory
+                .iter()
+                .map(|x| x.operation.solidify())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )),
+        3 => Some(format!(
+            "bytes memory[{}] = ripemd160({});",
+            return_data_offset.solidify(),
+            extcalldata_memory
+                .iter()
+                .map(|x| x.operation.solidify())
+                .collect::<Vec<String>>()
+                .join(", ")
+        )),
+        _ => None,
     }
-
-    (is_ext_call_precompile, ext_call_logic)
 }

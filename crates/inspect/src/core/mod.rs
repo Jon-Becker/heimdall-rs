@@ -8,8 +8,11 @@ use std::{collections::VecDeque, time::Instant};
 use tracing::{debug, info, trace, warn};
 
 use heimdall_common::{
-    ether::rpc::{get_block_logs, get_trace, get_transaction},
-    utils::{hex::ToLowerHex, io::logging::TraceFactory},
+    ether::{
+        rpc::{get_block_logs, get_trace, get_transaction},
+        signatures::cache_signatures_from_abi,
+    },
+    utils::{env::set_env, hex::ToLowerHex, io::logging::TraceFactory},
 };
 
 use crate::{
@@ -32,6 +35,13 @@ impl InspectResult {
 pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     // init
     let start_time = Instant::now();
+    set_env("SKIP_RESOLVING", &args.skip_resolving.to_string());
+
+    // parse and cache signatures from the ABI, if provided
+    if let Some(abi_path) = args.abi.as_ref() {
+        cache_signatures_from_abi(abi_path.into())
+            .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
+    }
 
     // get calldata from RPC
     let start_fetch_time = Instant::now();

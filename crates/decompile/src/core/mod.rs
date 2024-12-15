@@ -11,7 +11,10 @@ use hashbrown::HashMap;
 use heimdall_common::{
     ether::{
         compiler::detect_compiler,
-        signatures::{score_signature, ResolvedError, ResolvedFunction, ResolvedLog},
+        signatures::{
+            cache_signatures_from_abi, score_signature, ResolvedError, ResolvedFunction,
+            ResolvedLog,
+        },
         types::to_type,
     },
     utils::strings::{decode_hex, encode_hex, encode_hex_reduced, StringExt},
@@ -81,13 +84,30 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
-    // for now, we only support one of these at a time
+    // validate arguments
     if args.include_solidity && args.include_yul {
         return Err(Error::Eyre(eyre!(
             "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
         )));
     }
+    if args.llm_postprocess && args.openai_api_key.is_empty() {
+        return Err(Error::Eyre(eyre!(
+                "llm postprocessing requires an openai API key. please provide one using the '--openai-api-key' flag."
+            )));
+    }
+    if !args.include_solidity && args.llm_postprocess {
+        return Err(Error::Eyre(eyre!(
+            "llm postprocessing requires including solidity source code. please enable the '--include-sol' flag."
+        )));
+    }
+
     let analyzer_type = AnalyzerType::from_args(args.include_solidity, args.include_yul);
+
+    // parse and cache signatures from the ABI, if provided
+    if let Some(abi_path) = args.abi.as_ref() {
+        cache_signatures_from_abi(abi_path.into())
+            .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
+    }
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
@@ -193,21 +213,22 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
     info!("symbolically executed {} selectors", symbolic_execution_maps.len());
 
     let start_analysis_time = Instant::now();
-    let mut analyzed_functions = symbolic_execution_maps
-        .into_iter()
-        .map(|(selector, trace_root)| {
+    let handles = symbolic_execution_maps.into_iter().map(|(selector, trace_root)| {
+        let mut evm_clone = evm.clone();
+        async move {
             let mut analyzer = Analyzer::new(
                 analyzer_type,
+                args.skip_resolving,
                 AnalyzedFunction::new(&selector, selector == "fallback"),
             );
 
             // analyze the symbolic execution trace
-            let mut analyzed_function = analyzer.analyze(trace_root)?;
+            let mut analyzed_function = analyzer.analyze(trace_root).await?;
 
             // if the function is constant, we can get the exact val
             if analyzed_function.is_constant() && !analyzed_function.fallback {
-                evm.reset();
-                let x = evm.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
+                evm_clone.reset();
+                let x = evm_clone.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
 
                 let returns_param_type = analyzed_function
                     .returns
@@ -229,8 +250,9 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
             }
 
             Ok::<_, Error>(analyzed_function)
-        })
-        .collect::<Result<Vec<AnalyzedFunction>, Error>>()?;
+        }
+    });
+    let mut analyzed_functions = futures::future::try_join_all(handles).await?;
 
     debug!("analyzing symbolic execution results took {:?}", start_analysis_time.elapsed());
     info!("analyzed {} symbolic execution traces", analyzed_functions.len());
@@ -349,7 +371,10 @@ pub async fn decompile_impl(mut args: DecompilerArgs, address: &str) -> Result<D
         &all_resolved_errors,
         &all_resolved_events,
         &storage_variables,
-    )?;
+        args.llm_postprocess,
+        args.openai_api_key,
+    )
+    .await?;
 
     debug!("decompilation took {:?}", start_time.elapsed());
 

@@ -119,7 +119,7 @@ impl Version {
             (self.major == other.major && self.minor == other.minor && self.patch <= other.patch)
     }
 
-    /// equal to
+    #[allow(clippy::should_implement_trait)]
     pub fn eq(&self, other: &Version) -> bool {
         self.major == other.major &&
             self.minor == other.minor &&

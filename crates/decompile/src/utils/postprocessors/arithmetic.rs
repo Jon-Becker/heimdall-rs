@@ -71,7 +71,7 @@ pub fn simplify_parentheses(line: &str, paren_index: usize) -> Result<String, Er
         };
 
         let inner_tokens = tokenize(&inside);
-        return !inner_tokens.iter().any(|tk| classify_token(tk) == TokenType::Operator);
+        !inner_tokens.iter().any(|tk| classify_token(tk) == TokenType::Operator)
     }
 
     let mut cleaned: String = line.to_owned();

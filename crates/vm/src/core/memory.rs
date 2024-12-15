@@ -191,7 +191,7 @@ impl Memory {
     /// Given an offset into memory, returns the opcode that last modified it (if it has been
     /// modified at all)
     ///
-    /// Due to the nature of `WrappedOpcode`, this allows the entire CFG branch to be traversed.
+    /// Due to the nature of `WrappedOpcode`, this allows the entire Cfg branch to be traversed.
     pub fn origin(&self, byte: usize) -> Option<WrappedOpcode> {
         self.bytes.get_by_offset(byte)
     }

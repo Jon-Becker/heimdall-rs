@@ -68,7 +68,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
-      - run: cargo fmt --check --all
+      - run: cargo +nightly fmt --check --all
 
   check:
     runs-on: ubuntu-latest

@@ -195,6 +195,7 @@ fn try_decode_dynamic_parameter_bytes(
 }
 
 /// Handle ABI-encoded bytes
+#[allow(clippy::too_many_arguments)]
 fn try_decode_dynamic_parameter_array(
     parameter_index: usize,
     calldata_words: &[Vec<u8>],
@@ -259,6 +260,7 @@ fn try_decode_dynamic_parameter_array(
 }
 
 /// Determine if the given word is an abi-encoded string.
+#[allow(clippy::too_many_arguments)]
 fn try_decode_dynamic_parameter_string(
     data_words: &[Vec<u8>],
     parameter_index: usize,

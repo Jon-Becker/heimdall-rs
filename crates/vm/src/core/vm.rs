@@ -748,7 +748,7 @@ impl VM {
                 let gas_cost = 6 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.stack.push(U256::try_from(result)?, operation);
+                self.stack.push(U256::from_be_bytes(result.0), operation);
             }
 
             // ADDRESS
@@ -1153,7 +1153,7 @@ impl VM {
                 if !condition.eq(&U256::from(0u8)) {
                     // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
                     // destination)
-                    if (pc <=
+                    if (pc <
                         self.bytecode
                             .len()
                             .try_into()

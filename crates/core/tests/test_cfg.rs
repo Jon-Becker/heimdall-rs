@@ -3,7 +3,7 @@ mod integration_tests {
     use memory_stats::memory_stats;
     use std::path::PathBuf;
 
-    use heimdall_cfg::{cfg, CFGArgs, CFGArgsBuilder};
+    use heimdall_cfg::{cfg, CfgArgs, CfgArgsBuilder};
     use petgraph::dot::Dot;
     use serde_json::Value;
 
@@ -14,7 +14,7 @@ mod integration_tests {
             std::process::exit(0);
         });
 
-        let result = heimdall_cfg::cfg(CFGArgs {
+        let result = heimdall_cfg::cfg(CfgArgs {
             target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
             rpc_url,
             default: true,
@@ -43,7 +43,7 @@ mod integration_tests {
             std::process::exit(0);
         });
 
-        let result = heimdall_cfg::cfg(CFGArgs {
+        let result = heimdall_cfg::cfg(CfgArgs {
             target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
             rpc_url,
             default: true,
@@ -110,8 +110,8 @@ mod integration_tests {
         let mut fail_count = 0;
 
         for (contract_address, bytecode) in contracts {
-            println!("Generating CFG for contract {contract_address}");
-            let args = CFGArgsBuilder::new()
+            println!("Generating Cfg for contract {contract_address}");
+            let args = CfgArgsBuilder::new()
                 .target(bytecode)
                 .timeout(10000)
                 .build()

@@ -35,7 +35,7 @@ pub fn task_pool<
     let mut handles = Vec::new();
 
     // Split items into chunks for each thread to process
-    let chunk_size = (items.len() + num_threads - 1) / num_threads;
+    let chunk_size = items.len().div_ceil(num_threads);
     let chunks = items.chunks(chunk_size);
 
     // Share ownership of f across threads with Arc

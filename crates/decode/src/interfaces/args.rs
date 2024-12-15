@@ -43,11 +43,20 @@ pub struct DecodeArgs {
     /// Whether to skip resolving selectors. Heimdall will attempt to guess types.
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
+
+    /// Whether to treat the target as a raw calldata string. Useful if the target is exactly 32
+    /// bytes.
+    #[clap(long, short)]
+    pub raw: bool,
+
+    /// Path to an optional ABI file to use for resolving errors, functions, and events.
+    #[clap(long, short, default_value = None, hide_default_value = true)]
+    pub abi: Option<String>,
 }
 
 impl DecodeArgs {
     pub async fn get_calldata(&self) -> Result<Vec<u8>> {
-        get_calldata_from_target(&self.target, &self.rpc_url).await
+        get_calldata_from_target(&self.target, self.raw, &self.rpc_url).await
     }
 }
 
@@ -62,6 +71,8 @@ impl DecodeArgsBuilder {
             constructor: Some(false),
             truncate_calldata: Some(false),
             skip_resolving: Some(false),
+            raw: Some(false),
+            abi: Some(None),
         }
     }
 }

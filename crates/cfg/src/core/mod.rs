@@ -8,17 +8,17 @@ use heimdall_vm::core::vm::VM;
 use petgraph::{dot::Dot, Graph};
 use std::time::{Duration, Instant};
 
-use super::CFGArgs;
+use super::CfgArgs;
 
 use crate::{core::graph::build_cfg, error::Error};
 use tracing::{debug, info};
 
 #[derive(Debug, Clone)]
-pub struct CFGResult {
+pub struct CfgResult {
     pub graph: Graph<String, String>,
 }
 
-impl CFGResult {
+impl CfgResult {
     pub fn as_dot(&self, color_edges: bool) -> String {
         let output = format!("{}", Dot::with_config(&self.graph, &[]));
 
@@ -44,7 +44,7 @@ impl CFGResult {
     }
 }
 
-pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
+pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     // init
     let start_time = Instant::now();
 
@@ -99,5 +99,5 @@ pub async fn cfg(args: CFGArgs) -> Result<CFGResult, Error> {
     debug!("cfg generated in {:?}", start_time.elapsed());
     info!("generated cfg successfully");
 
-    Ok(CFGResult { graph: contract_cfg })
+    Ok(CfgResult { graph: contract_cfg })
 }
