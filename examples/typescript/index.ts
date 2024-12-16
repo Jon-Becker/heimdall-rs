@@ -3,12 +3,28 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-interface DecodeArgsOptions {
-  target: string;
-  rpc_url?: string;
-  default?: boolean;
-  skip_resolving?: boolean;
-  raw?: boolean;
+class DecodeResult {
+  public name: string;
+  public signature: string;
+  public inputs: any[];
+  public decoded_inputs: any[];
+
+  constructor(path: string) {
+    // walk the directory and find the json file
+    const files = fs.readdirSync(path);
+    const jsonFile = files.find((file) => file.endsWith('.json'));
+    if (!jsonFile) {
+      throw new Error('`decoded.json` not found');
+    }
+
+    const data = JSON.parse(fs.readFileSync
+      (path + '/' + jsonFile, 'utf8'));
+
+    this.name = data.name;
+    this.signature = data.signature;
+    this.inputs = data.inputs;
+    this.decoded_inputs = data.decoded_inputs;
+  }
 }
 
 class DecodeArgs {
@@ -44,7 +60,7 @@ class Decoder {
     try {
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'decoder-'));
 
-      const command = ['decode', this.args.target, ];
+      const command = ['decode', this.args.target, "--output", tempDir];
 
       if (this.args.rpc_url) {
         command.push('--rpc-url', this.args.rpc_url);
@@ -62,9 +78,8 @@ class Decoder {
       // Execute heimdall command
       execSync(`heimdall ${command.join(' ')}`, { stdio: 'inherit' });
 
-      // Here you would read and parse the output from `tempDir`
-      // For now, we return null since the original code doesn't show the parsing step.
-      return null;
+      let result = new DecodeResult(tempDir);
+      return result
     } catch (e) {
       console.error("Error: ", e);
       return null;
@@ -89,7 +104,7 @@ function main() {
   }
 
   const args = new DecodeArgs(
-    "0x000000000000000000000000008dfede2ef0e61578c3bba84a7ed4b9d25795c30000000000000000000000000000000000000001431e0fae6d7217caa00000000000000000000000000000000000000000000000000000000000000000002710fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc7c0000000000000000000000000000000000000000000000a6af776004abf4e612ad000000000000000000000000000000000000000000000000000000012a05f20000000000000000000000000000000000000000000000000000000000000111700000000000000000000000001c5f545f5b46f76e440fa02dabf88fdc0b10851a00000000000000000000000000000000000000000000000000000002540be400",
+    "0xc47f00270000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000b6a6265636b65722e657468000000000000000000000000000000000000000000",
     "",
     false,
     false,
@@ -97,7 +112,7 @@ function main() {
   );
 
   const decoded = new Decoder(args).decode();
-  console.log("Decoded Result:", decoded);
+  console.log(decoded);
 }
 
 main();
