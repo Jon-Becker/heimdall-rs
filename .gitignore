@@ -36,3 +36,6 @@ false/*
 *.sh
 
 largest1k
+
+bun.lockb
+node_modules
