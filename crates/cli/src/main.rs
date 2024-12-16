@@ -160,9 +160,18 @@ async fn main() -> Result<()> {
             }
 
             let result =
-                decode(cmd).await.map_err(|e| eyre!("failed to decode calldata: {}", e))?;
+                decode(cmd.clone()).await.map_err(|e| eyre!("failed to decode calldata: {}", e))?;
 
-            result.display()
+            if cmd.output == "print" {
+                result.display()
+            } else {
+                let output_path =
+                    build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "decoded.json")
+                        .await
+                        .map_err(|e| eyre!("failed to build output path: {}", e))?;
+                write_file(&output_path, &result.decoded.to_json()?)
+                    .map_err(|e| eyre!("failed to write decoded output: {}", e))?;
+            }
         }
 
         Subcommands::Cfg(mut cmd) => {

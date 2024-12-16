@@ -2305,6 +2305,7 @@ dependencies = [
  "heimdall-common",
  "heimdall-config",
  "heimdall-vm",
+ "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tracing",

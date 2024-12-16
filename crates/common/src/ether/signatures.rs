@@ -17,6 +17,8 @@ use heimdall_cache::{store_cache, with_cache};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace};
 
+use super::types::DynSolValueExt;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedFunction {
     pub name: String,
@@ -29,6 +31,31 @@ pub struct ResolvedFunction {
 impl ResolvedFunction {
     pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
+    }
+
+    /// A helper function to convert the struct into a JSON string.
+    /// We use this because `decoded_inputs` cannot be serialized by serde.
+    pub fn to_json(&self) -> Result<String> {
+        Ok(format!(
+            r#"{{
+  "name": "{}",
+  "signature": "{}",
+  "inputs": {},
+  "decoded_inputs": [{}]
+}}"#,
+            &self.name,
+            &self.signature,
+            serde_json::to_string(&self.inputs)?,
+            if let Some(decoded_inputs) = &self.decoded_inputs {
+                decoded_inputs
+                    .iter()
+                    .map(|input| input.serialize().to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            } else {
+                "".to_string()
+            }
+        ))
     }
 }
 

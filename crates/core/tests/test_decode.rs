@@ -16,6 +16,7 @@ mod integration_tests {
             truncate_calldata: false,
             skip_resolving: false,
             raw: false,
+            output: String::from("print"),
         };
         let _ = heimdall_decoder::decode(args).await;
     }
@@ -33,6 +34,8 @@ mod integration_tests {
             truncate_calldata: false,
             skip_resolving: false,
             raw: false,
+            output: String::from("print"),
+
         };
         let _ = heimdall_decoder::decode(args).await;
     }
