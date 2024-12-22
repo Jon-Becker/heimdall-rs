@@ -12,18 +12,15 @@ use heimdall_common::{
     ether::{
         compiler::detect_compiler,
         signatures::{
-            cache_signatures_from_abi, score_signature, ResolvedError, ResolvedFunction,
-            ResolvedLog,
+            cache_signatures_from_abi, resolve_selectors, score_signature, ResolvedError,
+            ResolvedFunction, ResolvedLog,
         },
         types::to_type,
     },
     utils::strings::{decode_hex, encode_hex, encode_hex_reduced, StringExt},
 };
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
-use heimdall_vm::{
-    core::vm::VM,
-    ext::selectors::{find_function_selectors, resolve_selectors},
-};
+use heimdall_vm::{core::vm::VM, ext::selectors::find_function_selectors};
 use std::time::{Duration, Instant};
 
 use crate::{

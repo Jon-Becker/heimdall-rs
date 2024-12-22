@@ -1,8 +1,13 @@
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use alloy_dyn_abi::{DynSolType, DynSolValue};
 use alloy_json_abi::JsonAbi;
 use async_trait::async_trait;
+use hashbrown::HashMap;
 
 use crate::{
     ether::types::parse_function_parameters,
@@ -15,7 +20,7 @@ use crate::{
 use eyre::{OptionExt, Result};
 use heimdall_cache::{store_cache, with_cache};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, trace};
+use tracing::{debug, error, info, trace, warn};
 
 use super::types::DynSolValueExt;
 
@@ -306,94 +311,6 @@ impl ResolveSelector for ResolvedFunction {
     }
 }
 
-/// Given the path to an ABI file, parses all [`ResolvedFunction`]s, [`ResolvedError`]s, and
-/// [`ResolvedLog`]s from the ABI and saves them to the cache.
-pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
-    let abi = std::fs::read_to_string(&path)?;
-    let json_abi = JsonAbi::from_json_str(&abi)?;
-
-    debug!("caching signatures from abi: {}", path.display());
-
-    json_abi.functions().for_each(|function| {
-        let selector = function.selector().to_string().trim_start_matches("0x").to_string();
-        let inputs: Vec<String> = function.inputs.iter().map(|input| input.ty.clone()).collect();
-
-        let resolved_function = ResolvedFunction {
-            name: function.name.clone(),
-            signature: function.signature(),
-            inputs,
-            decoded_inputs: None,
-        };
-
-        store_cache(&format!("selector.{selector}"), Some(vec![resolved_function]), None).ok();
-    });
-    json_abi.events().for_each(|event| {
-        let selector = event.selector().to_string().trim_start_matches("0x").to_string();
-        let inputs: Vec<String> = event.inputs.iter().map(|input| input.ty.clone()).collect();
-
-        let resolved_log =
-            ResolvedLog { name: event.name.clone(), signature: event.signature(), inputs };
-
-        store_cache(&format!("selector.{selector}"), Some(vec![resolved_log]), None).ok();
-    });
-    json_abi.errors().for_each(|error| {
-        let selector = error.selector().to_string().trim_start_matches("0x").to_string();
-        let inputs: Vec<String> = error.inputs.iter().map(|input| input.ty.clone()).collect();
-
-        let resolved_error =
-            ResolvedError { name: error.name.clone(), signature: error.signature(), inputs };
-
-        store_cache(&format!("selector.{selector}"), Some(vec![resolved_error]), None).ok();
-    });
-
-    debug!(
-        "cached {} functions, {} logs, and {} errors from provided abi",
-        json_abi.functions().count(),
-        json_abi.events().count(),
-        json_abi.errors().count(),
-    );
-
-    Ok(())
-}
-
-pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
-    // the score starts at 1000
-    let mut score = 1000;
-
-    // remove the length of the signature from the score
-    // this will prioritize shorter signatures, which are typically less spammy
-    score -= signature.len() as u32;
-
-    // prioritize signatures with less numbers
-    score -= (signature.split('(').next().unwrap_or("").matches(|c: char| c.is_numeric()).count()
-        as u32) *
-        3;
-
-    // prioritize signatures with parameters
-    let num_params = signature.matches(',').count() + 1;
-    score += num_params as u32 * 10;
-
-    // count the number of parameters in the signature, if enabled
-    if let Some(num_words) = num_words {
-        let num_dyn_params = signature.matches("bytes").count() +
-            signature.matches("string").count() +
-            signature.matches('[').count();
-        let num_static_params = num_params - num_dyn_params;
-
-        // reduce the score if the signature has less static parameters than there are words in the
-        // calldata
-        if num_static_params < num_words {
-            score -= (num_words - num_static_params) as u32 * 10;
-        }
-    }
-
-    score
-}
-
-/// trait impls
-/// trait impls
-/// trait impls
-
 impl TryFrom<&ResolvedFunction> for TraceFactory {
     // eyre
     type Error = eyre::Report;
@@ -444,9 +361,136 @@ impl TryFrom<&ResolvedFunction> for TraceFactory {
     }
 }
 
-/// tests
-/// tests
-/// tests
+/// Given the path to an ABI file, parses all [`ResolvedFunction`]s, [`ResolvedError`]s, and
+/// [`ResolvedLog`]s from the ABI and saves them to the cache.
+pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
+    let abi = std::fs::read_to_string(&path)?;
+    let json_abi = JsonAbi::from_json_str(&abi)?;
+
+    debug!("caching signatures from abi: {}", path.display());
+
+    json_abi.functions().for_each(|function| {
+        let selector = function.selector().to_string().trim_start_matches("0x").to_string();
+        let inputs: Vec<String> = function.inputs.iter().map(|input| input.ty.clone()).collect();
+
+        let resolved_function = ResolvedFunction {
+            name: function.name.clone(),
+            signature: function.signature(),
+            inputs,
+            decoded_inputs: None,
+        };
+
+        store_cache(&format!("selector.{selector}"), Some(vec![resolved_function]), None).ok();
+    });
+    json_abi.events().for_each(|event| {
+        let selector = event.selector().to_string().trim_start_matches("0x").to_string();
+        let inputs: Vec<String> = event.inputs.iter().map(|input| input.ty.clone()).collect();
+
+        let resolved_log =
+            ResolvedLog { name: event.name.clone(), signature: event.signature(), inputs };
+
+        store_cache(&format!("selector.{selector}"), Some(vec![resolved_log]), None).ok();
+    });
+    json_abi.errors().for_each(|error| {
+        let selector = error.selector().to_string().trim_start_matches("0x").to_string();
+        let inputs: Vec<String> = error.inputs.iter().map(|input| input.ty.clone()).collect();
+
+        let resolved_error =
+            ResolvedError { name: error.name.clone(), signature: error.signature(), inputs };
+
+        store_cache(&format!("selector.{selector}"), Some(vec![resolved_error]), None).ok();
+    });
+
+    debug!(
+        "cached {} functions, {} logs, and {} errors from provided abi",
+        json_abi.functions().count(),
+        json_abi.events().count(),
+        json_abi.errors().count(),
+    );
+
+    Ok(())
+}
+
+/// A heuristic function to score a function signature based on its spamminess.
+pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
+    // the score starts at 1000
+    let mut score = 1000;
+
+    // remove the length of the signature from the score
+    // this will prioritize shorter signatures, which are typically less spammy
+    score -= signature.len() as u32;
+
+    // prioritize signatures with less numbers
+    score -= (signature.split('(').next().unwrap_or("").matches(|c: char| c.is_numeric()).count()
+        as u32) *
+        3;
+
+    // prioritize signatures with parameters
+    let num_params = signature.matches(',').count() + 1;
+    score += num_params as u32 * 10;
+
+    // count the number of parameters in the signature, if enabled
+    if let Some(num_words) = num_words {
+        let num_dyn_params = signature.matches("bytes").count() +
+            signature.matches("string").count() +
+            signature.matches('[').count();
+        let num_static_params = num_params - num_dyn_params;
+
+        // reduce the score if the signature has less static parameters than there are words in the
+        // calldata
+        if num_static_params < num_words {
+            score -= (num_words - num_static_params) as u32 * 10;
+        }
+    }
+
+    score
+}
+
+/// Resolve a list of selectors to their function signatures.
+pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
+where
+    T: ResolveSelector + Send + Clone + 'static, {
+    // short-circuit if there are no selectors
+    if selectors.is_empty() {
+        return HashMap::new();
+    }
+
+    let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    let mut threads = Vec::new();
+    let start_time = Instant::now();
+    let selector_count = selectors.len();
+
+    for selector in selectors {
+        let function_clone = resolved_functions.clone();
+
+        // create a new thread for each selector
+        threads.push(tokio::task::spawn(async move {
+            if let Ok(Some(function)) = T::resolve(&selector).await {
+                let mut _resolved_functions =
+                    function_clone.lock().expect("Could not obtain lock on function_clone.");
+                _resolved_functions.insert(selector, function);
+            }
+        }));
+    }
+
+    // wait for all threads to finish
+    for thread in threads {
+        if let Err(e) = thread.await {
+            // Handle error
+            error!("failed to resolve selector: {:?}", e);
+        }
+    }
+
+    let signatures =
+        resolved_functions.lock().expect("failed to obtain lock on resolved_functions.").clone();
+    if signatures.is_empty() {
+        warn!("failed to resolve any signatures from {} selectors", selector_count);
+    }
+    info!("resolved {} signatures from {} selectors", signatures.len(), selector_count);
+    debug!("signature resolution took {:?}", start_time.elapsed());
+    signatures
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,44 +1,9 @@
 use hashbrown::{HashMap, HashSet};
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
 
-use eyre::Result;
-use heimdall_common::{
-    ether::signatures::{ResolveSelector, ResolvedFunction},
-    utils::strings::decode_hex,
-};
-use tokio::task;
-use tracing::{debug, error, info, trace, warn};
+use heimdall_common::utils::strings::decode_hex;
+use tracing::{info, trace};
 
 use crate::core::vm::VM;
-
-// Find all function selectors and all the data associated to this function, represented by
-// [`ResolvedFunction`]
-pub async fn get_resolved_selectors(
-    disassembled_bytecode: &str,
-    skip_resolving: &bool,
-    evm: &VM,
-) -> Result<(HashMap<String, u128>, HashMap<String, Vec<ResolvedFunction>>)> {
-    let selectors = find_function_selectors(evm, disassembled_bytecode);
-
-    let mut resolved_selectors = HashMap::new();
-    if !skip_resolving {
-        resolved_selectors =
-            resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await;
-
-        trace!(
-            "resolved {} possible functions from {} detected selectors.",
-            resolved_selectors.len(),
-            selectors.len()
-        );
-    } else {
-        trace!("found {} possible function selectors.", selectors.len());
-    }
-
-    Ok((selectors, resolved_selectors))
-}
 
 /// find all function selectors in the given EVM assembly.
 // TODO: update get_resolved_selectors logic to support vyper, huff
@@ -97,7 +62,7 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
 
 /// resolve a selector's function entry point from the EVM bytecode
 // TODO: update resolve_entry_point logic to support vyper
-pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
+fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
     let mut handled_jumps = HashSet::new();
 
     // execute the EVM call to find the entry point for the given selector
@@ -137,50 +102,4 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
     }
 
     0
-}
-
-/// Resolve a list of selectors to their function signatures.
-pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
-where
-    T: ResolveSelector + Send + Clone + 'static, {
-    // short-circuit if there are no selectors
-    if selectors.is_empty() {
-        return HashMap::new();
-    }
-
-    let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    let mut threads = Vec::new();
-    let start_time = Instant::now();
-    let selector_count = selectors.len();
-
-    for selector in selectors {
-        let function_clone = resolved_functions.clone();
-
-        // create a new thread for each selector
-        threads.push(task::spawn(async move {
-            if let Ok(Some(function)) = T::resolve(&selector).await {
-                let mut _resolved_functions =
-                    function_clone.lock().expect("Could not obtain lock on function_clone.");
-                _resolved_functions.insert(selector, function);
-            }
-        }));
-    }
-
-    // wait for all threads to finish
-    for thread in threads {
-        if let Err(e) = thread.await {
-            // Handle error
-            error!("failed to resolve selector: {:?}", e);
-        }
-    }
-
-    let signatures =
-        resolved_functions.lock().expect("failed to obtain lock on resolved_functions.").clone();
-    if signatures.is_empty() {
-        warn!("failed to resolve any signatures from {} selectors", selector_count);
-    }
-    info!("resolved {} signatures from {} selectors", signatures.len(), selector_count);
-    debug!("signature resolution took {:?}", start_time.elapsed());
-    signatures
 }
