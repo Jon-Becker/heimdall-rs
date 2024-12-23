@@ -47,7 +47,7 @@ impl Vm {
             self.step()?;
 
             // this shouldn't be necessary, but it's safer to have it
-            if self.exitcode != 255 || !self.returndata.is_empty() {
+            if self.stopped {
                 break;
             }
         }
@@ -316,7 +316,7 @@ impl Vm {
             }
 
             // when the vm exits, this path is complete
-            if vm.exitcode != 255 || !vm.returndata.is_empty() {
+            if vm.stopped {
                 break;
             }
         }

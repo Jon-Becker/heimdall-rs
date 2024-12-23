@@ -43,7 +43,7 @@ pub struct Vm {
     pub gas_used: u128,
     pub events: Vec<Log>,
     pub returndata: Vec<u8>,
-    pub exitcode: u128,
+    pub stopped: bool,
     pub address_access_set: HashSet<U256>,
     #[cfg(feature = "step-tracing")]
     pub operation_count: u128,
@@ -57,7 +57,6 @@ pub struct ExecutionResult {
     pub gas_used: u128,
     pub gas_remaining: u128,
     pub returndata: Vec<u8>,
-    pub exitcode: u128,
     pub events: Vec<Log>,
     pub instruction: u128,
 }
@@ -130,7 +129,7 @@ impl Vm {
             gas_used: 21000,
             events: Vec::new(),
             returndata: Vec::new(),
-            exitcode: 255,
+            stopped: false,
             address_access_set: HashSet::new(),
             #[cfg(feature = "step-tracing")]
             operation_count: 0,
@@ -177,8 +176,8 @@ impl Vm {
     /// vm.exit(0xff, Vec::new());
     /// assert_eq!(vm.exitcode, 0xff);
     /// ```
-    pub fn exit(&mut self, code: u128, returndata: Vec<u8>) {
-        self.exitcode = code;
+    pub fn exit(&mut self, returndata: Vec<u8>) {
+        self.stopped = true;
         self.returndata = returndata;
     }
 
@@ -210,7 +209,7 @@ impl Vm {
         if amount > self.gas_remaining {
             self.gas_used += self.gas_remaining;
             self.gas_remaining = 0;
-            self.exit(9, Vec::new());
+            self.exit(Vec::new());
             return false;
         }
 
@@ -242,7 +241,7 @@ impl Vm {
     fn _step(&mut self) -> Result<Instruction> {
         // sanity check
         if self.bytecode.len() < self.instruction as usize {
-            self.exit(2, Vec::new());
+            self.exit(Vec::new());
             return Ok(Instruction {
                 instruction: self.instruction,
                 opcode: 0xff,
@@ -302,7 +301,7 @@ impl Vm {
         match opcode {
             // STOP
             0x00 => {
-                self.exit(10, Vec::new());
+                self.exit(Vec::new());
                 return Ok(Instruction {
                     instruction: last_instruction,
                     opcode,
@@ -1148,7 +1147,7 @@ impl Vm {
                         .expect("impossible case: bytecode is larger than u128::MAX"))
                     && (self.bytecode[pc as usize] != 0x5b)
                 {
-                    self.exit(790, Vec::new());
+                    self.exit(Vec::new());
                     return Ok(Instruction {
                         instruction: last_instruction,
                         opcode,
@@ -1181,7 +1180,7 @@ impl Vm {
                             .expect("impossible case: bytecode is larger than u128::MAX"))
                         && (self.bytecode[pc as usize] != 0x5b)
                     {
-                        self.exit(790, Vec::new());
+                        self.exit(Vec::new());
                         return Ok(Instruction {
                             instruction: last_instruction,
                             opcode,
@@ -1373,7 +1372,7 @@ impl Vm {
                 let gas_cost = self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.exit(0, self.memory.read(offset, size));
+                self.exit(self.memory.read(offset, size));
             }
 
             // DELEGATECALL, STATICCALL
@@ -1408,12 +1407,12 @@ impl Vm {
                 let offset: usize = offset.try_into()?;
                 let size: usize = size.try_into()?;
 
-                self.exit(1, self.memory.read(offset, size));
+                self.exit(self.memory.read(offset, size));
             }
 
             // INVALID & SELFDESTRUCT
             _ => {
-                self.exit(1, Vec::new());
+                self.exit(Vec::new());
             }
         }
 
@@ -1515,10 +1514,7 @@ impl Vm {
         let mut vm_clone = self.clone();
 
         for _ in 0..n {
-            if vm_clone.bytecode.len() < vm_clone.instruction as usize
-                || vm_clone.exitcode != 255
-                || !vm_clone.returndata.is_empty()
-            {
+            if vm_clone.bytecode.len() < vm_clone.instruction as usize || vm_clone.stopped {
                 break;
             }
             states.push(vm_clone.step()?);
@@ -1557,7 +1553,7 @@ impl Vm {
         self.gas_used = 21000;
         self.events = Vec::new();
         self.returndata = Vec::new();
-        self.exitcode = 255;
+        self.stopped = false;
     }
 
     /// Executes the code until finished
@@ -1583,7 +1579,7 @@ impl Vm {
         while self.bytecode.len() >= self.instruction as usize {
             self.step()?;
 
-            if self.exitcode != 255 || !self.returndata.is_empty() {
+            if self.stopped {
                 break;
             }
         }
@@ -1592,7 +1588,6 @@ impl Vm {
             gas_used: self.gas_used,
             gas_remaining: self.gas_remaining,
             returndata: self.returndata.to_owned(),
-            exitcode: self.exitcode,
             events: self.events.clone(),
             instruction: self.instruction,
         })
@@ -1662,7 +1657,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert!(vm.returndata.is_empty());
-        assert_eq!(vm.exitcode, 10);
+        assert!(vm.stopped);
     }
 
     #[test]
@@ -1671,7 +1666,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert!(vm.returndata.is_empty());
-        assert_eq!(vm.exitcode, 255);
+        assert!(vm.stopped);
     }
 
     #[test]
