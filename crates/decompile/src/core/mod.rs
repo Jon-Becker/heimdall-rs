@@ -3,7 +3,6 @@ pub(crate) mod out;
 pub(crate) mod postprocess;
 pub(crate) mod resolve;
 
-use alloy::primitives::Address;
 use alloy_dyn_abi::{DynSolType, DynSolValue};
 use alloy_json_abi::JsonAbi;
 use eyre::eyre;
@@ -19,8 +18,7 @@ use heimdall_common::{
     },
     utils::strings::{decode_hex, encode_hex, encode_hex_reduced, StringExt},
 };
-use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
-use heimdall_vm::{core::vm::VM, ext::selectors::find_function_selectors};
+use heimdall_vm::{core::vm::Vm, ext::selectors::find_function_selectors};
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -89,29 +87,11 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // create a new EVM instance. we will use this for finding function selectors,
     // performing symbolic execution, and more.
-    let mut evm = VM::new(
-        &contract_bytecode,
-        &[],
-        Address::default(),
-        Address::default(),
-        Address::default(),
-        0,
-        u128::MAX,
-    );
-
-    // disassemble the contract's bytecode
-    let assembly = disassemble(
-        DisassemblerArgsBuilder::new()
-            .target(encode_hex(&contract_bytecode))
-            .build()
-            .expect("impossible case: failed to build disassembly arguments"),
-    )
-    .await
-    .map_err(|e| Error::Eyre(eyre!("disassembling contract bytecode failed: {}", e)))?;
+    let mut evm = Vm::new_with_bytecode(&contract_bytecode);
 
     // find all the function selectors in the bytecode
     let start_selectors_time = Instant::now();
-    let selectors = find_function_selectors(&evm, &assembly);
+    let selectors = find_function_selectors(&evm);
     debug!("finding function selectors took {:?}", start_selectors_time.elapsed());
 
     // resolve selectors (if enabled)

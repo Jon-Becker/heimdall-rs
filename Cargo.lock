@@ -2328,7 +2328,6 @@ dependencies = [
  "heimdall-common",
  "heimdall-config",
  "heimdall-decoder",
- "heimdall-disassembler",
  "heimdall-vm",
  "lazy_static",
  "serde",

@@ -1,7 +1,7 @@
 use alloy::primitives::Address;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use heimdall_common::utils::strings::decode_hex;
-use heimdall_vm::core::vm::VM;
+use heimdall_vm::core::vm::Vm;
 use tokio::runtime::Runtime;
 
 fn test_ten_thousand_hashes(c: &mut Criterion) {
@@ -11,7 +11,7 @@ fn test_ten_thousand_hashes(c: &mut Criterion) {
     group.bench_function(BenchmarkId::from_parameter("ten_thousand_hashes"), |b| {
         b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
             // build the evm
-            let mut evm = VM::new(
+            let mut evm = Vm::new(
                 &decode_hex(include_str!("./testdata/ten_thousand_hashes.hex"))
                     .expect("invalid bytecode"),
                 &[],

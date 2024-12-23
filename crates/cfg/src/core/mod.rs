@@ -1,9 +1,8 @@
 pub(crate) mod graph;
 
-use alloy::primitives::Address;
 use eyre::eyre;
 use heimdall_common::{ether::compiler::detect_compiler, utils::strings::StringExt};
-use heimdall_vm::core::vm::VM;
+use heimdall_vm::core::vm::Vm;
 
 use petgraph::{dot::Dot, Graph};
 use std::time::{Duration, Instant};
@@ -65,15 +64,7 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
 
     // create a new EVM instance. we will use this for finding function selectors,
     // performing symbolic execution, and more.
-    let mut evm = VM::new(
-        &contract_bytecode,
-        &[],
-        Address::default(),
-        Address::default(),
-        Address::default(),
-        0,
-        u128::MAX,
-    );
+    let mut evm = Vm::new_with_bytecode(&contract_bytecode);
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));
     let start_sym_exec_time = Instant::now();

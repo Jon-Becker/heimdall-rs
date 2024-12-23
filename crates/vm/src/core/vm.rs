@@ -24,11 +24,11 @@ use super::{
     storage::Storage,
 };
 
-/// The [`VM`] struct represents an EVM instance. \
+/// The [`Vm`] struct represents an EVM instance. \
 /// It contains the EVM's [`Stack`], [`Memory`], [`Storage`], and other state variables needed to
 /// emulate EVM execution.
 #[derive(Clone, Debug)]
-pub struct VM {
+pub struct Vm {
     pub stack: Stack,
     pub memory: Memory,
     pub storage: Storage,
@@ -63,7 +63,7 @@ pub struct ExecutionResult {
 }
 
 /// [`State`] is the state of the EVM after executing a single instruction. It is returned by the
-/// [`VM::step`] function, and is used by heimdall for tracing contract execution.
+/// [`Vm::step`] function, and is used by heimdall for tracing contract execution.
 #[derive(Clone, Debug)]
 pub struct State {
     pub last_instruction: Instruction,
@@ -75,7 +75,7 @@ pub struct State {
     pub events: Vec<Log>,
 }
 
-/// [`Instruction`] is a single EVM instruction. It is returned by the [`VM::step`] function, and
+/// [`Instruction`] is a single EVM instruction. It is returned by the [`Vm::step`] function, and
 /// contains necessary tracing information, such as the opcode executed, it's inputs and outputs, as
 /// well as their parent operations.
 #[derive(Clone, Debug)]
@@ -88,15 +88,15 @@ pub struct Instruction {
     pub output_operations: Vec<WrappedOpcode>,
 }
 
-impl VM {
-    /// Creates a new [`VM`] instance with the given bytecode, calldata, address, origin, caller,
+impl Vm {
+    /// Creates a new [`Vm`] instance with the given bytecode, calldata, address, origin, caller,
     /// value, and gas limit.
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let vm = VM::new(
+    /// let vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -114,8 +114,8 @@ impl VM {
         caller: Address,
         value: u128,
         gas_limit: u128,
-    ) -> VM {
-        VM {
+    ) -> Vm {
+        Vm {
             stack: Stack::new(),
             memory: Memory::new(),
             storage: Storage::new(),
@@ -139,13 +139,32 @@ impl VM {
         }
     }
 
+    /// Creates a new [`Vm`] instance with the given bytecode. All other fields are defaulted
+    ///
+    /// ```
+    /// use heimdall_vm::core::vm::Vm;
+    ///
+    /// let vm = Vm::new_with_bytecode(&vec![0x00]);
+    /// ```
+    pub fn new_with_bytecode(bytecode: &[u8]) -> Vm {
+        Vm::new(
+            bytecode,
+            &[],
+            Address::default(),
+            Address::default(),
+            Address::default(),
+            0,
+            u128::MAX,
+        )
+    }
+
     /// Exits current execution with the given code and returndata.
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -166,10 +185,10 @@ impl VM {
     /// Consume gas units, halting execution if out of gas
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -204,10 +223,10 @@ impl VM {
     /// executed.
     ///
     /// ```no_run
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -303,8 +322,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -321,8 +340,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -339,8 +358,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -360,8 +379,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&denominator.operation.opcode)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode)
+                    && (0x5f..=0x7f).contains(&denominator.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -381,8 +400,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&denominator.operation.opcode)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode)
+                    && (0x5f..=0x7f).contains(&denominator.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -403,8 +422,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&modulus.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&modulus.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -424,8 +443,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&modulus.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&modulus.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -447,8 +466,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -469,8 +488,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -487,8 +506,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&exponent.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&exponent.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -591,8 +610,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -609,8 +628,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -627,8 +646,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -677,8 +696,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -697,8 +716,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -721,8 +740,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -1121,12 +1140,13 @@ impl VM {
                 let pc: u128 = pc.try_into()?;
 
                 // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                if (pc <=
-                    self.bytecode
+                if (pc
+                    <= self
+                        .bytecode
                         .len()
                         .try_into()
-                        .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                    (self.bytecode[pc as usize] != 0x5b)
+                        .expect("impossible case: bytecode is larger than u128::MAX"))
+                    && (self.bytecode[pc as usize] != 0x5b)
                 {
                     self.exit(790, Vec::new());
                     return Ok(Instruction {
@@ -1153,12 +1173,13 @@ impl VM {
                 if !condition.eq(&U256::from(0u8)) {
                     // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
                     // destination)
-                    if (pc <
-                        self.bytecode
+                    if (pc
+                        < self
+                            .bytecode
                             .len()
                             .try_into()
-                            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                        (self.bytecode[pc as usize] != 0x5b)
+                            .expect("impossible case: bytecode is larger than u128::MAX"))
+                        && (self.bytecode[pc as usize] != 0x5b)
                     {
                         self.exit(790, Vec::new());
                         return Ok(Instruction {
@@ -1299,9 +1320,9 @@ impl VM {
                 let data = self.memory.read(offset, size);
 
                 // consume dynamic gas
-                let gas_cost = (375 * (topic_count as u128)) +
-                    8 * (size as u128) +
-                    self.memory.expansion_cost(offset, size);
+                let gas_cost = (375 * (topic_count as u128))
+                    + 8 * (size as u128)
+                    + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
                 // no need for a panic check because the length of events should never be larger
@@ -1436,14 +1457,14 @@ impl VM {
         })
     }
 
-    /// Executes the next instruction in the VM and returns a snapshot of the VM state after
+    /// Executes the next instruction in the Vm and returns a snapshot of the Vm state after
     /// executing the instruction
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -1473,10 +1494,10 @@ impl VM {
     /// View the next n instructions without executing them
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -1494,9 +1515,9 @@ impl VM {
         let mut vm_clone = self.clone();
 
         for _ in 0..n {
-            if vm_clone.bytecode.len() < vm_clone.instruction as usize ||
-                vm_clone.exitcode != 255 ||
-                !vm_clone.returndata.is_empty()
+            if vm_clone.bytecode.len() < vm_clone.instruction as usize
+                || vm_clone.exitcode != 255
+                || !vm_clone.returndata.is_empty()
             {
                 break;
             }
@@ -1615,9 +1636,9 @@ mod tests {
 
     use super::*;
 
-    // creates a new test VM with calldata.
-    fn new_test_vm(bytecode: &str) -> VM {
-        VM::new(
+    // creates a new test Vm with calldata.
+    fn new_test_vm(bytecode: &str) -> Vm {
+        Vm::new(
             &decode_hex(bytecode).expect("failed to decode bytecode"),
             &decode_hex("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
                 .expect("failed to decode calldata"),

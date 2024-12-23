@@ -4,7 +4,7 @@ mod util;
 use crate::{
     core::{
         stack::Stack,
-        vm::{State, VM},
+        vm::{State, Vm},
     },
     ext::exec::{
         jump_frame::JumpFrame,
@@ -31,7 +31,7 @@ pub struct VMTrace {
     pub children: Vec<VMTrace>,
 }
 
-impl VM {
+impl Vm {
     /// Run symbolic execution on a given function selector within a contract
     pub fn symbolic_exec_selector(
         &mut self,
