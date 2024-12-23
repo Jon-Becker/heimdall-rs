@@ -39,7 +39,7 @@ pub fn extcall_heuristic<'a>(
                 if gas_solidified.contains("0x08fc") {
                     trace!(
                         "instruction {} ({}) with 2300 gas indicates a value transfer",
-                        instruction.instruction,
+                        instruction.pc,
                         opcode_name(instruction.opcode)
                     );
                     function.logic.push(format!(
@@ -51,7 +51,7 @@ pub fn extcall_heuristic<'a>(
                 if extcalldata.is_empty() {
                     trace!(
                         "instruction {} ({}) with no calldata indicates a value transfer",
-                        instruction.instruction,
+                        instruction.pc,
                         opcode_name(instruction.opcode)
                     );
                     function.logic.push(format!(
