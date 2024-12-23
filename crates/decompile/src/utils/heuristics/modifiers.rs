@@ -22,7 +22,7 @@ pub fn modifier_heuristic<'a>(
         if function.pure && !opcode_info.is_pure() {
             debug!(
                 "instruction {} ({}) indicates a non-pure function",
-                state.last_instruction.instruction,
+                state.last_instruction.pc,
                 opcode_info.name()
             );
             function.pure = false;
@@ -32,7 +32,7 @@ pub fn modifier_heuristic<'a>(
         if function.view && !opcode_info.is_view() {
             debug!(
                 "instruction {} ({}) indicates a non-view function",
-                state.last_instruction.instruction,
+                state.last_instruction.pc,
                 opcode_info.name()
             );
             function.view = false;
@@ -40,13 +40,13 @@ pub fn modifier_heuristic<'a>(
 
         // if the instruction is a JUMPI with non-zero CALLVALUE requirement, the function is
         // non-payable exactly: ISZERO(CALLVALUE())
-        if function.payable &&
-            state.last_instruction.opcode == JUMPI &&
-            state.last_instruction.input_operations[1] == w_iszero!(w_callvalue!())
+        if function.payable
+            && state.last_instruction.opcode == JUMPI
+            && state.last_instruction.input_operations[1] == w_iszero!(w_callvalue!())
         {
             debug!(
                 "conditional at instruction {} indicates a non-payable function",
-                state.last_instruction.instruction
+                state.last_instruction.pc
             );
             function.payable = false;
         }

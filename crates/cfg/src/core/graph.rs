@@ -25,7 +25,7 @@ pub fn build_cfg(
 
         let assembly = format!(
             "{} {} {}",
-            encode_hex_reduced(U256::from(operation.last_instruction.instruction)),
+            encode_hex_reduced(U256::from(operation.last_instruction.pc)),
             opcode_name,
             if opcode_name.contains("PUSH") {
                 encode_hex_reduced(
@@ -61,8 +61,8 @@ pub fn build_cfg(
                 .first()
                 .ok_or_eyre("failed to get first operation")?
                 .last_instruction
-                .opcode ==
-                JUMPDEST,
+                .opcode
+                == JUMPDEST,
         )?;
     }
 

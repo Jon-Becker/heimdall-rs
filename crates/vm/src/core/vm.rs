@@ -29,48 +29,71 @@ use super::{
 /// emulate EVM execution.
 #[derive(Clone, Debug)]
 pub struct Vm {
+    /// Register in the EVM that points to the current instruction
+    pub pc: u128,
+    /// Data structure that stores 256-bit values (words) in the EVM
     pub stack: Stack,
+    /// Data structure that stores arbitrary-length byte arrays in the EVM
     pub memory: Memory,
+    /// Data structure that stores key-value pairs in the EVM
     pub storage: Storage,
-    pub instruction: u128,
+    /// The compiled code that the EVM executes
     pub bytecode: Vec<u8>,
+    /// The input data that the EVM receives when executing a contract
     pub calldata: Vec<u8>,
+    /// The address of the contract being executed
     pub address: Address,
+    /// The address of the account that initiated the contract execution
     pub origin: Address,
+    /// The address of the account that called the contract
     pub caller: Address,
+    /// the amount of wei sent to the contract
     pub value: u128,
+    /// The amount of gas left in the current execution
     pub gas_remaining: u128,
+    /// The amount of gas used in the current execution
     pub gas_used: u128,
+    /// The exit code of the current execution
     pub events: Vec<Log>,
+    /// The return data of the current execution
     pub returndata: Vec<u8>,
+    /// A flag that indicates if the current execution has stopped
     pub stopped: bool,
-    pub address_access_set: HashSet<U256>,
+    /// A set that stores the addresses that have been accessed in the current execution
+    /// This is used in gas calculations
+    address_access_set: HashSet<U256>,
+    /// The number of operations executed in the current execution
     #[cfg(feature = "step-tracing")]
-    pub operation_count: u128,
+    operation_count: u128,
+    /// The time at which the current execution started
     #[cfg(feature = "step-tracing")]
-    pub start_time: Instant,
+    start_time: Instant,
 }
 
 /// [`ExecutionResult`] is the result of a single contract execution.
 #[derive(Clone, Debug)]
 pub struct ExecutionResult {
+    /// The amount of gas used in the execution
     pub gas_used: u128,
-    pub gas_remaining: u128,
+    /// The return data of the execution
     pub returndata: Vec<u8>,
+    /// The events emitted during the execution
     pub events: Vec<Log>,
-    pub instruction: u128,
 }
 
 /// [`State`] is the state of the EVM after executing a single instruction. It is returned by the
 /// [`Vm::step`] function, and is used by heimdall for tracing contract execution.
 #[derive(Clone, Debug)]
 pub struct State {
+    /// The last instruction executed
     pub last_instruction: Instruction,
-    pub gas_used: u128,
-    pub gas_remaining: u128,
+    /// The current program counter
     pub stack: Stack,
+    /// The current memory
     pub memory: Memory,
+    /// The current storage
     pub storage: Storage,
+    /// The current program counter
     pub events: Vec<Log>,
 }
 
@@ -79,11 +102,17 @@ pub struct State {
 /// well as their parent operations.
 #[derive(Clone, Debug)]
 pub struct Instruction {
-    pub instruction: u128,
+    /// Register in the EVM that points to the current instruction
+    pub pc: u128,
+    /// The opcode executed
     pub opcode: u8,
+    /// The inputs to the opcode (values popped from the stack)
     pub inputs: Vec<U256>,
+    /// The outputs of the opcode (values pushed to the stack)
     pub outputs: Vec<U256>,
+    /// The operations that generated the inputs (traced values popped from the stack)
     pub input_operations: Vec<WrappedOpcode>,
+    /// The operations that generated the outputs (traced values pushed to the stack)
     pub output_operations: Vec<WrappedOpcode>,
 }
 
@@ -118,7 +147,7 @@ impl Vm {
             stack: Stack::new(),
             memory: Memory::new(),
             storage: Storage::new(),
-            instruction: 1,
+            pc: 1,
             bytecode: bytecode.to_vec(),
             calldata: calldata.to_vec(),
             address,
@@ -240,10 +269,10 @@ impl Vm {
     /// ```
     fn _step(&mut self) -> Result<Instruction> {
         // sanity check
-        if self.bytecode.len() < self.instruction as usize {
+        if self.bytecode.len() < self.pc as usize {
             self.exit(Vec::new());
             return Ok(Instruction {
-                instruction: self.instruction,
+                pc: self.pc,
                 opcode: 0xff,
                 inputs: Vec::new(),
                 outputs: Vec::new(),
@@ -255,11 +284,11 @@ impl Vm {
         // get the opcode at the current instruction
         let opcode = self
             .bytecode
-            .get((self.instruction - 1) as usize)
-            .ok_or_eyre(format!("invalid jumpdest: {}", self.instruction - 1))?
+            .get((self.pc - 1) as usize)
+            .ok_or_eyre(format!("invalid jumpdest: {}", self.pc - 1))?
             .to_owned();
-        let last_instruction = self.instruction;
-        self.instruction += 1;
+        let last_instruction = self.pc;
+        self.pc += 1;
         #[cfg(feature = "step-tracing")]
         {
             self.operation_count += 1;
@@ -288,7 +317,7 @@ impl Vm {
         // if step-tracing feature is enabled, print the current operation
         #[cfg(feature = "step-tracing")]
         trace!(
-            pc = self.instruction - 1,
+            pc = self.pc - 1,
             opcode = opcode_info.name(),
             inputs = ?inputs
                 .iter()
@@ -303,7 +332,7 @@ impl Vm {
             0x00 => {
                 self.exit(Vec::new());
                 return Ok(Instruction {
-                    instruction: last_instruction,
+                    pc: last_instruction,
                     opcode,
                     inputs,
                     outputs: Vec::new(),
@@ -1149,7 +1178,7 @@ impl Vm {
                 {
                     self.exit(Vec::new());
                     return Ok(Instruction {
-                        instruction: last_instruction,
+                        pc: last_instruction,
                         opcode,
                         inputs,
                         outputs: Vec::new(),
@@ -1157,7 +1186,7 @@ impl Vm {
                         output_operations: Vec::new(),
                     });
                 } else {
-                    self.instruction = pc + 1;
+                    self.pc = pc + 1;
                 }
             }
 
@@ -1182,7 +1211,7 @@ impl Vm {
                     {
                         self.exit(Vec::new());
                         return Ok(Instruction {
-                            instruction: last_instruction,
+                            pc: last_instruction,
                             opcode,
                             inputs,
                             outputs: Vec::new(),
@@ -1190,7 +1219,7 @@ impl Vm {
                             output_operations: Vec::new(),
                         });
                     } else {
-                        self.instruction = pc + 1;
+                        self.pc = pc + 1;
                     }
                 }
             }
@@ -1249,7 +1278,7 @@ impl Vm {
 
             // PC
             0x58 => {
-                self.stack.push(U256::from(self.instruction), operation);
+                self.stack.push(U256::from(self.pc), operation);
             }
 
             // MSIZE
@@ -1273,9 +1302,9 @@ impl Vm {
                 let num_bytes = (opcode - 95) as u128;
 
                 // Get the bytes to push from bytecode
-                let bytes = &self.bytecode
-                    [(self.instruction - 1) as usize..(self.instruction - 1 + num_bytes) as usize];
-                self.instruction += num_bytes;
+                let bytes =
+                    &self.bytecode[(self.pc - 1) as usize..(self.pc - 1 + num_bytes) as usize];
+                self.pc += num_bytes;
 
                 // update the operation's inputs
                 let new_operation_inputs = vec![WrappedInput::Raw(U256::from_be_slice(bytes))];
@@ -1425,7 +1454,7 @@ impl Vm {
         // if step-tracing feature is enabled, print the current operation
         #[cfg(feature = "step-tracing")]
         trace!(
-            pc = self.instruction - 1,
+            pc = self.pc - 1,
             opcode = opcode_info.name(),
             outputs = ?outputs
                 .iter()
@@ -1447,7 +1476,7 @@ impl Vm {
         }
 
         Ok(Instruction {
-            instruction: last_instruction,
+            pc: last_instruction,
             opcode,
             inputs,
             outputs,
@@ -1481,8 +1510,6 @@ impl Vm {
 
         Ok(State {
             last_instruction: instruction,
-            gas_used: self.gas_used,
-            gas_remaining: self.gas_remaining,
             stack: self.stack.clone(),
             memory: self.memory.clone(),
             storage: self.storage.clone(),
@@ -1514,7 +1541,7 @@ impl Vm {
         let mut vm_clone = self.clone();
 
         for _ in 0..n {
-            if vm_clone.bytecode.len() < vm_clone.instruction as usize || vm_clone.stopped {
+            if vm_clone.bytecode.len() < vm_clone.pc as usize || vm_clone.stopped {
                 break;
             }
             states.push(vm_clone.step()?);
@@ -1548,7 +1575,7 @@ impl Vm {
     pub fn reset(&mut self) {
         self.stack = Stack::new();
         self.memory = Memory::new();
-        self.instruction = 1;
+        self.pc = 1;
         self.gas_remaining = (self.gas_used + self.gas_remaining).max(21000) - 21000;
         self.gas_used = 21000;
         self.events = Vec::new();
@@ -1576,7 +1603,7 @@ impl Vm {
     /// assert_eq!(vm.exitcode, 10);
     /// ```
     pub fn execute(&mut self) -> Result<ExecutionResult> {
-        while self.bytecode.len() >= self.instruction as usize {
+        while self.bytecode.len() >= self.pc as usize {
             self.step()?;
 
             if self.stopped {
@@ -1586,10 +1613,8 @@ impl Vm {
 
         Ok(ExecutionResult {
             gas_used: self.gas_used,
-            gas_remaining: self.gas_remaining,
             returndata: self.returndata.to_owned(),
             events: self.events.clone(),
-            instruction: self.instruction,
         })
     }
 
@@ -2157,10 +2182,7 @@ mod tests {
         let mut vm = new_test_vm("0x60fe56");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
-        );
+        assert_eq!(U256::from(vm.pc), U256::from_str("0xff").expect("failed to parse hex"));
     }
 
     #[test]
@@ -2168,18 +2190,12 @@ mod tests {
         let mut vm = new_test_vm("0x600160fe57");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
-        );
+        assert_eq!(U256::from(vm.pc), U256::from_str("0xff").expect("failed to parse hex"));
 
         let mut vm = new_test_vm("0x600060fe5758");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0x07").expect("failed to parse hex")
-        );
+        assert_eq!(U256::from(vm.pc), U256::from_str("0x07").expect("failed to parse hex"));
 
         // PC test
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0x07").expect("failed to parse hex"));

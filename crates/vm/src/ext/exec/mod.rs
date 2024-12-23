@@ -42,8 +42,7 @@ impl Vm {
         self.calldata = decode_hex(selector)?;
 
         // step through the bytecode until we reach the entry point
-        while self.bytecode.len() >= self.instruction as usize && (self.instruction <= entry_point)
-        {
+        while self.bytecode.len() >= self.pc as usize && (self.pc <= entry_point) {
             self.step()?;
 
             // this shouldn't be necessary, but it's safer to have it
@@ -88,14 +87,14 @@ impl Vm {
         // this will essentially be a tree of executions, with each branch being a different path
         // that symbolic execution discovered
         let mut vm_trace = VMTrace {
-            instruction: vm.instruction,
+            instruction: vm.pc,
             gas_used: 0,
             operations: Vec::new(),
             children: Vec::new(),
         };
 
         // step through the bytecode until we find a JUMPI instruction
-        while vm.bytecode.len() >= vm.instruction as usize {
+        while vm.bytecode.len() >= vm.pc as usize {
             // if we have reached the timeout, return None
             if Instant::now() >= *timeout_at {
                 return Ok(None);
@@ -114,7 +113,7 @@ impl Vm {
                 trace!(
                     "found branch due to JUMP{} instruction at {}",
                     if last_instruction.opcode == 0x57 { "I" } else { "" },
-                    last_instruction.instruction
+                    last_instruction.pc
                 );
 
                 let jump_condition: Option<String> =
@@ -124,7 +123,7 @@ impl Vm {
 
                 // build hashable jump frame
                 let jump_frame = JumpFrame::new(
-                    last_instruction.instruction,
+                    last_instruction.pc,
                     last_instruction.inputs[0],
                     vm.stack.size(),
                     jump_taken,
@@ -261,15 +260,14 @@ impl Vm {
                 trace!(
                     "creating branching paths at instructions {} (JUMPDEST) and {} (CONTINUE)",
                     last_instruction.inputs[0],
-                    last_instruction.instruction + 1
+                    last_instruction.pc + 1
                 );
 
                 // we need to create a trace for the path that wasn't taken.
                 if !jump_taken {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction =
-                        last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
+                    trace_vm.pc = last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
@@ -292,7 +290,7 @@ impl Vm {
                 } else {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction = last_instruction.instruction + 1;
+                    trace_vm.pc = last_instruction.pc + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
