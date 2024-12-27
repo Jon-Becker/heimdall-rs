@@ -91,7 +91,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // find all the function selectors in the bytecode
     let start_selectors_time = Instant::now();
-    let selectors = find_function_selectors(&evm);
+    let selectors = find_function_selectors(&contract_bytecode);
     debug!("finding function selectors took {:?}", start_selectors_time.elapsed());
 
     // resolve selectors (if enabled)

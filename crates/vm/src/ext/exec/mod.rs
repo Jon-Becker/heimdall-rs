@@ -36,13 +36,13 @@ impl Vm {
     pub fn symbolic_exec_selector(
         &mut self,
         selector: &str,
-        entry_point: u128,
+        entry_point: usize,
         timeout: Instant,
     ) -> Result<(VMTrace, u32)> {
         self.calldata = decode_hex(selector)?;
 
         // step through the bytecode until we reach the entry point
-        while self.bytecode.len() >= self.pc as usize && (self.pc <= entry_point) {
+        while self.bytecode.len() >= self.pc as usize && (self.pc as usize <= entry_point) {
             self.step()?;
 
             // this shouldn't be necessary, but it's safer to have it
