@@ -30,8 +30,8 @@ pub fn argument_heuristic<'a>(
                 // calculate the argument index, with the 4byte signature padding removed
                 // for example, CALLDATALOAD(4) -> (4-4)/32 = 0
                 //              CALLDATALOAD(36) -> (36-4)/32 = 1
-                let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) /
-                    U256::from(32))
+                let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4))
+                    / U256::from(32))
                 .try_into()
                 .unwrap_or(usize::MAX);
 
@@ -77,7 +77,7 @@ pub fn argument_heuristic<'a>(
                     {
                         debug!(
                             "instruction {} ({}) indicates argument {} is masked to {} bytes",
-                            state.last_instruction.instruction,
+                            state.last_instruction.pc,
                             opcode_name(state.last_instruction.opcode),
                             arg_index,
                             mask_size_bytes
@@ -227,7 +227,7 @@ pub fn argument_heuristic<'a>(
                 {
                     debug!(
                         "instruction {} ({}) indicates argument {} may be a numeric type",
-                        state.last_instruction.instruction,
+                        state.last_instruction.pc,
                         opcode_name(state.last_instruction.opcode),
                         arg_index
                     );
@@ -251,7 +251,7 @@ pub fn argument_heuristic<'a>(
                 {
                     debug!(
                         "instruction {} ({}) indicates argument {} may be a bytes type",
-                        state.last_instruction.instruction,
+                        state.last_instruction.pc,
                         opcode_name(state.last_instruction.opcode),
                         arg_index
                     );
@@ -278,7 +278,7 @@ pub fn argument_heuristic<'a>(
                     {
                         debug!(
                             "instruction {} ({}) indicates argument {} may be a boolean",
-                            state.last_instruction.instruction,
+                            state.last_instruction.pc,
                             opcode_name(state.last_instruction.opcode),
                             arg_index
                         );

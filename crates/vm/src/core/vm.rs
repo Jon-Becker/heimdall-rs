@@ -24,79 +24,107 @@ use super::{
     storage::Storage,
 };
 
-/// The [`VM`] struct represents an EVM instance. \
+/// The [`Vm`] struct represents an EVM instance. \
 /// It contains the EVM's [`Stack`], [`Memory`], [`Storage`], and other state variables needed to
 /// emulate EVM execution.
 #[derive(Clone, Debug)]
-pub struct VM {
+pub struct Vm {
+    /// Register in the EVM that points to the current instruction
+    pub pc: u128,
+    /// Data structure that stores 256-bit values (words) in the EVM
     pub stack: Stack,
+    /// Data structure that stores arbitrary-length byte arrays in the EVM
     pub memory: Memory,
+    /// Data structure that stores key-value pairs in the EVM
     pub storage: Storage,
-    pub instruction: u128,
+    /// The compiled code that the EVM executes
     pub bytecode: Vec<u8>,
+    /// The input data that the EVM receives when executing a contract
     pub calldata: Vec<u8>,
+    /// The address of the contract being executed
     pub address: Address,
+    /// The address of the account that initiated the contract execution
     pub origin: Address,
+    /// The address of the account that called the contract
     pub caller: Address,
+    /// the amount of wei sent to the contract
     pub value: u128,
+    /// The amount of gas left in the current execution
     pub gas_remaining: u128,
+    /// The amount of gas used in the current execution
     pub gas_used: u128,
+    /// The exit code of the current execution
     pub events: Vec<Log>,
+    /// The return data of the current execution
     pub returndata: Vec<u8>,
-    pub exitcode: u128,
-    pub address_access_set: HashSet<U256>,
+    /// A flag that indicates if the current execution has stopped
+    pub stopped: bool,
+    /// A set that stores the addresses that have been accessed in the current execution
+    /// This is used in gas calculations
+    address_access_set: HashSet<U256>,
+    /// The number of operations executed in the current execution
     #[cfg(feature = "step-tracing")]
-    pub operation_count: u128,
+    operation_count: u128,
+    /// The time at which the current execution started
     #[cfg(feature = "step-tracing")]
-    pub start_time: Instant,
+    start_time: Instant,
 }
 
 /// [`ExecutionResult`] is the result of a single contract execution.
 #[derive(Clone, Debug)]
 pub struct ExecutionResult {
+    /// The amount of gas used in the execution
     pub gas_used: u128,
-    pub gas_remaining: u128,
+    /// The return data of the execution
     pub returndata: Vec<u8>,
-    pub exitcode: u128,
+    /// The events emitted during the execution
     pub events: Vec<Log>,
-    pub instruction: u128,
 }
 
 /// [`State`] is the state of the EVM after executing a single instruction. It is returned by the
-/// [`VM::step`] function, and is used by heimdall for tracing contract execution.
+/// [`Vm::step`] function, and is used by heimdall for tracing contract execution.
 #[derive(Clone, Debug)]
 pub struct State {
+    /// The last instruction executed
     pub last_instruction: Instruction,
-    pub gas_used: u128,
-    pub gas_remaining: u128,
+    /// The current program counter
     pub stack: Stack,
+    /// The current memory
     pub memory: Memory,
+    /// The current storage
     pub storage: Storage,
+    /// The current program counter
     pub events: Vec<Log>,
 }
 
-/// [`Instruction`] is a single EVM instruction. It is returned by the [`VM::step`] function, and
+/// [`Instruction`] is a single EVM instruction. It is returned by the [`Vm::step`] function, and
 /// contains necessary tracing information, such as the opcode executed, it's inputs and outputs, as
 /// well as their parent operations.
 #[derive(Clone, Debug)]
 pub struct Instruction {
-    pub instruction: u128,
+    /// Register in the EVM that points to the current instruction
+    pub pc: u128,
+    /// The opcode executed
     pub opcode: u8,
+    /// The inputs to the opcode (values popped from the stack)
     pub inputs: Vec<U256>,
+    /// The outputs of the opcode (values pushed to the stack)
     pub outputs: Vec<U256>,
+    /// The operations that generated the inputs (traced values popped from the stack)
     pub input_operations: Vec<WrappedOpcode>,
+    /// The operations that generated the outputs (traced values pushed to the stack)
     pub output_operations: Vec<WrappedOpcode>,
 }
 
-impl VM {
-    /// Creates a new [`VM`] instance with the given bytecode, calldata, address, origin, caller,
+impl Vm {
+    /// Creates a new [`Vm`] instance with the given bytecode, calldata, address, origin, caller,
     /// value, and gas limit.
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let vm = VM::new(
+    /// let vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -114,12 +142,12 @@ impl VM {
         caller: Address,
         value: u128,
         gas_limit: u128,
-    ) -> VM {
-        VM {
+    ) -> Vm {
+        Vm {
             stack: Stack::new(),
             memory: Memory::new(),
             storage: Storage::new(),
-            instruction: 1,
+            pc: 1,
             bytecode: bytecode.to_vec(),
             calldata: calldata.to_vec(),
             address,
@@ -130,7 +158,7 @@ impl VM {
             gas_used: 21000,
             events: Vec::new(),
             returndata: Vec::new(),
-            exitcode: 255,
+            stopped: false,
             address_access_set: HashSet::new(),
             #[cfg(feature = "step-tracing")]
             operation_count: 0,
@@ -139,13 +167,32 @@ impl VM {
         }
     }
 
+    /// Creates a new [`Vm`] instance with the given bytecode. All other fields are defaulted
+    ///
+    /// ```
+    /// use heimdall_vm::core::vm::Vm;
+    ///
+    /// let vm = Vm::new_with_bytecode(&vec![0x00]);
+    /// ```
+    pub fn new_with_bytecode(bytecode: &[u8]) -> Vm {
+        Vm::new(
+            bytecode,
+            &[],
+            Address::default(),
+            Address::default(),
+            Address::default(),
+            0,
+            u128::MAX,
+        )
+    }
+
     /// Exits current execution with the given code and returndata.
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -158,18 +205,18 @@ impl VM {
     /// vm.exit(0xff, Vec::new());
     /// assert_eq!(vm.exitcode, 0xff);
     /// ```
-    pub fn exit(&mut self, code: u128, returndata: Vec<u8>) {
-        self.exitcode = code;
+    pub fn exit(&mut self, returndata: Vec<u8>) {
+        self.stopped = true;
         self.returndata = returndata;
     }
 
     /// Consume gas units, halting execution if out of gas
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -191,7 +238,7 @@ impl VM {
         if amount > self.gas_remaining {
             self.gas_used += self.gas_remaining;
             self.gas_remaining = 0;
-            self.exit(9, Vec::new());
+            self.exit(Vec::new());
             return false;
         }
 
@@ -204,10 +251,10 @@ impl VM {
     /// executed.
     ///
     /// ```no_run
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -222,10 +269,10 @@ impl VM {
     /// ```
     fn _step(&mut self) -> Result<Instruction> {
         // sanity check
-        if self.bytecode.len() < self.instruction as usize {
-            self.exit(2, Vec::new());
+        if self.bytecode.len() < self.pc as usize {
+            self.exit(Vec::new());
             return Ok(Instruction {
-                instruction: self.instruction,
+                pc: self.pc,
                 opcode: 0xff,
                 inputs: Vec::new(),
                 outputs: Vec::new(),
@@ -237,11 +284,11 @@ impl VM {
         // get the opcode at the current instruction
         let opcode = self
             .bytecode
-            .get((self.instruction - 1) as usize)
-            .ok_or_eyre(format!("invalid jumpdest: {}", self.instruction - 1))?
+            .get((self.pc - 1) as usize)
+            .ok_or_eyre(format!("invalid jumpdest: {}", self.pc - 1))?
             .to_owned();
-        let last_instruction = self.instruction;
-        self.instruction += 1;
+        let last_instruction = self.pc;
+        self.pc += 1;
         #[cfg(feature = "step-tracing")]
         {
             self.operation_count += 1;
@@ -270,7 +317,7 @@ impl VM {
         // if step-tracing feature is enabled, print the current operation
         #[cfg(feature = "step-tracing")]
         trace!(
-            pc = self.instruction - 1,
+            pc = self.pc - 1,
             opcode = opcode_info.name(),
             inputs = ?inputs
                 .iter()
@@ -283,9 +330,9 @@ impl VM {
         match opcode {
             // STOP
             0x00 => {
-                self.exit(10, Vec::new());
+                self.exit(Vec::new());
                 return Ok(Instruction {
-                    instruction: last_instruction,
+                    pc: last_instruction,
                     opcode,
                     inputs,
                     outputs: Vec::new(),
@@ -303,8 +350,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -321,8 +368,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -339,8 +386,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -360,8 +407,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&denominator.operation.opcode)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode)
+                    && (0x5f..=0x7f).contains(&denominator.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -381,8 +428,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&numerator.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&denominator.operation.opcode)
+                if (0x5f..=0x7f).contains(&numerator.operation.opcode)
+                    && (0x5f..=0x7f).contains(&denominator.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -403,8 +450,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&modulus.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&modulus.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -424,8 +471,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&modulus.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&modulus.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -447,8 +494,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -469,8 +516,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -487,8 +534,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&exponent.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&exponent.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -591,8 +638,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -609,8 +656,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -627,8 +674,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -677,8 +724,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -697,8 +744,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation = WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
                 }
@@ -721,8 +768,8 @@ impl VM {
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
-                if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-                    (0x5f..=0x7f).contains(&b.operation.opcode)
+                if (0x5f..=0x7f).contains(&a.operation.opcode)
+                    && (0x5f..=0x7f).contains(&b.operation.opcode)
                 {
                     simplified_operation =
                         WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
@@ -1117,16 +1164,17 @@ impl VM {
                 let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
                 // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                if (pc <=
-                    self.bytecode
+                if (pc
+                    <= self
+                        .bytecode
                         .len()
                         .try_into()
-                        .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                    (self.bytecode[pc as usize] != 0x5b)
+                        .expect("impossible case: bytecode is larger than u128::MAX"))
+                    && (self.bytecode[pc as usize] != 0x5b)
                 {
-                    self.exit(790, Vec::new());
+                    self.exit(Vec::new());
                     return Ok(Instruction {
-                        instruction: last_instruction,
+                        pc: last_instruction,
                         opcode,
                         inputs,
                         outputs: Vec::new(),
@@ -1134,7 +1182,7 @@ impl VM {
                         output_operations: Vec::new(),
                     });
                 } else {
-                    self.instruction = pc + 1;
+                    self.pc = pc + 1;
                 }
             }
 
@@ -1149,16 +1197,17 @@ impl VM {
                 if !condition.eq(&U256::from(0u8)) {
                     // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
                     // destination)
-                    if (pc <
-                        self.bytecode
+                    if (pc
+                        < self
+                            .bytecode
                             .len()
                             .try_into()
-                            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                        (self.bytecode[pc as usize] != 0x5b)
+                            .expect("impossible case: bytecode is larger than u128::MAX"))
+                        && (self.bytecode[pc as usize] != 0x5b)
                     {
-                        self.exit(790, Vec::new());
+                        self.exit(Vec::new());
                         return Ok(Instruction {
-                            instruction: last_instruction,
+                            pc: last_instruction,
                             opcode,
                             inputs,
                             outputs: Vec::new(),
@@ -1166,7 +1215,7 @@ impl VM {
                             output_operations: Vec::new(),
                         });
                     } else {
-                        self.instruction = pc + 1;
+                        self.pc = pc + 1;
                     }
                 }
             }
@@ -1225,7 +1274,7 @@ impl VM {
 
             // PC
             0x58 => {
-                self.stack.push(U256::from(self.instruction), operation);
+                self.stack.push(U256::from(self.pc), operation);
             }
 
             // MSIZE
@@ -1249,9 +1298,9 @@ impl VM {
                 let num_bytes = (opcode - 95) as u128;
 
                 // Get the bytes to push from bytecode
-                let bytes = &self.bytecode
-                    [(self.instruction - 1) as usize..(self.instruction - 1 + num_bytes) as usize];
-                self.instruction += num_bytes;
+                let bytes =
+                    &self.bytecode[(self.pc - 1) as usize..(self.pc - 1 + num_bytes) as usize];
+                self.pc += num_bytes;
 
                 // update the operation's inputs
                 let new_operation_inputs = vec![WrappedInput::Raw(U256::from_be_slice(bytes))];
@@ -1295,9 +1344,9 @@ impl VM {
                 let data = self.memory.read(offset, size);
 
                 // consume dynamic gas
-                let gas_cost = (375 * (topic_count as u128)) +
-                    8 * (size as u128) +
-                    self.memory.expansion_cost(offset, size);
+                let gas_cost = (375 * (topic_count as u128))
+                    + 8 * (size as u128)
+                    + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
                 // no need for a panic check because the length of events should never be larger
@@ -1348,7 +1397,7 @@ impl VM {
                 let gas_cost = self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
-                self.exit(0, self.memory.read(offset, size));
+                self.exit(self.memory.read(offset, size));
             }
 
             // DELEGATECALL, STATICCALL
@@ -1383,12 +1432,12 @@ impl VM {
                 let offset: usize = offset.try_into()?;
                 let size: usize = size.try_into()?;
 
-                self.exit(1, self.memory.read(offset, size));
+                self.exit(self.memory.read(offset, size));
             }
 
             // INVALID & SELFDESTRUCT
             _ => {
-                self.exit(1, Vec::new());
+                self.exit(Vec::new());
             }
         }
 
@@ -1401,7 +1450,7 @@ impl VM {
         // if step-tracing feature is enabled, print the current operation
         #[cfg(feature = "step-tracing")]
         trace!(
-            pc = self.instruction - 1,
+            pc = self.pc - 1,
             opcode = opcode_info.name(),
             outputs = ?outputs
                 .iter()
@@ -1423,7 +1472,7 @@ impl VM {
         }
 
         Ok(Instruction {
-            instruction: last_instruction,
+            pc: last_instruction,
             opcode,
             inputs,
             outputs,
@@ -1432,14 +1481,14 @@ impl VM {
         })
     }
 
-    /// Executes the next instruction in the VM and returns a snapshot of the VM state after
+    /// Executes the next instruction in the Vm and returns a snapshot of the Vm state after
     /// executing the instruction
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -1457,8 +1506,6 @@ impl VM {
 
         Ok(State {
             last_instruction: instruction,
-            gas_used: self.gas_used,
-            gas_remaining: self.gas_remaining,
             stack: self.stack.clone(),
             memory: self.memory.clone(),
             storage: self.storage.clone(),
@@ -1469,10 +1516,10 @@ impl VM {
     /// View the next n instructions without executing them
     ///
     /// ```
-    /// use heimdall_vm::core::vm::VM;
+    /// use heimdall_vm::core::vm::Vm;
     /// use alloy::primitives::Address;
     ///
-    /// let mut vm = VM::new(
+    /// let mut vm = Vm::new(
     ///     &vec![0x00],
     ///     &vec![],
     ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
@@ -1490,10 +1537,7 @@ impl VM {
         let mut vm_clone = self.clone();
 
         for _ in 0..n {
-            if vm_clone.bytecode.len() < vm_clone.instruction as usize ||
-                vm_clone.exitcode != 255 ||
-                !vm_clone.returndata.is_empty()
-            {
+            if vm_clone.bytecode.len() < vm_clone.pc as usize || vm_clone.stopped {
                 break;
             }
             states.push(vm_clone.step()?);
@@ -1527,12 +1571,12 @@ impl VM {
     pub fn reset(&mut self) {
         self.stack = Stack::new();
         self.memory = Memory::new();
-        self.instruction = 1;
+        self.pc = 1;
         self.gas_remaining = (self.gas_used + self.gas_remaining).max(21000) - 21000;
         self.gas_used = 21000;
         self.events = Vec::new();
         self.returndata = Vec::new();
-        self.exitcode = 255;
+        self.stopped = false;
     }
 
     /// Executes the code until finished
@@ -1555,21 +1599,18 @@ impl VM {
     /// assert_eq!(vm.exitcode, 10);
     /// ```
     pub fn execute(&mut self) -> Result<ExecutionResult> {
-        while self.bytecode.len() >= self.instruction as usize {
+        while self.bytecode.len() >= self.pc as usize {
             self.step()?;
 
-            if self.exitcode != 255 || !self.returndata.is_empty() {
+            if self.stopped {
                 break;
             }
         }
 
         Ok(ExecutionResult {
             gas_used: self.gas_used,
-            gas_remaining: self.gas_remaining,
             returndata: self.returndata.to_owned(),
-            exitcode: self.exitcode,
             events: self.events.clone(),
-            instruction: self.instruction,
         })
     }
 
@@ -1611,9 +1652,9 @@ mod tests {
 
     use super::*;
 
-    // creates a new test VM with calldata.
-    fn new_test_vm(bytecode: &str) -> VM {
-        VM::new(
+    // creates a new test Vm with calldata.
+    fn new_test_vm(bytecode: &str) -> Vm {
+        Vm::new(
             &decode_hex(bytecode).expect("failed to decode bytecode"),
             &decode_hex("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
                 .expect("failed to decode calldata"),
@@ -1637,7 +1678,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert!(vm.returndata.is_empty());
-        assert_eq!(vm.exitcode, 10);
+        assert!(vm.stopped);
     }
 
     #[test]
@@ -1646,7 +1687,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert!(vm.returndata.is_empty());
-        assert_eq!(vm.exitcode, 255);
+        assert!(vm.stopped);
     }
 
     #[test]
@@ -2137,10 +2178,7 @@ mod tests {
         let mut vm = new_test_vm("0x60fe56");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
-        );
+        assert_eq!(U256::from(vm.pc), U256::from_str("0xff").expect("failed to parse hex"));
     }
 
     #[test]
@@ -2148,18 +2186,12 @@ mod tests {
         let mut vm = new_test_vm("0x600160fe57");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
-        );
+        assert_eq!(U256::from(vm.pc), U256::from_str("0xff").expect("failed to parse hex"));
 
         let mut vm = new_test_vm("0x600060fe5758");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0x07").expect("failed to parse hex")
-        );
+        assert_eq!(U256::from(vm.pc), U256::from_str("0x07").expect("failed to parse hex"));
 
         // PC test
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0x07").expect("failed to parse hex"));
