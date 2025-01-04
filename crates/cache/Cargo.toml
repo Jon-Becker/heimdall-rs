@@ -10,6 +10,9 @@ repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 bench = false
 

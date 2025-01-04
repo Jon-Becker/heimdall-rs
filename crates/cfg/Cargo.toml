@@ -10,6 +10,9 @@ repository.workspace = true
 keywords.workspace = true
 exclude.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 bench = false
 
@@ -25,7 +28,11 @@ eyre = "0.6.12"
 futures = "0.3.30"
 lazy_static = "1.4.0"
 petgraph = "0.6.2"
-alloy = { version = "0.3.3", features = ["full", "rpc-types-debug", "rpc-types-trace"] }
+alloy = { version = "0.3.3", features = [
+    "full",
+    "rpc-types-debug",
+    "rpc-types-trace",
+] }
 
 heimdall-disassembler.workspace = true
 heimdall-vm.workspace = true
