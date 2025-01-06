@@ -13,12 +13,15 @@ use super::CfgArgs;
 use crate::{core::graph::build_cfg, error::Error};
 use tracing::{debug, info};
 
+/// The result of the cfg command. Contains the generated control flow graph.
 #[derive(Debug, Clone)]
 pub struct CfgResult {
+    /// The generated control flow graph of the contract.
     pub graph: Graph<String, String>,
 }
 
 impl CfgResult {
+    /// Returns the control flow graph as a graphviz formatted string.
     pub fn as_dot(&self, color_edges: bool) -> String {
         let output = format!("{}", Dot::with_config(&self.graph, &[]));
 
@@ -44,6 +47,7 @@ impl CfgResult {
     }
 }
 
+/// Generates a control flow graph for the target contract.
 pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     // init
     let start_time = Instant::now();

@@ -9,8 +9,7 @@ use petgraph::{matrix_graph::NodeIndex, Graph};
 
 /// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
 /// control-flow graph found by the symbolic execution engine.
-// TODO: should this be a trait for VMTrace to implement?
-pub fn build_cfg(
+pub(crate) fn build_cfg(
     vm_trace: &VMTrace,
     contract_cfg: &mut Graph<String, String>,
     parent_node: Option<NodeIndex<u32>>,
@@ -61,8 +60,8 @@ pub fn build_cfg(
                 .first()
                 .ok_or_eyre("failed to get first operation")?
                 .last_instruction
-                .opcode ==
-                JUMPDEST,
+                .opcode
+                == JUMPDEST,
         )?;
     }
 

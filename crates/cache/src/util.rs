@@ -10,20 +10,20 @@ use std::{
 use crate::error::Error;
 
 /// Decode a hex string into a bytearray
-pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
+pub(crate) fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
     (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16)).collect()
 }
 
 /// Encode a bytearray into a hex string
-pub fn encode_hex(s: Vec<u8>) -> String {
+pub(crate) fn encode_hex(s: Vec<u8>) -> String {
     s.iter().fold(String::new(), |mut acc: String, b| {
         write!(acc, "{b:02x}", b = b).expect("unable to write");
         acc
     })
 }
 
-/// Prettify bytes into a human-readable format \
-pub fn prettify_bytes(bytes: u64) -> String {
+/// Prettify bytes into a human-readable format
+pub(crate) fn prettify_bytes(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{bytes} B")
     } else if bytes < 1024 * 1024 {
@@ -39,7 +39,8 @@ pub fn prettify_bytes(bytes: u64) -> String {
 }
 
 /// Write contents to a file on the disc
-pub fn write_file(path_str: &str, contents: &str) -> Result<(), Error> {
+/// If the parent directory does not exist, it will be created
+pub(crate) fn write_file(path_str: &str, contents: &str) -> Result<(), Error> {
     let path = Path::new(path_str);
 
     if let Some(prefix) = path.parent() {
@@ -58,7 +59,8 @@ pub fn write_file(path_str: &str, contents: &str) -> Result<(), Error> {
 }
 
 /// Read contents from a file on the disc
-pub fn read_file(path: &str) -> Result<String, Error> {
+/// Returns the contents as a string
+pub(crate) fn read_file(path: &str) -> Result<String, Error> {
     let path = Path::new(path);
     let mut file = File::open(path)
         .map_err(|e| Error::IOError(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
@@ -68,7 +70,8 @@ pub fn read_file(path: &str) -> Result<String, Error> {
 }
 
 /// Delete a file or directory on the disc
-pub fn delete_path(_path: &str) -> bool {
+/// Returns true if the operation was successful
+pub(crate) fn delete_path(_path: &str) -> bool {
     let path = match std::path::Path::new(_path).to_str() {
         Some(path) => path,
         None => return false,

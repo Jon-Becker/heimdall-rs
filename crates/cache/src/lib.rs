@@ -1,3 +1,7 @@
+//! A simple cache system for heimdall-rs
+//! Stores objects in ~/.bifrost/cache as bincode serialized files
+//! Objects are stored with an expiry time, and are deleted if they are expired
+
 use clap::Parser;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[allow(deprecated)]
@@ -17,6 +21,7 @@ pub(crate) mod util;
     override_usage = "heimdall cache <SUBCOMMAND>"
 )]
 pub struct CacheArgs {
+    /// Cache subcommand
     #[clap(subcommand)]
     pub sub: Subcommands,
 }
@@ -33,12 +38,15 @@ pub struct NoArguments {}
 )]
 #[allow(clippy::large_enum_variant)]
 pub enum Subcommands {
+    /// Clear the cache, removing all objects
     #[clap(name = "clean", about = "Removes all cached objects in ~/.bifrost/cache")]
     Clean(NoArguments),
 
+    /// List all cached objects
     #[clap(name = "ls", about = "Lists all cached objects in ~/.bifrost/cache")]
     Ls(NoArguments),
 
+    /// Print the size of the cache in ~/.bifrost/cache
     #[clap(name = "size", about = "Prints the size of the cache in ~/.bifrost/cache")]
     Size(NoArguments),
 }
@@ -47,7 +55,9 @@ pub enum Subcommands {
 /// The expiry time is a unix timestamp
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Cache<T> {
+    /// The value stored in the cache
     pub value: T,
+    /// The expiry time of the cache object
     pub expiry: u64,
 }
 
@@ -215,7 +225,8 @@ pub fn delete_cache(key: &str) -> Result<(), Error> {
 #[allow(deprecated)]
 pub fn read_cache<T>(key: &str) -> Result<Option<T>, Error>
 where
-    T: 'static + DeserializeOwned, {
+    T: 'static + DeserializeOwned,
+{
     let home = home_dir().ok_or(Error::Generic(
         "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
     ))?;
@@ -238,8 +249,8 @@ where
         .map_err(|e| Error::Generic(format!("failed to deserialize cache object: {:?}", e)))?;
 
     // check if the cache has expired, if so, delete it and return None
-    if cache.expiry <
-        std::time::SystemTime::now()
+    if cache.expiry
+        < std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| Error::Generic(format!("failed to get current time: {:?}", e)))?
             .as_secs()
@@ -266,7 +277,8 @@ where
 #[allow(deprecated)]
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>) -> Result<(), Error>
 where
-    T: Serialize, {
+    T: Serialize,
+{
     let home = home_dir().ok_or(Error::Generic(
         "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
     ))?;
@@ -278,8 +290,8 @@ where
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| Error::Generic(format!("failed to get current time: {:?}", e)))?
-            .as_secs() +
-            60 * 60 * 24 * 90,
+            .as_secs()
+            + 60 * 60 * 24 * 90,
     );
 
     let cache = Cache { value, expiry };
@@ -304,7 +316,8 @@ pub async fn with_cache<T, F, Fut>(key: &str, func: F) -> eyre::Result<T>
 where
     T: 'static + Serialize + DeserializeOwned + Send + Sync,
     F: FnOnce() -> Fut + Send,
-    Fut: std::future::Future<Output = Result<T, eyre::Report>> + Send, {
+    Fut: std::future::Future<Output = Result<T, eyre::Report>> + Send,
+{
     // Try to read from cache
     match read_cache::<T>(key) {
         Ok(Some(cached_value)) => {
