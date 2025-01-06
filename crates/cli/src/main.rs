@@ -1,3 +1,5 @@
+//! The Heimdall CLI is a command line interface for interacting with Heimdall modules.
+
 pub(crate) mod args;
 pub(crate) mod output;
 

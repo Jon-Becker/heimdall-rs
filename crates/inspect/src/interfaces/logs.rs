@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tracing::trace;
 
 /// Represents a decoded log
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DecodedLog {
     /// H160. the contract that emitted the log
     pub address: Address,

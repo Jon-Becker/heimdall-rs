@@ -1,7 +1,7 @@
 use crate::{core::postprocess::PostprocessorState, Error};
 
 /// Handles simplifying expressions by replacing equivalent expressions with variables.
-pub fn variable_postprocessor(
+pub(crate) fn variable_postprocessor(
     line: &mut String,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {

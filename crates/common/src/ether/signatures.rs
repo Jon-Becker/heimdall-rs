@@ -1,3 +1,6 @@
+//! This module contains the logic for resolving signatures from
+//! 4-byte function selector or a 32-byte event selector.
+
 use std::path::PathBuf;
 
 use alloy_dyn_abi::{DynSolType, DynSolValue};
@@ -19,16 +22,23 @@ use tracing::{debug, trace};
 
 use super::types::DynSolValueExt;
 
+/// A resolved function signature. May contain decoded inputs.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedFunction {
+    /// The name of the function. For example, `transfer`.
     pub name: String,
+    /// The function signature. For example, `transfer(address,uint256)`.
     pub signature: String,
+    /// The inputs of the function. For example, `["address", "uint256"]`.
     pub inputs: Vec<String>,
+    /// The decoded inputs of the function. For example, `[DynSolValue::Address("0x1234"),
+    /// DynSolValue::Uint(123)]`.
     #[serde(skip)]
     pub decoded_inputs: Option<Vec<DynSolValue>>,
 }
 
 impl ResolvedFunction {
+    /// Returns the inputs of the function as a vector of [`DynSolType`]s.
     pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
@@ -59,34 +69,45 @@ impl ResolvedFunction {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// A resolved error signature.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ResolvedError {
+    /// The name of the error. For example, `revert`.
     pub name: String,
+    /// The error signature. For example, `revert(string)`.
     pub signature: String,
+    /// The inputs of the error. For example, `["string"]`.
     pub inputs: Vec<String>,
 }
 
 impl ResolvedError {
+    /// Returns the inputs of the error as a vector of [`DynSolType`]s.
     pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// A resolved log signature.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ResolvedLog {
+    /// The name of the log. For example, `Transfer`.
     pub name: String,
+    /// The log signature. For example, `Transfer(address,address,uint256)`.
     pub signature: String,
+    /// The inputs of the log. For example, `["address", "address", "uint256"]`.
     pub inputs: Vec<String>,
 }
 
 impl ResolvedLog {
+    /// Returns the inputs of the log as a vector of [`DynSolType`]s.
     pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
-
+/// A trait for resolving a selector into a vector of [`ResolvedFunction`]s, [`ResolvedError`]s, or
 #[async_trait]
 pub trait ResolveSelector {
+    /// Resolves a selector into a vector of [`ResolvedFunction`]s, [`ResolvedError`]s, or
+    /// [`ResolvedLog`]s.
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>>
     where
         Self: Sized;
@@ -356,6 +377,7 @@ pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
     Ok(())
 }
 
+/// Heuristic to score a function signature based on its spamminess.
 pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
     // the score starts at 1000
     let mut score = 1000;

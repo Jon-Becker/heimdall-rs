@@ -43,7 +43,7 @@ async fn annotate_function(source: &str, openai_api_key: &str) -> Result<String>
     Ok(annotated)
 }
 
-pub async fn build_source(
+pub(crate) async fn build_source(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,

@@ -109,10 +109,10 @@ impl RangeMap {
     fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {
         !(incoming.start <= incumbent.start &&
             incoming.end < incumbent.end &&
-            incoming.end < incumbent.start ||
+            incoming.start < incumbent.start ||
             incoming.start > incumbent.start &&
                 incoming.end >= incumbent.end &&
-                incoming.start > incumbent.end)
+                incoming.end > incumbent.end)
     }
 }
 
@@ -140,7 +140,7 @@ mod tests {
         actual_byte_tracker.write(offset, size, some_op.clone());
 
         let expected_pairs: Vec<((usize, usize), WrappedOpcode)> =
-            vec![((7, 17), some_op.clone()), ((32, 64), some_op.clone())];
+            vec![((7, 17), some_op.clone()), ((32, 64), some_op)];
         let expected_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
             expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
         ));
@@ -168,7 +168,7 @@ mod tests {
             ((7, 7), some_op.clone()),
             ((8, 15), some_op.clone()),
             ((16, 18), some_op.clone()),
-            ((32, 64), some_op.clone()),
+            ((32, 64), some_op),
         ];
         let expected_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
             expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
@@ -193,11 +193,8 @@ mod tests {
         let size: usize = 14;
         actual_byte_tracker.write(offset, size, some_op.clone());
 
-        let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![
-            ((7, 9), some_op.clone()),
-            ((10, 23), some_op.clone()),
-            ((32, 64), some_op.clone()),
-        ];
+        let expected_pairs: Vec<((usize, usize), WrappedOpcode)> =
+            vec![((7, 9), some_op.clone()), ((10, 23), some_op.clone()), ((32, 64), some_op)];
         let expected_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
             expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
         ));
@@ -221,11 +218,8 @@ mod tests {
         let size: usize = 8;
         actual_byte_tracker.write(offset, size, some_op.clone());
 
-        let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![
-            ((2, 9), some_op.clone()),
-            ((10, 18), some_op.clone()),
-            ((32, 64), some_op.clone()),
-        ];
+        let expected_pairs: Vec<((usize, usize), WrappedOpcode)> =
+            vec![((2, 9), some_op.clone()), ((10, 18), some_op.clone()), ((32, 64), some_op)];
         let expected_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
             expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
         ));

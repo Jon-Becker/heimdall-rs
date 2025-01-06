@@ -5,6 +5,6 @@ mod traces;
 
 // re-export the public interface
 pub use args::{InspectArgs, InspectArgsBuilder};
-pub use contracts::*;
-pub use logs::*;
-pub use traces::*;
+pub(crate) use contracts::*;
+pub(crate) use logs::*;
+pub(crate) use traces::*;

@@ -364,7 +364,7 @@ pub fn tokenize(s: &str) -> Vec<String> {
     tokens
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TokenType {
     Control,
     Operator,

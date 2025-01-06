@@ -8,7 +8,7 @@ use crate::{
     Error,
 };
 
-pub fn yul_heuristic<'a>(
+pub(crate) fn yul_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
     analyzer_state: &'a mut AnalyzerState,
@@ -37,7 +37,7 @@ pub fn yul_heuristic<'a>(
             0x57 => {
                 let conditional = instruction.input_operations[1].yulify();
 
-                function.logic.push(format!("if {conditional} {{").to_string());
+                function.logic.push(format!("if {conditional} {{"));
                 analyzer_state.jumped_conditional = Some(conditional.clone());
                 analyzer_state.conditional_stack.push(conditional);
             }

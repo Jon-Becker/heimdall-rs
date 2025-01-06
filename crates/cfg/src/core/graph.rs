@@ -60,8 +60,8 @@ pub(crate) fn build_cfg(
                 .first()
                 .ok_or_eyre("failed to get first operation")?
                 .last_instruction
-                .opcode
-                == JUMPDEST,
+                .opcode ==
+                JUMPDEST,
         )?;
     }
 

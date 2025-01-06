@@ -1,10 +1,17 @@
+//! Tokenizer for expressions
+
 use std::fmt::{Display, Formatter};
 
+/// A token represents a single unit of an expression
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Token {
+    /// A literal value, for example, "0x1234"
     Literal(String),
+    /// A variable, for example, "a"
     Variable(String),
+    /// An operator, for example, "+"
     Operator(String),
+    /// An expression, for example, "(a + b)"
     Expression(Vec<Token>),
 }
 
@@ -130,17 +137,17 @@ pub fn tokenize(s: &str) -> Token {
                 let mut op = ch.to_string();
                 iter.next();
                 if let Some(&next_ch) = iter.peek() {
-                    if (ch == '=' && (next_ch == '=' || next_ch == '>'))
-                        || (ch == '&' && next_ch == '&')
-                        || (ch == '|' && next_ch == '|')
-                        || (ch == '<' && next_ch == '=')
-                        || (ch == '>' && next_ch == '=')
-                        || (ch == '!' && next_ch == '=')
-                        || (ch == '+' && next_ch == '+')
-                        || (ch == '-' && next_ch == '-')
-                        || (ch == '*' && next_ch == '*')
-                        || (ch == '>' && next_ch == '>')
-                        || (ch == '<' && next_ch == '<')
+                    if (ch == '=' && (next_ch == '=' || next_ch == '>')) ||
+                        (ch == '&' && next_ch == '&') ||
+                        (ch == '|' && next_ch == '|') ||
+                        (ch == '<' && next_ch == '=') ||
+                        (ch == '>' && next_ch == '=') ||
+                        (ch == '!' && next_ch == '=') ||
+                        (ch == '+' && next_ch == '+') ||
+                        (ch == '-' && next_ch == '-') ||
+                        (ch == '*' && next_ch == '*') ||
+                        (ch == '>' && next_ch == '>') ||
+                        (ch == '<' && next_ch == '<')
                     {
                         op.push(next_ch);
                         iter.next();
@@ -188,9 +195,9 @@ fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String 
     }
 
     // literal validation
-    if literal.starts_with("0x")
-        && literal.len() > 2
-        && literal[2..].chars().all(|c| c.is_ascii_hexdigit())
+    if literal.starts_with("0x") &&
+        literal.len() > 2 &&
+        literal[2..].chars().all(|c| c.is_ascii_hexdigit())
     {
         return literal;
     }
