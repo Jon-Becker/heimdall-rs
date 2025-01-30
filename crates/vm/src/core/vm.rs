@@ -804,7 +804,7 @@ impl VM {
                 // Safely convert U256 to usize
                 let i: usize = i.try_into().unwrap_or(usize::MAX);
 
-                let result = if i + 32 > self.calldata.len() {
+                let result = if i.saturating_add(32) > self.calldata.len() {
                     let mut value = [0u8; 32];
 
                     if i <= self.calldata.len() {
@@ -881,6 +881,7 @@ impl VM {
                 let offset: usize = offset.try_into().unwrap_or(usize::MAX);
                 let size: usize = size.try_into().unwrap_or(usize::MAX);
 
+                // clamp values to bytecode length
                 let value_offset_safe = offset.saturating_add(size).min(self.bytecode.len());
                 let mut value =
                     self.bytecode.get(offset..value_offset_safe).unwrap_or(&[]).to_owned();
@@ -932,8 +933,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(0);
+                let size: usize = size.try_into().unwrap_or(256);
 
                 let mut value = Vec::with_capacity(size);
                 value.fill(0xff);
@@ -971,8 +972,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(0);
+                let size: usize = size.try_into().unwrap_or(256);
 
                 let mut value = Vec::with_capacity(size);
                 value.fill(0xff);
