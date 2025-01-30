@@ -712,7 +712,7 @@ impl VM {
                 let b = self.stack.pop()?;
 
                 // convert a to usize
-                let usize_a: usize = a.value.try_into()?;
+                let usize_a: usize = a.value.try_into().unwrap_or(usize::MAX);
 
                 let mut result = I256::ZERO;
                 if !b.value.is_zero() {
@@ -737,8 +737,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into()?;
-                let size: usize = size.try_into()?;
+                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(usize::MAX);
 
                 let data = self.memory.read(offset, size);
                 let result = keccak256(data);
@@ -802,7 +802,7 @@ impl VM {
                 let i = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let i: usize = i.try_into()?;
+                let i: usize = i.try_into().unwrap_or(usize::MAX);
 
                 let result = if i + 32 > self.calldata.len() {
                     let mut value = [0u8; 32];
@@ -932,8 +932,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into()?;
-                let size: usize = size.try_into()?;
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(usize::MAX);
 
                 let mut value = Vec::with_capacity(size);
                 value.fill(0xff);
@@ -971,8 +971,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into()?;
-                let size: usize = size.try_into()?;
+                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(usize::MAX);
 
                 let mut value = Vec::with_capacity(size);
                 value.fill(0xff);
@@ -1033,7 +1033,7 @@ impl VM {
             // MLOAD
             0x51 => {
                 let i = self.stack.pop()?.value;
-                let i: usize = i.try_into()?;
+                let i: usize = i.try_into().unwrap_or(usize::MAX);
 
                 let result = U256::from_be_slice(self.memory.read(i, 32).as_slice());
 
@@ -1050,7 +1050,7 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into()?;
+                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, 32);
@@ -1071,7 +1071,7 @@ impl VM {
                 let value = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into()?;
+                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, 1);
@@ -1289,8 +1289,8 @@ impl VM {
                     self.stack.pop_n(topic_count as usize).iter().map(|x| x.value).collect();
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into()?;
-                let size: usize = size.try_into()?;
+                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(usize::MAX);
 
                 let data = self.memory.read(offset, size);
 
@@ -1341,8 +1341,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into()?;
-                let size: usize = size.try_into()?;
+                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(usize::MAX);
 
                 // consume dynamic gas
                 let gas_cost = self.memory.expansion_cost(offset, size);
@@ -1380,8 +1380,8 @@ impl VM {
                 let size = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
-                let offset: usize = offset.try_into()?;
-                let size: usize = size.try_into()?;
+                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(usize::MAX);
 
                 self.exit(1, self.memory.read(offset, size));
             }
