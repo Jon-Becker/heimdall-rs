@@ -1,3 +1,5 @@
+//! Functions for working with Ethereum bytecode.
+
 use crate::utils::strings::decode_hex;
 
 use super::rpc::get_code;

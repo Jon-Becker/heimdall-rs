@@ -9,7 +9,7 @@ use crate::{
 
 /// Handles converting storage operations to variables. For example:
 /// - `storage[0x20]` would become `store_a`, and so on.
-pub fn storage_postprocessor(
+pub(crate) fn storage_postprocessor(
     line: &mut String,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {

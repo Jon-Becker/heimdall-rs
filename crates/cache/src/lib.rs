@@ -1,3 +1,7 @@
+//! A simple cache system for heimdall-rs
+//! Stores objects in ~/.bifrost/cache as bincode serialized files
+//! Objects are stored with an expiry time, and are deleted if they are expired
+
 use clap::Parser;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 #[allow(deprecated)]
@@ -17,6 +21,7 @@ pub(crate) mod util;
     override_usage = "heimdall cache <SUBCOMMAND>"
 )]
 pub struct CacheArgs {
+    /// Cache subcommand
     #[clap(subcommand)]
     pub sub: Subcommands,
 }
@@ -33,12 +38,15 @@ pub struct NoArguments {}
 )]
 #[allow(clippy::large_enum_variant)]
 pub enum Subcommands {
+    /// Clear the cache, removing all objects
     #[clap(name = "clean", about = "Removes all cached objects in ~/.bifrost/cache")]
     Clean(NoArguments),
 
+    /// List all cached objects
     #[clap(name = "ls", about = "Lists all cached objects in ~/.bifrost/cache")]
     Ls(NoArguments),
 
+    /// Print the size of the cache in ~/.bifrost/cache
     #[clap(name = "size", about = "Prints the size of the cache in ~/.bifrost/cache")]
     Size(NoArguments),
 }
@@ -47,7 +55,9 @@ pub enum Subcommands {
 /// The expiry time is a unix timestamp
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Cache<T> {
+    /// The value stored in the cache
     pub value: T,
+    /// The expiry time of the cache object
     pub expiry: u64,
 }
 

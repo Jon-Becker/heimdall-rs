@@ -8,7 +8,7 @@ use crate::{core::postprocess::PostprocessorState, utils::constants::MEMORY_ACCE
 
 /// Handles converting memory operations to variables. For example:
 /// - `memory[0x20]` would become `var_a`, and so on.
-pub fn memory_postprocessor(
+pub(crate) fn memory_postprocessor(
     line: &mut String,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
@@ -73,7 +73,7 @@ pub fn memory_postprocessor(
                     .collect::<Vec<&str>>()[0];
 
                 *line = format!("{cast_type} {line}");
-                state.memory_type_map.insert(var_name.to_string(), cast_type.to_string());
+                state.memory_type_map.insert(var_name, cast_type.to_string());
                 return Ok(());
             }
 
@@ -82,10 +82,10 @@ pub fn memory_postprocessor(
                 assignment[1].replace(';', "").parse::<i64>().is_ok()
             {
                 *line = format!("uint256 {line}");
-                state.memory_type_map.insert(var_name.to_string(), "uint256".to_string());
+                state.memory_type_map.insert(var_name, "uint256".to_string());
             } else if ["&", "~", "byte", ">>", "<<"].iter().any(|op| line.contains(op)) {
                 *line = format!("bytes32 {line}");
-                state.memory_type_map.insert(var_name.to_string(), "bytes32".to_string());
+                state.memory_type_map.insert(var_name, "bytes32".to_string());
             }
         }
     }

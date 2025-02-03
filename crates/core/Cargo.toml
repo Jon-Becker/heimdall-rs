@@ -13,6 +13,9 @@ exclude.workspace = true
 [lib]
 bench = false
 
+[lints]
+workspace = true
+
 [dependencies]
 async-recursion = "1.0.5"
 thiserror = "1.0.50"
@@ -33,7 +36,7 @@ derive_builder = "0.12.0"
 async-convert = "1.0.0"
 futures = "0.3.28"
 tracing = "0.1.40"
-alloy-json-abi = { version = "0.7.6", features = ["serde_json"]}
+alloy-json-abi = { version = "0.7.6", features = ["serde_json"] }
 
 # modules
 heimdall-cfg = { workspace = true }

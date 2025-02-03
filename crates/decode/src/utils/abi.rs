@@ -13,13 +13,13 @@ use tracing::trace;
 use crate::error::Error;
 
 #[derive(Debug, Clone)]
-pub struct AbiEncoded {
+pub(crate) struct AbiEncoded {
     pub ty: String,
     pub coverages: HashSet<usize>,
 }
 
 /// Attempt to decode the given calldata with the given types.
-pub fn try_decode(
+pub(crate) fn try_decode(
     inputs: &[DynSolType],
     byte_args: &[u8],
 ) -> Result<(Vec<DynSolValue>, Vec<Param>), Error> {
@@ -45,7 +45,7 @@ pub fn try_decode(
 }
 
 /// Finds the offsets of all ABI-encoded items in the given calldata.
-pub fn try_decode_dynamic_parameter(
+pub(crate) fn try_decode_dynamic_parameter(
     parameter_index: usize,
     calldata_words: &[Vec<u8>],
 ) -> Result<Option<AbiEncoded>, Error> {

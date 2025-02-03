@@ -1,13 +1,20 @@
+//! Module for compiler detection.
+
 use std::fmt::Display;
 
 use crate::{ether::bytecode::remove_pushbytes_from_bytecode, utils::iter::ByteSliceExt};
 use tracing::{debug, trace, warn};
 
-#[derive(Debug, PartialEq, Clone)]
+/// Compiler enum to represent the compiler used to compile the contract.
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Compiler {
+    /// Indicates that the contract was compiled using the Solidity compiler.
     Solc,
+    /// Indicates that the contract was compiled using the Vyper compiler.
     Vyper,
+    /// Indicates that the contract is a minimal proxy.
     Proxy,
+    /// Indicates that the compiler could not be detected.
     Unknown,
 }
 
