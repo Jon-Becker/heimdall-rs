@@ -45,7 +45,7 @@ pub(crate) struct PostprocessorState {
 ///
 /// Depending on [`AnalyzerType`], different postprocessors will be registered and run on the
 /// [`AnalyzedFunction`]
-pub struct PostprocessOrchestrator {
+pub(crate) struct PostprocessOrchestrator {
     /// The type of postprocessor to use. this is taken from the analyzer
     typ: AnalyzerType,
     /// A list of registered postprocessors
@@ -56,7 +56,7 @@ pub struct PostprocessOrchestrator {
 
 impl PostprocessOrchestrator {
     /// Build a new postprocessor with the given analyzer type
-    pub fn new(typ: AnalyzerType) -> Result<Self, Error> {
+    pub(crate) fn new(typ: AnalyzerType) -> Result<Self, Error> {
         let mut orchestrator =
             Self { typ, postprocessors: Vec::new(), state: PostprocessorState::default() };
         orchestrator.register_postprocessors()?;
@@ -64,7 +64,7 @@ impl PostprocessOrchestrator {
     }
 
     /// Register heuristics for the given function and trace
-    pub fn register_postprocessors(&mut self) -> Result<(), Error> {
+    pub(crate) fn register_postprocessors(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
                 self.postprocessors.push(Postprocessor::new(bitwise_mask_postprocessor));
@@ -82,7 +82,7 @@ impl PostprocessOrchestrator {
     }
 
     /// Performs postprocessing
-    pub fn postprocess(
+    pub(crate) fn postprocess(
         &mut self,
         function: &mut AnalyzedFunction,
     ) -> Result<PostprocessorState, Error> {

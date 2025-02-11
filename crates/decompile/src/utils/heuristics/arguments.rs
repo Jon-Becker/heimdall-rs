@@ -18,7 +18,7 @@ use crate::{
     Error,
 };
 
-pub fn argument_heuristic<'a>(
+pub(crate) fn argument_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
     analyzer_state: &'a mut AnalyzerState,

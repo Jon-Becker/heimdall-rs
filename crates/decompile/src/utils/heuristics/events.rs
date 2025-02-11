@@ -10,7 +10,7 @@ use crate::{
     Error,
 };
 
-pub fn event_heuristic<'a>(
+pub(crate) fn event_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
     analyzer_state: &'a mut AnalyzerState,

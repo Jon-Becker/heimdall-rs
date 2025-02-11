@@ -547,5 +547,5 @@ fn wei_to_ether(wei: U256) -> f64 {
         trace!("WARNING: wei value was truncated to u64::MAX. Original value: {}", wei);
     }
 
-    wei_f64 / 10f64.powf(18.0)
+    wei_f64 / 10f64.powi(18)
 }

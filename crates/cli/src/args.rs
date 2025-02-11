@@ -20,7 +20,7 @@ use tracing::{level_filters::LevelFilter, Level};
 
 #[derive(Debug, Parser)]
 #[clap(name = "heimdall", author = "Jonathan Becker <jonathan@jbecker.dev>", version)]
-pub struct Arguments {
+pub(crate) struct Arguments {
     #[clap(subcommand)]
     pub sub: Subcommands,
 
@@ -34,7 +34,7 @@ pub struct Arguments {
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki"
 )]
 #[allow(clippy::large_enum_variant)]
-pub enum Subcommands {
+pub(crate) enum Subcommands {
     #[clap(name = "disassemble", about = "Disassemble EVM bytecode to assembly")]
     Disassemble(DisassemblerArgs),
 
@@ -66,7 +66,7 @@ pub enum Subcommands {
 /// The log configuration.
 #[derive(Debug, Args)]
 #[clap(next_help_heading = "LOGGING")]
-pub struct LogArgs {
+pub(crate) struct LogArgs {
     /// The format to use for logs written to stdout.
     #[clap(long = "log.stdout.format", value_name = "FORMAT", global = true, default_value_t = LogFormat::Terminal)]
     pub log_stdout_format: LogFormat,
@@ -115,7 +115,7 @@ impl LogArgs {
     }
 
     /// Initializes tracing with the configured options from cli args.
-    pub fn init_tracing(&self) -> eyre::Result<Option<FileWorkerGuard>> {
+    pub(crate) fn init_tracing(&self) -> eyre::Result<Option<FileWorkerGuard>> {
         let mut tracer = HeimdallTracer::new();
 
         let stdout = self.layer(self.log_stdout_format, self.log_stdout_filter.clone(), true);
@@ -132,7 +132,7 @@ impl LogArgs {
 
 /// The color mode for the cli.
 #[derive(Debug, Copy, Clone, ValueEnum, Eq, PartialEq)]
-pub enum ColorMode {
+pub(crate) enum ColorMode {
     /// Colors on
     Always,
     /// Colors on
@@ -167,7 +167,7 @@ impl FromStr for ColorMode {
 /// The verbosity settings for the cli.
 #[derive(Debug, Copy, Clone, Args)]
 #[clap(next_help_heading = "DISPLAY")]
-pub struct Verbosity {
+pub(crate) struct Verbosity {
     /// Set the minimum log level.
     ///
     /// -v     Warnings & Errors
@@ -185,7 +185,7 @@ pub struct Verbosity {
 impl Verbosity {
     /// Get the corresponding [Directive] for the given verbosity, or none if the verbosity
     /// corresponds to silent.
-    pub fn directive(&self) -> Directive {
+    pub(crate) fn directive(&self) -> Directive {
         if self.quiet {
             LevelFilter::OFF.into()
         } else {

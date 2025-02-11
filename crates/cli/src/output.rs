@@ -10,7 +10,7 @@ use heimdall_common::ether::rpc;
 ///   - if `target` is a contract_address, return `/output/{chain_id}/{target}/{filename}`
 ///   - if `target` is a file or raw bytes, return `/output/local/{filename}`
 /// - if `output` is specified, return `/{output}/{filename}`
-pub async fn build_output_path(
+pub(crate) async fn build_output_path(
     output: &str,
     target: &str,
     rpc_url: &str,
@@ -38,7 +38,7 @@ pub async fn build_output_path(
 }
 
 /// pass the input to the `less` command
-pub async fn print_with_less(input: &str) -> Result<()> {
+pub(crate) async fn print_with_less(input: &str) -> Result<()> {
     let mut child =
         std::process::Command::new("less").stdin(std::process::Stdio::piped()).spawn()?;
 

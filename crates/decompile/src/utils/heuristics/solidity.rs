@@ -11,7 +11,7 @@ use crate::{
     Error,
 };
 
-pub fn solidity_heuristic<'a>(
+pub(crate) fn solidity_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
     analyzer_state: &'a mut AnalyzerState,
@@ -106,7 +106,7 @@ pub fn solidity_heuristic<'a>(
                     return Ok(());
                 }
 
-                function.logic.push(format!("if ({conditional}) {{").to_string());
+                function.logic.push(format!("if ({conditional}) {{"));
 
                 // save a copy of the conditional and add it to the conditional map
                 analyzer_state.jumped_conditional = Some(conditional.clone());

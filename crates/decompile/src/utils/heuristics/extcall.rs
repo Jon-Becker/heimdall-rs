@@ -13,7 +13,7 @@ use crate::{
 };
 use heimdall_decoder::{decode, DecodeArgsBuilder};
 
-pub fn extcall_heuristic<'a>(
+pub(crate) fn extcall_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
     analyzer_state: &'a mut AnalyzerState,
@@ -27,11 +27,8 @@ pub fn extcall_heuristic<'a>(
                 let address = instruction.input_operations[1].solidify();
                 let memory =
                     function.get_memory_range(instruction.inputs[3], instruction.inputs[4]);
-                let extcalldata = memory
-                    .iter()
-                    .map(|x| x.value.to_lower_hex().to_owned())
-                    .collect::<Vec<String>>()
-                    .join("");
+                let extcalldata =
+                    memory.iter().map(|x| x.value.to_lower_hex()).collect::<Vec<String>>().join("");
                 let gas_solidified = instruction.input_operations[0].solidify();
                 let value_solidified = instruction.input_operations[2].solidify();
 

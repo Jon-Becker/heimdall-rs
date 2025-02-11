@@ -1,15 +1,22 @@
+//! Tokenizer for expressions
+
 use std::fmt::{Display, Formatter};
 
+/// A token represents a single unit of an expression
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Token {
+    /// A literal value, for example, "0x1234"
     Literal(String),
+    /// A variable, for example, "a"
     Variable(String),
+    /// An operator, for example, "+"
     Operator(String),
+    /// An expression, for example, "(a + b)"
     Expression(Vec<Token>),
 }
 
 impl Display for Token {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Token::Literal(literal) => write!(f, "{}", literal),
             Token::Variable(variable) => write!(f, "{}", variable),
@@ -174,7 +181,7 @@ pub fn tokenize(s: &str) -> Token {
     Token::Expression(tokens)
 }
 
-fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
+fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
     let mut literal = String::new();
 
     while let Some(&ch) = iter.peek() {
@@ -200,7 +207,7 @@ fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
     String::from("0")
 }
 
-fn parse_variable(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
+fn parse_variable(iter: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
     let mut variable = String::new();
     while let Some(&ch) = iter.peek() {
         match ch {
@@ -214,7 +221,7 @@ fn parse_variable(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
     variable
 }
 
-fn consume_parentheses(iter: &mut std::iter::Peekable<std::str::Chars>) -> String {
+fn consume_parentheses(iter: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
     let mut expression = String::new();
     let mut parentheses_count = 1;
 

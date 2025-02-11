@@ -9,7 +9,7 @@ use crate::{
 
 /// Handles converting storage operations to variables. For example:
 /// - `transient[0x20]` would become `tstore_a`, and so on.
-pub fn transient_postprocessor(
+pub(crate) fn transient_postprocessor(
     line: &mut String,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {

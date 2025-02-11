@@ -20,7 +20,7 @@ use crate::{
 /// nature of [`WrappedOpcode`]s. Essentially pattern matching on
 /// `WrappedOpcode::Raw(_)` and `WrappedOpcode::Opcode(_)` is not possible
 /// for complicated reasons. If you want to know more about why, ask @Jon-Becker.
-pub fn bitwise_mask_postprocessor(
+pub(crate) fn bitwise_mask_postprocessor(
     line: &mut String,
     _: &mut PostprocessorState,
 ) -> Result<(), Error> {
@@ -120,7 +120,7 @@ pub fn bitwise_mask_postprocessor(
 ///
 /// note: this function clones the input string, but hopefully
 /// in the future ill be able to avoid that
-pub fn simplify_casts(line: &str) -> String {
+pub(super) fn simplify_casts(line: &str) -> String {
     let mut cleaned = line.to_owned();
 
     // remove unnecessary casts

@@ -1,3 +1,5 @@
+//! Module for fetching calldata from a target.
+
 use super::rpc::get_transaction;
 use crate::utils::strings::decode_hex;
 use alloy::primitives::TxHash;
