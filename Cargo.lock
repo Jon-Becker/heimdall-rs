@@ -2225,6 +2225,7 @@ dependencies = [
  "lazy_static",
  "petgraph",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
 ]
 

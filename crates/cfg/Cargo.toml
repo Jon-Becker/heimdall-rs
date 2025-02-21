@@ -29,3 +29,6 @@ alloy = { version = "0.3.3", features = ["full", "rpc-types-debug", "rpc-types-t
 
 heimdall-disassembler.workspace = true
 heimdall-vm.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

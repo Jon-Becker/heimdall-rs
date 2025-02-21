@@ -57,7 +57,7 @@ mod integration_tests {
 
         let output = format!("{}", Dot::with_config(&result.graph, &[]));
 
-        for line in &[String::from("\"0x03a0 JUMPDEST \\l0x03a1 STOP \\l\"")] {
+        for line in &[String::from("\"0x039f JUMPDEST \\l0x03a0 STOP \\l\"")] {
             assert!(output.contains(line))
         }
     }
