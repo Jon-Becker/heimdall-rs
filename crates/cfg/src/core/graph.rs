@@ -46,7 +46,7 @@ pub fn build_cfg(
 
         cfg_node.push_str(&format!("{}\n", &assembly));
     }
-    
+
     // check if this node has been seen before
     if seen_nodes.contains(&cfg_node) {
         return Ok(());
@@ -73,7 +73,7 @@ pub fn build_cfg(
                 .last_instruction
                 .opcode ==
                 JUMPDEST,
-                seen_nodes,
+            seen_nodes,
         )?;
     }
 
@@ -82,8 +82,8 @@ pub fn build_cfg(
 
 #[cfg(test)]
 mod tests {
-    use crate::{cfg, CfgArgsBuilder};
     use super::*;
+    use crate::{cfg, CfgArgsBuilder};
     use tokio::test;
 
     #[test]
@@ -91,11 +91,11 @@ mod tests {
         let args = CfgArgsBuilder::new()
             .target("0x6080604052348015600e575f80fd5b50600436106030575f3560e01c80632125b65b146034578063b69ef8a8146044575b5f80fd5b6044603f3660046046565b505050565b005b5f805f606084860312156057575f80fd5b833563ffffffff811681146069575f80fd5b925060208401356001600160a01b03811681146083575f80fd5b915060408401356001600160e01b0381168114609d575f80fd5b80915050925092509256".to_string())
             .build()?;
-    
+
         let result = cfg(args).await?;
-    
+
         println!("Contract Cfg: {:#?}", result);
-    
+
         Ok(())
     }
 }

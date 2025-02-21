@@ -744,7 +744,7 @@ impl VM {
                 let result = keccak256(data);
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost = 6 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
@@ -850,7 +850,7 @@ impl VM {
                 }
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
@@ -892,7 +892,7 @@ impl VM {
                 }
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
@@ -940,7 +940,7 @@ impl VM {
                 value.fill(0xff);
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost =
                     3 * minimum_word_size + self.memory.expansion_cost(dest_offset, size);
                 self.consume_gas(gas_cost);
@@ -979,7 +979,7 @@ impl VM {
                 value.fill(0xff);
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost =
                     3 * minimum_word_size + self.memory.expansion_cost(dest_offset, size);
                 self.consume_gas(gas_cost);
@@ -1211,7 +1211,7 @@ impl VM {
                 }
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 

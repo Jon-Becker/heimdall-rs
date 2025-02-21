@@ -35,10 +35,7 @@ pub fn to_type(string: &str) -> DynSolType {
 
         let size = string[array_range].to_string();
 
-        array_size.push_back(match size.parse::<usize>() {
-            Ok(size) => Some(size),
-            Err(_) => None,
-        });
+        array_size.push_back(size.parse::<usize>().ok());
 
         string = string.replacen(&format!("[{}]", &size), "", 1);
     }
