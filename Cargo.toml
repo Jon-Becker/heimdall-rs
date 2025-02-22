@@ -31,7 +31,7 @@ lto = "thin"
 debug = true
 
 [workspace.package]
-version = "0.8.5"
+version = "0.8.6"
 edition = "2021"
 license = "MIT"
 rust-version = "1.81"
