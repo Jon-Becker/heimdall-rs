@@ -2198,7 +2198,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "heimdall-cache"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "bincode",
  "clap",
@@ -2210,7 +2210,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-cfg"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy",
  "clap",
@@ -2231,7 +2231,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-cli"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy",
  "alloy-json-abi 0.8.21",
@@ -2254,7 +2254,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-common"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy",
  "alloy-dyn-abi",
@@ -2288,7 +2288,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-config"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "clap",
  "heimdall-common",
@@ -2302,7 +2302,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-core"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy-json-abi 0.7.7",
  "async-convert",
@@ -2336,7 +2336,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-decoder"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy",
  "alloy-dyn-abi",
@@ -2357,7 +2357,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-decompiler"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy",
  "alloy-dyn-abi",
@@ -2384,7 +2384,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-disassembler"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "clap",
  "eyre",
@@ -2398,7 +2398,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-dump"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy",
  "clap",
@@ -2416,7 +2416,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-inspect"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy",
  "async-convert",
@@ -2439,7 +2439,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-tracing"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "clap",
  "eyre",
@@ -2453,7 +2453,7 @@ dependencies = [
 
 [[package]]
 name = "heimdall-vm"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "alloy",
  "async-openai 0.10.3",
