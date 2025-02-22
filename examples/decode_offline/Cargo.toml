@@ -1,13 +1,13 @@
 [package]
 name = "heimdall-rs-decode-offline-example"
-version = "0.8.5"
+version = "0.8.6"
 edition = "2021"
 description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
 
 [dependencies]
-heimdall-decoder = { git = "https://github.com/Jon-Becker/heimdall-rs.git", tag = "0.8.5" }
+heimdall-decoder = { git = "https://github.com/Jon-Becker/heimdall-rs.git", tag = "0.8.6" }
 serde = "1.0.196"
 serde_yaml = "0.9.31"
 tokio = "1.35.1"
