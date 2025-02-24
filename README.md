@@ -68,10 +68,12 @@ If interested in the research behind Heimdall, check out some of my [publication
 
 Heimdall has been cited in the following academic papers & theses:
 
+
+
+- **Forissier, T.** (2024). *EVeilM: EVM Bytecode Obfuscation*. Masters Thesis, KTH EECS. [Full Text](https://www.diva-portal.org/smash/get/diva2:1935522/FULLTEXT01.pdf)
 - **Lagouvardos, S., Bollanos, Y., Grech, N., & Smaragdakis, Y.** (2024). *The Incredible Shrinking Context... in a decompiler near you*. Research Article. [arXiv](https://www.arxiv.org/pdf/2409.11157)
 - **Ye, M., Lin, X., Nan, Y., Wu, J., & Zheng, Z.** (2024). *Midas: Mining Profitable Exploits in On-Chain Smart Contracts via Feedback-Driven Fuzzing and Differential Analysis*. Research Article, ISSTA. [DOI](https://doi.org/10.1145/3650212.3680321)
 - **Darwish, M.** (2024). *From Bytecode to Safety - Decompiling Smart Contracts for Vulnerability Analysis*. Bachelors Thesis, Linnaeus University. [Full Text](https://lnu.diva-portal.org/smash/get/diva2:1864948/FULLTEXT01.pdf)
 - **Aimar, D.** (2023). *Extraction, Indexing, and Analysis of Ethereum Smart Contracts Data*. Masters Thesis, Politecnico di Torino. [Full Text](https://webthesis.biblio.polito.it/28450/1/tesi.pdf)
-
 
 If you have used or plan to use Heimdall in your research, please reach out to me via [email](mailto:jonathan@jbecker.dev) or [Twitter](https://x.com/BeckerrJon)! I'd love to hear about what you're using heimdall for :)
