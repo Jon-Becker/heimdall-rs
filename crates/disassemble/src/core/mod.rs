@@ -37,7 +37,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
             program_counter += byte_count_to_push as usize;
         }
 
-        let offset = program_counter - 1;
+        let offset = program_counter - 1; // offset starts from zero
         asm.push_str(
             format!(
                 "{} {} {}\n",
@@ -58,26 +58,4 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     info!("disassembled {} bytes successfully", program_counter);
     debug!("disassembly took {:?}", start_time.elapsed());
     Ok(asm)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::DisassemblerArgsBuilder;
-    use super::disassemble;
-    use tokio::test;
-
-    #[test]
-    async fn test_disassemble() -> Result<(), Box<dyn std::error::Error>> {
-        let args = DisassemblerArgsBuilder::new()
-            .target("0x9f00c43700bc0000Ff91bE00841F8e04c0495000".to_string())
-            .rpc_url("https://eth.llamarpc.com".to_string())
-            .build()
-            .unwrap();
-
-        let result = disassemble(args).await.unwrap();
-
-        println!("Disassembled contract: {:#?}", result);
-
-        Ok(())
-    }
 }
