@@ -14,8 +14,20 @@ use tracing::{debug, error, info, trace, warn};
 
 use crate::core::vm::VM;
 
-// Find all function selectors and all the data associated to this function, represented by
-// [`ResolvedFunction`]
+/// Finds and resolves function selectors from disassembled bytecode
+///
+/// This function analyzes disassembled EVM bytecode to extract function selectors
+/// and optionally resolves them to human-readable function signatures.
+///
+/// # Arguments
+/// * `disassembled_bytecode` - The disassembled EVM bytecode to analyze
+/// * `skip_resolving` - If true, skip the process of resolving selectors to function signatures
+/// * `evm` - The VM instance to use for analysis
+///
+/// # Returns
+/// * A Result containing a tuple with:
+///   - A HashMap mapping selector strings to their instruction offsets
+///   - A HashMap mapping selector strings to their resolved function information
 pub async fn get_resolved_selectors(
     disassembled_bytecode: &str,
     skip_resolving: &bool,

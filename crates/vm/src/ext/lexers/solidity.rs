@@ -15,6 +15,17 @@ use crate::core::opcodes::{
     TLOAD, XOR,
 };
 
+/// Checks if a given address is a supported precompiled contract address
+///
+/// The Ethereum network includes several precompiled contracts at specific addresses.
+/// This function checks if the given address corresponds to one of the supported
+/// precompiles (addresses 1-3).
+///
+/// # Arguments
+/// * `precompile_address` - The address to check
+///
+/// # Returns
+/// * `true` if the address is a supported precompile, `false` otherwise
 pub fn is_ext_call_precompile(precompile_address: U256) -> bool {
     let address: usize = match precompile_address.try_into() {
         Ok(x) => x,

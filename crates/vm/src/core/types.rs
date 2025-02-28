@@ -12,10 +12,16 @@ use super::{
     vm::Instruction,
 };
 
+/// Indicates the type of padding in a byte array
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Padding {
+    /// Padding exists on the left side (higher order bytes)
     Left,
+
+    /// Padding exists on the right side (lower order bytes)
     Right,
+
+    /// No padding exists
     None,
 }
 
@@ -245,7 +251,19 @@ pub fn get_padding_size(bytes: &[u8]) -> usize {
     }
 }
 
-// Get minimum size needed to store the given word
+/// Analyzes a byte array and determines potential Solidity types that could represent it
+///
+/// This function examines the given word (byte array) and returns:
+/// 1. The minimum size in bytes needed to store the word
+/// 2. A list of possible Solidity type names that could represent the data
+///
+/// # Arguments
+/// * `word` - The byte array to analyze
+///
+/// # Returns
+/// * A tuple containing:
+///   - The minimum size in bytes needed to store the word
+///   - A vector of strings representing potential Solidity types
 pub fn get_potential_types_for_word(word: &[u8]) -> (usize, Vec<String>) {
     // get padding of the word, note this is a maximum
     let padding_size = get_padding_size(word);

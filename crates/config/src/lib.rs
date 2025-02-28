@@ -1,3 +1,9 @@
+//! Configuration management for Heimdall
+//!
+//! This crate provides functionality for managing the Heimdall configuration,
+//! including loading, saving, updating, and deleting configuration settings.
+
+/// Error types for the configuration module
 pub mod error;
 
 use crate::error::Error;
@@ -8,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::env::home_dir;
 use tracing::{debug, error, info};
 
+/// Command line arguments for the configuration command
 #[derive(Debug, Clone, Parser)]
 #[clap(
     about = "Display and edit the current configuration",
@@ -28,10 +35,19 @@ pub struct ConfigArgs {
 /// will attempt to read from this configuration when possible.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Configuration {
+    /// The URL for the Ethereum RPC endpoint
     pub rpc_url: String,
+
+    /// The URL for a local Ethereum RPC endpoint
     pub local_rpc_url: String,
+
+    /// The API key for Etherscan services
     pub etherscan_api_key: String,
+
+    /// The API key for Transpose services
     pub transpose_api_key: String,
+
+    /// The API key for OpenAI services
     pub openai_api_key: String,
 }
 
