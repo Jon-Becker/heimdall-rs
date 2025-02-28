@@ -6,29 +6,43 @@ use super::super::strings::replace_last;
 /// Has several helper functions to add different types of traces.
 #[derive(Clone, Debug)]
 pub struct TraceFactory {
+    /// The level of the trace. Higher numbers mean more verbose output.
     pub level: i8,
+    /// The collection of traces gathered during execution.
     pub traces: Vec<Trace>,
 }
 
 /// The trace category is used to determine how the trace is formatted.
 #[derive(Clone, Debug)]
 pub enum TraceCategory {
+    /// Standard log message.
     Log,
+    /// Log message with unknown source.
     LogUnknown,
+    /// General message.
     Message,
+    /// Function call trace.
     Call,
+    /// Contract creation trace.
     Create,
+    /// Empty trace (placeholder).
     Empty,
+    /// Contract self-destruct trace.
     Suicide,
 }
 
 /// Individual trace, which is added to the trace factory.
 #[derive(Clone, Debug)]
 pub struct Trace {
+    /// The category of the trace, determining its formatting and interpretation.
     pub category: TraceCategory,
+    /// The instruction number or identifier for this trace.
     pub instruction: u32,
+    /// The message content of the trace, potentially multiple lines.
     pub message: Vec<String>,
+    /// The parent trace identifier (if this is a child trace).
     pub parent: u32,
+    /// Child trace identifiers that are nested under this trace.
     pub children: Vec<u32>,
 }
 
@@ -246,6 +260,24 @@ impl TraceFactory {
         self.add("call", parent_index, instruction, vec![title, returns])
     }
 
+    /// Adds a function call trace with extra information.
+    ///
+    /// This method creates a trace entry for a function call and includes additional context
+    /// information.
+    ///
+    /// # Arguments
+    ///
+    /// * `parent_index` - The index of the parent trace
+    /// * `instruction` - The instruction identifier
+    /// * `origin` - The origin context (e.g., contract name)
+    /// * `function_name` - The name of the function being called
+    /// * `args` - The arguments passed to the function
+    /// * `returns` - The return value(s) of the function
+    /// * `extra` - Additional context information to display
+    ///
+    /// # Returns
+    ///
+    /// * `u32` - The index of the newly added trace
     #[allow(clippy::too_many_arguments)]
     pub fn add_call_with_extra(
         &mut self,

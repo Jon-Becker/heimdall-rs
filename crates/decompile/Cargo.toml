@@ -13,6 +13,9 @@ exclude.workspace = true
 [lib]
 bench = false
 
+[lints]
+workspace = true
+
 [dependencies]
 heimdall-config = { workspace = true }
 heimdall-common = { workspace = true }

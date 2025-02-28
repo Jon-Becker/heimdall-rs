@@ -10,6 +10,10 @@ use heimdall_config::parse_url_arg;
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
     override_usage = "heimdall decode <TARGET> [OPTIONS]"
 )]
+/// Arguments for the decode operation
+///
+/// This struct contains all the configuration parameters needed to decode
+/// calldata into human-readable function signatures and parameters.
 pub struct DecodeArgs {
     /// The target to decode, either a transaction hash or string of bytes.
     #[clap(required = true)]
@@ -59,12 +63,20 @@ pub struct DecodeArgs {
 }
 
 impl DecodeArgs {
+    /// Retrieves the calldata from the specified target
+    ///
+    /// This method fetches the calldata from a transaction hash, raw hex string,
+    /// or directly from the provided target, depending on the configuration options.
+    ///
+    /// # Returns
+    /// The raw calldata as a vector of bytes
     pub async fn get_calldata(&self) -> Result<Vec<u8>> {
         get_calldata_from_target(&self.target, self.raw, &self.rpc_url).await
     }
 }
 
 impl DecodeArgsBuilder {
+    /// Creates a new DecodeArgsBuilder with default values
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),

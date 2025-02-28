@@ -8,7 +8,7 @@ use crate::core::analyze::AnalyzerType;
 
 /// The [`AnalyzedFunction`] struct represents a function that has been analyzed by the decompiler.
 #[derive(Clone, Debug)]
-pub struct AnalyzedFunction {
+pub(crate) struct AnalyzedFunction {
     /// the function's 4byte selector
     pub selector: String,
 
@@ -59,13 +59,13 @@ pub struct AnalyzedFunction {
 }
 
 #[derive(Clone, Debug)]
-pub struct StorageFrame {
+pub(crate) struct StorageFrame {
     pub operation: WrappedOpcode,
     pub value: U256,
 }
 
 #[derive(Clone, Debug)]
-pub struct CalldataFrame {
+pub(crate) struct CalldataFrame {
     pub arg_op: String,
     pub mask_size: usize,
     pub heuristics: HashSet<TypeHeuristic>,
@@ -73,21 +73,21 @@ pub struct CalldataFrame {
 
 impl CalldataFrame {
     /// Get the potential types for the given argument
-    pub fn potential_types(&self) -> Vec<String> {
+    pub(crate) fn potential_types(&self) -> Vec<String> {
         // get all potential types that can fit in self.mask_size
         byte_size_to_type(self.mask_size).1.to_vec()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
-pub enum TypeHeuristic {
+pub(crate) enum TypeHeuristic {
     Numeric,
     Bytes,
     Boolean,
 }
 
 impl AnalyzedFunction {
-    pub fn new(selector: &str, fallback: bool) -> Self {
+    pub(crate) fn new(selector: &str, fallback: bool) -> Self {
         AnalyzedFunction {
             selector: if fallback { "00000000".to_string() } else { selector.to_string() },
             arguments: HashMap::new(),
@@ -109,12 +109,12 @@ impl AnalyzedFunction {
     }
 
     /// Whether this is a constant or not
-    pub fn is_constant(&self) -> bool {
+    pub(crate) fn is_constant(&self) -> bool {
         self.pure && self.arguments.is_empty()
     }
 
     /// Gets the inputs for a range of memory
-    pub fn get_memory_range(&self, _offset: U256, _size: U256) -> Vec<StorageFrame> {
+    pub(crate) fn get_memory_range(&self, _offset: U256, _size: U256) -> Vec<StorageFrame> {
         let mut memory_slice: Vec<StorageFrame> = Vec::new();
 
         // Safely convert U256 to usize
@@ -134,7 +134,7 @@ impl AnalyzedFunction {
     }
 
     /// Get the arguments in a sorted vec
-    pub fn sorted_arguments(&self) -> Vec<(usize, CalldataFrame)> {
+    pub(crate) fn sorted_arguments(&self) -> Vec<(usize, CalldataFrame)> {
         let mut arguments: Vec<_> = self.arguments.clone().into_iter().collect();
         arguments.sort_by(|x, y| x.0.cmp(&y.0));
         arguments

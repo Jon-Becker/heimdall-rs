@@ -271,7 +271,17 @@ pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
     None
 }
 
+/// Extension trait for strings that adds helpful operations.
 pub trait StringExt {
+    /// Truncates a string to a maximum length, adding an ellipsis if necessary.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_length` - The maximum length of the returned string
+    ///
+    /// # Returns
+    ///
+    /// * `String` - The truncated string with ellipsis if needed
     fn truncate(&self, max_length: usize) -> String;
 }
 
@@ -364,12 +374,18 @@ pub fn tokenize(s: &str) -> Vec<String> {
     tokens
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
+/// Classification for tokens in code analysis.
 pub enum TokenType {
+    /// Control flow related tokens (if, while, for, etc).
     Control,
+    /// Operators (+, -, *, /, etc).
     Operator,
+    /// Constant values (numbers, string literals, etc).
     Constant,
+    /// Variable identifiers.
     Variable,
+    /// Function identifiers.
     Function,
 }
 

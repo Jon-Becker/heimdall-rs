@@ -40,7 +40,7 @@ impl Contracts {
                 address,
                 get_label(&address.to_lower_hex(), &self.transpose_api_key)
                     .await
-                    .unwrap_or(address.to_lower_hex()),
+                    .unwrap_or_else(|| address.to_lower_hex()),
             );
         } else {
             self.contracts.insert(address, address.to_lower_hex());
@@ -74,12 +74,9 @@ impl Contracts {
             let labels =
                 try_join_all(handles).await.map_err(|e| Error::TransposeError(e.to_string()))?;
 
-            self.contracts.extend(
-                addresses
-                    .into_iter()
-                    .zip(labels.into_iter())
-                    .map(|(address, label)| (address, label.unwrap_or(address.to_lower_hex()))),
-            );
+            self.contracts.extend(addresses.into_iter().zip(labels.into_iter()).map(
+                |(address, label)| (address, label.unwrap_or_else(|| address.to_lower_hex())),
+            ));
             // replace None
         } else {
             self.contracts

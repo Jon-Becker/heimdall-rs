@@ -8,6 +8,10 @@ use heimdall_config::parse_url_arg;
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
     override_usage = "heimdall dump <TARGET> [OPTIONS]"
 )]
+/// Arguments for the dump operation
+///
+/// This struct contains all the configuration parameters needed to perform
+/// a storage slot dump for a target contract.
 pub struct DumpArgs {
     /// The target to find and dump the storage slots of.
     #[clap(required = true)]
@@ -40,6 +44,7 @@ pub struct DumpArgs {
 }
 
 impl DumpArgsBuilder {
+    /// Creates a new DumpArgsBuilder with default values
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),

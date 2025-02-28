@@ -1,3 +1,5 @@
+//! Helper functions for parsing and converting Solidity types to Rust types.
+
 use alloy_dyn_abi::{DynSolType, DynSolValue};
 use alloy_json_abi::Param;
 use serde_json::{Map, Number, Value};
@@ -6,10 +8,14 @@ use std::collections::VecDeque;
 use crate::utils::strings::find_balanced_encapsulator;
 use eyre::Result;
 
-#[derive(Debug, Clone, PartialEq)]
+/// Enum representing the padding of a type.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Padding {
+    /// The value is left-padded. I.e. 0x0000...1234
     Left,
+    /// The value is right-padded. I.e. 0x1234...0000
     Right,
+    /// The value is not padded, or the padding is unknown.
     None,
 }
 
@@ -249,6 +255,7 @@ pub fn to_components(param_type: &DynSolType) -> Vec<Param> {
 
 /// an extension on DynSolValue which allows serialization to a string
 pub trait DynSolValueExt {
+    /// Serialize the value to a serde_json::Value
     fn serialize(&self) -> Value;
 }
 

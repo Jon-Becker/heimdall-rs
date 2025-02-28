@@ -4,6 +4,7 @@ use eyre::Result;
 use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
 
+/// Arguments for the CFG subcommand
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(
     about = "Generate a visual control flow graph for EVM bytecode",
@@ -43,12 +44,14 @@ pub struct CfgArgs {
 }
 
 impl CfgArgs {
+    /// Get the bytecode for the target
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
         get_bytecode_from_target(&self.target, &self.rpc_url).await
     }
 }
 
 impl CfgArgsBuilder {
+    /// Create a new instance of the [`CfgArgsBuilder`]
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),

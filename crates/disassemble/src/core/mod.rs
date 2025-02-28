@@ -6,6 +6,19 @@ use heimdall_common::utils::strings::encode_hex;
 use heimdall_vm::core::opcodes::opcode_name;
 use tracing::{debug, info};
 
+/// Disassembles EVM bytecode into readable assembly instructions
+///
+/// This function takes the bytecode of a contract and converts it into a string
+/// representation of the equivalent EVM assembly code. It handles special cases
+/// like PUSH operations which consume additional bytes as data.
+///
+/// # Arguments
+///
+/// * `args` - Arguments specifying the target and disassembly options
+///
+/// # Returns
+///
+/// A string containing the disassembled bytecode in assembly format
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     // init
     let start_time = Instant::now();

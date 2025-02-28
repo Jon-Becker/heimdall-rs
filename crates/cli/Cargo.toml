@@ -26,8 +26,16 @@ tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 eyre = "0.6.12"
 alloy-json-abi = "0.8.3"
-alloy = { version = "0.3.3", features = ["full", "rpc-types-debug", "rpc-types-trace"] }
+alloy = { version = "0.3.3", features = [
+    "full",
+    "rpc-types-debug",
+    "rpc-types-trace",
+] }
 async-trait = "0.1.51"
+
+[lints]
+workspace = true
+
 
 [[bin]]
 name = "heimdall"

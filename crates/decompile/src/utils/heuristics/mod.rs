@@ -12,12 +12,12 @@ mod solidity;
 mod yul;
 
 // re-export heuristics
-pub use arguments::argument_heuristic;
-pub use events::event_heuristic;
-pub use extcall::extcall_heuristic;
-pub use modifiers::modifier_heuristic;
-pub use solidity::solidity_heuristic;
-pub use yul::yul_heuristic;
+pub(crate) use arguments::argument_heuristic;
+pub(crate) use events::event_heuristic;
+pub(crate) use extcall::extcall_heuristic;
+pub(crate) use modifiers::modifier_heuristic;
+pub(crate) use solidity::solidity_heuristic;
+pub(crate) use yul::yul_heuristic;
 
 /// A heuristic is a function that takes a function and a state and modifies the function based on
 /// the state
@@ -32,11 +32,11 @@ pub(crate) struct Heuristic {
 }
 
 impl Heuristic {
-    pub fn new(implementation: HeuristicFn) -> Self {
+    pub(crate) fn new(implementation: HeuristicFn) -> Self {
         Self { implementation }
     }
 
-    pub async fn run<'a>(
+    pub(crate) async fn run<'a>(
         &self,
         function: &'a mut AnalyzedFunction,
         state: &'a State,

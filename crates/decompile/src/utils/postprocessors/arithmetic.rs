@@ -15,12 +15,12 @@ use crate::{
 ///
 /// Additionally, this postprocessor will simplify parentheses within the
 /// arithmetic operations.
-pub fn arithmetic_postprocessor(
+pub(crate) fn arithmetic_postprocessor(
     line: &mut String,
     _state: &mut PostprocessorState,
 ) -> Result<(), Error> {
     // 1. Simplify parentheses
-    *line = simplify_parentheses(line, 0).unwrap_or(line.clone());
+    *line = simplify_parentheses(line, 0).unwrap_or_else(|_| line.clone());
 
     // 2. Simplify arithmetic operations
     while let Some(negation) = line.find("!!") {
@@ -31,7 +31,7 @@ pub fn arithmetic_postprocessor(
 }
 
 /// Simplifies expressions by removing unnecessary parentheses
-pub fn simplify_parentheses(line: &str, paren_index: usize) -> Result<String, Error> {
+pub(super) fn simplify_parentheses(line: &str, paren_index: usize) -> Result<String, Error> {
     // helper function to determine if parentheses are necessary
     fn are_parentheses_unnecessary(expression: &str) -> bool {
         // safely grab the first and last chars

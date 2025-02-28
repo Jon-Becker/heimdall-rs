@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tracing::trace;
 
 /// Represents a decoded log
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DecodedLog {
     /// H160. the contract that emitted the log
     pub address: Address,
@@ -67,7 +67,7 @@ impl TryFrom<Log> for DecodedLog {
     async fn try_from(value: Log) -> Result<Self, Self::Error> {
         let mut resolved_logs = Vec::new();
         let skip_resolving = get_env("SKIP_RESOLVING")
-            .unwrap_or("false".to_string())
+            .unwrap_or_else(|| "false".to_string())
             .parse::<bool>()
             .unwrap_or(false);
 

@@ -14,6 +14,9 @@ use super::opcodes::WrappedOpcode;
 /// It is a LIFO data structure that holds a VecDeque of [`StackFrame`]s.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Stack {
+    /// The collection of stack frames in LIFO order.
+    ///
+    /// The front of the deque represents the top of the stack.
     pub stack: VecDeque<StackFrame>,
 }
 
@@ -24,7 +27,14 @@ pub struct Stack {
 /// By doing this, we can keep track of the source of each value on the stack in a recursive manner.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct StackFrame {
+    /// The value stored in this stack frame.
+    ///
+    /// In the EVM, all stack values are 256-bit unsigned integers.
     pub value: U256,
+
+    /// The operation that produced this value.
+    ///
+    /// This allows for tracking the data flow and dependencies between operations.
     pub operation: WrappedOpcode,
 }
 

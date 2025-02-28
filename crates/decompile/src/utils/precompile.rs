@@ -10,7 +10,7 @@ use crate::interfaces::StorageFrame;
 /// Once a precompile has been detected, this function attempts to format it in a solidity-like
 /// format.
 /// TODO: move to common
-pub fn decode_precompile(
+pub(crate) fn decode_precompile(
     precompile_address: U256,
     extcalldata_memory: &[StorageFrame],
     return_data_offset: &WrappedOpcode,
