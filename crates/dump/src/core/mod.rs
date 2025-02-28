@@ -16,6 +16,18 @@ use tracing::{debug, info};
 
 use crate::{error::Error, interfaces::DumpArgs};
 
+/// Dumps the storage slots for a contract
+///
+/// This function retrieves storage slots from a contract by analyzing state differences
+/// across multiple blocks. It uses parallel processing to efficiently handle large block ranges.
+///
+/// # Arguments
+///
+/// * `args` - Configuration parameters for the dump operation
+///
+/// # Returns
+///
+/// A HashMap containing the storage slots (keys) and their values
 pub async fn dump(args: DumpArgs) -> Result<HashMap<FixedBytes<32>, FixedBytes<32>>, Error> {
     let start_time = Instant::now();
     let storage = Arc::new(Mutex::new(HashMap::new()));

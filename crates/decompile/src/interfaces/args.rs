@@ -10,6 +10,10 @@ use heimdall_config::parse_url_arg;
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
     override_usage = "heimdall decompile <TARGET> [OPTIONS]"
 )]
+/// Arguments for the decompile operation
+///
+/// This struct contains all the configuration parameters needed to decompile
+/// bytecode into human-readable source code and ABI.
 pub struct DecompilerArgs {
     /// The target to decompile, either a file, bytecode, contract address, or ENS name.
     #[clap(required = true)]
@@ -62,12 +66,20 @@ pub struct DecompilerArgs {
 }
 
 impl DecompilerArgs {
+    /// Retrieves the bytecode for the specified target
+    ///
+    /// This method fetches the bytecode from a file, address, or directly from a hex string,
+    /// depending on the target type provided in the arguments.
+    ///
+    /// # Returns
+    /// The raw bytecode as a vector of bytes
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
         get_bytecode_from_target(&self.target, &self.rpc_url).await
     }
 }
 
 impl DecompilerArgsBuilder {
+    /// Creates a new DecompilerArgsBuilder with default values
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),

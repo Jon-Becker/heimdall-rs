@@ -8,6 +8,10 @@ use heimdall_config::parse_url_arg;
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
     override_usage = "heimdall inspect <TARGET> [OPTIONS]"
 )]
+/// Arguments for the inspect operation
+///
+/// This struct contains all the configuration parameters needed to inspect
+/// a transaction and decode its trace, logs, and state changes.
 pub struct InspectArgs {
     /// The target transaction hash to inspect.
     #[clap(required = true)]
@@ -44,6 +48,7 @@ pub struct InspectArgs {
 }
 
 impl InspectArgsBuilder {
+    /// Creates a new InspectArgsBuilder with default values
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),

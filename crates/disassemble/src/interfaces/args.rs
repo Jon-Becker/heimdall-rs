@@ -9,6 +9,10 @@ use heimdall_config::parse_url_arg;
     after_help = "For more information, read the wiki: https://jbecker.dev/r/heimdall-rs/wiki",
     override_usage = "heimdall disassemble <TARGET> [OPTIONS]"
 )]
+/// Arguments for the disassembly operation
+///
+/// This struct contains all the configuration parameters needed to disassemble
+/// a contract's bytecode into human-readable assembly.
 pub struct DisassemblerArgs {
     /// The target to disassemble, either a file, bytecode, contract address, or ENS name.
     #[clap(required = true)]
@@ -33,6 +37,10 @@ pub struct DisassemblerArgs {
 }
 
 #[derive(Debug, Clone)]
+/// Builder for DisassemblerArgs
+///
+/// This struct provides a builder pattern for creating DisassemblerArgs instances
+/// with a fluent API.
 pub struct DisassemblerArgsBuilder {
     /// The target to disassemble, either a file, bytecode, contract address, or ENS name.
     target: Option<String>,
@@ -51,6 +59,13 @@ pub struct DisassemblerArgsBuilder {
 }
 
 impl DisassemblerArgs {
+    /// Retrieves the bytecode for the specified target
+    ///
+    /// This method fetches the bytecode from a file, address, or directly from a hex string,
+    /// depending on the target type provided in the arguments.
+    ///
+    /// # Returns
+    /// The raw bytecode as a vector of bytes
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
         get_bytecode_from_target(&self.target, &self.rpc_url).await
     }
@@ -63,6 +78,7 @@ impl Default for DisassemblerArgsBuilder {
 }
 
 impl DisassemblerArgsBuilder {
+    /// Creates a new DisassemblerArgsBuilder with default values
     pub fn new() -> Self {
         Self {
             target: Some(String::new()),
@@ -73,31 +89,40 @@ impl DisassemblerArgsBuilder {
         }
     }
 
+    /// Sets the target for disassembly (address, file, or bytecode)
     pub fn target(&mut self, target: String) -> &mut Self {
         self.target = Some(target);
         self
     }
 
+    /// Sets the RPC URL for fetching bytecode if the target is an address
     pub fn rpc_url(&mut self, rpc_url: String) -> &mut Self {
         self.rpc_url = Some(rpc_url);
         self
     }
 
+    /// Sets whether to use decimal (true) or hexadecimal (false) for program counter
     pub fn decimal_counter(&mut self, decimal_counter: bool) -> &mut Self {
         self.decimal_counter = Some(decimal_counter);
         self
     }
 
+    /// Sets the name for the output file
     pub fn name(&mut self, name: String) -> &mut Self {
         self.name = Some(name);
         self
     }
 
+    /// Sets the output directory or 'print' to print to console
     pub fn output(&mut self, output: String) -> &mut Self {
         self.output = Some(output);
         self
     }
 
+    /// Builds the DisassemblerArgs from the builder
+    ///
+    /// # Returns
+    /// A Result containing the built DisassemblerArgs or an error if required fields are missing
     pub fn build(&self) -> eyre::Result<DisassemblerArgs> {
         Ok(DisassemblerArgs {
             target: self.target.clone().ok_or_else(|| eyre::eyre!("target is required"))?,
