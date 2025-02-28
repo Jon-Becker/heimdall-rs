@@ -908,7 +908,7 @@ impl VM {
                 // Safely convert U256 to usize, clamping to calldata length
                 let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
                 let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(self.calldata.len());
 
                 // clamp values to calldata length
                 let end_offset_clamped = offset.saturating_add(size).min(self.calldata.len());
@@ -952,7 +952,7 @@ impl VM {
                 // Safely convert U256 to usize, clamping to bytecode length
                 let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
                 let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
+                let size: usize = size.try_into().unwrap_or(self.bytecode.len());
 
                 // clamp values to bytecode length
                 let value_offset_safe = offset.saturating_add(size).min(self.bytecode.len());
@@ -1270,7 +1270,9 @@ impl VM {
                 // Safely convert U256 to usize, clamping to memory length
                 let dest_offset: usize = dest_offset.try_into().unwrap_or(u128::MAX as usize);
                 let offset: usize = offset.try_into().unwrap_or(u128::MAX as usize);
-                let size: usize = size.try_into().unwrap_or(u128::MAX as usize);
+                let size: usize = size.try_into().unwrap_or(
+                    self.memory.size().try_into().expect("failed to convert u128 to usize"),
+                );
                 let value_offset_safe = offset
                     .saturating_add(size)
                     .min(self.memory.size().try_into().expect("failed to convert u128 to usize"));
