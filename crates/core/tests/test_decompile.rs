@@ -39,13 +39,13 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn test_decompile_u256_conversion_overflow_1() {
+    async fn test_decompile_edge_case_u256_conversion_overflow_1() {
         let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
             println!("RPC_URL not set, skipping test");
             std::process::exit(0);
         });
 
-        let result = decompile(DecompilerArgs {
+        let _ = decompile(DecompilerArgs {
             target: String::from("0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7"),
             rpc_url,
             default: true,
@@ -64,14 +64,39 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn test_decompile_u256_conversion_overflow_2() {
+    async fn test_decompile_edge_case_u256_conversion_overflow_2() {
         let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
             println!("RPC_URL not set, skipping test");
             std::process::exit(0);
         });
 
-        let result = decompile(DecompilerArgs {
+        let _ = decompile(DecompilerArgs {
             target: String::from("0x5141b82f5ffda4c6fe1e372978f1c5427640a190"),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+            abi: None,
+            openai_api_key: String::from(""),
+            llm_postprocess: false,
+        })
+        .await
+        .expect("failed to decompile");
+    }
+
+    #[tokio::test]
+    async fn test_decompile_edge_case_vec_overflow() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        let _ = decompile(DecompilerArgs {
+            target: String::from("0x8579970692bf77fafeeb017f07dec9a8fdb4893d"),
             rpc_url,
             default: true,
             skip_resolving: true,
