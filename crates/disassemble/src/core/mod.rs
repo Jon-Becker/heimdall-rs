@@ -41,11 +41,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
         asm.push_str(
             format!(
                 "{} {} {}\n",
-                if args.decimal_counter {
-                    offset.to_string()
-                } else {
-                    format!("{:06x}", offset)
-                },
+                if args.decimal_counter { offset.to_string() } else { format!("{:06x}", offset) },
                 opcode_name(opcode),
                 pushed_bytes
             )
