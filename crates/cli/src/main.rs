@@ -21,6 +21,7 @@ use heimdall_core::{
     heimdall_disassembler::disassemble, heimdall_dump::dump, heimdall_inspect::inspect,
 };
 
+#[allow(clippy::large_stack_frames)]
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Arguments::parse();
