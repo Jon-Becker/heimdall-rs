@@ -5,10 +5,18 @@ use eyre::Result;
 use super::http::get_json_from_url;
 
 #[derive(Debug)]
+/// Represents a semantic version number.
+///
+/// This struct follows the semantic versioning format of MAJOR.MINOR.PATCH,
+/// with an optional release channel (e.g., alpha, beta).
 pub struct Version {
+    /// The major version number. Incremented for incompatible API changes.
     pub major: u32,
+    /// The minor version number. Incremented for backward-compatible new functionality.
     pub minor: u32,
+    /// The patch version number. Incremented for backward-compatible bug fixes.
     pub patch: u32,
+    /// The optional release channel (e.g., "alpha", "beta", "rc").
     pub channel: Option<String>,
 }
 
@@ -119,6 +127,15 @@ impl Version {
             (self.major == other.major && self.minor == other.minor && self.patch <= other.patch)
     }
 
+    /// Checks if this version is equal to another version.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The version to compare with
+    ///
+    /// # Returns
+    ///
+    /// * `bool` - `true` if the versions are equal, `false` otherwise
     #[allow(clippy::should_implement_trait)]
     pub fn eq(&self, other: &Version) -> bool {
         self.major == other.major &&

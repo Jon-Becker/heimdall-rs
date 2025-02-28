@@ -75,10 +75,7 @@ fn extract_types_from_string(string: &str) -> Result<Vec<DynSolType>> {
                     let array_range = find_balanced_encapsulator(split, ('[', ']'))?;
 
                     let size = split[array_range].to_string();
-                    array_size = match size.parse::<usize>() {
-                        Ok(size) => Some(size),
-                        Err(_) => None,
-                    };
+                    array_size = size.parse::<usize>().ok();
                 }
             }
 
@@ -180,10 +177,7 @@ pub fn to_type(string: &str) -> DynSolType {
 
         let size = string[array_range].to_string();
 
-        array_size.push_back(match size.parse::<usize>() {
-            Ok(size) => Some(size),
-            Err(_) => None,
-        });
+        array_size.push_back(size.parse::<usize>().ok());
 
         string = string.replacen(&format!("[{}]", &size), "", 1);
     }

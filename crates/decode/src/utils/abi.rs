@@ -397,10 +397,9 @@ fn get_potential_type(
 
             if size > max_size {
                 potential_type.clone_from(types.first().expect("types is empty"));
-                (max_size, potential_type)
-            } else {
-                (max_size, potential_type)
             }
+
+            (max_size, potential_type)
         });
 
     potential_type

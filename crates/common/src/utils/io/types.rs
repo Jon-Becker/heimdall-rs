@@ -67,8 +67,23 @@ pub fn display(inputs: Vec<DynSolValue>, prefix: &str) -> Vec<String> {
     output
 }
 
+/// Trait for converting values to parameterized strings and type information.
+///
+/// This trait is used primarily for displaying and serializing function parameters
+/// in a readable format when presenting decoded contract data.
 pub trait Parameterize {
+    /// Converts the value to a parameterized string representation.
+    ///
+    /// # Returns
+    ///
+    /// * `String` - The string representation of the parameter value
     fn parameterize(&self) -> String;
+
+    /// Returns the type name of the parameter as a string.
+    ///
+    /// # Returns
+    ///
+    /// * `String` - The type name (e.g., "uint256", "address", etc.)
     fn to_type(&self) -> String;
 }
 

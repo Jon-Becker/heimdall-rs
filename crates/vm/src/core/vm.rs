@@ -353,10 +353,11 @@ impl VM {
                 let numerator = self.stack.pop()?;
                 let denominator = self.stack.pop()?;
 
-                let mut result = U256::ZERO;
-                if !denominator.value.is_zero() {
-                    result = numerator.value.div(denominator.value);
-                }
+                let result = if !denominator.value.is_zero() {
+                    numerator.value.div(denominator.value)
+                } else {
+                    U256::ZERO
+                };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -374,10 +375,11 @@ impl VM {
                 let numerator = self.stack.pop()?;
                 let denominator = self.stack.pop()?;
 
-                let mut result = I256::ZERO;
-                if !denominator.value.is_zero() {
-                    result = sign_uint(numerator.value).div(sign_uint(denominator.value));
-                }
+                let result = if !denominator.value.is_zero() {
+                    sign_uint(numerator.value).div(sign_uint(denominator.value))
+                } else {
+                    I256::ZERO
+                };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -396,10 +398,8 @@ impl VM {
                 let a = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
 
-                let mut result = U256::ZERO;
-                if !modulus.value.is_zero() {
-                    result = a.value.rem(modulus.value);
-                }
+                let result =
+                    if !modulus.value.is_zero() { a.value.rem(modulus.value) } else { U256::ZERO };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -417,10 +417,11 @@ impl VM {
                 let a = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
 
-                let mut result = I256::ZERO;
-                if !modulus.value.is_zero() {
-                    result = sign_uint(a.value).rem(sign_uint(modulus.value));
-                }
+                let result = if !modulus.value.is_zero() {
+                    sign_uint(a.value).rem(sign_uint(modulus.value))
+                } else {
+                    I256::ZERO
+                };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -440,10 +441,11 @@ impl VM {
                 let b = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
 
-                let mut result = U256::ZERO;
-                if !modulus.value.is_zero() {
-                    result = a.value.overflowing_add(b.value).0.rem(modulus.value);
-                }
+                let result = if !modulus.value.is_zero() {
+                    a.value.overflowing_add(b.value).0.rem(modulus.value)
+                } else {
+                    U256::ZERO
+                };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -462,10 +464,11 @@ impl VM {
                 let b = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
 
-                let mut result = U256::ZERO;
-                if !modulus.value.is_zero() {
-                    result = a.value.overflowing_mul(b.value).0.rem(modulus.value);
-                }
+                let result = if !modulus.value.is_zero() {
+                    a.value.overflowing_mul(b.value).0.rem(modulus.value)
+                } else {
+                    U256::ZERO
+                };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -714,10 +717,8 @@ impl VM {
                 // convert a to usize
                 let usize_a: usize = a.value.try_into()?;
 
-                let mut result = I256::ZERO;
-                if !b.value.is_zero() {
-                    result = sign_uint(b.value).shr(usize_a);
-                }
+                let result =
+                    if !b.value.is_zero() { sign_uint(b.value).shr(usize_a) } else { I256::ZERO };
 
                 // if both inputs are PUSH instructions, simplify the operation
                 let mut simplified_operation = operation;
@@ -744,7 +745,7 @@ impl VM {
                 let result = keccak256(data);
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost = 6 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
@@ -850,7 +851,7 @@ impl VM {
                 }
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
@@ -891,7 +892,7 @@ impl VM {
                 }
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
@@ -939,7 +940,7 @@ impl VM {
                 value.fill(0xff);
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost =
                     3 * minimum_word_size + self.memory.expansion_cost(dest_offset, size);
                 self.consume_gas(gas_cost);
@@ -978,7 +979,7 @@ impl VM {
                 value.fill(0xff);
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost =
                     3 * minimum_word_size + self.memory.expansion_cost(dest_offset, size);
                 self.consume_gas(gas_cost);
@@ -1210,7 +1211,7 @@ impl VM {
                 }
 
                 // consume dynamic gas
-                let minimum_word_size = ((size + 31) / 32) as u128;
+                let minimum_word_size = size.div_ceil(32) as u128;
                 let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 

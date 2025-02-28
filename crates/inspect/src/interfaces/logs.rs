@@ -67,7 +67,7 @@ impl TryFrom<Log> for DecodedLog {
     async fn try_from(value: Log) -> Result<Self, Self::Error> {
         let mut resolved_logs = Vec::new();
         let skip_resolving = get_env("SKIP_RESOLVING")
-            .unwrap_or("false".to_string())
+            .unwrap_or_else(|| "false".to_string())
             .parse::<bool>()
             .unwrap_or(false);
 

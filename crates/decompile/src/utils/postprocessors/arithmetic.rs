@@ -20,7 +20,7 @@ pub(crate) fn arithmetic_postprocessor(
     _state: &mut PostprocessorState,
 ) -> Result<(), Error> {
     // 1. Simplify parentheses
-    *line = simplify_parentheses(line, 0).unwrap_or(line.clone());
+    *line = simplify_parentheses(line, 0).unwrap_or_else(|_| line.clone());
 
     // 2. Simplify arithmetic operations
     while let Some(negation) = line.find("!!") {
