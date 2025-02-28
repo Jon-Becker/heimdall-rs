@@ -150,16 +150,6 @@ macro_rules! opcodes {
                 /// This macro provides a convenient way to construct a `WrappedOpcode` for a specific
                 /// opcode (`$name`), supporting between 0 and 8 input arguments that implement
                 /// `Into<WrappedInput>`.
-                ///
-                /// # Examples
-                ///
-                /// ```
-                /// // Create an ADD opcode with two inputs
-                /// let add_op = w_add!(value1, value2);
-                ///
-                /// // Create a MSTORE opcode with memory offset and value
-                /// let mstore_op = w_mstore!(offset, value);
-                /// ```
                 #[macro_export]
                 macro_rules! [<w_$name:lower>] {
                     // zero inputs
