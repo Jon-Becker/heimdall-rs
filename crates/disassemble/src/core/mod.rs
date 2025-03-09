@@ -50,14 +50,11 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
             program_counter += byte_count_to_push as usize;
         }
 
+        let offset = program_counter - 1; // offset starts from zero
         asm.push_str(
             format!(
                 "{} {} {}\n",
-                if args.decimal_counter {
-                    program_counter.to_string()
-                } else {
-                    format!("{:06x}", program_counter)
-                },
+                if args.decimal_counter { offset.to_string() } else { format!("{:06x}", offset) },
                 opcode_name(opcode),
                 pushed_bytes
             )
