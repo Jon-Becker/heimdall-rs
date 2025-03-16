@@ -37,7 +37,10 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
             program_counter += byte_count_to_push as usize;
         }
 
-        let offset = program_counter - 1; // offset starts from zero
+        let mut offset = program_counter;
+        if offset > 0 {
+            offset = offset - 1; // offset starts from zero
+        }
         asm.push_str(
             format!(
                 "{} {} {}\n",
