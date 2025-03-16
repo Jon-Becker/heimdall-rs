@@ -200,15 +200,13 @@ impl TryFrom<CallAction> for DecodedCall {
     async fn try_from(value: CallAction) -> Result<Self, Self::Error> {
         let calldata = value.input.to_string().replacen("0x", "", 1);
         let mut decoded_inputs = Vec::new();
-        let mut resolved_function = None;
-
-        if !calldata.is_empty() {
+        let resolved_function = if !calldata.is_empty() {
             let result = decode(
                 DecodeArgsBuilder::new()
                     .target(calldata)
                     .skip_resolving(
                         get_env("SKIP_RESOLVING")
-                            .unwrap_or("false".to_string())
+                            .unwrap_or_else(|| "false".to_string())
                             .parse::<bool>()
                             .unwrap_or(false),
                     )
@@ -218,8 +216,10 @@ impl TryFrom<CallAction> for DecodedCall {
             .await?;
 
             decoded_inputs = result.decoded.decoded_inputs.clone().unwrap_or_default();
-            resolved_function = Some(result.decoded);
-        }
+            Some(result.decoded)
+        } else {
+            None
+        };
 
         Ok(Self {
             from: value.from,
@@ -422,7 +422,7 @@ impl DecodedTransactionTrace {
             DecodedAction::Call(call) => trace.add_call_with_extra(
                 parent_trace_index,
                 call.gas.try_into().unwrap_or(0),
-                contracts.get(call.to).cloned().unwrap_or(call.to.to_lower_hex()),
+                contracts.get(call.to).cloned().unwrap_or_else(|| call.to.to_lower_hex()),
                 match call.resolved_function.as_ref() {
                     Some(f) => f.name.clone(),
                     None => "fallback".to_string(),
@@ -466,7 +466,7 @@ impl DecodedTransactionTrace {
                     Some(DecodedRes::Create(create_result)) => contracts
                         .get(create_result.address)
                         .cloned()
-                        .unwrap_or(create_result.address.to_lower_hex()),
+                        .unwrap_or_else(|| create_result.address.to_lower_hex()),
                     _ => "".to_string(),
                 },
                 create.init.len().try_into().unwrap_or(0),
@@ -547,5 +547,5 @@ fn wei_to_ether(wei: U256) -> f64 {
         trace!("WARNING: wei value was truncated to u64::MAX. Original value: {}", wei);
     }
 
-    wei_f64 / 10f64.powf(18.0)
+    wei_f64 / 10f64.powi(18)
 }

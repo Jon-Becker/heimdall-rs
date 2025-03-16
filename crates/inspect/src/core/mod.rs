@@ -21,17 +21,37 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
+/// Result of a successful inspect operation
+///
+/// Contains the decoded transaction trace with all function calls, logs,
+/// and state changes, as well as a trace factory for displaying the result
+/// in a formatted way.
 pub struct InspectResult {
+    /// The decoded transaction trace containing all the execution steps
     pub decoded_trace: DecodedTransactionTrace,
     _trace: TraceFactory,
 }
 
 impl InspectResult {
+    /// Displays the decoded transaction trace in a formatted way
     pub fn display(&self) {
         self._trace.display();
     }
 }
 
+/// Inspects a transaction by decoding its trace and associated logs
+///
+/// This function retrieves transaction execution data from the blockchain and
+/// decodes it into a human-readable format, showing function calls, events,
+/// and state changes that occurred during the transaction's execution.
+///
+/// # Arguments
+///
+/// * `args` - Configuration parameters for the inspect operation
+///
+/// # Returns
+///
+/// An InspectResult containing the decoded transaction trace
 pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     // init
     let start_time = Instant::now();

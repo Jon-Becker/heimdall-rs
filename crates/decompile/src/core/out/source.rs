@@ -43,7 +43,7 @@ async fn annotate_function(source: &str, openai_api_key: &str) -> Result<String>
     Ok(annotated)
 }
 
-pub async fn build_source(
+pub(crate) async fn build_source(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
@@ -194,7 +194,7 @@ pub async fn build_source(
             .resolved_function
             .as_ref()
             .map(|x| x.name.clone())
-            .unwrap_or(format!("unresolved_{}", f.selector));
+            .unwrap_or_else(|| format!("unresolved_{}", f.selector));
         source = source.replace(getter_for_storage_variable, &resolved_name);
     });
 
@@ -330,7 +330,7 @@ fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
                     f.resolved_function
                         .as_ref()
                         .map(|x| x.name.clone())
-                        .unwrap_or(format!("unresolved_{}", f.selector)),
+                        .unwrap_or_else(|| format!("unresolved_{}", f.selector)),
                     f.constant_value.as_ref().unwrap_or(&"0x".to_string())
                 ))
             } else {
@@ -358,7 +358,7 @@ fn get_storage_variables(
                     .resolved_function
                     .as_ref()
                     .map(|x| x.name.clone())
-                    .unwrap_or(format!("unresolved_{}", f.selector));
+                    .unwrap_or_else(|| format!("unresolved_{}", f.selector));
 
                 // TODO: for public getters, we can use `eth_getStorageAt` to get the value
                 return format!(

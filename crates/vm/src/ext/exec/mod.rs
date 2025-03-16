@@ -23,11 +23,22 @@ use heimdall_common::utils::strings::decode_hex;
 use std::time::Instant;
 use tracing::{trace, warn};
 
+/// Represents a trace of virtual machine execution including operations and child calls
+///
+/// VMTrace is used to track the operations performed during VM execution, including
+/// any nested calls that occur during execution (stored in the `children` field).
 #[derive(Clone, Debug, Default)]
 pub struct VMTrace {
+    /// The instruction pointer at the start of this trace
     pub instruction: u128,
+
+    /// The amount of gas used by this execution trace
     pub gas_used: u128,
+
+    /// The sequence of VM states recorded during execution
     pub operations: Vec<State>,
+
+    /// Child traces resulting from internal calls (CALL, DELEGATECALL, etc.)
     pub children: Vec<VMTrace>,
 }
 
@@ -63,7 +74,19 @@ impl VM {
         ))
     }
 
-    // build a map of function jump possibilities from the EVM bytecode
+    /// Performs symbolic execution on the entire contract to map out control flow
+    ///
+    /// This method executes the VM symbolically, starting from the beginning of the bytecode,
+    /// to build a comprehensive map of all possible execution paths within the contract.
+    /// It tracks branching and records operation states throughout execution.
+    ///
+    /// # Arguments
+    /// * `timeout` - An Instant representing when execution should time out
+    ///
+    /// # Returns
+    /// * A Result containing a tuple with:
+    ///   - The execution trace (VMTrace)
+    ///   - The number of branches encountered during execution
     pub fn symbolic_exec(&mut self, timeout: Instant) -> Result<(VMTrace, u32)> {
         trace!("beginning contract-wide symbolic execution");
 

@@ -10,7 +10,7 @@ use tracing::debug;
 
 use crate::{core::analyze::AnalyzerState, interfaces::AnalyzedFunction, Error};
 
-pub fn modifier_heuristic<'a>(
+pub(crate) fn modifier_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
     _: &'a mut AnalyzerState,

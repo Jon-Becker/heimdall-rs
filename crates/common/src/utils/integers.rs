@@ -1,4 +1,15 @@
+/// Trait for formatting numbers with locale-specific formatting.
+///
+/// This trait adds methods to format numbers in a more human-readable way,
+/// such as adding thousands separators.
 pub trait ToLocaleString {
+    /// Formats a number with locale-specific formatting.
+    ///
+    /// For numbers, this adds commas as thousand separators.
+    ///
+    /// # Returns
+    ///
+    /// * `String` - The formatted string
     fn to_locale_string(&self) -> String;
 }
 

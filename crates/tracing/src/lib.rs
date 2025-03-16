@@ -1,3 +1,10 @@
+//! Tracing support for Heimdall.
+//!
+//! This crate provides tracing functionality for the Heimdall toolkit, including
+//! configuration for various tracing output formats and levels. It supports
+//! logging to stdout, journald, and files with different formatting options
+//! like JSON, logfmt, and terminal-friendly formats.
+
 // Re-export tracing crates
 pub use tracing;
 pub use tracing_subscriber;

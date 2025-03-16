@@ -10,7 +10,7 @@ use crate::{
     Error,
 };
 
-pub fn event_heuristic<'a>(
+pub(crate) fn event_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
     analyzer_state: &'a mut AnalyzerState,
@@ -50,25 +50,20 @@ pub fn event_heuristic<'a>(
                         .topics
                         .get(1..)
                         .map(|topics| {
+                            let mut solidified_topics: Vec<String> = Vec::new();
+                            for (i, _) in topics.iter().enumerate() {
+                                solidified_topics.push(
+                                    state.last_instruction.input_operations[i + 3].solidify(),
+                                );
+                            }
+
                             if !event.data.is_empty() && !topics.is_empty() {
-                                let mut solidified_topics: Vec<String> = Vec::new();
-                                for (i, _) in topics.iter().enumerate() {
-                                    solidified_topics.push(
-                                        state.last_instruction.input_operations[i + 3].solidify(),
-                                    );
-                                }
                                 format!("{}, ", solidified_topics.join(", "))
                             } else {
-                                let mut solidified_topics: Vec<String> = Vec::new();
-                                for (i, _) in topics.iter().enumerate() {
-                                    solidified_topics.push(
-                                        state.last_instruction.input_operations[i + 3].solidify(),
-                                    );
-                                }
                                 solidified_topics.join(", ")
                             }
                         })
-                        .unwrap_or("".to_string()),
+                        .unwrap_or_else(|| "".to_string()),
                     data_mem_ops_solidified,
                     if anonymous { " // anonymous event" } else { "" }
                 ));

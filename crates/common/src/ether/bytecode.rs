@@ -1,3 +1,5 @@
+//! Functions for working with Ethereum bytecode.
+
 use crate::utils::strings::decode_hex;
 
 use super::rpc::get_code;
@@ -40,11 +42,11 @@ pub fn remove_pushbytes_from_bytecode(bytecode: alloy::primitives::Bytes) -> Res
 
     let mut i = 0;
     while i < bytecode.len() {
+        pruned.push(bytecode[i]);
+
         if push_range.contains(&bytecode[i]) {
-            pruned.push(bytecode[i]);
             i += bytecode[i] as usize - 0x5f + 1;
         } else {
-            pruned.push(bytecode[i]);
             i += 1;
         }
     }

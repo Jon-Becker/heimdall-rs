@@ -23,17 +23,37 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
+/// Result of a successful decode operation
+///
+/// Contains the decoded function signature and parameters, as well as
+/// a trace factory for displaying the result in a formatted way.
 pub struct DecodeResult {
+    /// The resolved function with its decoded inputs
     pub decoded: ResolvedFunction,
     _trace: TraceFactory,
 }
 
 impl DecodeResult {
+    /// Displays the decoded function signature and parameters in a formatted way
     pub fn display(&self) {
         self._trace.display();
     }
 }
 
+/// Decodes EVM calldata into human-readable function signatures and parameters
+///
+/// This function attempts to identify the function being called based on the function
+/// selector in the calldata, and then decodes the remaining data according to the
+/// function's parameter types. If no matching function is found, it will attempt
+/// to infer the parameter types from the raw calldata.
+///
+/// # Arguments
+///
+/// * `args` - Configuration parameters for the decode operation
+///
+/// # Returns
+///
+/// A DecodeResult containing the resolved function and its decoded parameters
 pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     let start_time = Instant::now();
 

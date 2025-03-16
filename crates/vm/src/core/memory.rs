@@ -107,6 +107,18 @@ impl Memory {
         self.memory.splice(offset..offset.saturating_add(size), value);
     }
 
+    /// Stores a value in memory and records the opcode that performed the store operation
+    ///
+    /// This method is similar to `store()` but additionally records which opcode
+    /// was responsible for the memory store operation when the experimental feature
+    /// is enabled.
+    ///
+    /// # Arguments
+    /// * `offset` - The byte offset in memory where the value will be stored
+    /// * `size` - The size of the value in bytes
+    /// * `value` - The value to store in memory
+    /// * `opcode` - The opcode that performed the store operation (only used with experimental
+    ///   feature)
     pub fn store_with_opcode(
         &mut self,
         offset: usize,

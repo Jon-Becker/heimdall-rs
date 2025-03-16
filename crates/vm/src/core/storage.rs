@@ -8,8 +8,21 @@ use alloy::primitives::U256;
 /// for gas calculation purposes.
 #[derive(Clone, Debug)]
 pub struct Storage {
+    /// The persistent storage of the contract, mapping 256-bit keys to 256-bit values.
+    ///
+    /// This represents the permanent state storage that persists between transactions.
     pub storage: HashMap<U256, U256>,
+
+    /// The transient storage of the contract, mapping 256-bit keys to 256-bit values.
+    ///
+    /// This represents temporary storage that only persists for the duration of a transaction
+    /// (introduced in EIP-1153).
     pub transient: HashMap<U256, U256>,
+
+    /// A set of storage keys that have been accessed during execution.
+    ///
+    /// This is used for gas calculation purposes, as accessing a "cold" storage slot
+    /// costs more gas than accessing a "warm" one.
     access_set: HashSet<U256>,
 }
 

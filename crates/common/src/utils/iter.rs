@@ -1,5 +1,25 @@
+/// Extension trait for byte slices that adds helpful operations.
 pub trait ByteSliceExt {
+    /// Splits a byte slice by a delimiter byte slice.
+    ///
+    /// # Arguments
+    ///
+    /// * `delimiter` - The byte sequence to split on
+    ///
+    /// # Returns
+    ///
+    /// * `Vec<&[u8]>` - The split parts
     fn split_by_slice(&self, delimiter: &[u8]) -> Vec<&[u8]>;
+
+    /// Checks if a byte slice contains another byte slice.
+    ///
+    /// # Arguments
+    ///
+    /// * `sequence` - The byte sequence to search for
+    ///
+    /// # Returns
+    ///
+    /// * `bool` - `true` if the sequence is found, `false` otherwise
     fn contains_slice(&self, sequence: &[u8]) -> bool;
 }
 
@@ -36,6 +56,19 @@ impl ByteSliceExt for [u8] {
     }
 }
 
+/// Removes elements at specified indices from a collection.
+///
+/// This function takes a collection and a sorted list of indices, and removes
+/// the elements at those indices from the collection.
+///
+/// # Arguments
+///
+/// * `v` - The collection to remove elements from
+/// * `indices` - A sorted list of indices to remove
+///
+/// # Returns
+///
+/// * `Vec<T>` - A new collection with the elements at the specified indices removed
 pub fn remove_sorted_indices<T>(
     v: impl IntoIterator<Item = T>,
     indices: impl IntoIterator<Item = usize>,

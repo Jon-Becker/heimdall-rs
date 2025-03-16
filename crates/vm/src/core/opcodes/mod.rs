@@ -1,6 +1,15 @@
-//! Mostly adapted from https://github.com/bluealloy/revm
+//! EVM opcodes and related utilities.
+//!
+//! This module provides functionality for working with EVM opcodes, including:
+//! - Opcode information (names, gas costs, stack effects)
+//! - Wrapped opcode structures for tracking data flow
+//! - Various utility functions for working with opcodes
+//!
+//! The implementation is partially adapted from https://github.com/bluealloy/revm
 
-mod wrapped;
+/// Re-export wrapped opcode module that provides structures for tracking opcode operations
+/// and their relationships in data flow analysis.
+pub mod wrapped;
 use paste::paste;
 pub use wrapped::*;
 
@@ -136,6 +145,11 @@ macro_rules! opcodes {
         // each input MUST implement the `Into<WrappedOpcode>` trait
         $(
             paste!{
+                /// A macro that creates a wrapped opcode with the given inputs.
+                ///
+                /// This macro provides a convenient way to construct a `WrappedOpcode` for a specific
+                /// opcode (`$name`), supporting between 0 and 8 input arguments that implement
+                /// `Into<WrappedInput>`.
                 #[macro_export]
                 macro_rules! [<w_$name:lower>] {
                     // zero inputs
