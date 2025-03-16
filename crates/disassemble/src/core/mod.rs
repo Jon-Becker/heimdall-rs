@@ -27,6 +27,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
+    debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
     
     // avoid the special case when the target length is exactly 20 bytes
     let contract_bytecode;
@@ -35,9 +36,8 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     }else {
         contract_bytecode =
         args.get_bytecode().await.map_err(|e| eyre!("fetching target bytecode failed: {}", e))?;
-        debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
     }
-
+    
     // iterate over the bytecode, disassembling each instruction
     let start_disassemble_time = Instant::now();
     while program_counter < contract_bytecode.len() {
