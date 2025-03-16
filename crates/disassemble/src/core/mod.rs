@@ -5,7 +5,7 @@ use eyre::eyre;
 use heimdall_common::utils::strings::encode_hex;
 use heimdall_vm::core::opcodes::opcode_name;
 use tracing::{debug, info};
-
+use hex;
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     // init
     let start_time = Instant::now();
@@ -14,9 +14,16 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
-    let contract_bytecode =
+    
+    // avoid the special case when the target length is exactly 20 bytes
+    let contract_bytecode;
+    if args.rpc_url == String::new() {
+        contract_bytecode = hex::decode(args.target).expect("Failed to decode hex string");
+    }else {
+        contract_bytecode =
         args.get_bytecode().await.map_err(|e| eyre!("fetching target bytecode failed: {}", e))?;
-    debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
+        debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
+    }
 
     // iterate over the bytecode, disassembling each instruction
     let start_disassemble_time = Instant::now();

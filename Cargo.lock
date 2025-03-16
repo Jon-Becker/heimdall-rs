@@ -2407,6 +2407,7 @@ dependencies = [
  "heimdall-common",
  "heimdall-config",
  "heimdall-vm",
+ "hex",
  "thiserror 1.0.69",
  "tracing",
 ]
