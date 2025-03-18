@@ -39,6 +39,7 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
 
         // handle PUSH0 -> PUSH32, which require us to push the next N bytes
         // onto the stack
+        let mut byte_count_to_push_offset = 0;
         if (0x5f..=0x7f).contains(&opcode) {
             let byte_count_to_push: u8 = opcode - 0x5f;
             pushed_bytes = match contract_bytecode
@@ -47,23 +48,20 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
                 Some(bytes) => encode_hex(bytes),
                 None => break,
             };
-            program_counter += byte_count_to_push as usize;
+            byte_count_to_push_offset += byte_count_to_push as usize;
         }
 
+        let offset = program_counter;
         asm.push_str(
             format!(
                 "{} {} {}\n",
-                if args.decimal_counter {
-                    program_counter.to_string()
-                } else {
-                    format!("{:06x}", program_counter)
-                },
+                if args.decimal_counter { offset.to_string() } else { format!("{:06x}", offset) },
                 opcode_name(opcode),
                 pushed_bytes
             )
             .as_str(),
         );
-        program_counter += 1;
+        program_counter += 1 + byte_count_to_push_offset;
     }
     debug!("disassembly took {:?}", start_disassemble_time.elapsed());
 
