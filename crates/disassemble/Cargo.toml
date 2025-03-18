@@ -24,4 +24,3 @@ thiserror = "1.0.50"
 clap = { workspace = true, features = ["derive"] }
 eyre = "0.6.12"
 tracing = "0.1.40"
-heimdall-vm.workspace = true
