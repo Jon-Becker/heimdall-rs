@@ -9,7 +9,7 @@ use alloy::{
         Filter, FilterBlockOption, FilterSet, Log, Transaction,
     },
 };
-use eyre::{OptionExt, Result};
+use eyre::{bail, OptionExt, Result};
 use heimdall_cache::with_cache;
 use tokio_retry::{strategy::ExponentialBackoff, Retry};
 
@@ -59,6 +59,11 @@ pub async fn latest_block_number(rpc_url: &str) -> Result<u128> {
 /// // assert!(bytecode.is_ok());
 /// ```
 pub async fn get_code(contract_address: Address, rpc_url: &str) -> Result<Vec<u8>> {
+    // if rpc_url is empty, return an error
+    if rpc_url.is_empty() {
+        bail!("cannot get_code, rpc_url is empty");
+    }
+
     Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
         let chain_id = chain_id(rpc_url).await.unwrap_or(1);
         with_cache(&format!("contract.{}.{}", &chain_id, &contract_address), || async {
