@@ -42,6 +42,24 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn test_disassemble_20_byte_non_address() {
+        let bytecode = "608060405234801561000f575f5ffd5b50600400";
+        let expected = String::from("000000 PUSH1 80\n000002 PUSH1 40\n000004 MSTORE \n000005 CALLVALUE \n000006 DUP1 \n000007 ISZERO \n000008 PUSH2 000f\n00000b JUMPI \n00000c PUSH0 \n00000d PUSH0 \n00000e REVERT \n00000f JUMPDEST \n000010 POP \n000011 PUSH1 04\n000013 STOP \n");
+
+        let assembly = disassemble(DisassemblerArgs {
+            target: bytecode.to_owned(),
+            rpc_url: String::from(""),
+            decimal_counter: false,
+            name: String::from(""),
+            output: String::from(""),
+        })
+        .await
+        .expect("failed to disassemble");
+
+        assert_eq!(expected, assembly);
+    }
+
+    #[tokio::test]
     async fn test_disassemble_with_custom_output() {
         let bytecode = "366000600037611000600036600073";
         let expected = String::from("0 CALLDATASIZE \n1 PUSH1 00\n3 PUSH1 00\n5 CALLDATACOPY \n6 PUSH2 1000\n9 PUSH1 00\n11 CALLDATASIZE \n12 PUSH1 00\n");

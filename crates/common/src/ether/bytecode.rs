@@ -6,6 +6,7 @@ use super::rpc::get_code;
 use alloy::primitives::{bytes::Bytes, Address};
 use eyre::{eyre, Result};
 use std::fs;
+use tracing::debug;
 
 /// Given a target, return bytecode of the target.
 pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec<u8>> {
@@ -14,6 +15,10 @@ pub async fn get_bytecode_from_target(target: &str, rpc_url: &str) -> Result<Vec
         if let Ok(bytecode) = get_code(address, rpc_url).await {
             return Ok(bytecode);
         }
+
+        debug!(
+            "failed to fetch bytecode from RPC provider. attempting to decode target as bytecode"
+        );
     }
 
     // If the target is not an address, it could be bytecode or a file path.
