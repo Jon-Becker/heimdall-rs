@@ -70,10 +70,12 @@ Heimdall has been cited in the following academic papers & theses:
 
 
 
-- **Forissier, T.** (2024). *EVeilM: EVM Bytecode Obfuscation*. Masters Thesis, KTH EECS. [Full Text](https://www.diva-portal.org/smash/get/diva2:1935522/FULLTEXT01.pdf)
-- **Lagouvardos, S., Bollanos, Y., Grech, N., & Smaragdakis, Y.** (2024). *The Incredible Shrinking Context... in a decompiler near you*. Research Article. [arXiv](https://www.arxiv.org/pdf/2409.11157)
-- **Ye, M., Lin, X., Nan, Y., Wu, J., & Zheng, Z.** (2024). *Midas: Mining Profitable Exploits in On-Chain Smart Contracts via Feedback-Driven Fuzzing and Differential Analysis*. Research Article, ISSTA. [DOI](https://doi.org/10.1145/3650212.3680321)
-- **Darwish, M.** (2024). *From Bytecode to Safety - Decompiling Smart Contracts for Vulnerability Analysis*. Bachelors Thesis, Linnaeus University. [Full Text](https://lnu.diva-portal.org/smash/get/diva2:1864948/FULLTEXT01.pdf)
-- **Aimar, D.** (2023). *Extraction, Indexing, and Analysis of Ethereum Smart Contracts Data*. Masters Thesis, Politecnico di Torino. [Full Text](https://webthesis.biblio.polito.it/28450/1/tesi.pdf)
+- Aimar, D. (2023). *Extraction, indexing, and analysis of Ethereum smart contracts data* [Master’s Thesis, Politecnico di Torino]. Webthesis. http://webthesis.biblio.polito.it/id/eprint/28450
+- Chen, Z., Beillahi, S. M., Barahimi, P., Minwalla, C., Du, H., Veneris, A., & Long, F. (2025) *Secure smart contract with control flow integrity*. arXiv. https://doi.org/10.48550/arXiv.2504.05509
+- Darwish, M. (2024). *From bytecode to safety: Decompiling smart contracts for vulnerability analysis* [Bachelor’s Thesis, Linnaeus University]. DiVA Portal. https://urn.kb.se/resolve?urn=urn:nbn:se:lnu:diva-129903
+- Forissier, T. (2024) *EVeilM: EVM bytecode obfuscation* [Master’s thesis, KTH Royal Institute of Technology]. DiVA Portal. https://urn.kb.se/resolve?urn=urn:nbn:se:kth:diva-359674
+- Lagouvardos, S., Bollanos, Y., Debono, M., Grech, N. & Smaragdakis, Y. (2025) *Precise static identification of Ethereum storage variables*. arXiv. https://doi.org/10.48550/arXiv.2503.20690
+- Lagouvardos, S., Bollanos, Y., Grech, N., & Smaragdakis, Y. (2025) *The incredible shrinking context…in a decompiler near you*. arXiv. https://doi.org/10.48550/arXiv.2409.11157
+- Ye, M., Lin, X., Nan, Y., Wu, J., & Zheng, Z. (2024). Midas: Mining profitable exploits in on-chain smart contracts via feedback-driven fuzzing and differential analysis. In M. Christakis & M. Pradel (Eds.), *ISSTA 2024: Proceedings of the 33rd ACM SIGSOFT International Symposium on Software Testing and Analysis* (pp. 794–805). Association for Computing Machinery. https://doi.org/10.1145/3650212.3680321
 
 If you have used or plan to use Heimdall in your research, please reach out to me via [email](mailto:jonathan@jbecker.dev) or [Twitter](https://x.com/BeckerrJon)! I'd love to hear about what you're using heimdall for :)
