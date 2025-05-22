@@ -1976,6 +1976,131 @@ mod tests {
     }
 
     #[test]
+    fn test_mcopy_clamping_source_beyond_memory() {
+        // Test copying from offset beyond current memory size
+        // Store 32 bytes at memory[0x20], then try to copy from offset 0x40 (beyond memory)
+        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020604060005e");
+        vm.execute().expect("execution failed!");
+
+        // Should copy zeros since source is beyond memory
+        let result = vm.memory.read(0, 32);
+        assert_eq!(result, vec![0u8; 32]);
+    }
+
+    #[test]
+    fn test_mcopy_clamping_partial_source_beyond_memory() {
+        // Test copying where source starts in memory but extends beyond it
+        // Store 32 bytes at memory[0x20], then copy 64 bytes from offset 0x30
+        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526040603060005e");
+        vm.execute().expect("execution failed!");
+
+        // Should copy the available 16 bytes from memory[0x30-0x3F] then pad with zeros
+        let result = vm.memory.read(0, 64);
+        let expected = [
+            &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..],
+            &vec![0u8; 48][..],
+        ]
+        .concat();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mcopy_clamping_zero_size() {
+        // Test copying zero bytes
+        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526000602060005e");
+        vm.execute().expect("execution failed!");
+
+        // Memory should only contain the original store at 0x20, destination at 0x00 should be
+        // unchanged
+        let result = vm.memory.read(0, 64);
+        let expected = [
+            &vec![0u8; 32][..],
+            &decode_hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+                .expect("failed to parse hex")[..],
+        ]
+        .concat();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mcopy_clamping_size_exceeds_memory() {
+        // Test copying more bytes than available memory
+        // Store 32 bytes at 0x20, then copy 64 bytes from 0x20 to 0x00
+        // The copy overlaps, so source data at 0x20+ gets overwritten by destination
+        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526040602060005e");
+        vm.execute().expect("execution failed!");
+
+        // Since we copy 64 bytes from 0x20 to 0x00, and only 32 bytes exist at source:
+        // - Bytes 0x00-0x1F get the original data from 0x20-0x3F
+        // - Bytes 0x20-0x3F get overwritten with zeros (padding from beyond source)
+        let result = vm.memory.read(0, 64);
+        let expected = [
+            &decode_hex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+                .expect("failed to parse hex")[..], // First 32 bytes: copied data
+            &vec![0u8; 32][..], // Next 32 bytes: zeros (padding that overwrote the source)
+        ]
+        .concat();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mcopy_clamping_simple_overlap() {
+        // Test a simpler overlapping copy case
+        // Store data, then copy within the same memory region
+        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6000526010601060005e");
+        vm.execute().expect("execution failed!");
+
+        // Original data at 0x00: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+        // Copy 16 bytes from 0x10 to 0x00: should copy 101112131415161718191a1b1c1d1e1f
+        let result = vm.memory.read(0, 32);
+        let expected = [
+            &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..], // 0x00-0x0F: copied data
+            &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..] // 0x10-0x1F: original data
+        ].concat();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mcopy_clamping_large_offsets() {
+        // Test with very large U256 offsets that get clamped to usize::MAX
+        // This tests the try_into().unwrap_or() clamping behavior
+        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020608060005e");
+        vm.execute().expect("execution failed!");
+
+        // Should handle large offset gracefully and copy zeros (since source is beyond memory)
+        let result = vm.memory.read(0, 32);
+        assert_eq!(result, vec![0u8; 32]);
+    }
+
+    #[test]
+    fn test_mcopy_clamping_exact_memory_boundary() {
+        // Test copying exactly at memory boundary
+        // Store 32 bytes, then copy from the last valid offset
+        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526001603f60005e");
+        vm.execute().expect("execution failed!");
+
+        // Should copy the last byte of memory and pad with zero
+        let result = vm.memory.read(0, 32);
+        let expected = [
+            &[0x1f][..],        // Last byte of the stored data
+            &vec![0u8; 31][..], // Padding
+        ]
+        .concat();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_mcopy_clamping_empty_memory() {
+        // Test copying from empty memory (no prior stores)
+        let mut vm = new_test_vm("0x6020602060005e");
+        vm.execute().expect("execution failed!");
+
+        // Should copy all zeros
+        let result = vm.memory.read(0, 64);
+        assert_eq!(result, vec![0u8; 64]);
+    }
+
+    #[test]
     fn test_codesize() {
         let mut vm = new_test_vm("0x60ff60ff60ff60ff60ff38");
         vm.execute().expect("execution failed!");
