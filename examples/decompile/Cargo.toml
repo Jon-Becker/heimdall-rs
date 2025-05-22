@@ -1,11 +1,11 @@
 [package]
 name = "heimdall-rs-decompile-example"
-version = "0.8.7"
+version = "0.8.8"
 edition = "2021"
 description = "Heimdall is an advanced Ethereum smart contract toolkit for forensic and heuristic analysis."
 keywords = ["ethereum", "web3", "decompiler", "evm", "crypto"]
 license = "MIT"
 
 [dependencies]
-heimdall-decompiler = { git = "https://github.com/Jon-Becker/heimdall-rs.git", tag = "0.8.7" }
+heimdall-decompiler = { git = "https://github.com/Jon-Becker/heimdall-rs.git", tag = "0.8.8" }
 tokio = { version = "1", features = ["full"] }
