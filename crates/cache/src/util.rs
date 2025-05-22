@@ -46,10 +46,7 @@ pub(crate) fn write_file(path_str: &str, contents: &str) -> Result<(), Error> {
     if let Some(prefix) = path.parent() {
         std::fs::create_dir_all(prefix)?;
     } else {
-        return Err(Error::IOError(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Unable to create directory",
-        )));
+        return Err(Error::IOError(std::io::Error::other("Unable to create directory")));
     }
 
     let mut file = File::create(path)?;
@@ -62,8 +59,7 @@ pub(crate) fn write_file(path_str: &str, contents: &str) -> Result<(), Error> {
 /// Returns the contents as a string
 pub(crate) fn read_file(path: &str) -> Result<String, Error> {
     let path = Path::new(path);
-    let mut file = File::open(path)
-        .map_err(|e| Error::IOError(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+    let mut file = File::open(path).map_err(|e| Error::IOError(std::io::Error::other(e)))?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     Ok(contents)
