@@ -2,17 +2,13 @@
 use alloy::{
     network::Ethereum,
     primitives::{Address, TxHash},
-    providers::{ext::TraceApi, IpcConnect, Provider, ProviderBuilder, RootProvider, WsConnect},
-    pubsub::PubSubFrontend,
+    providers::{ext::TraceApi, Provider, ProviderBuilder, RootProvider},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
         Filter, Log, Transaction,
     },
-    transports::http::Http,
 };
 use eyre::Result;
-use reqwest::{Client, Url};
-use std::{fmt::Debug, str::FromStr};
 
 /// [`MultiTransportProvider`] is a convenience wrapper around the different transport types
 /// supported by the [`Provider`].
@@ -63,14 +59,9 @@ impl MultiTransportProvider {
         trace_type: &[TraceType],
     ) -> Result<TraceResults> {
         let tx_hash: TxHash = tx_hash.parse::<TxHash>()?;
-        // let trace_builder = alloy::providers::ext::TraceBuilder::<TxHash, TraceResults>::new_provider(&self.provider);
-
-        // Ok(match self {
-        //     Self::Ws(provider) => provider.trace_replay_transaction<TraceType::StateDiff>(tx_hash).await?,
-        //     Self::Ipc(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
-        //     Self::Http(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
-        // })
-        todo!()
+        let trace_builder = self.provider.trace_replay_transaction(tx_hash);
+        let trace_results = trace_builder.trace_types(trace_type.to_vec()).trace().await?;
+        Ok(trace_results)
     }
 
     /// Replays the block at the given number.
@@ -80,10 +71,11 @@ impl MultiTransportProvider {
         block_number: u64,
         trace_type: &[TraceType],
     ) -> Result<Vec<TraceResultsWithTransactionHash>> {
-        // let block_number = block_number.into();
+        let block_number = block_number.into();
 
-        // Ok(self.provider.trace_replay_block_transactions(block_number, trace_type).await?)
-        todo!()
+        let trace_builder = self.provider.trace_replay_block_transactions(block_number);
+        let trace_results = trace_builder.trace_types(trace_type.to_vec()).trace().await?;
+        Ok(trace_results)
     }
 
     /// Get the logs that match the given filter.
