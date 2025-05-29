@@ -1,8 +1,8 @@
 //! Module for fetching calldata from a target.
 use super::rpc::get_transaction;
-use alloy::consensus::Transaction;
 use crate::utils::strings::decode_hex;
 use alloy::primitives::TxHash;
+use alloy::consensus::Transaction;
 use eyre::{bail, eyre, Result};
 /// Given a target, return calldata of the target.
 pub async fn get_calldata_from_target(target: &str, raw: bool, rpc_url: &str) -> Result<Vec<u8>> {

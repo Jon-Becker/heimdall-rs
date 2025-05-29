@@ -1,9 +1,9 @@
 //! RPC utilities for interacting with Ethereum nodes
 
 use crate::ether::provider::MultiTransportProvider;
-use alloy::network::TransactionResponse;
 use alloy::{
     eips::BlockNumberOrTag,
+    network::TransactionResponse,
     primitives::{Address, TxHash},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
