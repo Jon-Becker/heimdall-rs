@@ -1,6 +1,7 @@
 //! RPC utilities for interacting with Ethereum nodes
 
 use crate::ether::provider::MultiTransportProvider;
+use alloy::network::TransactionResponse;
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, TxHash},
@@ -224,7 +225,7 @@ pub mod tests {
             .await
             .expect("get_transaction() returned an error!");
 
-        assert_eq!(transaction.hash.to_lower_hex(), transaction_hash);
+        assert_eq!(transaction.tx_hash().to_lower_hex(), transaction_hash);
     }
 
     #[tokio::test]

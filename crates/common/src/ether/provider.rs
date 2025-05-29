@@ -17,13 +17,8 @@ use std::{fmt::Debug, str::FromStr};
 /// [`MultiTransportProvider`] is a convenience wrapper around the different transport types
 /// supported by the [`Provider`].
 #[derive(Clone, Debug)]
-pub enum MultiTransportProvider {
-    /// WebSocket transport
-    Ws(RootProvider<PubSubFrontend, Ethereum>),
-    /// IPC transport
-    Ipc(RootProvider<PubSubFrontend, Ethereum>),
-    /// HTTP transport
-    Http(RootProvider<Http<Client>, Ethereum>),
+pub struct MultiTransportProvider {
+    provider: RootProvider<Ethereum>,
 }
 
 // We implement a convenience "constructor" method, to easily initialize the transport.
@@ -36,54 +31,28 @@ impl MultiTransportProvider {
             return Err(eyre::eyre!("No RPC URL provided"));
         }
 
-        let this = if rpc_url.to_lowercase().contains("http") {
-            let url = Url::from_str(rpc_url)?;
-            Self::Http(ProviderBuilder::new().on_http(url))
-        } else if rpc_url.to_lowercase().contains("ws") {
-            let ws = WsConnect::new(rpc_url);
-            Self::Ws(ProviderBuilder::new().on_ws(ws).await?)
-        } else {
-            let ipc = IpcConnect::new(rpc_url.to_string());
-            Self::Ipc(ProviderBuilder::new().on_ipc(ipc).await?)
-        };
-        Ok(this)
+        let provider = ProviderBuilder::new().connect(rpc_url).await.unwrap().root().clone();
+        Ok(Self { provider })
     }
 
     /// Get the chain id.
     pub async fn get_chainid(&self) -> Result<u64> {
-        Ok(match self {
-            Self::Ws(provider) => provider.get_chain_id().await?,
-            Self::Ipc(provider) => provider.get_chain_id().await?,
-            Self::Http(provider) => provider.get_chain_id().await?,
-        })
+        Ok(self.provider.get_chain_id().await?)
     }
 
     /// Get the latest block number.
     pub async fn get_block_number(&self) -> Result<u64> {
-        Ok(match self {
-            Self::Ws(provider) => provider.get_block_number().await?,
-            Self::Ipc(provider) => provider.get_block_number().await?,
-            Self::Http(provider) => provider.get_block_number().await?,
-        })
+        Ok(self.provider.get_block_number().await?)
     }
 
     /// Get the bytecode at the given address.
     pub async fn get_code_at(&self, address: Address) -> Result<Vec<u8>> {
-        Ok(match self {
-            Self::Ws(provider) => provider.get_code_at(address).await?,
-            Self::Ipc(provider) => provider.get_code_at(address).await?,
-            Self::Http(provider) => provider.get_code_at(address).await?,
-        }
-        .to_vec())
+        Ok(self.provider.get_code_at(address).await?.to_vec())
     }
 
     /// Get the transaction by hash.
     pub async fn get_transaction_by_hash(&self, tx_hash: TxHash) -> Result<Option<Transaction>> {
-        Ok(match self {
-            Self::Ws(provider) => provider.get_transaction_by_hash(tx_hash).await?,
-            Self::Ipc(provider) => provider.get_transaction_by_hash(tx_hash).await?,
-            Self::Http(provider) => provider.get_transaction_by_hash(tx_hash).await?,
-        })
+        Ok(self.provider.get_transaction_by_hash(tx_hash).await?)
     }
 
     /// Replays the transaction at the given hash.
@@ -93,13 +62,15 @@ impl MultiTransportProvider {
         tx_hash: &str,
         trace_type: &[TraceType],
     ) -> Result<TraceResults> {
-        let tx_hash = tx_hash.parse()?;
+        let tx_hash: TxHash = tx_hash.parse::<TxHash>()?;
+        // let trace_builder = alloy::providers::ext::TraceBuilder::<TxHash, TraceResults>::new_provider(&self.provider);
 
-        Ok(match self {
-            Self::Ws(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
-            Self::Ipc(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
-            Self::Http(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
-        })
+        // Ok(match self {
+        //     Self::Ws(provider) => provider.trace_replay_transaction<TraceType::StateDiff>(tx_hash).await?,
+        //     Self::Ipc(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
+        //     Self::Http(provider) => provider.trace_replay_transaction(tx_hash, trace_type).await?,
+        // })
+        todo!()
     }
 
     /// Replays the block at the given number.
@@ -109,27 +80,14 @@ impl MultiTransportProvider {
         block_number: u64,
         trace_type: &[TraceType],
     ) -> Result<Vec<TraceResultsWithTransactionHash>> {
-        let block_number = block_number.into();
+        // let block_number = block_number.into();
 
-        Ok(match self {
-            Self::Ws(provider) => {
-                provider.trace_replay_block_transactions(block_number, trace_type).await?
-            }
-            Self::Ipc(provider) => {
-                provider.trace_replay_block_transactions(block_number, trace_type).await?
-            }
-            Self::Http(provider) => {
-                provider.trace_replay_block_transactions(block_number, trace_type).await?
-            }
-        })
+        // Ok(self.provider.trace_replay_block_transactions(block_number, trace_type).await?)
+        todo!()
     }
 
     /// Get the logs that match the given filter.
     pub async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>> {
-        Ok(match self {
-            Self::Ws(provider) => provider.get_logs(filter).await?,
-            Self::Ipc(provider) => provider.get_logs(filter).await?,
-            Self::Http(provider) => provider.get_logs(filter).await?,
-        })
+        Ok(self.provider.get_logs(filter).await?)
     }
 }

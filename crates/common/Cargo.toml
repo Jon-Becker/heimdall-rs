@@ -38,14 +38,14 @@ backoff = { version = "0.4.0", features = ["tokio"] }
 thiserror = "1.0.50"
 tracing = "0.1.40"
 eyre = "0.6.12"
-alloy-json-abi = { version = "0.8.3", features = ["serde_json"] }
+alloy-json-abi = { version = "1.0", features = ["serde_json"] }
 futures = "0.3.17"
-alloy = { version = "0.3.3", features = [
+alloy = { version = "1.0", features = [
     "full",
     "rpc-types-debug",
     "rpc-types-trace",
 ] }
 bytes = "1.6.1"
-alloy-dyn-abi = "0.8.3"
+alloy-dyn-abi = "1.0"
 tokio-retry = "0.3.0"
 hashbrown = "0.14.5"
