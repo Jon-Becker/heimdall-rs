@@ -24,7 +24,7 @@ heimdall-decoder = { workspace = true }
 thiserror = "1.0.50"
 clap = { workspace = true, features = ["derive"] }
 derive_builder = "0.12.0"
-alloy-json-abi = "0.8.3"
+alloy-json-abi = "1.0"
 tracing = "0.1.40"
 eyre = "0.6.12"
 futures = "0.3.30"
@@ -32,8 +32,8 @@ lazy_static = "1.4.0"
 fancy-regex = "0.11.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-alloy-dyn-abi = "0.8.3"
-alloy = { version = "0.3.3", features = [
+alloy-dyn-abi = "1.0"
+alloy = { version = "1.0", features = [
     "full",
     "rpc-types-debug",
     "rpc-types-trace",

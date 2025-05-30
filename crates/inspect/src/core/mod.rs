@@ -1,4 +1,6 @@
 use alloy::{
+    consensus::Transaction,
+    network::TransactionResponse,
     primitives::TxHash,
     rpc::types::{trace::parity::TransactionTrace, Log},
 };
@@ -90,7 +92,7 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
         .await
         .map_err(|e| Error::Eyre(eyre!("fetching block logs failed: {}", e)))?
         .into_iter()
-        .filter(|log| log.transaction_hash == Some(transaction.hash))
+        .filter(|log| log.transaction_hash == Some(transaction.tx_hash()))
         .collect::<Vec<_>>();
     debug!("fetching transaction logs took {:?}", start_fetch_time.elapsed());
 
@@ -146,10 +148,10 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     let mut trace = TraceFactory::default();
     let inspect_call = trace.add_call(
         0,
-        transaction.gas.try_into().unwrap_or_default(),
+        transaction.inner.gas_limit().try_into().unwrap_or_default(),
         "heimdall".to_string(),
         "inspect".to_string(),
-        vec![transaction.hash.to_lower_hex()],
+        vec![transaction.tx_hash().to_lower_hex()],
         "()".to_string(),
     );
     decoded_trace.add_to_trace(&contracts, &mut trace, inspect_call);

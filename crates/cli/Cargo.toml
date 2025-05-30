@@ -25,8 +25,8 @@ thiserror = "1.0.50"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 eyre = "0.6.12"
-alloy-json-abi = "0.8.3"
-alloy = { version = "0.3.3", features = [
+alloy-json-abi = "1.0"
+alloy = { version = "1.0", features = [
     "full",
     "rpc-types-debug",
     "rpc-types-trace",

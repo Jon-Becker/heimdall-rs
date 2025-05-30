@@ -150,7 +150,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             );
 
             if let Ok(result) = ty
-                .abi_decode_input(byte_args, true)
+                .abi_decode_input(byte_args)
                 .map_err(|e| Error::Eyre(eyre!("decoding calldata failed: {}", e)))
             {
                 let mut found_match = potential_match.clone();

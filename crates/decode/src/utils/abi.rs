@@ -28,7 +28,7 @@ pub(crate) fn try_decode(
         DynSolCall::new(Selector::default(), inputs.to_vec(), None, DynSolReturns::new(Vec::new()));
 
     let result = ty
-        .abi_decode_input(byte_args, true)
+        .abi_decode_input(byte_args)
         .map_err(|e| Error::Eyre(eyre!("failed to decode calldata: {}", e)))?;
     // convert tokens to params
     let mut params: Vec<Param> = Vec::new();

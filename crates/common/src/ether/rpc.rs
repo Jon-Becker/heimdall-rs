@@ -3,6 +3,7 @@
 use crate::ether::provider::MultiTransportProvider;
 use alloy::{
     eips::BlockNumberOrTag,
+    network::TransactionResponse,
     primitives::{Address, TxHash},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
@@ -224,7 +225,7 @@ pub mod tests {
             .await
             .expect("get_transaction() returned an error!");
 
-        assert_eq!(transaction.hash.to_lower_hex(), transaction_hash);
+        assert_eq!(transaction.tx_hash().to_lower_hex(), transaction_hash);
     }
 
     #[tokio::test]
