@@ -59,7 +59,7 @@ impl LogFormat {
                 // level is TRACE
                 filter
                     .max_level_hint()
-                    .map_or(true, |max_level| max_level >= tracing::Level::TRACE));
+                    .is_none_or(|max_level| max_level >= tracing::Level::TRACE));
 
         match self {
             LogFormat::Json => {
@@ -104,7 +104,7 @@ impl FromStr for LogFormat {
             "json" => Ok(LogFormat::Json),
             "logfmt" => Ok(LogFormat::LogFmt),
             "terminal" => Ok(LogFormat::Terminal),
-            _ => Err(format!("Invalid log format: {}", s)),
+            _ => Err(format!("Invalid log format: {s}")),
         }
     }
 }

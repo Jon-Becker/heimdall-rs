@@ -18,13 +18,13 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Token::Literal(literal) => write!(f, "{}", literal),
-            Token::Variable(variable) => write!(f, "{}", variable),
-            Token::Operator(operator) => write!(f, "{}", operator),
+            Token::Literal(literal) => write!(f, "{literal}"),
+            Token::Variable(variable) => write!(f, "{variable}"),
+            Token::Operator(operator) => write!(f, "{operator}"),
             Token::Expression(tokens) => {
                 write!(f, "(")?;
                 for token in tokens.iter() {
-                    write!(f, "{} ", token)?;
+                    write!(f, "{token} ")?;
                 }
                 write!(f, ")")
             }
@@ -78,7 +78,7 @@ impl Token {
                             if lit.len() <= 2 {
                                 stack.push(token.clone());
                             } else if let Ok(num) = u64::from_str_radix(&lit[2..], 16) {
-                                stack.push(Token::Literal(format!("0x{:X}", num)));
+                                stack.push(Token::Literal(format!("0x{num:X}")));
                             } else {
                                 stack.push(token.clone());
                             }

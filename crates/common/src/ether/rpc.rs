@@ -3,7 +3,6 @@
 use crate::ether::provider::MultiTransportProvider;
 use alloy::{
     eips::BlockNumberOrTag,
-    network::TransactionResponse,
     primitives::{Address, TxHash},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
@@ -173,9 +172,10 @@ pub async fn get_block_state_diff(
     .await
 }
 
+/// Tests for RPC functionality.
 #[cfg(test)]
 pub mod tests {
-    use alloy::primitives::address;
+    use alloy::{network::TransactionResponse, primitives::address};
 
     use crate::{ether::rpc::*, utils::hex::ToLowerHex};
 

@@ -90,18 +90,15 @@ fn extract_types_from_string(string: &str) -> Result<Vec<DynSolType>> {
                     string = "".to_string();
                 }
 
-                if let Some(array_size) = array_size {
-                    // recursively call this function to extract the tuple types
-                    let inner_types = extract_types_from_string(&tuple_types)?;
+                // recursively call this function to extract the tuple types
+                let inner_types = extract_types_from_string(&tuple_types)?;
 
+                if let Some(array_size) = array_size {
                     types.push(DynSolType::FixedArray(
                         Box::new(DynSolType::Tuple(inner_types)),
                         array_size,
                     ))
                 } else {
-                    // recursively call this function to extract the tuple types
-                    let inner_types = extract_types_from_string(&tuple_types)?;
-
                     types.push(DynSolType::Array(Box::new(DynSolType::Tuple(inner_types))))
                 }
             } else {
@@ -244,7 +241,7 @@ pub fn to_components(param_type: &DynSolType) -> Vec<Param> {
             .enumerate()
             .map(|(i, p)| Param {
                 ty: to_abi_string(p),
-                name: format!("component{}", i),
+                name: format!("component{i}"),
                 components: to_components(p),
                 internal_type: None,
             })
@@ -280,7 +277,7 @@ impl DynSolValueExt for DynSolValue {
             DynSolValue::Tuple(t) => {
                 let mut map = Map::new();
                 for (i, v) in t.iter().enumerate() {
-                    map.insert(format!("component{}", i), v.serialize());
+                    map.insert(format!("component{i}"), v.serialize());
                 }
                 Value::Object(map)
             }

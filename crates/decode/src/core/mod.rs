@@ -75,7 +75,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     let mut calldata = args
         .get_calldata()
         .await
-        .map_err(|e| Error::FetchError(format!("fetching target calldata failed: {}", e)))?;
+        .map_err(|e| Error::FetchError(format!("fetching target calldata failed: {e}")))?;
     debug!("fetching target calldata took {:?}", start_fetch_time.elapsed());
 
     if calldata.is_empty() {
@@ -241,7 +241,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             .map_err(|e| Error::Eyre(eyre!("dynamically decoding calldata failed: {}", e)))?;
         // build a ResolvedFunction to add to matches
         let resolved_function = ResolvedFunction {
-            name: format!("Unresolved_{}", function_selector),
+            name: format!("Unresolved_{function_selector}"),
             signature: format!(
                 "Unresolved_{}({})",
                 function_selector,

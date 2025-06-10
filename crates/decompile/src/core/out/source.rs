@@ -80,7 +80,7 @@ pub(crate) async fn build_source(
         get_event_and_error_declarations(functions, all_resolved_errors, all_resolved_logs);
     if analyzer_type == AnalyzerType::Solidity {
         resolved_event_error_map.iter().for_each(|(_, (resolved_name, typ))| {
-            source.push(format!("{} {}", typ, resolved_name));
+            source.push(format!("{typ} {resolved_name}"));
         });
 
         // add the fallback function, if it exists
@@ -240,7 +240,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
         function_modifiers.push(state_mutability.to_owned());
     }
     if let Some(returns) = f.returns.as_ref() {
-        function_modifiers.push(format!("returns ({})", returns));
+        function_modifiers.push(format!("returns ({returns})"));
     }
 
     // determine the name of the function
@@ -368,7 +368,7 @@ fn get_storage_variables(
                 );
             }
 
-            format!("{} {};", typ, name)
+            format!("{typ} {name};")
         })
         .collect();
     if !output.is_empty() {

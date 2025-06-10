@@ -3,6 +3,8 @@ use std::ops::Range;
 
 use crate::core::opcodes::WrappedOpcode;
 
+/// A map that associates memory ranges with their corresponding opcodes.
+/// This is used to track which opcodes are responsible for writing to specific memory locations.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RangeMap(pub HashMap<Range<usize>, WrappedOpcode>);
 
@@ -13,6 +15,7 @@ impl Default for RangeMap {
 }
 
 impl RangeMap {
+    /// Creates a new empty RangeMap.
     pub fn new() -> Self {
         Self(HashMap::new())
     }

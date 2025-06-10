@@ -67,10 +67,12 @@ impl Default for Configuration {
 impl Configuration {
     /// Returns the current configuration.
     pub fn load() -> Result<Self, Error> {
-        let mut home = home_dir().ok_or(Error::Generic(
-            "failed to get home directory. does your os support `std::env::home_dir()`?"
-                .to_string(),
-        ))?;
+        let mut home = home_dir().ok_or_else(|| {
+            Error::Generic(
+                "failed to get home directory. does your os support `std::env::home_dir()`?"
+                    .to_string(),
+            )
+        })?;
         home.push(".bifrost");
         home.push("config.toml");
 
@@ -82,13 +84,14 @@ impl Configuration {
 
         // read the config file
         let contents = read_file(
-            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            home.to_str()
+                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
         )
-        .map_err(|e| Error::Generic(format!("failed to read config file: {}", e)))?;
+        .map_err(|e| Error::Generic(format!("failed to read config file: {e}")))?;
 
         // parse the config file
         let mut config: Configuration = toml::from_str(&contents)
-            .map_err(|e| Error::ParseError(format!("failed to parse config file: {}", e)))?;
+            .map_err(|e| Error::ParseError(format!("failed to parse config file: {e}")))?;
 
         // load mesc config if enabled
         if !mesc::is_mesc_enabled() {
@@ -96,25 +99,25 @@ impl Configuration {
         }
 
         if let Some(endpoint) = mesc::get_default_endpoint(Some("heimdall"))
-            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+            .map_err(|e| Error::Generic(format!("MESC error: {e}")))?
         {
             debug!("overriding rpc_url with mesc endpoint");
             config.rpc_url = endpoint.url;
         }
         if let Some(key) = mesc::metadata::get_api_key("etherscan", Some("heimdall"))
-            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+            .map_err(|e| Error::Generic(format!("MESC error: {e}")))?
         {
             debug!("overriding etherscan_api_key with mesc key");
             config.etherscan_api_key = key;
         }
         if let Some(key) = mesc::metadata::get_api_key("transpose", Some("heimdall"))
-            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+            .map_err(|e| Error::Generic(format!("MESC error: {e}")))?
         {
             debug!("overriding transpose_api_key with mesc key");
             config.transpose_api_key = key;
         }
         if let Some(key) = mesc::metadata::get_api_key("openai", Some("heimdall"))
-            .map_err(|e| Error::Generic(format!("MESC error: {}", e)))?
+            .map_err(|e| Error::Generic(format!("MESC error: {e}")))?
         {
             debug!("overriding openai_api_key with mesc key");
             config.openai_api_key = key;
@@ -125,34 +128,40 @@ impl Configuration {
 
     /// Saves the current configuration to disk.
     pub fn save(&self) -> Result<(), Error> {
-        let mut home = home_dir().ok_or(Error::Generic(
-            "failed to get home directory. does your os support `std::env::home_dir()`?"
-                .to_string(),
-        ))?;
+        let mut home = home_dir().ok_or_else(|| {
+            Error::Generic(
+                "failed to get home directory. does your os support `std::env::home_dir()`?"
+                    .to_string(),
+            )
+        })?;
         home.push(".bifrost");
         home.push("config.toml");
 
         write_file(
-            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            home.to_str()
+                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
             &toml::to_string(&self)
-                .map_err(|e| Error::ParseError(format!("failed to serialize config: {}", e)))?,
+                .map_err(|e| Error::ParseError(format!("failed to serialize config: {e}")))?,
         )
-        .map_err(|e| Error::Generic(format!("failed to write config file: {}", e)))?;
+        .map_err(|e| Error::Generic(format!("failed to write config file: {e}")))?;
 
         Ok(())
     }
 
     /// Deletes the configuration file at `$HOME/.bifrost/config.toml`.
     pub fn delete() -> Result<(), Error> {
-        let mut home = home_dir().ok_or(Error::Generic(
-            "failed to get home directory. does your os support `std::env::home_dir()`?"
-                .to_string(),
-        ))?;
+        let mut home = home_dir().ok_or_else(|| {
+            Error::Generic(
+                "failed to get home directory. does your os support `std::env::home_dir()`?"
+                    .to_string(),
+            )
+        })?;
         home.push(".bifrost");
         home.push("config.toml");
 
         delete_path(
-            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            home.to_str()
+                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
         );
 
         Ok(())
@@ -179,8 +188,7 @@ impl Configuration {
             }
             _ => {
                 return Err(Error::Generic(format!(
-                    "invalid key: \'{}\' is not a valid configuration key.",
-                    key
+                    "invalid key: \'{key}\' is not a valid configuration key."
                 )))
             }
         }

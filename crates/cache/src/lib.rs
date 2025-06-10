@@ -80,22 +80,25 @@ pub struct Cache<T> {
 /// ```
 #[allow(deprecated)]
 pub fn clear_cache() -> Result<(), Error> {
-    let home = home_dir().ok_or(Error::Generic(
-        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
-    ))?;
+    let home = home_dir().ok_or_else(|| {
+        Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        )
+    })?;
     let cache_dir = home.join(".bifrost").join("cache");
 
     for entry in cache_dir
         .read_dir()
-        .map_err(|e| Error::Generic(format!("failed to read cache directory: {:?}", e)))?
+        .map_err(|e| Error::Generic(format!("failed to read cache directory: {e:?}")))?
     {
         let entry =
-            entry.map_err(|e| Error::Generic(format!("failed to read cache entry: {:?}", e)))?;
+            entry.map_err(|e| Error::Generic(format!("failed to read cache entry: {e:?}")))?;
         delete_path(
             entry
                 .path()
                 .to_str()
-                .ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
         );
     }
 
@@ -118,9 +121,12 @@ pub fn clear_cache() -> Result<(), Error> {
 /// ```
 #[allow(deprecated)]
 pub fn exists(key: &str) -> Result<bool, Error> {
-    let home = home_dir().ok_or(Error::Generic(
-        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
-    ))?;
+    let home = home_dir().ok_or_else(|| {
+        Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        )
+    })?;
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
@@ -146,9 +152,12 @@ pub fn exists(key: &str) -> Result<bool, Error> {
 /// ```
 #[allow(deprecated)]
 pub fn keys(pattern: &str) -> Result<Vec<String>, Error> {
-    let home = home_dir().ok_or(Error::Generic(
-        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
-    ))?;
+    let home = home_dir().ok_or_else(|| {
+        Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        )
+    })?;
     let cache_dir = home.join(".bifrost").join("cache");
     let mut keys = Vec::new();
 
@@ -157,16 +166,16 @@ pub fn keys(pattern: &str) -> Result<Vec<String>, Error> {
 
     for entry in cache_dir
         .read_dir()
-        .map_err(|e| Error::Generic(format!("failed to read cache directory: {:?}", e)))?
+        .map_err(|e| Error::Generic(format!("failed to read cache directory: {e:?}")))?
     {
         let entry =
-            entry.map_err(|e| Error::Generic(format!("failed to read cache entry: {:?}", e)))?;
+            entry.map_err(|e| Error::Generic(format!("failed to read cache entry: {e:?}")))?;
         let key = entry
             .path()
             .file_name()
-            .ok_or(Error::Generic("failed to get file name".to_string()))?
+            .ok_or_else(|| Error::Generic("failed to get file name".to_string()))?
             .to_str()
-            .ok_or(Error::Generic("failed to convert path to string".to_string()))?
+            .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?
             .to_string();
         if pattern.is_empty() || key.contains(&pattern) {
             keys.push(key.replace(".bin", ""));
@@ -197,15 +206,18 @@ pub fn keys(pattern: &str) -> Result<Vec<String>, Error> {
 /// ```
 #[allow(deprecated)]
 pub fn delete_cache(key: &str) -> Result<(), Error> {
-    let home = home_dir().ok_or(Error::Generic(
-        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
-    ))?;
+    let home = home_dir().ok_or_else(|| {
+        Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        )
+    })?;
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
     if cache_file.exists() {
         std::fs::remove_file(cache_file)
-            .map_err(|e| Error::Generic(format!("failed to delete cache file: {:?}", e)))?;
+            .map_err(|e| Error::Generic(format!("failed to delete cache file: {e:?}")))?;
     }
 
     Ok(())
@@ -226,32 +238,35 @@ pub fn delete_cache(key: &str) -> Result<(), Error> {
 pub fn read_cache<T>(key: &str) -> Result<Option<T>, Error>
 where
     T: 'static + DeserializeOwned, {
-    let home = home_dir().ok_or(Error::Generic(
-        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
-    ))?;
+    let home = home_dir().ok_or_else(|| {
+        Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        )
+    })?;
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
     let binary_string = match read_file(
         cache_file
             .to_str()
-            .ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
     ) {
         Ok(s) => s,
         Err(_) => return Ok(None),
     };
 
     let binary_vec = decode_hex(&binary_string)
-        .map_err(|e| Error::Generic(format!("failed to decode hex: {:?}", e)))?;
+        .map_err(|e| Error::Generic(format!("failed to decode hex: {e:?}")))?;
 
     let cache: Cache<T> = bincode::deserialize::<Cache<T>>(&binary_vec)
-        .map_err(|e| Error::Generic(format!("failed to deserialize cache object: {:?}", e)))?;
+        .map_err(|e| Error::Generic(format!("failed to deserialize cache object: {e:?}")))?;
 
     // check if the cache has expired, if so, delete it and return None
     if cache.expiry <
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| Error::Generic(format!("failed to get current time: {:?}", e)))?
+            .map_err(|e| Error::Generic(format!("failed to get current time: {e:?}")))?
             .as_secs()
     {
         delete_cache(key)?;
@@ -277,9 +292,12 @@ where
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>) -> Result<(), Error>
 where
     T: Serialize, {
-    let home = home_dir().ok_or(Error::Generic(
-        "failed to get home directory. does your os support `std::env::home_dir()`?".to_string(),
-    ))?;
+    let home = home_dir().ok_or_else(|| {
+        Error::Generic(
+            "failed to get home directory. does your os support `std::env::home_dir()`?"
+                .to_string(),
+        )
+    })?;
     let cache_dir = home.join(".bifrost").join("cache");
     let cache_file = cache_dir.join(format!("{key}.bin"));
 
@@ -287,19 +305,19 @@ where
     let expiry = expiry.unwrap_or(
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| Error::Generic(format!("failed to get current time: {:?}", e)))?
+            .map_err(|e| Error::Generic(format!("failed to get current time: {e:?}")))?
             .as_secs() +
             60 * 60 * 24 * 90,
     );
 
     let cache = Cache { value, expiry };
     let encoded: Vec<u8> = bincode::serialize(&cache)
-        .map_err(|e| Error::Generic(format!("failed to serialize cache object: {:?}", e)))?;
+        .map_err(|e| Error::Generic(format!("failed to serialize cache object: {e:?}")))?;
     let binary_string = encode_hex(encoded);
     write_file(
         cache_file
             .to_str()
-            .ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
         &binary_string,
     )?;
 
@@ -352,22 +370,24 @@ pub fn cache(args: CacheArgs) -> Result<(), Error> {
             }
         }
         Subcommands::Size(_) => {
-            let home = home_dir().ok_or(Error::Generic(
-                "failed to get home directory. does your os support `std::env::home_dir()`?"
-                    .to_string(),
-            ))?;
+            let home = home_dir().ok_or_else(|| {
+                Error::Generic(
+                    "failed to get home directory. does your os support `std::env::home_dir()`?"
+                        .to_string(),
+                )
+            })?;
             let cache_dir = home.join(".bifrost").join("cache");
             let mut size = 0;
 
             for entry in cache_dir
                 .read_dir()
-                .map_err(|e| Error::Generic(format!("failed to read cache directory: {:?}", e)))?
+                .map_err(|e| Error::Generic(format!("failed to read cache directory: {e:?}")))?
             {
                 let entry = entry
-                    .map_err(|e| Error::Generic(format!("failed to read cache entry: {:?}", e)))?;
+                    .map_err(|e| Error::Generic(format!("failed to read cache entry: {e:?}")))?;
                 let path = entry.path();
                 let metadata = std::fs::metadata(path)
-                    .map_err(|e| Error::Generic(format!("failed to get metadata: {:?}", e)))?;
+                    .map_err(|e| Error::Generic(format!("failed to get metadata: {e:?}")))?;
                 size += metadata.len();
             }
 

@@ -40,8 +40,7 @@ pub(crate) fn extcall_heuristic<'a>(
                         opcode_name(instruction.opcode)
                     );
                     function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({}).transfer({});",
-                        address, value_solidified
+                        "(bool success, bytes memory ret0) = address({address}).transfer({value_solidified});"
                     ));
                     return Ok(());
                 }
@@ -52,8 +51,7 @@ pub(crate) fn extcall_heuristic<'a>(
                         opcode_name(instruction.opcode)
                     );
                     function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({}).transfer({});",
-                        address, value_solidified
+                        "(bool success, bytes memory ret0) = address({address}).transfer({value_solidified});"
                     ));
                     return Ok(());
                 }
@@ -75,7 +73,7 @@ pub(crate) fn extcall_heuristic<'a>(
                 // - if value is just the default (0), we don't need to include it
                 let mut modifiers = vec![];
                 if instruction.input_operations[0] != w_gas!() {
-                    modifiers.push(format!("gas: {}", gas_solidified));
+                    modifiers.push(format!("gas: {gas_solidified}"));
                 }
                 if instruction.input_operations[2] != w_push0!() {
                     // if the value is just a hex string, we can parse it as ether for readability
@@ -83,9 +81,9 @@ pub(crate) fn extcall_heuristic<'a>(
                         u128::from_str_radix(value_solidified.trim_start_matches("0x"), 16)
                     {
                         let ether_value = value as f64 / 10_f64.powi(18);
-                        modifiers.push(format!("value: {} ether", ether_value));
+                        modifiers.push(format!("value: {ether_value} ether"));
                     } else {
-                        modifiers.push(format!("value: {}", value_solidified));
+                        modifiers.push(format!("value: {value_solidified}"));
                     }
                 }
                 let modifier = if modifiers.is_empty() {
@@ -164,7 +162,7 @@ pub(crate) fn extcall_heuristic<'a>(
                 // build the modifier w/ gas
                 // if the modifier is just the default (GAS()), we don't need to include it
                 let modifier = if instruction.input_operations[0] != w_gas!() {
-                    format!("{{ {} }}", gas)
+                    format!("{{ {gas} }}")
                 } else {
                     "".to_string()
                 };

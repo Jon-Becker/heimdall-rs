@@ -280,7 +280,7 @@ impl Display for Stack {
         for frame in self.stack.iter() {
             stack.push_str(&format!("{}, ", frame.value));
         }
-        write!(f, "[{:#02x?}]", stack)
+        write!(f, "[{stack:#02x?}]")
     }
 }
 

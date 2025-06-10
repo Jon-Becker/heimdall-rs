@@ -415,7 +415,7 @@ impl VM {
             opcode = opcode_info.name(),
             inputs = ?inputs
                 .iter()
-                .map(|x| format!("{:#x}", x))
+                .map(|x| format!("{x:#x}"))
                 .collect::<Vec<String>>(),
             "executing opcode"
         );
@@ -1312,7 +1312,7 @@ impl VM {
             opcode = opcode_info.name(),
             outputs = ?outputs
                 .iter()
-                .map(|x| format!("{:#x}", x))
+                .map(|x| format!("{x:#x}"))
                 .collect::<Vec<String>>(),
             elapsed = ?Instant::now().duration_since(start_time),
             "done executing opcode"

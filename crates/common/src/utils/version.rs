@@ -89,12 +89,12 @@ impl Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let version_string = format!("{}.{}.{}{}", self.major, self.minor, self.patch, {
             if let Some(channel) = &self.channel {
-                format!("+{}", channel)
+                format!("+{channel}")
             } else {
                 "".to_string()
             }
         });
-        write!(f, "{}", version_string)
+        write!(f, "{version_string}")
     }
 }
 
