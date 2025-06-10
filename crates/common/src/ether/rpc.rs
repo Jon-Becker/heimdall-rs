@@ -3,7 +3,6 @@
 use crate::ether::provider::MultiTransportProvider;
 use alloy::{
     eips::BlockNumberOrTag,
-    network::TransactionResponse,
     primitives::{Address, TxHash},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},

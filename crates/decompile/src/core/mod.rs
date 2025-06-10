@@ -99,7 +99,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     let contract_bytecode = args
         .get_bytecode()
         .await
-        .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
+        .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {e}")))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
 
     if contract_bytecode.is_empty() {
@@ -212,10 +212,10 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                 let decoded = returns_param_type
                     .abi_decode(&x.returndata)
                     .map(|decoded| match decoded {
-                        DynSolValue::String(s) => format!("\"{}\"", s),
+                        DynSolValue::String(s) => format!("\"{s}\""),
                         DynSolValue::Uint(x, _) => x.to_string(),
                         DynSolValue::Int(x, _) => x.to_string(),
-                        token => format!("0x{:?}", token),
+                        token => format!("0x{token:?}"),
                     })
                     .unwrap_or_else(|_| encode_hex(&x.returndata));
 

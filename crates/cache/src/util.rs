@@ -17,7 +17,7 @@ pub(crate) fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 /// Encode a bytearray into a hex string
 pub(crate) fn encode_hex(s: Vec<u8>) -> String {
     s.iter().fold(String::new(), |mut acc: String, b| {
-        write!(acc, "{b:02x}", b = b).expect("unable to write");
+        write!(acc, "{b:02x}").expect("unable to write");
         acc
     })
 }
@@ -28,13 +28,13 @@ pub(crate) fn prettify_bytes(bytes: u64) -> String {
         format!("{bytes} B")
     } else if bytes < 1024 * 1024 {
         let kb = bytes / 1024;
-        return format!("{kb} KB");
+        format!("{kb} KB")
     } else if bytes < 1024 * 1024 * 1024 {
         let mb = bytes / (1024 * 1024);
-        return format!("{mb} MB");
+        format!("{mb} MB")
     } else {
         let gb = bytes / (1024 * 1024 * 1024);
-        return format!("{gb} GB");
+        format!("{gb} GB")
     }
 }
 

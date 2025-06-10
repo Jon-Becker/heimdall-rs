@@ -104,7 +104,7 @@ impl PostprocessOrchestrator {
         // add the function arguments to memory_type_map
         state.memory_type_map.extend(function.arguments.iter().map(|(i, frame)| {
             (
-                format!("arg{}", i),
+                format!("arg{i}"),
                 frame.potential_types().first().unwrap_or(&String::from("bytes32")).to_owned(),
             )
         }));

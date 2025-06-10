@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
             let given_name = cmd.name.as_str();
 
             if !given_name.is_empty() {
-                filename = format!("{}-{}", given_name, filename);
+                filename = format!("{given_name}-{filename}");
             }
 
             let assembly = disassemble(cmd.clone())
@@ -91,9 +91,8 @@ async fn main() -> Result<()> {
             let given_name = cmd.name.as_str();
 
             if !given_name.is_empty() {
-                abi_filename = format!("{}-{}", given_name, abi_filename);
-                decompiled_output_filename =
-                    format!("{}-{}", given_name, decompiled_output_filename);
+                abi_filename = format!("{given_name}-{abi_filename}");
+                decompiled_output_filename = format!("{given_name}-{decompiled_output_filename}");
             }
 
             let result = decompile(cmd.clone())
@@ -108,7 +107,7 @@ async fn main() -> Result<()> {
                 ));
 
                 if let Some(source) = &result.source {
-                    output_str.push_str(&format!("Source:\n\n{}\n", source));
+                    output_str.push_str(&format!("Source:\n\n{source}\n"));
                 }
 
                 print_with_less(&output_str)
@@ -188,7 +187,7 @@ async fn main() -> Result<()> {
             let given_name = cmd.name.as_str();
 
             if !given_name.is_empty() {
-                filename = format!("{}-{}", given_name, filename);
+                filename = format!("{given_name}-{filename}");
             }
             let cfg = cfg(cmd.clone()).await.map_err(|e| eyre!("failed to generate cfg: {}", e))?;
             let stringified_dot = cfg.as_dot(cmd.color_edges);
@@ -218,7 +217,7 @@ async fn main() -> Result<()> {
             let given_name = cmd.name.as_str();
 
             if !given_name.is_empty() {
-                filename = format!("{}-{}", given_name, filename);
+                filename = format!("{given_name}-{filename}");
             }
 
             let result =
@@ -264,7 +263,7 @@ async fn main() -> Result<()> {
             let given_name = cmd.name.as_str();
 
             if !given_name.is_empty() {
-                filename = format!("{}-{}", given_name, filename);
+                filename = format!("{given_name}-{filename}");
             }
 
             let inspect_result = inspect(cmd.clone())

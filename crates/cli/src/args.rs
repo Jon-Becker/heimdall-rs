@@ -159,7 +159,7 @@ impl FromStr for ColorMode {
             "always" => Ok(ColorMode::Always),
             "auto" => Ok(ColorMode::Auto),
             "never" => Ok(ColorMode::Never),
-            _ => Err(format!("Invalid color mode: {}", s)),
+            _ => Err(format!("Invalid color mode: {s}")),
         }
     }
 }

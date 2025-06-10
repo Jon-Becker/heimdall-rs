@@ -27,14 +27,14 @@ pub(crate) async fn build_output_path(
         if target.parse::<Address>().is_ok() || target.parse::<TxHash>().is_ok() {
             let chain_id =
                 rpc::chain_id(rpc_url).await.map_err(|_| eyre!("Unable to get chain id"))?;
-            return Ok(format!("{}/output/{}/{}/{}", cwd, chain_id, target, filename));
+            return Ok(format!("{cwd}/output/{chain_id}/{target}/{filename}"));
         } else {
-            return Ok(format!("{}/output/local/{}", cwd, filename));
+            return Ok(format!("{cwd}/output/local/{filename}"));
         }
     }
 
     // output is specified, return the path
-    Ok(format!("{}/{}", output, filename))
+    Ok(format!("{output}/{filename}"))
 }
 
 /// pass the input to the `less` command

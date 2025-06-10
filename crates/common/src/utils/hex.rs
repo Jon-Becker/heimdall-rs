@@ -31,7 +31,7 @@ impl ToLowerHex for U256 {
 
 impl ToLowerHex for FixedBytes<20> {
     fn to_lower_hex(&self) -> String {
-        format!("{:#020x}", self)
+        format!("{self:#020x}")
     }
 }
 
@@ -43,12 +43,12 @@ impl ToLowerHex for Vec<u8> {
 
 impl ToLowerHex for FixedBytes<32> {
     fn to_lower_hex(&self) -> String {
-        format!("{:#032x}", self)
+        format!("{self:#032x}")
     }
 }
 
 impl ToLowerHex for Address {
     fn to_lower_hex(&self) -> String {
-        format!("{:#020x}", self)
+        format!("{self:#020x}")
     }
 }

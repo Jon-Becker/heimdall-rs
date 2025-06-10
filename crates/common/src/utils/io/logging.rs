@@ -294,7 +294,7 @@ impl TraceFactory {
             origin.bright_cyan(),
             function_name.bright_cyan(),
             args.join(", "),
-            extra.iter().map(|s| format!("[{}]", s)).collect::<Vec<String>>().join(" ").dimmed()
+            extra.iter().map(|s| format!("[{s}]")).collect::<Vec<String>>().join(" ").dimmed()
         );
         self.add("call", parent_index, instruction, vec![title, returns])
     }
@@ -327,7 +327,7 @@ impl TraceFactory {
             instruction,
             vec![
                 address,
-                format!("{} {}", refund_address, format!("[{} ether]", refund_amount).dimmed()),
+                format!("{} {}", refund_address, format!("[{refund_amount} ether]").dimmed()),
             ],
         )
     }

@@ -244,7 +244,7 @@ pub fn to_components(param_type: &DynSolType) -> Vec<Param> {
             .enumerate()
             .map(|(i, p)| Param {
                 ty: to_abi_string(p),
-                name: format!("component{}", i),
+                name: format!("component{i}"),
                 components: to_components(p),
                 internal_type: None,
             })
@@ -280,7 +280,7 @@ impl DynSolValueExt for DynSolValue {
             DynSolValue::Tuple(t) => {
                 let mut map = Map::new();
                 for (i, v) in t.iter().enumerate() {
-                    map.insert(format!("component{}", i), v.serialize());
+                    map.insert(format!("component{i}"), v.serialize());
                 }
                 Value::Object(map)
             }

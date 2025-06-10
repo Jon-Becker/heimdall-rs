@@ -43,7 +43,7 @@ pub fn decode_hex(mut s: &str) -> Result<Vec<u8>> {
 /// ```
 pub fn encode_hex(s: &[u8]) -> String {
     s.iter().fold(String::new(), |mut acc, b| {
-        write!(acc, "{b:02x}", b = b).expect("unable to write");
+        write!(acc, "{b:02x}").expect("unable to write");
         acc
     })
 }
@@ -66,7 +66,7 @@ pub fn encode_hex_reduced(s: U256) -> String {
                 .rev()
                 .skip_while(|b| **b == 0)
                 .fold(String::new(), |mut acc, b| {
-                    write!(acc, "{:02x}", b).expect("unable to write");
+                    write!(acc, "{b:02x}").expect("unable to write");
                     acc
                 })
                 .trim_start_matches("00")
@@ -346,7 +346,7 @@ pub fn tokenize(s: &str) -> Vec<String> {
                     // Remove the last character as a single token
                     tokens.pop();
                     // Add the compound operator as a single token
-                    tokens.push(format!("{}{}", last, c));
+                    tokens.push(format!("{last}{c}"));
                 } else if separators.contains(&c) {
                     tokens.push(c.to_string());
                 }

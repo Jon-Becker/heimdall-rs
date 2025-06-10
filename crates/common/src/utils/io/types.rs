@@ -100,11 +100,11 @@ pub trait Parameterize {
 impl Parameterize for DynSolValue {
     fn parameterize(&self) -> String {
         match self {
-            DynSolValue::Address(val) => format!("address: {}", val),
-            DynSolValue::Int(val, _) => format!("int: {}", val),
-            DynSolValue::Uint(val, _) => format!("uint: {}", val),
-            DynSolValue::String(val) => format!("string: {}", val),
-            DynSolValue::Bool(val) => format!("bool: {}", val),
+            DynSolValue::Address(val) => format!("address: {val}"),
+            DynSolValue::Int(val, _) => format!("int: {val}"),
+            DynSolValue::Uint(val, _) => format!("uint: {val}"),
+            DynSolValue::String(val) => format!("string: {val}"),
+            DynSolValue::Bool(val) => format!("bool: {val}"),
             DynSolValue::Bytes(val) => format!("bytes: 0x{}", val.to_lower_hex()),
             DynSolValue::FixedBytes(val, size) => {
                 format!("bytes{}: 0x{}", size, &val.to_string()[(64 - size * 2) + 2..])
@@ -119,12 +119,12 @@ impl Parameterize for DynSolValue {
                 // parametrize all array elements, remove their `type: ` prefix, and join them
                 let elements = val
                     .iter()
-                    .map(|token| token.parameterize().replace(&format!("{}: ", array_type), ""))
+                    .map(|token| token.parameterize().replace(&format!("{array_type}: "), ""))
                     .collect::<Vec<String>>()
                     .join(", ");
 
                 // return array type and elements
-                format!("{}[]: [{}]", array_type, elements)
+                format!("{array_type}[]: [{elements}]")
             }
             DynSolValue::FixedArray(val) => {
                 // get type of array
@@ -136,7 +136,7 @@ impl Parameterize for DynSolValue {
                 // parametrize all array elements, remove their `type: ` prefix, and join them
                 let elements = val
                     .iter()
-                    .map(|token| token.parameterize().replace(&format!("{}: ", array_type), ""))
+                    .map(|token| token.parameterize().replace(&format!("{array_type}: "), ""))
                     .collect::<Vec<String>>()
                     .join(", ");
 
@@ -172,7 +172,7 @@ impl Parameterize for DynSolValue {
                     Some(token) => token.to_type(),
                     None => String::new(),
                 };
-                format!("{}[]", array_type)
+                format!("{array_type}[]")
             }
             DynSolValue::FixedArray(val) => {
                 // get type of array
@@ -188,7 +188,7 @@ impl Parameterize for DynSolValue {
                     val.iter().map(|token| token.to_type()).collect::<Vec<String>>().join(", ");
 
                 // return tuple type
-                format!("({})", types)
+                format!("({types})")
             }
             _ => unreachable!(),
         }

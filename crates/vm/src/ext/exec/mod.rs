@@ -261,7 +261,7 @@ impl VM {
                                 " - jump condition: {:?}\n        - stack: {}\n        - historical stacks: {}",
                                 jump_condition,
                                 vm.stack,
-                                historical_stacks.iter().map(|stack| format!("{}", stack)).collect::<Vec<String>>().join("\n            - ")
+                                historical_stacks.iter().map(|stack| format!("{stack}")).collect::<Vec<String>>().join("\n            - ")
                             );
 
                             // this key exists, but the stack is different, so the jump is new

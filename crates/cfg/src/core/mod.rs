@@ -58,7 +58,7 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     let contract_bytecode = args
         .get_bytecode()
         .await
-        .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {}", e)))?;
+        .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {e}")))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
 
     if contract_bytecode.is_empty() {
