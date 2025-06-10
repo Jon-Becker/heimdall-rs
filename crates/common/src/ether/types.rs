@@ -90,18 +90,15 @@ fn extract_types_from_string(string: &str) -> Result<Vec<DynSolType>> {
                     string = "".to_string();
                 }
 
-                if let Some(array_size) = array_size {
-                    // recursively call this function to extract the tuple types
-                    let inner_types = extract_types_from_string(&tuple_types)?;
+                // recursively call this function to extract the tuple types
+                let inner_types = extract_types_from_string(&tuple_types)?;
 
+                if let Some(array_size) = array_size {
                     types.push(DynSolType::FixedArray(
                         Box::new(DynSolType::Tuple(inner_types)),
                         array_size,
                     ))
                 } else {
-                    // recursively call this function to extract the tuple types
-                    let inner_types = extract_types_from_string(&tuple_types)?;
-
                     types.push(DynSolType::Array(Box::new(DynSolType::Tuple(inner_types))))
                 }
             } else {

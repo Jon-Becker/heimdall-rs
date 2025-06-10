@@ -1,3 +1,5 @@
+//! Integration tests for decompile functionality.
+
 #[cfg(test)]
 mod integration_tests {
     use std::path::PathBuf;

@@ -67,10 +67,12 @@ impl Default for Configuration {
 impl Configuration {
     /// Returns the current configuration.
     pub fn load() -> Result<Self, Error> {
-        let mut home = home_dir().ok_or(Error::Generic(
-            "failed to get home directory. does your os support `std::env::home_dir()`?"
-                .to_string(),
-        ))?;
+        let mut home = home_dir().ok_or_else(|| {
+            Error::Generic(
+                "failed to get home directory. does your os support `std::env::home_dir()`?"
+                    .to_string(),
+            )
+        })?;
         home.push(".bifrost");
         home.push("config.toml");
 
@@ -82,7 +84,8 @@ impl Configuration {
 
         // read the config file
         let contents = read_file(
-            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            home.to_str()
+                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
         )
         .map_err(|e| Error::Generic(format!("failed to read config file: {e}")))?;
 
@@ -125,15 +128,18 @@ impl Configuration {
 
     /// Saves the current configuration to disk.
     pub fn save(&self) -> Result<(), Error> {
-        let mut home = home_dir().ok_or(Error::Generic(
-            "failed to get home directory. does your os support `std::env::home_dir()`?"
-                .to_string(),
-        ))?;
+        let mut home = home_dir().ok_or_else(|| {
+            Error::Generic(
+                "failed to get home directory. does your os support `std::env::home_dir()`?"
+                    .to_string(),
+            )
+        })?;
         home.push(".bifrost");
         home.push("config.toml");
 
         write_file(
-            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            home.to_str()
+                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
             &toml::to_string(&self)
                 .map_err(|e| Error::ParseError(format!("failed to serialize config: {e}")))?,
         )
@@ -144,15 +150,18 @@ impl Configuration {
 
     /// Deletes the configuration file at `$HOME/.bifrost/config.toml`.
     pub fn delete() -> Result<(), Error> {
-        let mut home = home_dir().ok_or(Error::Generic(
-            "failed to get home directory. does your os support `std::env::home_dir()`?"
-                .to_string(),
-        ))?;
+        let mut home = home_dir().ok_or_else(|| {
+            Error::Generic(
+                "failed to get home directory. does your os support `std::env::home_dir()`?"
+                    .to_string(),
+            )
+        })?;
         home.push(".bifrost");
         home.push("config.toml");
 
         delete_path(
-            home.to_str().ok_or(Error::Generic("failed to convert path to string".to_string()))?,
+            home.to_str()
+                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
         );
 
         Ok(())

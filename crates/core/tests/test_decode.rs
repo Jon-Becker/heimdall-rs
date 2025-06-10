@@ -1,3 +1,5 @@
+//! Integration tests for decode functionality.
+
 mod integration_tests {
     use heimdall_common::utils::{sync::blocking_await, threading::task_pool};
     use heimdall_decoder::{DecodeArgs, DecodeArgsBuilder};

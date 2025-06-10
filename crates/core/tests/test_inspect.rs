@@ -1,3 +1,5 @@
+//! Integration tests for inspect functionality.
+
 #[cfg(test)]
 mod integration_tests {
     use heimdall_common::utils::{sync::blocking_await, threading::task_pool};

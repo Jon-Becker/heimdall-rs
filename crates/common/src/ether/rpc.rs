@@ -172,9 +172,10 @@ pub async fn get_block_state_diff(
     .await
 }
 
+/// Tests for RPC functionality.
 #[cfg(test)]
 pub mod tests {
-    use alloy::primitives::address;
+    use alloy::{network::TransactionResponse, primitives::address};
 
     use crate::{ether::rpc::*, utils::hex::ToLowerHex};
 

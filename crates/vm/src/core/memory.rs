@@ -4,6 +4,7 @@ use crate::ext::range_map::RangeMap;
 #[cfg(feature = "experimental")]
 use super::opcodes::WrappedOpcode;
 
+/// A type alias for tracking byte ranges in memory with associated opcodes.
 #[cfg(feature = "experimental")]
 pub type ByteTracker = RangeMap;
 

@@ -1,3 +1,5 @@
+//! Integration tests for CFG (Control Flow Graph) functionality.
+
 #[cfg(test)]
 mod integration_tests {
     use memory_stats::memory_stats;

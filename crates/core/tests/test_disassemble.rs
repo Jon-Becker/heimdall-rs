@@ -1,3 +1,5 @@
+//! Integration tests for disassemble functionality.
+
 #[cfg(test)]
 mod integration_tests {
     use std::{io::Write, path::PathBuf};
