@@ -2415,6 +2415,7 @@ dependencies = [
  "heimdall-cache",
  "indicatif",
  "lazy_static",
+ "libc",
  "rand 0.8.5",
  "reqwest 0.12.20",
  "serde",

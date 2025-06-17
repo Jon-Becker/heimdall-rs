@@ -104,12 +104,40 @@ impl TraceFactory {
         match trace.category {
             TraceCategory::Call => {
                 // print the trace title
-                println!(
-                    "{} {} {}",
-                    replace_last(prefix, "│ ", " ├─").bold().bright_white(),
-                    format!("[{}]", trace.instruction).bold().bright_white(),
-                    trace.message.first().expect("Failed to build trace.")
-                );
+                let instruction_str = format!("[{}]", trace.instruction);
+                let prefix_str = replace_last(prefix, "│ ", " ├─");
+                let message = trace.message.first().expect("Failed to build trace.");
+
+                // Calculate terminal width (default to 120 if unable to determine)
+                let terminal_width = termwidth().unwrap_or(120);
+
+                // Calculate the available width for the message
+                // Account for prefix, instruction, and spacing
+                let prefix_len = strip_ansi_codes(&prefix_str).len();
+                let instruction_len = instruction_str.len();
+                let spacing = 2; // spaces between elements
+                let available_width =
+                    terminal_width.saturating_sub(prefix_len + instruction_len + spacing);
+
+                // Wrap the message if it's too long
+                let wrapped_lines = wrap_text(message, available_width);
+
+                // Print the first line with prefix and instruction
+                if let Some(first_line) = wrapped_lines.first() {
+                    println!(
+                        "{} {} {}",
+                        prefix_str.bold().bright_white(),
+                        instruction_str.bold().bright_white(),
+                        first_line
+                    );
+
+                    // Print subsequent lines with appropriate indentation
+                    let continuation_prefix =
+                        format!("{}{}   ", prefix, " ".repeat(instruction_len));
+                    for line in wrapped_lines.iter().skip(1) {
+                        println!("{} {}", continuation_prefix.bold().bright_white(), line);
+                    }
+                }
 
                 // print the children
                 for child in &trace.children {
@@ -133,12 +161,38 @@ impl TraceFactory {
                 )
             }
             TraceCategory::Log => {
-                println!(
-                    "{} emit {} {}",
-                    replace_last(prefix, "│ ", " ├─").bold().bright_white(),
-                    trace.message.first().expect("Failed to build trace."),
-                    format!("[log index: {}]", trace.instruction).dimmed(),
-                );
+                let prefix_str = replace_last(prefix, "│ ", " ├─");
+                let log_index_str = format!("[log index: {}]", trace.instruction);
+                let message = trace.message.first().expect("Failed to build trace.");
+
+                // Calculate terminal width
+                let terminal_width = termwidth().unwrap_or(120);
+
+                // Calculate available width
+                let prefix_len = strip_ansi_codes(&prefix_str).len();
+                let emit_len = 5; // "emit "
+                let log_index_len = log_index_str.len();
+                let spacing = 2;
+                let available_width =
+                    terminal_width.saturating_sub(prefix_len + emit_len + log_index_len + spacing);
+
+                // Wrap the message if needed
+                let wrapped_lines = wrap_text(message, available_width);
+
+                if let Some(first_line) = wrapped_lines.first() {
+                    println!(
+                        "{} emit {} {}",
+                        prefix_str.bold().bright_white(),
+                        first_line,
+                        log_index_str.dimmed(),
+                    );
+
+                    // Print continuation lines
+                    let continuation_prefix = format!("{}{}", prefix, " ".repeat(emit_len));
+                    for line in wrapped_lines.iter().skip(1) {
+                        println!("{} {}", continuation_prefix.bold().bright_white(), line);
+                    }
+                }
             }
             TraceCategory::LogUnknown => {
                 let log_size = trace.message.len();
@@ -171,17 +225,32 @@ impl TraceFactory {
             TraceCategory::Message => {
                 for message_index in 0..trace.message.len() {
                     let message = trace.message.get(message_index).expect("Failed to build trace.");
-                    println!(
-                        "{} {}",
-                        if prefix.ends_with("└─") {
-                            prefix.to_string().bold().bright_white()
-                        } else if message_index == 0 {
-                            replace_last(prefix, "│ ", " ├─").bold().bright_white()
+                    let prefix_str = if prefix.ends_with("└─") {
+                        prefix.to_string()
+                    } else if message_index == 0 {
+                        replace_last(prefix, "│ ", " ├─")
+                    } else {
+                        replace_last(prefix, "│ ", " │ ")
+                    };
+
+                    // Calculate terminal width
+                    let terminal_width = termwidth().unwrap_or(120);
+                    let prefix_len = strip_ansi_codes(&prefix_str).len();
+                    let spacing = 1;
+                    let available_width = terminal_width.saturating_sub(prefix_len + spacing);
+
+                    // Wrap the message if needed
+                    let wrapped_lines = wrap_text(message, available_width);
+
+                    for (i, line) in wrapped_lines.iter().enumerate() {
+                        if i == 0 {
+                            println!("{} {}", prefix_str.bold().bright_white(), line);
                         } else {
-                            replace_last(prefix, "│ ", " │ ").bold().bright_white()
-                        },
-                        message
-                    );
+                            // Continuation lines
+                            let continuation_prefix = replace_last(prefix, "│ ", " │ ");
+                            println!("{}   {}", continuation_prefix.bold().bright_white(), line);
+                        }
+                    }
                 }
 
                 // print the children
@@ -438,6 +507,112 @@ impl Default for TraceFactory {
 
         TraceFactory::new(level)
     }
+}
+
+/// Get the terminal width using environment variables or common methods
+fn termwidth() -> Option<usize> {
+    // Try to get terminal width from environment
+    if let Ok(cols) = std::env::var("COLUMNS") {
+        if let Ok(width) = cols.parse::<usize>() {
+            return Some(width);
+        }
+    }
+
+    // Try to get terminal size using libc on Unix-like systems
+    #[cfg(unix)]
+    {
+        use std::mem;
+        unsafe {
+            let mut winsize: libc::winsize = mem::zeroed();
+            if libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ, &mut winsize) == 0 &&
+                winsize.ws_col > 0
+            {
+                return Some(winsize.ws_col as usize);
+            }
+        }
+    }
+
+    None
+}
+
+/// Strip ANSI color codes from a string to get its actual display length
+fn strip_ansi_codes(s: &str) -> String {
+    // This is a simplified version that removes common ANSI escape sequences
+    let mut result = String::new();
+    let mut in_escape = false;
+
+    for ch in s.chars() {
+        if ch == '\x1b' {
+            in_escape = true;
+        } else if in_escape {
+            if ch == 'm' {
+                in_escape = false;
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+
+    result
+}
+
+/// Wrap text to fit within a specified width, preserving word boundaries where possible
+fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    if max_width == 0 || text.len() <= max_width {
+        return vec![text.to_string()];
+    }
+
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+    let mut current_length = 0;
+
+    // Split on common delimiters while preserving them
+    let parts = split_preserving_delimiters(text);
+
+    for part in parts {
+        let part_len = strip_ansi_codes(&part).len();
+
+        if current_length + part_len > max_width && current_length > 0 {
+            // Start a new line
+            lines.push(current_line.trim().to_string());
+            current_line = String::new();
+            current_length = 0;
+        }
+
+        current_line.push_str(&part);
+        current_length += part_len;
+    }
+
+    if !current_line.is_empty() {
+        lines.push(current_line.trim().to_string());
+    }
+
+    if lines.is_empty() {
+        lines.push(text.to_string());
+    }
+
+    lines
+}
+
+/// Split text on common delimiters while preserving the delimiters
+fn split_preserving_delimiters(text: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+
+    for ch in text.chars() {
+        current.push(ch);
+        // Split after common delimiters
+        if matches!(ch, ',' | ';' | ':' | ')' | ']' | '}') {
+            parts.push(current.clone());
+            current.clear();
+        }
+    }
+
+    if !current.is_empty() {
+        parts.push(current);
+    }
+
+    parts
 }
 
 #[cfg(test)]

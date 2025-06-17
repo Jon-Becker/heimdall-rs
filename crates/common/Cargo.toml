@@ -49,3 +49,6 @@ bytes = "1.6.1"
 alloy-dyn-abi = "1.0"
 tokio-retry = "0.3.0"
 hashbrown = "0.14.5"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
