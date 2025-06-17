@@ -237,7 +237,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             potential_inputs.iter().map(|x| x.to_string()).collect::<Vec<String>>()
         );
 
-        let (decoded_inputs, params) = try_decode(&potential_inputs, byte_args)
+        let (decoded_inputs, params) = try_decode(&potential_inputs, &calldata[4..])
             .map_err(|e| Error::Eyre(eyre!("dynamically decoding calldata failed: {}", e)))?;
         // build a ResolvedFunction to add to matches
         let resolved_function = ResolvedFunction {
