@@ -18,7 +18,11 @@ pub(crate) fn match_parameters(
             &function
                 .arguments
                 .values()
-                .map(|f| f.potential_types().first().unwrap_or(&"bytes32".to_string()).clone())
+                .map(|f| f
+                    .potential_types()
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "bytes32".to_string()))
                 .collect::<Vec<String>>()
                 .join(",")
         );

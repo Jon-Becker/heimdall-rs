@@ -63,8 +63,8 @@ pub(crate) fn build_abi(
                         None => arg
                             .potential_types()
                             .first()
-                            .unwrap_or(&"bytes32".to_string())
-                            .to_string(),
+                            .cloned()
+                            .unwrap_or_else(|| "bytes32".to_string()),
                     },
                     components: match f.resolved_function {
                         Some(ref sig) => {
@@ -155,183 +155,74 @@ pub(crate) fn build_abi(
 }
 
 pub(crate) fn build_abi_with_details(
+    abi: &JsonAbi,
     functions: &[AnalyzedFunction],
-    all_resolved_errors: &HashMap<String, ResolvedError>,
-    all_resolved_logs: &HashMap<String, ResolvedLog>,
-) -> Result<Vec<Value>> {
-    debug!("constructing abi with function details");
+) -> Result<Value> {
+    debug!("adding function details to abi");
     let start_time = Instant::now();
 
-    let mut abi_items = Vec::new();
+    // Serialize the standard ABI to JSON
+    let mut abi_array = serde_json::to_value(abi)?;
 
-    // Process each function to create extended ABI items
-    functions.iter().filter(|f| !f.fallback).for_each(|f| {
-        // determine the state mutability of the function
-        let state_mutability = match f.pure {
-            true => "pure",
-            false => match f.view {
-                true => "view",
-                false => match f.payable {
-                    true => "payable",
-                    false => "nonpayable",
-                },
-            },
-        };
+    // Create a map of function selectors for quick lookup
+    let function_map: HashMap<String, &AnalyzedFunction> = functions
+        .iter()
+        .filter(|f| !f.fallback)
+        .map(|f| {
+            let name = match f.resolved_function {
+                Some(ref sig) => sig.name.clone(),
+                None => format!("Unresolved_{}", f.selector),
+            };
+            (name, f)
+        })
+        .collect();
 
-        // determine the name of the function
-        let name = match f.resolved_function {
-            Some(ref sig) => sig.name.clone(),
-            None => format!("Unresolved_{}", f.selector),
-        };
+    // Add selector and signature to each function in the ABI
+    if let Some(items) = abi_array.as_array_mut() {
+        for item in items.iter_mut() {
+            if let Some(obj) = item.as_object_mut() {
+                if obj.get("type").and_then(|t| t.as_str()) == Some("function") {
+                    let name = obj.get("name").and_then(|n| n.as_str()).map(|s| s.to_string());
+                    if let Some(name_str) = name {
+                        if let Some(analyzed_func) = function_map.get(&name_str) {
+                            // Add selector
+                            obj.insert(
+                                "selector".to_string(),
+                                json!(format!("0x{}", analyzed_func.selector)),
+                            );
 
-        // Get the signature
-        let signature = match f.resolved_function {
-            Some(ref sig) => sig.signature.clone(),
-            None => {
-                // Build signature from analyzed function
-                let params: Vec<String> = f
-                    .sorted_arguments()
-                    .iter()
-                    .enumerate()
-                    .map(|(i, (_, arg))| match f.resolved_function {
-                        Some(ref sig) => {
-                            sig.inputs.get(i).unwrap_or(&"bytes32".to_string()).clone()
+                            // Add signature
+                            let signature = match &analyzed_func.resolved_function {
+                                Some(sig) => sig.signature.clone(),
+                                None => {
+                                    // Build signature from the ABI inputs
+                                    if let Some(inputs) =
+                                        obj.get("inputs").and_then(|i| i.as_array())
+                                    {
+                                        let params: Vec<String> = inputs
+                                            .iter()
+                                            .filter_map(|input| {
+                                                input
+                                                    .get("type")
+                                                    .and_then(|t| t.as_str())
+                                                    .map(|s| s.to_string())
+                                            })
+                                            .collect();
+                                        format!("{}({})", name_str, params.join(","))
+                                    } else {
+                                        format!("{name_str}()")
+                                    }
+                                }
+                            };
+                            obj.insert("signature".to_string(), json!(signature));
                         }
-                        None => arg
-                            .potential_types()
-                            .first()
-                            .unwrap_or(&"bytes32".to_string())
-                            .to_string(),
-                    })
-                    .collect();
-                format!("{}({})", name, params.join(","))
-            }
-        };
-
-        let inputs: Vec<Value> = f
-            .sorted_arguments()
-            .iter()
-            .enumerate()
-            .map(|(i, (_, arg))| {
-                json!({
-                    "name": format!("arg{i}"),
-                    "type": match f.resolved_function {
-                        Some(ref sig) => {
-                            to_abi_string(sig.inputs().get(i).unwrap_or(&DynSolType::Bytes))
-                        }
-                        None => arg
-                            .potential_types()
-                            .first()
-                            .unwrap_or(&"bytes32".to_string())
-                            .to_string(),
-                    },
-                    "internalType": match f.resolved_function {
-                        Some(ref sig) => {
-                            to_abi_string(sig.inputs().get(i).unwrap_or(&DynSolType::Bytes))
-                        }
-                        None => arg
-                            .potential_types()
-                            .first()
-                            .unwrap_or(&"bytes32".to_string())
-                            .to_string(),
                     }
-                })
-            })
-            .collect();
-
-        let outputs: Vec<Value> = f
-            .returns
-            .as_ref()
-            .map(|r| {
-                vec![json!({
-                    "name": "",
-                    "type": r.replacen("memory", "", 1).trim().to_string(),
-                    "internalType": r.replacen("memory", "", 1).trim().to_string()
-                })]
-            })
-            .unwrap_or_default();
-
-        // Create extended function object with selector and signature
-        let function_item = json!({
-            "type": "function",
-            "name": name,
-            "inputs": inputs,
-            "outputs": outputs,
-            "stateMutability": state_mutability,
-            "selector": format!("0x{}", f.selector),
-            "signature": signature,
-        });
-
-        abi_items.push(function_item);
-
-        // Add function errors
-        f.errors.iter().for_each(|error_selector| {
-            let (name, inputs) = match all_resolved_errors
-                .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
-            {
-                Some(error) => {
-                    let inputs: Vec<Value> = error
-                        .inputs()
-                        .iter()
-                        .enumerate()
-                        .map(|(i, input)| {
-                            json!({
-                                "name": format!("arg{i}"),
-                                "type": to_abi_string(input),
-                                "internalType": to_abi_string(input)
-                            })
-                        })
-                        .collect();
-                    (error.name.clone(), inputs)
                 }
-                None => (format!("CustomError_{}", error_selector.to_lower_hex()), vec![]),
-            };
+            }
+        }
+    }
 
-            let error_item = json!({
-                "type": "error",
-                "name": name,
-                "inputs": inputs
-            });
+    debug!("adding function details took {:?}", start_time.elapsed());
 
-            abi_items.push(error_item);
-        });
-
-        // Add function events
-        f.events.iter().for_each(|event_selector| {
-            let (name, inputs) = match all_resolved_logs
-                .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
-            {
-                Some(event) => {
-                    let inputs: Vec<Value> = event
-                        .inputs()
-                        .iter()
-                        .enumerate()
-                        .map(|(i, input)| {
-                            json!({
-                                "name": format!("arg{i}"),
-                                "type": to_abi_string(input),
-                                "internalType": to_abi_string(input),
-                                "indexed": false
-                            })
-                        })
-                        .collect();
-                    (event.name.clone(), inputs)
-                }
-                None => (format!("Event_{}", event_selector.to_lower_hex()), vec![]),
-            };
-
-            let event_item = json!({
-                "type": "event",
-                "name": name,
-                "inputs": inputs,
-                "anonymous": event_selector.is_zero()
-            });
-
-            abi_items.push(event_item);
-        });
-    });
-
-    debug!("constructing abi with details took {:?}", start_time.elapsed());
-
-    Ok(abi_items)
+    Ok(abi_array)
 }

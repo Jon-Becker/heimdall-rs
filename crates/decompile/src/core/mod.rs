@@ -341,11 +341,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // construct the abi for the given analyzed functions
     let abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
-    let abi_with_details = serde_json::Value::Array(build_abi_with_details(
-        &analyzed_functions,
-        &all_resolved_errors,
-        &all_resolved_events,
-    )?);
+    let abi_with_details = build_abi_with_details(&abi, &analyzed_functions)?;
     let source = build_source(
         &analyzed_functions,
         &all_resolved_errors,
