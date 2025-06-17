@@ -102,8 +102,8 @@ async fn main() -> Result<()> {
             if cmd.output == "print" {
                 let mut output_str = String::new();
                 output_str.push_str(&format!(
-                    "ABI:\n\n[{}]\n",
-                    serde_json::to_string_pretty(&result.abi)?
+                    "ABI:\n\n{}\n",
+                    serde_json::to_string_pretty(&result.abi_with_details)?
                 ));
 
                 if let Some(source) = &result.source {
@@ -120,7 +120,7 @@ async fn main() -> Result<()> {
                         .await
                         .map_err(|e| eyre!("failed to build output path: {}", e))?;
 
-                write_file(&output_path, &serde_json::to_string_pretty(&result.abi)?)
+                write_file(&output_path, &serde_json::to_string_pretty(&result.abi_with_details)?)
                     .map_err(|e| eyre!("failed to write ABI: {}", e))?;
 
                 // write the contract source

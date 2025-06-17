@@ -406,4 +406,90 @@ mod integration_tests {
             "success rate is less than 99%"
         );
     }
+
+    #[tokio::test]
+    async fn test_decompile_extended_abi() {
+        // Test that the extended ABI includes selector and signature fields
+        let bytecode = "0x608060405234801561001057600080fd5b50600436106100365760003560e01c80636057361d1461003b5780638bab8dd514610057575b600080fd5b610055600480360381019061005091906101a3565b610087565b005b610071600480360381019061006c9190610158565b610091565b60405161007e91906101db565b60405180910390f35b8060008190555050565b6000816040516100a19190610181565b908152602001604051809103902060009054906101000a900460ff169050919050565b600080fd5b600080fd5b6000819050919050565b6100e2816100cf565b81146100ed57600080fd5b50565b6000813590506100ff816100d9565b92915050565b600080fd5b600080fd5b600080fd5b60008083601f84011261012a576101296100ff565b5b8235905067ffffffffffffffff81111561014757610146610104565b5b60208301915083600182028301111561016357610162610109565b5b9250929050565b60008060208385031215610181576101806100c5565b5b600083013567ffffffffffffffff81111561019f5761019e6100ca565b5b6101ab85828601610114565b92509250509250929050565b6000602082840312156101cd576101cc6100c5565b5b60006101db848285016100f0565b91505092915050565b60008115159050919050565b6101fa816101e4565b82525050565b600060208201905061021560008301846101f1565b92915050565b600081519050919050565b600081905092915050565b60005b8381101561024f578082015181840152602081019050610234565b8381111561025e576000848401525b50505050565b600061026f8261021b565b6102798185610226565b9350610289818560208601610231565b80840191505092915050565b60006102a18284610264565b91508190509291505056fea264697066735822122001c9bb0054b2e989dde58e82a86834274d784bd6503669a5b973edc73f03fa9d64736f6c634300080f0033";
+
+        let args = DecompilerArgsBuilder::new()
+            .target(bytecode.to_string())
+            .skip_resolving(true)
+            .include_solidity(true)
+            .timeout(10000)
+            .build()
+            .expect("failed to build args");
+
+        let result = decompile(args).await.expect("failed to decompile");
+
+        // Check that the standard ABI is valid
+        let abi_serialized = serde_json::to_string(&result.abi).unwrap();
+        let abi_deserialized = JsonAbi::from_json_str(&abi_serialized);
+        assert!(abi_deserialized.is_ok());
+
+        // Check that the extended ABI contains selector and signature fields
+        let extended_abi = &result.abi_with_details;
+
+        // The extended ABI is an array of ABI items
+        assert!(extended_abi.is_array(), "Extended ABI should be an array");
+        let abi_items = extended_abi.as_array().unwrap();
+        assert!(!abi_items.is_empty(), "Extended ABI should contain items");
+
+        // Group items by type
+        let mut functions = Vec::new();
+        let mut events = Vec::new();
+        let mut errors = Vec::new();
+
+        for item in abi_items {
+            assert!(item.is_object());
+            let item_obj = item.as_object().unwrap();
+
+            if let Some(item_type) = item_obj.get("type").and_then(|v| v.as_str()) {
+                match item_type {
+                    "function" => functions.push(item_obj),
+                    "event" => events.push(item_obj),
+                    "error" => errors.push(item_obj),
+                    _ => {}
+                }
+            }
+        }
+
+        // Check functions
+        assert!(!functions.is_empty(), "Extended ABI should contain functions");
+        for func_obj in &functions {
+            // Verify selector field exists and is a string
+            assert!(func_obj.contains_key("selector"), "Function should have a selector field");
+            let selector = func_obj.get("selector").unwrap();
+            assert!(selector.is_string(), "Selector should be a string");
+            let selector_str = selector.as_str().unwrap();
+            assert!(selector_str.starts_with("0x"), "Selector should start with 0x");
+            assert_eq!(
+                selector_str.len(),
+                10,
+                "Selector should be 10 characters (0x + 8 hex chars)"
+            );
+
+            // Verify signature field exists and is a string
+            assert!(func_obj.contains_key("signature"), "Function should have a signature field");
+            let signature = func_obj.get("signature").unwrap();
+            assert!(signature.is_string(), "Signature should be a string");
+            let sig_str = signature.as_str().unwrap();
+            assert!(sig_str.contains("("), "Signature should contain opening parenthesis");
+            assert!(sig_str.contains(")"), "Signature should contain closing parenthesis");
+        }
+
+        // Check events if present
+        for event_obj in &events {
+            // Events should have selector (topic0) and signature
+            assert!(event_obj.contains_key("selector"), "Event should have a selector field");
+            assert!(event_obj.contains_key("signature"), "Event should have a signature field");
+        }
+
+        // Check errors if present
+        for error_obj in &errors {
+            // Errors should have selector and signature
+            assert!(error_obj.contains_key("selector"), "Error should have a selector field");
+            assert!(error_obj.contains_key("signature"), "Error should have a signature field");
+        }
+    }
 }
