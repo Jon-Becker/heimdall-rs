@@ -23,12 +23,27 @@ pub(crate) fn try_decode(
     inputs: &[DynSolType],
     byte_args: &[u8],
 ) -> Result<(Vec<DynSolValue>, Vec<Param>), Error> {
+    trace!("try_decode: inputs={:?}, byte_args.len()={}", inputs, byte_args.len());
+
+    // For non-standard sized calldata that isn't a multiple of 32 bytes,
+    // we need to pad it to ensure proper ABI decoding
+    let padded_args = if !byte_args.is_empty() && byte_args.len() % 32 != 0 {
+        let mut padded = byte_args.to_vec();
+        // Pad to the next multiple of 32 bytes
+        let padding_needed = 32 - (byte_args.len() % 32);
+        padded.extend(vec![0u8; padding_needed]);
+        trace!("padded byte_args from {} to {} bytes", byte_args.len(), padded.len());
+        padded
+    } else {
+        byte_args.to_vec()
+    };
+
     // convert inputs to tuple
     let ty =
         DynSolCall::new(Selector::default(), inputs.to_vec(), None, DynSolReturns::new(Vec::new()));
 
     let result = ty
-        .abi_decode_input(byte_args)
+        .abi_decode_input(&padded_args)
         .map_err(|e| Error::Eyre(eyre!("failed to decode calldata: {}", e)))?;
     // convert tokens to params
     let mut params: Vec<Param> = Vec::new();
