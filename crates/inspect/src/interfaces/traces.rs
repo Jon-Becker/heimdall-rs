@@ -455,7 +455,7 @@ impl DecodedTransactionTrace {
                 },
                 vec![
                     format!("{:?}", call.call_type).to_lowercase(),
-                    format!("value: {} wei", wei_to_ether(call.value)),
+                    format!("value: {} ether", wei_to_ether(call.value)),
                 ],
             ),
             DecodedAction::Create(create) => trace.add_creation(
@@ -540,10 +540,11 @@ impl DecodedTransactionTrace {
 
 fn wei_to_ether(wei: U256) -> f64 {
     // convert U256 to u64 safely
-    let wei_f64 = wei.min(U256::from(u64::MAX)).try_into().unwrap_or(0) as f64;
+    let wei_u64: u64 = wei.min(U256::from(u64::MAX)).try_into().unwrap_or(0);
+    let wei_f64 = wei_u64 as f64;
 
     // if wei = u64::MAX, log that it was truncated
-    if wei_f64 == u64::MAX as f64 {
+    if wei_u64 == u64::MAX {
         trace!("WARNING: wei value was truncated to u64::MAX. Original value: {}", wei);
     }
 
