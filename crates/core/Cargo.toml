@@ -17,26 +17,26 @@ bench = false
 workspace = true
 
 [dependencies]
-async-recursion = "1.0.5"
-thiserror = "1.0.50"
+async-recursion.workspace = true
+thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
-colored = "2"
-fancy-regex = "0.11.0"
+colored.workspace = true
+fancy-regex.workspace = true
 heimdall-cache = { workspace = true }
 heimdall-common = { workspace = true }
 heimdall-config = { workspace = true }
-indicatif = "0.17.0"
-lazy_static = "1.4.0"
-petgraph = "0.6.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-strsim = "0.10.0"
-tokio = { version = "1", features = ["full"] }
-derive_builder = "0.12.0"
-async-convert = "1.0.0"
-futures = "0.3.28"
-tracing = "0.1.40"
-alloy-json-abi = { version = "1.0", features = ["serde_json"] }
+indicatif.workspace = true
+lazy_static.workspace = true
+petgraph.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+strsim.workspace = true
+tokio.workspace = true
+derive_builder.workspace = true
+async-convert = { workspace = true }
+futures.workspace = true
+tracing.workspace = true
+alloy-json-abi = { workspace = true, features = ["serde_json"] }
 
 # modules
 heimdall-cfg = { workspace = true }
@@ -48,8 +48,8 @@ heimdall-disassembler = { workspace = true }
 
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
-memory-stats = "1.0.0"
+criterion = { workspace = true }
+memory-stats = { workspace = true }
 
 [[bench]]
 name = "bench_cfg"

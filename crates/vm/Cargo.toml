@@ -17,43 +17,39 @@ bench = false
 workspace = true
 
 [dependencies]
-async-openai = "0.10.0"
+async-openai.workspace = true
 clap = { workspace = true, features = ["derive"] }
-colored = "2"
-crossbeam-channel = "0.5.7"
-fancy-regex = "0.11.0"
+colored.workspace = true
+crossbeam-channel.workspace = true
+fancy-regex.workspace = true
 heimdall-cache = { workspace = true }
-indicatif = "0.17.0"
-lazy_static = "1.4.0"
-rand = "0.8.5"
-reqwest = { version = "0.11.11", features = ["blocking"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1", features = ["full"] }
-strsim = "0.10.0"
-async-recursion = "1.0.5"
-async-trait = "0.1.51"
-chrono = "0.4.31"
-backoff = { version = "0.4.0", features = ["tokio"] }
-thiserror = "1.0.50"
-tracing = "0.1.40"
-eyre = "0.6.12"
+indicatif.workspace = true
+lazy_static.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+strsim.workspace = true
+async-recursion.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+backoff.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+eyre.workspace = true
 heimdall-common.workspace = true
-alloy = { version = "1.0", features = [
-    "full",
-    "rpc-types-debug",
-    "rpc-types-trace",
-] }
-hashbrown = "0.14.5"
-paste = "1.0.15"
+alloy.workspace = true
+hashbrown.workspace = true
+paste = { workspace = true }
 
 [features]
 step-tracing = []
 experimental = []
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
-memory-stats = "1.0.0"
+criterion = { workspace = true }
+memory-stats = { workspace = true }
 
 [[bench]]
 name = "bench_erc20_transfer"

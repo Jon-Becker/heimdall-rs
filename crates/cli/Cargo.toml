@@ -12,26 +12,22 @@ exclude.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-colored = "2"
+colored.workspace = true
 heimdall-tracing = { workspace = true }
 heimdall-cache = { workspace = true }
 heimdall-core = { workspace = true }
 heimdall-common = { workspace = true }
 heimdall-config = { workspace = true }
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0.50"
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
-eyre = "0.6.12"
-alloy-json-abi = "1.0"
-alloy = { version = "1.0", features = [
-    "full",
-    "rpc-types-debug",
-    "rpc-types-trace",
-] }
-async-trait = "0.1.51"
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true }
+eyre.workspace = true
+alloy-json-abi.workspace = true
+alloy.workspace = true
+async-trait.workspace = true
 
 [lints]
 workspace = true

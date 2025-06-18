@@ -1,0 +1,44 @@
+name: Check Workspace Dependencies
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  check-deps:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check for non-workspace dependencies
+      run: |
+        echo "Checking for non-workspace dependencies in crate Cargo.toml files..."
+
+        # Find all Cargo.toml files in crates directory
+        failed=false
+
+        for toml in crates/*/Cargo.toml; do
+          echo "Checking $toml..."
+
+          # Look for dependencies with version specifications
+          # This regex matches lines like: package = "version" or package = { version = "..." }
+          # but excludes workspace dependencies
+          if grep -E '^\s*[a-zA-Z0-9_-]+\s*=\s*("[0-9]|{[^}]*version\s*=\s*"[0-9])' "$toml" | grep -v workspace | grep -v '^\s*#'; then
+            echo "❌ Found non-workspace dependencies in $toml:"
+            grep -E '^\s*[a-zA-Z0-9_-]+\s*=\s*("[0-9]|{[^}]*version\s*=\s*"[0-9])' "$toml" | grep -v workspace | grep -v '^\s*#'
+            failed=true
+          fi
+        done
+
+        if [ "$failed" = true ]; then
+          echo ""
+          echo "❌ Error: Found non-workspace dependencies!"
+          echo "All dependencies in crate Cargo.toml files should use workspace references."
+          echo "Example: dependency = { workspace = true }"
+          exit 1
+        else
+          echo "✅ All dependencies are using workspace references!"
+        fi
