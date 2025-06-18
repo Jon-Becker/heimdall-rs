@@ -20,17 +20,17 @@ workspace = true
 async-recursion = "1.0.5"
 thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
-colored = "2"
+colored.workspace = true
 fancy-regex.workspace = true
 heimdall-cache = { workspace = true }
 heimdall-common = { workspace = true }
 heimdall-config = { workspace = true }
-indicatif = "0.17.0"
+indicatif.workspace = true
 lazy_static.workspace = true
-petgraph = "0.6.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-strsim = "0.10.0"
+petgraph.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+strsim.workspace = true
 tokio.workspace = true
 derive_builder.workspace = true
 async-convert = "1.0.0"

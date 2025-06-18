@@ -23,5 +23,5 @@ heimdall-cache = { workspace = true }
 heimdall-vm = { workspace = true }
 thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
-eyre = "0.6.12"
+eyre.workspace = true
 tracing.workspace = true

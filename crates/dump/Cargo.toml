@@ -24,12 +24,8 @@ thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
 derive_builder.workspace = true
 tracing.workspace = true
-eyre = "0.6.12"
+eyre.workspace = true
 tokio.workspace = true
 futures.workspace = true
-alloy = { version = "1.0", features = [
-  "full",
-  "rpc-types-debug",
-  "rpc-types-trace",
-] }
+alloy.workspace = true
 hashbrown.workspace = true

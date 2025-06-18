@@ -30,14 +30,10 @@ eyre.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
 fancy-regex.workspace = true
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-alloy-dyn-abi = "1.0.11"
-alloy = { version = "1.0.11", features = [
-  "full",
-  "rpc-types-debug",
-  "rpc-types-trace",
-] }
+serde.workspace = true
+serde_json.workspace = true
+alloy-dyn-abi.workspace = true
+alloy.workspace = true
 hashbrown.workspace = true
 tokio.workspace = true
 

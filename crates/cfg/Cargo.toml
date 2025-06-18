@@ -24,19 +24,13 @@ thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
 derive_builder.workspace = true
 tracing.workspace = true
-eyre = "0.6.12"
+eyre.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
-petgraph = "0.6.2"
-alloy = { version = "1.0", features = [
-  "full",
-  "rpc-types-debug",
-  "rpc-types-trace",
-] }
-
+petgraph.workspace = true
+alloy.workspace = true
 heimdall-disassembler.workspace = true
 heimdall-vm.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true
-

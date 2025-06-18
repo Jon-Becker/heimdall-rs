@@ -24,15 +24,11 @@ thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
 derive_builder.workspace = true
 tracing.workspace = true
-eyre = "0.6.12"
+eyre.workspace = true
 heimdall-vm.workspace = true
-alloy-dyn-abi = "1.0"
+alloy-dyn-abi.workspace = true
 alloy-json-abi.workspace = true
-alloy = { version = "1.0", features = [
-    "full",
-    "rpc-types-debug",
-    "rpc-types-trace",
-] }
-serde_json = "1.0"
+alloy.workspace = true
+serde_json.workspace = true
 hashbrown.workspace = true
-serde = "1.0"
+serde = { workspace = true, default-features = false }

@@ -28,4 +28,4 @@ tracing-appender = "0.2.3"
 tracing-journald = "0.3"
 tracing-logfmt = "0.3.3"
 rolling-file = "0.2.0"
-eyre = "0.6.12"
+eyre.workspace = true

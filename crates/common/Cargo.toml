@@ -17,35 +17,31 @@ bench = false
 workspace = true
 
 [dependencies]
-async-openai = "0.26.0"
+async-openai.workspace = true
 clap = { workspace = true, features = ["derive"] }
-colored = "2"
-crossbeam-channel = "0.5.7"
+colored.workspace = true
+crossbeam-channel.workspace = true
 fancy-regex.workspace = true
 heimdall-cache = { workspace = true }
-indicatif = "0.17.0"
+indicatif.workspace = true
 lazy_static.workspace = true
-rand = "0.8.5"
+rand.workspace = true
 reqwest = { version = "0.12", features = ["blocking"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
-strsim = "0.10.0"
+strsim.workspace = true
 async-recursion = "1.0.5"
-async-trait = "0.1.51"
+async-trait.workspace = true
 chrono = "0.4.31"
 backoff = { version = "0.4.0", features = ["tokio"] }
 thiserror.workspace = true
 tracing.workspace = true
-eyre = "0.6.12"
+eyre.workspace = true
 alloy-json-abi = { version = "1.0", features = ["serde_json"] }
 futures = "0.3.17"
-alloy = { version = "1.0", features = [
-  "full",
-  "rpc-types-debug",
-  "rpc-types-trace",
-] }
+alloy.workspace = true
 bytes = "1.6.1"
-alloy-dyn-abi = "1.0"
+alloy-dyn-abi.workspace = true
 tokio-retry = "0.3.0"
 hashbrown.workspace = true

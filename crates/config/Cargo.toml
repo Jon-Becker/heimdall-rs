@@ -20,7 +20,7 @@ workspace = true
 heimdall-common = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 mesc = { version = "0.2.0" }
-serde = { version = "1.0", features = ["derive"] }
+serde.workspace = true
 toml = { version = "0.7.6" }
 thiserror.workspace = true
 serial_test = "3.0.0"
