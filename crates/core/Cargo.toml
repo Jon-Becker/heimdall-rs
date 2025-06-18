@@ -33,7 +33,7 @@ serde_json.workspace = true
 strsim.workspace = true
 tokio.workspace = true
 derive_builder.workspace = true
-async-convert = "1.0.0"
+async-convert = { workspace = true }
 futures.workspace = true
 tracing.workspace = true
 alloy-json-abi = { workspace = true, features = ["serde_json"] }
@@ -48,8 +48,8 @@ heimdall-disassembler = { workspace = true }
 
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
-memory-stats = "1.0.0"
+criterion = { workspace = true }
+memory-stats = { workspace = true }
 
 [[bench]]
 name = "bench_cfg"

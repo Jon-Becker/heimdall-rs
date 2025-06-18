@@ -27,7 +27,7 @@ derive_builder.workspace = true
 tracing.workspace = true
 eyre.workspace = true
 serde.workspace = true
-async-convert = "1.0.0"
+async-convert = { workspace = true }
 futures.workspace = true
 async-recursion.workspace = true
 tokio.workspace = true

@@ -41,7 +41,7 @@ eyre.workspace = true
 alloy-json-abi = { workspace = true, features = ["serde_json"] }
 futures.workspace = true
 alloy.workspace = true
-bytes = "1.6.1"
+bytes = { workspace = true }
 alloy-dyn-abi.workspace = true
-tokio-retry = "0.3.0"
+tokio-retry = { workspace = true }
 hashbrown.workspace = true

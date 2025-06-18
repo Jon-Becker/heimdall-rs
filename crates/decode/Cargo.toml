@@ -31,4 +31,4 @@ alloy-json-abi.workspace = true
 alloy.workspace = true
 serde_json.workspace = true
 hashbrown.workspace = true
-serde = { workspace = true, default-features = false }
+serde = { workspace = true }

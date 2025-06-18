@@ -41,15 +41,15 @@ eyre.workspace = true
 heimdall-common.workspace = true
 alloy.workspace = true
 hashbrown.workspace = true
-paste = "1.0.15"
+paste = { workspace = true }
 
 [features]
 step-tracing = []
 experimental = []
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
-memory-stats = "1.0.0"
+criterion = { workspace = true }
+memory-stats = { workspace = true }
 
 [[bench]]
 name = "bench_erc20_transfer"

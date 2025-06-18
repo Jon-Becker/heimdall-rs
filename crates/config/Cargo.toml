@@ -19,9 +19,9 @@ workspace = true
 [dependencies]
 heimdall-common = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-mesc = { version = "0.2.0" }
+mesc = { workspace = true }
 serde.workspace = true
-toml = { version = "0.7.6" }
+toml = { workspace = true }
 thiserror.workspace = true
-serial_test = "3.0.0"
+serial_test = { workspace = true }
 tracing.workspace = true
