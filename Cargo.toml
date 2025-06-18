@@ -150,3 +150,7 @@ petgraph = "0.6.2"
 async-openai = "0.26.0"
 crossbeam-channel = "0.5.7"
 strsim = "0.10.0"
+async-recursion = "1.0.5"
+chrono = "0.4.31"
+backoff = { version = "0.4.0", features = ["tokio"] }
+reqwest = { version = "0.12", features = ["blocking"] }

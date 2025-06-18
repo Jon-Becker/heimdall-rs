@@ -17,7 +17,7 @@ bench = false
 workspace = true
 
 [dependencies]
-async-recursion = "1.0.5"
+async-recursion.workspace = true
 thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
 colored.workspace = true
@@ -36,7 +36,7 @@ derive_builder.workspace = true
 async-convert = "1.0.0"
 futures.workspace = true
 tracing.workspace = true
-alloy-json-abi = { version = "1.0", features = ["serde_json"] }
+alloy-json-abi = { workspace = true, features = ["serde_json"] }
 
 # modules
 heimdall-cfg = { workspace = true }
