@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 use crate::{
     core::{
         analyze::{Analyzer, AnalyzerType},
-        out::{abi::build_abi, source::build_source},
+        out::{build_abi, build_abi_with_details, source::build_source},
         postprocess::PostprocessOrchestrator,
         resolve::match_parameters,
     },
@@ -48,6 +48,8 @@ pub struct DecompileResult {
     pub source: Option<String>,
     /// The reconstructed JSON ABI of the contract
     pub abi: JsonAbi,
+    /// The extended ABI with selector and signature information
+    pub abi_with_details: serde_json::Value,
 }
 
 /// Decompiles EVM bytecode into higher-level Solidity-like code
@@ -339,6 +341,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // construct the abi for the given analyzed functions
     let abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
+    let abi_with_details = build_abi_with_details(&abi, &analyzed_functions)?;
     let source = build_source(
         &analyzed_functions,
         &all_resolved_errors,
@@ -351,5 +354,5 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     debug!("decompilation took {:?}", start_time.elapsed());
 
-    Ok(DecompileResult { source, abi })
+    Ok(DecompileResult { source, abi, abi_with_details })
 }

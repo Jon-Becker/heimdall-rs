@@ -270,7 +270,10 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
                 .map(|(i, (_, arg))| {
                     format!(
                         "{} arg{i}",
-                        arg.potential_types().first().unwrap_or(&"bytes32".to_string())
+                        arg.potential_types()
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| "bytes32".to_string())
                     )
                 })
                 .collect::<Vec<String>>()
@@ -322,16 +325,12 @@ fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
             if f.is_constant() {
                 Some(format!(
                     "{} public constant {} = {};",
-                    f.returns
-                        .as_ref()
-                        .unwrap_or(&"bytes".to_string())
-                        .replacen("memory", "", 1)
-                        .trim(),
+                    f.returns.as_deref().unwrap_or("bytes").replacen("memory", "", 1).trim(),
                     f.resolved_function
                         .as_ref()
                         .map(|x| x.name.clone())
                         .unwrap_or_else(|| format!("unresolved_{}", f.selector)),
-                    f.constant_value.as_ref().unwrap_or(&"0x".to_string())
+                    f.constant_value.as_deref().unwrap_or("0x")
                 ))
             } else {
                 None

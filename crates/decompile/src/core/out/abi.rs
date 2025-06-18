@@ -12,6 +12,7 @@ use heimdall_common::{
     },
     utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
+use serde_json::{json, Value};
 
 use tracing::debug;
 
@@ -62,8 +63,8 @@ pub(crate) fn build_abi(
                         None => arg
                             .potential_types()
                             .first()
-                            .unwrap_or(&"bytes32".to_string())
-                            .to_string(),
+                            .cloned()
+                            .unwrap_or_else(|| "bytes32".to_string()),
                     },
                     components: match f.resolved_function {
                         Some(ref sig) => {
@@ -151,4 +152,77 @@ pub(crate) fn build_abi(
     debug!("constructing abi took {:?}", start_time.elapsed());
 
     Ok(abi)
+}
+
+pub(crate) fn build_abi_with_details(
+    abi: &JsonAbi,
+    functions: &[AnalyzedFunction],
+) -> Result<Value> {
+    debug!("adding function details to abi");
+    let start_time = Instant::now();
+
+    // Serialize the standard ABI to JSON
+    let mut abi_array = serde_json::to_value(abi)?;
+
+    // Create a map of function selectors for quick lookup
+    let function_map: HashMap<String, &AnalyzedFunction> = functions
+        .iter()
+        .filter(|f| !f.fallback)
+        .map(|f| {
+            let name = match f.resolved_function {
+                Some(ref sig) => sig.name.clone(),
+                None => format!("Unresolved_{}", f.selector),
+            };
+            (name, f)
+        })
+        .collect();
+
+    // Add selector and signature to each function in the ABI
+    if let Some(items) = abi_array.as_array_mut() {
+        for item in items.iter_mut() {
+            if let Some(obj) = item.as_object_mut() {
+                if obj.get("type").and_then(|t| t.as_str()) == Some("function") {
+                    let name = obj.get("name").and_then(|n| n.as_str()).map(|s| s.to_string());
+                    if let Some(name_str) = name {
+                        if let Some(analyzed_func) = function_map.get(&name_str) {
+                            // Add selector
+                            obj.insert(
+                                "selector".to_string(),
+                                json!(format!("0x{}", analyzed_func.selector)),
+                            );
+
+                            // Add signature
+                            let signature = match &analyzed_func.resolved_function {
+                                Some(sig) => sig.signature.clone(),
+                                None => {
+                                    // Build signature from the ABI inputs
+                                    if let Some(inputs) =
+                                        obj.get("inputs").and_then(|i| i.as_array())
+                                    {
+                                        let params: Vec<String> = inputs
+                                            .iter()
+                                            .filter_map(|input| {
+                                                input
+                                                    .get("type")
+                                                    .and_then(|t| t.as_str())
+                                                    .map(|s| s.to_string())
+                                            })
+                                            .collect();
+                                        format!("{}({})", name_str, params.join(","))
+                                    } else {
+                                        format!("{name_str}()")
+                                    }
+                                }
+                            };
+                            obj.insert("signature".to_string(), json!(signature));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    debug!("adding function details took {:?}", start_time.elapsed());
+
+    Ok(abi_array)
 }

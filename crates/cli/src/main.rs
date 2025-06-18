@@ -101,10 +101,8 @@ async fn main() -> Result<()> {
 
             if cmd.output == "print" {
                 let mut output_str = String::new();
-                output_str.push_str(&format!(
-                    "ABI:\n\n[{}]\n",
-                    serde_json::to_string_pretty(&result.abi)?
-                ));
+                output_str
+                    .push_str(&format!("ABI:\n\n{}\n", serde_json::to_string_pretty(&result.abi)?));
 
                 if let Some(source) = &result.source {
                     output_str.push_str(&format!("Source:\n\n{source}\n"));

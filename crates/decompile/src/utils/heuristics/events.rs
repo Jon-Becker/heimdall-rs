@@ -43,7 +43,7 @@ pub(crate) fn event_heuristic<'a>(
                     &event
                         .topics
                         .first()
-                        .unwrap_or(&U256::from(0))
+                        .unwrap_or(&U256::ZERO)
                         .to_lower_hex()
                         .replacen("0x", "", 1)[0..8],
                     event
