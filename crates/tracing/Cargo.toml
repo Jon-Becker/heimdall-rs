@@ -18,11 +18,11 @@ workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-tracing = "0.1.40"
+tracing.workspace = true
 tracing-subscriber = { version = "0.3", default-features = false, features = [
-    "env-filter",
-    "fmt",
-    "json",
+  "env-filter",
+  "fmt",
+  "json",
 ] }
 tracing-appender = "0.2.3"
 tracing-journald = "0.3"

@@ -1,18 +1,18 @@
 [workspace]
 members = [
-    "crates/disassemble",
-    "crates/decompile",
-    "crates/tracing",
-    "crates/inspect",
-    "crates/decode",
-    "crates/common",
-    "crates/config",
-    "crates/cache",
-    "crates/core",
-    "crates/dump",
-    "crates/cli",
-    "crates/cfg",
-    "crates/vm",
+  "crates/disassemble",
+  "crates/decompile",
+  "crates/tracing",
+  "crates/inspect",
+  "crates/decode",
+  "crates/common",
+  "crates/config",
+  "crates/cache",
+  "crates/core",
+  "crates/dump",
+  "crates/cli",
+  "crates/cfg",
+  "crates/vm",
 ]
 
 # Explicitly set the resolver to version 2, which is the default for packages with edition >= 2021
@@ -124,3 +124,12 @@ heimdall-disassembler = { path = "crates/disassemble" }
 heimdall-vm = { path = "crates/vm" }
 
 clap = "4"
+thiserror = "1.0.50"
+eyre = "0.6.12"
+tracing = "0.1.40"
+futures = "0.3.30"
+derive_builder = "0.12.0"
+alloy-json-abi = "1.0"
+lazy_static = "1.4.0"
+fancy-regex = "0.11.0"
+hashbrown = "0.14.5"

@@ -20,22 +20,23 @@ bench = false
 heimdall-config = { workspace = true }
 heimdall-common = { workspace = true }
 heimdall-cache = { workspace = true }
-thiserror = "1.0.50"
+thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
-derive_builder = "0.12.0"
-tracing = "0.1.40"
+derive_builder.workspace = true
+tracing.workspace = true
 eyre = "0.6.12"
-futures = "0.3.30"
-lazy_static = "1.4.0"
+futures.workspace = true
+lazy_static.workspace = true
 petgraph = "0.6.2"
 alloy = { version = "1.0", features = [
-    "full",
-    "rpc-types-debug",
-    "rpc-types-trace",
+  "full",
+  "rpc-types-debug",
+  "rpc-types-trace",
 ] }
 
 heimdall-disassembler.workspace = true
 heimdall-vm.workspace = true
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio.workspace = true
+

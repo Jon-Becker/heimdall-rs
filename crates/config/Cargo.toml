@@ -22,6 +22,6 @@ clap = { workspace = true, features = ["derive"] }
 mesc = { version = "0.2.0" }
 serde = { version = "1.0", features = ["derive"] }
 toml = { version = "0.7.6" }
-thiserror = "1.0.50"
+thiserror.workspace = true
 serial_test = "3.0.0"
-tracing = "0.1.40"
+tracing.workspace = true

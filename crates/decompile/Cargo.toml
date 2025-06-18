@@ -17,29 +17,29 @@ bench = false
 workspace = true
 
 [dependencies]
-heimdall-config = { workspace = true }
-heimdall-common = { workspace = true }
-heimdall-cache = { workspace = true }
-heimdall-decoder = { workspace = true }
-thiserror = "1.0.50"
+heimdall-config.workspace = true
+heimdall-common.workspace = true
+heimdall-cache.workspace = true
+heimdall-decoder.workspace = true
+thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
-derive_builder = "0.12.0"
-alloy-json-abi = "1.0"
-tracing = "0.1.40"
-eyre = "0.6.12"
-futures = "0.3.30"
-lazy_static = "1.4.0"
-fancy-regex = "0.11.0"
+derive_builder.workspace = true
+alloy-json-abi.workspace = true
+tracing.workspace = true
+eyre.workspace = true
+futures.workspace = true
+lazy_static.workspace = true
+fancy-regex.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-alloy-dyn-abi = "1.0"
-alloy = { version = "1.0", features = [
-    "full",
-    "rpc-types-debug",
-    "rpc-types-trace",
+alloy-dyn-abi = "1.0.11"
+alloy = { version = "1.0.11", features = [
+  "full",
+  "rpc-types-debug",
+  "rpc-types-trace",
 ] }
-hashbrown = "0.14.5"
-tokio = { version = "1", features = ["full"] }
+hashbrown.workspace = true
+tokio.workspace = true
 
 heimdall-disassembler.workspace = true
 heimdall-vm.workspace = true
