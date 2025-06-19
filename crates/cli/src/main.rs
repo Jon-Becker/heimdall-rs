@@ -169,7 +169,7 @@ async fn main() -> Result<()> {
                     build_output_path(&cmd.output, &cmd.target, &cmd.rpc_url, "decoded.json")
                         .await
                         .map_err(|e| eyre!("failed to build output path: {}", e))?;
-                write_file(&output_path, &result.decoded.to_json()?)
+                write_file(&output_path, &result.to_json()?)
                     .map_err(|e| eyre!("failed to write decoded output: {}", e))?;
             }
         }
