@@ -150,7 +150,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     if selectors.is_empty() {
         warn!("discovered no function selectors in the bytecode.");
         let start_sym_exec_time = Instant::now();
-        let (map, jumpdest_count) = evm
+        let (storage, jumpdest_count) = evm
             .symbolic_exec(
                 Instant::now()
                     .checked_add(Duration::from_millis(args.timeout))
@@ -158,7 +158,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             )
             .map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?;
 
-        symbolic_execution_maps.insert("fallback".to_string(), map);
+        symbolic_execution_maps.insert("fallback".to_string(), storage);
         debug!("symbolic execution (fallback) took {:?}", start_sym_exec_time.elapsed());
         debug!("'fallback' has {} unique branches", jumpdest_count);
     }
@@ -167,20 +167,20 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     for (selector, entry_point) in selectors {
         let start_sym_exec_time = Instant::now();
         evm.reset();
-        let (map, jumpdest_count) = match evm.symbolic_exec_selector(
+        let (storage, jumpdest_count) = match evm.symbolic_exec_selector(
             &selector,
             entry_point,
             Instant::now()
                 .checked_add(Duration::from_millis(args.timeout))
                 .expect("invalid timeout"),
         ) {
-            Ok(map) => map,
+            Ok(result) => result,
             Err(e) => {
                 warn!("failed to symbolically execute '{}': {}", selector, e);
                 continue;
             }
         };
-        symbolic_execution_maps.insert(selector.clone(), map);
+        symbolic_execution_maps.insert(selector.clone(), storage);
         debug!("symbolically executed '{}' in {:?}", selector, start_sym_exec_time.elapsed());
         debug!("'{}' has {} unique branches", selector, jumpdest_count);
     }
@@ -188,7 +188,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     info!("symbolically executed {} selectors", symbolic_execution_maps.len());
 
     let start_analysis_time = Instant::now();
-    let handles = symbolic_execution_maps.into_iter().map(|(selector, trace_root)| {
+    let handles = symbolic_execution_maps.into_iter().map(|(selector, trace_storage)| {
         let mut evm_clone = evm.clone();
         async move {
             let mut analyzer = Analyzer::new(
@@ -198,7 +198,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             );
 
             // analyze the symbolic execution trace
-            let mut analyzed_function = analyzer.analyze(trace_root).await?;
+            let mut analyzed_function = analyzer.analyze(trace_storage).await?;
 
             // if the function is constant, we can get the exact val
             if analyzed_function.is_constant() && !analyzed_function.fallback {

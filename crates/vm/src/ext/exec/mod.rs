@@ -23,12 +23,15 @@ use heimdall_common::utils::strings::decode_hex;
 use std::time::Instant;
 use tracing::{trace, warn};
 
-/// Represents a trace of virtual machine execution including operations and child calls
+/// Represents a trace of virtual machine execution including operations
 ///
-/// VMTrace is used to track the operations performed during VM execution, including
-/// any nested calls that occur during execution (stored in the `children` field).
+/// VMTrace is used to track the operations performed during VM execution.
+/// Child traces are now referenced by ID rather than being stored recursively.
 #[derive(Clone, Debug, Default)]
 pub struct VMTrace {
+    /// Unique identifier for this trace
+    pub id: u64,
+
     /// The instruction pointer at the start of this trace
     pub instruction: u128,
 
@@ -38,8 +41,77 @@ pub struct VMTrace {
     /// The sequence of VM states recorded during execution
     pub operations: Vec<State>,
 
-    /// Child traces resulting from internal calls (CALL, DELEGATECALL, etc.)
-    pub children: Vec<VMTrace>,
+    /// IDs of child traces (rather than storing them recursively)
+    pub children: Vec<u64>,
+}
+
+/// Storage for all VMTraces using a flat structure
+#[derive(Clone, Debug, Default)]
+pub struct VMTraceStorage {
+    /// All traces stored by their unique ID
+    traces: HashMap<u64, VMTrace>,
+
+    /// Next available trace ID
+    next_id: u64,
+
+    /// Root trace ID (the starting point)
+    root_id: Option<u64>,
+}
+
+impl VMTraceStorage {
+    /// Create a new trace storage
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add a new trace and return its ID
+    pub fn add_trace(&mut self, mut trace: VMTrace) -> u64 {
+        let id = self.next_id;
+        trace.id = id;
+        self.traces.insert(id, trace);
+        self.next_id += 1;
+        id
+    }
+
+    /// Get a trace by ID
+    pub fn get_trace(&self, id: u64) -> Option<&VMTrace> {
+        self.traces.get(&id)
+    }
+
+    /// Get a mutable trace by ID
+    pub fn get_trace_mut(&mut self, id: u64) -> Option<&mut VMTrace> {
+        self.traces.get_mut(&id)
+    }
+
+    /// Set the root trace ID
+    pub fn set_root(&mut self, id: u64) {
+        self.root_id = Some(id);
+    }
+
+    /// Get the root trace
+    pub fn get_root(&self) -> Option<&VMTrace> {
+        self.root_id.and_then(|id| self.traces.get(&id))
+    }
+
+    /// Get the root trace ID
+    pub fn get_root_id(&self) -> Option<u64> {
+        self.root_id
+    }
+
+    /// Get all trace IDs in the storage
+    pub fn get_all_ids(&self) -> Vec<u64> {
+        self.traces.keys().copied().collect()
+    }
+
+    /// Get the total number of traces
+    pub fn len(&self) -> usize {
+        self.traces.len()
+    }
+
+    /// Check if the storage is empty
+    pub fn is_empty(&self) -> bool {
+        self.traces.is_empty()
+    }
 }
 
 impl VM {
@@ -49,7 +121,7 @@ impl VM {
         selector: &str,
         entry_point: u128,
         timeout: Instant,
-    ) -> Result<(VMTrace, u32)> {
+    ) -> Result<(VMTraceStorage, u32)> {
         self.calldata = decode_hex(selector)?;
 
         // step through the bytecode until we reach the entry point
@@ -67,11 +139,13 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        Ok((
-            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)
-                .map(|x| x.ok_or_eyre("symbolic execution failed"))??,
-            branch_count,
-        ))
+        let mut storage = VMTraceStorage::new();
+        let root_id = self
+            .recursive_map(&mut branch_count, &mut HashMap::new(), &timeout, &mut storage)?
+            .ok_or_eyre("symbolic execution failed")?;
+        storage.set_root(root_id);
+
+        Ok((storage, branch_count))
     }
 
     /// Performs symbolic execution on the entire contract to map out control flow
@@ -85,18 +159,20 @@ impl VM {
     ///
     /// # Returns
     /// * A Result containing a tuple with:
-    ///   - The execution trace (VMTrace)
+    ///   - The execution trace storage (VMTraceStorage)
     ///   - The number of branches encountered during execution
-    pub fn symbolic_exec(&mut self, timeout: Instant) -> Result<(VMTrace, u32)> {
+    pub fn symbolic_exec(&mut self, timeout: Instant) -> Result<(VMTraceStorage, u32)> {
         trace!("beginning contract-wide symbolic execution");
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        Ok((
-            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)
-                .map(|x| x.ok_or_eyre("symbolic execution failed"))??,
-            branch_count,
-        ))
+        let mut storage = VMTraceStorage::new();
+        let root_id = self
+            .recursive_map(&mut branch_count, &mut HashMap::new(), &timeout, &mut storage)?
+            .ok_or_eyre("symbolic execution failed")?;
+        storage.set_root(root_id);
+
+        Ok((storage, branch_count))
     }
 
     fn recursive_map(
@@ -104,13 +180,15 @@ impl VM {
         branch_count: &mut u32,
         handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
         timeout_at: &Instant,
-    ) -> Result<Option<VMTrace>> {
+        storage: &mut VMTraceStorage,
+    ) -> Result<Option<u64>> {
         let vm = self;
 
         // create a new VMTrace object
         // this will essentially be a tree of executions, with each branch being a different path
         // that symbolic execution discovered
         let mut vm_trace = VMTrace {
+            id: 0, // Will be set when added to storage
             instruction: vm.instruction,
             gas_used: 0,
             operations: Vec::new(),
@@ -293,8 +371,8 @@ impl VM {
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction =
                         last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at, storage) {
+                        Ok(Some(child_id)) => vm_trace.children.push(child_id),
                         Ok(None) => {}
                         Err(e) => {
                             warn!("error executing branch: {:?}", e);
@@ -303,8 +381,8 @@ impl VM {
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                    match vm.recursive_map(branch_count, handled_jumps, timeout_at, storage) {
+                        Ok(Some(child_id)) => vm_trace.children.push(child_id),
                         Ok(None) => {}
                         Err(e) => {
                             warn!("error executing branch: {:?}", e);
@@ -316,8 +394,8 @@ impl VM {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = last_instruction.instruction + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at, storage) {
+                        Ok(Some(child_id)) => vm_trace.children.push(child_id),
                         Ok(None) => {}
                         Err(e) => {
                             warn!("error executing branch: {:?}", e);
@@ -326,8 +404,8 @@ impl VM {
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                    match vm.recursive_map(branch_count, handled_jumps, timeout_at, storage) {
+                        Ok(Some(child_id)) => vm_trace.children.push(child_id),
                         Ok(None) => {}
                         Err(e) => {
                             warn!("error executing branch: {:?}", e);
@@ -344,7 +422,9 @@ impl VM {
             }
         }
 
-        Ok(Some(vm_trace))
+        // Add the trace to storage and return its ID
+        let trace_id = storage.add_trace(vm_trace);
+        Ok(Some(trace_id))
     }
 }
 

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use super::CfgArgs;
 
-use crate::{core::graph::build_cfg, error::Error};
+use crate::{core::graph::build_cfg_from_storage, error::Error};
 use tracing::{debug, info};
 
 /// The result of the cfg command. Contains the generated control flow graph.
@@ -82,7 +82,7 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));
     let start_sym_exec_time = Instant::now();
-    let (map, jumpdest_count) = evm
+    let (storage, jumpdest_count) = evm
         .symbolic_exec(
             Instant::now()
                 .checked_add(Duration::from_millis(args.timeout))
@@ -99,7 +99,7 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     info!("building cfg for '{}' from symbolic execution trace", args.target.truncate(64));
     let mut contract_cfg = Graph::new();
     let mut seen_nodes: HashSet<String> = HashSet::new();
-    build_cfg(&map, &mut contract_cfg, None, false, &mut seen_nodes)?;
+    build_cfg_from_storage(&storage, &mut contract_cfg, &mut seen_nodes)?;
     debug!("building cfg took {:?}", start_cfg_time.elapsed());
 
     debug!("cfg generated in {:?}", start_time.elapsed());

@@ -3,20 +3,39 @@ use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::{
     core::opcodes::{opcode_name, JUMPDEST},
-    ext::exec::VMTrace,
+    ext::exec::VMTraceStorage,
 };
 use petgraph::{matrix_graph::NodeIndex, Graph};
 use std::collections::HashSet;
 
-/// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
+/// convert a symbolic execution [`VMTraceStorage`] into a [`Graph`] of blocks, illustrating the
 /// control-flow graph found by the symbolic execution engine.
-pub(crate) fn build_cfg(
-    vm_trace: &VMTrace,
+pub(crate) fn build_cfg_from_storage(
+    storage: &VMTraceStorage,
+    contract_cfg: &mut Graph<String, String>,
+    seen_nodes: &mut HashSet<String>,
+) -> Result<()> {
+    // Start from the root trace
+    if let Some(root_id) = storage.get_root_id() {
+        build_cfg_from_trace_id(storage, root_id, contract_cfg, None, false, seen_nodes)?;
+    }
+    Ok(())
+}
+
+/// Build a CFG recursively from a trace ID
+fn build_cfg_from_trace_id(
+    storage: &VMTraceStorage,
+    trace_id: u64,
     contract_cfg: &mut Graph<String, String>,
     parent_node: Option<NodeIndex<u32>>,
     jump_taken: bool,
     seen_nodes: &mut HashSet<String>,
 ) -> Result<()> {
+    // Get the trace from storage
+    let vm_trace = match storage.get_trace(trace_id) {
+        Some(trace) => trace,
+        None => return Ok(()),
+    };
     let mut cfg_node: String = String::new();
     let mut parent_node = parent_node;
 
@@ -60,18 +79,24 @@ pub(crate) fn build_cfg(
     parent_node = Some(node_index);
 
     // recurse into the children of the VMTrace map
-    for child in vm_trace.children.iter() {
-        build_cfg(
-            child,
-            contract_cfg,
-            parent_node,
-            child
+    for child_id in vm_trace.children.iter() {
+        // Get the child trace to check if it starts with JUMPDEST
+        let child_jump_taken = if let Some(child_trace) = storage.get_trace(*child_id) {
+            child_trace
                 .operations
                 .first()
-                .ok_or_eyre("failed to get first operation")?
-                .last_instruction
-                .opcode ==
-                JUMPDEST,
+                .map(|op| op.last_instruction.opcode == JUMPDEST)
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
+        build_cfg_from_trace_id(
+            storage,
+            *child_id,
+            contract_cfg,
+            parent_node,
+            child_jump_taken,
             seen_nodes,
         )?;
     }
