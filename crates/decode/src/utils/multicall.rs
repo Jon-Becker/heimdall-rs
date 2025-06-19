@@ -153,81 +153,70 @@ pub(crate) fn format_multicall_trace(
     parent_trace: u32,
     trace_factory: &mut TraceFactory,
 ) {
-    trace_factory.add_message(parent_trace, line!(), vec!["Multicall detected:".to_string()]);
+    // Build all multicall messages as a single batch
+    let mut messages = Vec::new();
+    messages.push("multicall:".to_string());
 
-    for result in multicall_results {
-        let call_desc = if let Some(value) = &result.value {
-            format!("├─ [{}] target: {} value: {} wei", result.index, result.target, value)
-        } else {
-            format!("├─ [{}] target: {}", result.index, result.target)
-        };
+    for (idx, result) in multicall_results.iter().enumerate() {
+        let is_last = idx == multicall_results.len() - 1;
+        let prefix = if is_last { "└─" } else { "├─" };
+        let continuation = if is_last { "   " } else { "│  " };
 
-        trace_factory.add_message(parent_trace, line!(), vec![call_desc]);
+        messages.push(format!("   {} [{}] target: {}", prefix, result.index, result.target));
 
         if let Some(decoded) = &result.decoded {
             // Add the decoded function signature
-            trace_factory.add_message(
-                parent_trace,
-                line!(),
-                vec![format!("│    └─ {}", decoded.decoded.signature)],
-            );
+            messages.push(format!("   {}    └─ {}", continuation, decoded.decoded.signature));
 
             // Add decoded inputs
             if let Some(inputs) = &decoded.decoded.decoded_inputs {
                 if inputs.is_empty() {
                     // Show that there are no parameters
-                    trace_factory.add_message(
-                        parent_trace,
-                        line!(),
-                        vec!["│         (no parameters)".to_string()],
-                    );
+                    messages.push(format!("   {continuation}         (no parameters)"));
                 } else {
                     for (i, input) in inputs.iter().enumerate() {
-                        let mut formatted_inputs = display(vec![input.clone()], "│           ");
+                        let formatted_inputs = display(
+                            vec![input.clone()],
+                            &format!("   {continuation}              "),
+                        );
                         if !formatted_inputs.is_empty() {
                             // Format the first line with input index
-                            formatted_inputs[0] = format!(
-                                "│         input {}: {}",
+                            let first_line = format!(
+                                "   {}         input {}: {}",
+                                continuation,
                                 i,
-                                formatted_inputs[0].trim_start_matches("│           ")
+                                formatted_inputs[0].trim_start_matches(&format!(
+                                    "   {continuation}              "
+                                ))
                             );
+                            messages.push(first_line);
 
-                            // Adjust subsequent lines for proper indentation
-                            for j in 1..formatted_inputs.len() {
-                                formatted_inputs[j] = formatted_inputs[j]
-                                    .replace("│           ", "│                ");
-                            }
-
-                            for line in formatted_inputs {
-                                trace_factory.add_message(parent_trace, line!(), vec![line]);
+                            // Add subsequent lines with proper indentation
+                            for line in formatted_inputs.iter().skip(1) {
+                                let line = line.replace(
+                                    &format!("   {continuation}              "),
+                                    &format!("   {continuation}                "),
+                                );
+                                messages.push(line);
                             }
                         } else {
                             // Handle case where display returns empty (e.g., for empty bytes)
                             match input {
                                 DynSolValue::Bytes(b) if b.is_empty() => {
-                                    trace_factory.add_message(
-                                        parent_trace,
-                                        line!(),
-                                        vec![format!("│         input {}: bytes: 0x (empty)", i)],
-                                    );
+                                    messages.push(format!(
+                                        "   {continuation}         input {i}: bytes: 0x (empty)"
+                                    ));
                                 }
                                 DynSolValue::String(s) if s.is_empty() => {
-                                    trace_factory.add_message(
-                                        parent_trace,
-                                        line!(),
-                                        vec![format!(
-                                            "│         input {}: string: \"\" (empty)",
-                                            i
-                                        )],
-                                    );
+                                    messages.push(format!(
+                                        "   {continuation}         input {i}: string: \"\" (empty)"
+                                    ));
                                 }
                                 _ => {
                                     // Fallback for other empty types
-                                    trace_factory.add_message(
-                                        parent_trace,
-                                        line!(),
-                                        vec![format!("│         input {}: (empty)", i)],
-                                    );
+                                    messages.push(format!(
+                                        "   {continuation}         input {i}: (empty)"
+                                    ));
                                 }
                             }
                         }
@@ -236,13 +225,21 @@ pub(crate) fn format_multicall_trace(
             }
         } else {
             // Show raw calldata if decoding failed
-            trace_factory.add_message(
-                parent_trace,
-                line!(),
-                vec![format!("│    └─ Raw calldata: 0x{}", encode_hex(&result.calldata))],
-            );
+            messages.push(format!(
+                "   {}    └─ Raw calldata: 0x{}",
+                continuation,
+                encode_hex(&result.calldata)
+            ));
+        }
+
+        // Add space between multicalls if not the last one
+        if !is_last {
+            messages.push(format!("   {continuation} "));
         }
     }
+
+    // Add all multicall lines as a single message
+    trace_factory.add_message(parent_trace, line!(), messages);
 }
 
 #[cfg(test)]
