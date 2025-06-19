@@ -42,6 +42,137 @@ mod integration_tests {
         let _ = heimdall_decoder::decode(args).await;
     }
 
+    #[tokio::test]
+    #[ignore] // Requires RPC
+    async fn test_decode_multicall_simple() {
+        // Test multicall with a single call - real transaction from Ethereum
+        let args = DecodeArgs {
+            target: String::from(
+                "0x2b235dca7596cae41f1dd2775ffa3109787bcc90e090121afc6e8f7bf97fdd7d",
+            ),
+            rpc_url: String::from("https://eth.public-rpc.com"),
+            abi: None,
+            openai_api_key: String::from(""),
+            explain: false,
+            default: true,
+            constructor: false,
+            truncate_calldata: false,
+            skip_resolving: false,
+            raw: false,
+            output: String::from("json"),
+        };
+
+        let result = heimdall_decoder::decode(args).await.expect("Failed to decode multicall");
+
+        // Verify multicall was detected
+        assert!(result.multicall_results.is_some());
+        let multicall_results = result.multicall_results.unwrap();
+        assert_eq!(multicall_results.len(), 1);
+
+        // Verify the decoded call
+        let first_call = &multicall_results[0];
+        assert_eq!(first_call.index, 0);
+        assert!(first_call.target.to_lowercase().contains("0x0813ccee"));
+        assert!(first_call.decoded.is_some());
+
+        // Verify it's performUpkeep
+        let decoded = first_call.decoded.as_ref().unwrap();
+        assert_eq!(decoded.decoded.signature, "performUpkeep(bytes)");
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires RPC
+    async fn test_decode_multicall_aggregate() {
+        // Test aggregate function with multiple transferFrom calls - real transaction
+        let args = DecodeArgs {
+            target: String::from(
+                "0xd6635a8a4e7a33a06707b64df088bebfd95a49b4fce8ffbe235d690950ebf75d",
+            ),
+            rpc_url: String::from("https://eth.public-rpc.com"),
+            abi: None,
+            openai_api_key: String::from(""),
+            explain: false,
+            default: true,
+            constructor: false,
+            truncate_calldata: false,
+            skip_resolving: false,
+            raw: false,
+            output: String::from("json"),
+        };
+
+        let result = heimdall_decoder::decode(args).await.expect("Failed to decode aggregate");
+
+        // Verify the function signature
+        assert_eq!(result.decoded.signature, "aggregate((address,bytes)[])");
+
+        // Verify multicall was detected
+        assert!(result.multicall_results.is_some());
+        let multicall_results = result.multicall_results.unwrap();
+        assert_eq!(multicall_results.len(), 4);
+
+        // Verify all calls are transferFrom
+        for (i, call) in multicall_results.iter().enumerate() {
+            assert_eq!(call.index, i);
+            assert!(call.target.to_lowercase().contains("0x69c8ebef"));
+            assert!(call.decoded.is_some());
+
+            let decoded = call.decoded.as_ref().unwrap();
+            assert_eq!(decoded.decoded.signature, "transferFrom(address,address,uint256)");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_decode_multicall_pattern_detection() {
+        // Test that multicall pattern is detected correctly for a simple case
+        let args = DecodeArgs {
+            target: String::from("0x1749e1e3000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000813ccee6e0fc0fbc506f834122c7c082cd4c33f0000000000000000000000000000000000000000000000000000000000176a2400000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044585e33b000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+            rpc_url: String::from(""),
+            abi: None,
+            openai_api_key: String::from(""),
+            explain: false,
+            default: true,
+            constructor: false,
+            truncate_calldata: false,
+            skip_resolving: false,
+            raw: true,
+            output: String::from("json"),
+        };
+
+        let result = heimdall_decoder::decode(args).await.expect("Failed to decode");
+
+        // The function should be decoded as multicall
+        assert!(result.decoded.signature.contains("multicall"));
+
+        // Verify multicall was detected
+        assert!(result.multicall_results.is_some());
+        let multicall_results = result.multicall_results.unwrap();
+        assert!(multicall_results.len() >= 1);
+    }
+
+    #[tokio::test]
+    async fn test_decode_aggregate_pattern_detection() {
+        // Test aggregate pattern detection
+        let args = DecodeArgs {
+            target: String::from("0x252dba42000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000069c8ebef7752407cc5818a099b1fcad65d5eee990000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000470a0823100000000000000000000000000000000000000000000000000000000"),
+            rpc_url: String::from(""),
+            abi: None,
+            openai_api_key: String::from(""),
+            explain: false,
+            default: true,
+            constructor: false,
+            truncate_calldata: false,
+            skip_resolving: false,
+            raw: true,
+            output: String::from("json"),
+        };
+
+        let result = heimdall_decoder::decode(args).await.expect("Failed to decode");
+
+        // Should detect aggregate pattern
+        assert!(result.decoded.signature.contains("aggregate"));
+        assert!(result.multicall_results.is_some());
+    }
+
     #[test]
     #[ignore]
     fn heavy_integration_test() {
