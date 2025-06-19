@@ -13,10 +13,12 @@ use crate::{
 };
 
 /// Detects if a decoded value represents a multicall pattern.
-/// A multicall is typically an array of tuples containing:
+/// A multicall is an array of tuples that must contain at least:
 /// - address: target contract
-/// - optional uint: value/amount (for payable multicalls)
 /// - bytes: encoded function call data
+///
+/// Additional parameters (like bool flags or uint values) are allowed
+/// but not required. The order of parameters doesn't matter.
 pub(crate) fn is_multicall_pattern(value: &DynSolValue) -> bool {
     match value {
         DynSolValue::Array(items) | DynSolValue::FixedArray(items) => {
@@ -27,19 +29,13 @@ pub(crate) fn is_multicall_pattern(value: &DynSolValue) -> bool {
             // Check if all items follow multicall pattern
             items.iter().all(|item| match item {
                 DynSolValue::Tuple(tuple_items) => {
-                    // Pattern 1: (address, bytes)
-                    if tuple_items.len() == 2 {
-                        matches!(&tuple_items[0], DynSolValue::Address(_)) &&
-                            matches!(&tuple_items[1], DynSolValue::Bytes(_))
-                    }
-                    // Pattern 2: (address, uint, bytes)
-                    else if tuple_items.len() == 3 {
-                        matches!(&tuple_items[0], DynSolValue::Address(_)) &&
-                            matches!(&tuple_items[1], DynSolValue::Uint(_, _)) &&
-                            matches!(&tuple_items[2], DynSolValue::Bytes(_))
-                    } else {
-                        false
-                    }
+                    // Must have at least address and bytes, regardless of other parameters
+                    let has_address =
+                        tuple_items.iter().any(|v| matches!(v, DynSolValue::Address(_)));
+                    let has_bytes = tuple_items.iter().any(|v| matches!(v, DynSolValue::Bytes(_)));
+
+                    // As long as we have address and bytes, it's a potential multicall
+                    has_address && has_bytes
                 }
                 _ => false,
             })
@@ -85,37 +81,36 @@ async fn decode_multicall_item(
     args: &DecodeArgs,
     index: usize,
 ) -> Result<MulticallDecoded, Error> {
-    let (target, value, calldata) = match tuple_items.len() {
-        2 => {
-            // (address, bytes)
-            let target = match &tuple_items[0] {
-                DynSolValue::Address(addr) => format!("{addr:?}"),
-                _ => return Err(Error::Eyre(eyre!("Expected address in multicall tuple"))),
-            };
-            let calldata = match &tuple_items[1] {
-                DynSolValue::Bytes(data) => data.clone(),
-                _ => return Err(Error::Eyre(eyre!("Expected bytes in multicall tuple"))),
-            };
-            (target, None, calldata)
+    // Find each component regardless of order
+    let mut target = None;
+    let mut value = None;
+    let mut calldata = None;
+
+    for item in tuple_items {
+        match item {
+            DynSolValue::Address(addr) => {
+                if target.is_none() {
+                    target = Some(format!("{addr:?}"));
+                }
+            }
+            DynSolValue::Uint(val, _) => {
+                if value.is_none() {
+                    value = Some(val.to_string());
+                }
+            }
+            DynSolValue::Bytes(data) => {
+                if calldata.is_none() {
+                    calldata = Some(data.clone());
+                }
+            }
+            _ => {}
         }
-        3 => {
-            // (address, uint, bytes)
-            let target = match &tuple_items[0] {
-                DynSolValue::Address(addr) => format!("{addr:?}"),
-                _ => return Err(Error::Eyre(eyre!("Expected address in multicall tuple"))),
-            };
-            let value = match &tuple_items[1] {
-                DynSolValue::Uint(val, _) => Some(val.to_string()),
-                _ => return Err(Error::Eyre(eyre!("Expected uint in multicall tuple"))),
-            };
-            let calldata = match &tuple_items[2] {
-                DynSolValue::Bytes(data) => data.clone(),
-                _ => return Err(Error::Eyre(eyre!("Expected bytes in multicall tuple"))),
-            };
-            (target, value, calldata)
-        }
-        _ => return Err(Error::Eyre(eyre!("Unexpected multicall tuple length"))),
-    };
+    }
+
+    // Validate we have required fields
+    let target = target.ok_or_else(|| Error::Eyre(eyre!("No address found in multicall tuple")))?;
+    let calldata =
+        calldata.ok_or_else(|| Error::Eyre(eyre!("No bytes found in multicall tuple")))?;
 
     // Check if calldata looks like a function call (4 byte selector + padded args)
     let decoded = if calldata.len() >= 4 && (calldata.len() - 4) % 32 == 0 {
@@ -349,5 +344,71 @@ mod tests {
         ])]);
 
         assert!(is_multicall_pattern(&multicall_with_value));
+    }
+
+    #[test]
+    fn test_aggregate3value_pattern() {
+        // Test the aggregate3Value pattern: (address, bool, uint256, bytes)[]
+        let multicall_with_bool = DynSolValue::Array(vec![DynSolValue::Tuple(vec![
+            DynSolValue::Address(Address::ZERO),
+            DynSolValue::Bool(false),
+            DynSolValue::Uint(U256::from(0), 256),
+            DynSolValue::Bytes(vec![0x12, 0x34, 0x56, 0x78]),
+        ])]);
+
+        // This SHOULD be detected as a multicall pattern (has address + bytes)
+        assert!(is_multicall_pattern(&multicall_with_bool));
+    }
+
+    #[test]
+    fn test_multicall_with_extra_params() {
+        // Test patterns with extra parameters
+        let with_string = DynSolValue::Array(vec![DynSolValue::Tuple(vec![
+            DynSolValue::Address(Address::ZERO),
+            DynSolValue::String("test".to_string()),
+            DynSolValue::Bytes(vec![0x12, 0x34]),
+            DynSolValue::Bool(true),
+        ])]);
+        assert!(is_multicall_pattern(&with_string));
+
+        // Should fail if missing address
+        let no_address = DynSolValue::Array(vec![DynSolValue::Tuple(vec![
+            DynSolValue::Uint(U256::from(100), 256),
+            DynSolValue::Bytes(vec![0x12, 0x34]),
+        ])]);
+        assert!(!is_multicall_pattern(&no_address));
+
+        // Should fail if missing bytes
+        let no_bytes = DynSolValue::Array(vec![DynSolValue::Tuple(vec![
+            DynSolValue::Address(Address::ZERO),
+            DynSolValue::Uint(U256::from(100), 256),
+        ])]);
+        assert!(!is_multicall_pattern(&no_bytes));
+    }
+
+    #[test]
+    fn test_multicall_pattern_permutations() {
+        // Test (bytes, address, uint) - different order
+        let permutation1 = DynSolValue::Array(vec![DynSolValue::Tuple(vec![
+            DynSolValue::Bytes(vec![0x12, 0x34, 0x56, 0x78]),
+            DynSolValue::Address(Address::ZERO),
+            DynSolValue::Uint(U256::from(100), 256),
+        ])]);
+        assert!(is_multicall_pattern(&permutation1));
+
+        // Test (uint, bytes, address) - another order
+        let permutation2 = DynSolValue::Array(vec![DynSolValue::Tuple(vec![
+            DynSolValue::Uint(U256::from(100), 256),
+            DynSolValue::Bytes(vec![0x12, 0x34, 0x56, 0x78]),
+            DynSolValue::Address(Address::ZERO),
+        ])]);
+        assert!(is_multicall_pattern(&permutation2));
+
+        // Test (bytes, address) - 2 element permutation
+        let permutation3 = DynSolValue::Array(vec![DynSolValue::Tuple(vec![
+            DynSolValue::Bytes(vec![0x12, 0x34, 0x56, 0x78]),
+            DynSolValue::Address(Address::ZERO),
+        ])]);
+        assert!(is_multicall_pattern(&permutation3));
     }
 }
