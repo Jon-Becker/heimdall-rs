@@ -2,7 +2,7 @@ use hashbrown::HashSet;
 use std::time::Instant;
 
 use alloy::primitives::Selector;
-use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType, DynSolValue};
+use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType};
 use eyre::eyre;
 use heimdall_common::{
     ether::{
@@ -107,47 +107,6 @@ impl DecodeResult {
 ///
 /// This function attempts to identify the function being called based on the function
 /// selector in the calldata, and then decodes the remaining data according to the
-/// Try to decode bytes as a multicall array parameter
-fn try_decode_as_multicall_array(calldata: &[u8]) -> Result<DynSolValue, Error> {
-    use alloy_dyn_abi::DynSolType;
-
-    // Try common multicall patterns
-    let patterns = vec![
-        // multicall((address,uint256,bytes)[])
-        DynSolType::Array(Box::new(DynSolType::Tuple(vec![
-            DynSolType::Address,
-            DynSolType::Uint(256),
-            DynSolType::Bytes,
-        ]))),
-        // aggregate((address,bytes)[])
-        DynSolType::Array(Box::new(DynSolType::Tuple(vec![
-            DynSolType::Address,
-            DynSolType::Bytes,
-        ]))),
-        // aggregate3((address,bool,bytes)[])
-        DynSolType::Array(Box::new(DynSolType::Tuple(vec![
-            DynSolType::Address,
-            DynSolType::Bool,
-            DynSolType::Bytes,
-        ]))),
-        // aggregate3Value((address,bool,uint256,bytes)[])
-        DynSolType::Array(Box::new(DynSolType::Tuple(vec![
-            DynSolType::Address,
-            DynSolType::Bool,
-            DynSolType::Uint(256),
-            DynSolType::Bytes,
-        ]))),
-    ];
-
-    for pattern in patterns {
-        if let Ok(decoded) = pattern.abi_decode(calldata) {
-            return Ok(decoded);
-        }
-    }
-
-    Err(Error::Eyre(eyre!("Failed to decode as any multicall pattern")))
-}
-
 /// function's parameter types. If no matching function is found, it will attempt
 /// to infer the parameter types from the raw calldata.
 ///
@@ -293,69 +252,122 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         }
     } else if matches.is_empty() {
         warn!("couldn't find any resolved matches for '{}'", function_selector);
-        info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
 
-        // we're going to build a Vec<DynSolType> of all possible types for each
-        let mut potential_inputs: Vec<DynSolType> = Vec::new();
-
-        // chunk in blocks of 32 bytes
-        let calldata_words = calldata[4..].chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
-
-        // while calldata_words is not empty, iterate over itcar
-        let mut i = 0;
-        let mut covered_words = HashSet::new();
-        while covered_words.len() != calldata_words.len() {
-            let word = calldata_words[i].to_owned();
-
-            // check if the first word is abiencoded
-            if let Some(abi_encoded) = try_decode_dynamic_parameter(i, &calldata_words)? {
-                let potential_type = to_type(&abi_encoded.ty);
-                potential_inputs.push(potential_type);
-                covered_words.extend(abi_encoded.coverages);
-            } else {
-                let (_, mut potential_types) = get_potential_types_for_word(&word);
-
-                // perform heuristics
-                // - if we use right-padding, this is probably bytesN
-                // - if we use left-padding, this is probably uintN or intN
-                // - if we use no padding, this is probably bytes32
-                match get_padding(&word) {
-                    Padding::Left => potential_types
-                        .retain(|t| t.starts_with("uint") || t.starts_with("address")),
-                    _ => potential_types
-                        .retain(|t| t.starts_with("bytes") || t.starts_with("string")),
-                }
-
-                let potential_type =
-                    to_type(potential_types.first().expect("potential types is empty"));
-
-                potential_inputs.push(potential_type);
-                covered_words.insert(i);
-            }
-
-            i += 1;
-        }
-
-        trace!(
-            "potential parameter inputs, ({:?})",
-            potential_inputs.iter().map(|x| x.to_string()).collect::<Vec<String>>()
+        // Check if this is a known multicall selector that we should handle specially
+        let is_known_multicall = matches!(
+            function_selector.as_str(),
+            "1749e1e3" | // multicall((address,uint256,bytes)[])
+            "252dba42" | // aggregate((address,bytes)[])
+            "82ad56cb" | // aggregate3((address,bool,bytes)[])
+            "174dea71" // aggregate3Value((address,bool,uint256,bytes)[])
         );
 
-        let (decoded_inputs, params) = try_decode(&potential_inputs, &calldata[4..])
-            .map_err(|e| Error::Eyre(eyre!("dynamically decoding calldata failed: {}", e)))?;
-        // build a ResolvedFunction to add to matches
-        let resolved_function = ResolvedFunction {
-            name: format!("Unresolved_{function_selector}"),
-            signature: format!(
-                "Unresolved_{}({})",
-                function_selector,
-                params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>().join(", ")
-            ),
-            inputs: params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>(),
-            decoded_inputs: Some(decoded_inputs),
-        };
+        if is_known_multicall {
+            info!(
+                "detected known multicall selector '{}', using specialized decoding",
+                function_selector
+            );
 
-        matches.push(resolved_function);
+            // Create the appropriate signature based on selector
+            let signature = match function_selector.as_str() {
+                "1749e1e3" => "multicall((address,uint256,bytes)[])",
+                "252dba42" => "aggregate((address,bytes)[])",
+                "82ad56cb" => "aggregate3((address,bool,bytes)[])",
+                "174dea71" => "aggregate3Value((address,bool,uint256,bytes)[])",
+                _ => unreachable!(),
+            };
+
+            // Parse and decode with the known signature
+            let inputs = parse_function_parameters(signature)
+                .map_err(|e| Error::Eyre(eyre!("parsing multicall parameters failed: {}", e)))?;
+            let ty = DynSolCall::new(
+                Selector::default(),
+                inputs.to_vec(),
+                None,
+                DynSolReturns::new(Vec::new()),
+            );
+
+            match ty.abi_decode_input(byte_args) {
+                Ok(result) => {
+                    matches.push(ResolvedFunction {
+                        name: signature.split('(').next().unwrap_or("unknown").to_string(),
+                        signature: signature.to_string(),
+                        inputs: inputs.iter().map(|ty| ty.to_string()).collect(),
+                        decoded_inputs: Some(result),
+                    });
+                }
+                Err(_) => {
+                    // Fall back to raw decoding if specialized decoding fails
+                    info!("specialized multicall decoding failed, falling back to raw decoding");
+                }
+            }
+        }
+
+        if matches.is_empty() {
+            info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
+
+            // we're going to build a Vec<DynSolType> of all possible types for each
+            let mut potential_inputs: Vec<DynSolType> = Vec::new();
+
+            // chunk in blocks of 32 bytes
+            let calldata_words = calldata[4..].chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
+
+            // while calldata_words is not empty, iterate over itcar
+            let mut i = 0;
+            let mut covered_words = HashSet::new();
+            while covered_words.len() != calldata_words.len() {
+                let word = calldata_words[i].to_owned();
+
+                // check if the first word is abiencoded
+                if let Some(abi_encoded) = try_decode_dynamic_parameter(i, &calldata_words)? {
+                    let potential_type = to_type(&abi_encoded.ty);
+                    potential_inputs.push(potential_type);
+                    covered_words.extend(abi_encoded.coverages);
+                } else {
+                    let (_, mut potential_types) = get_potential_types_for_word(&word);
+
+                    // perform heuristics
+                    // - if we use right-padding, this is probably bytesN
+                    // - if we use left-padding, this is probably uintN or intN
+                    // - if we use no padding, this is probably bytes32
+                    match get_padding(&word) {
+                        Padding::Left => potential_types
+                            .retain(|t| t.starts_with("uint") || t.starts_with("address")),
+                        _ => potential_types
+                            .retain(|t| t.starts_with("bytes") || t.starts_with("string")),
+                    }
+
+                    let potential_type =
+                        to_type(potential_types.first().expect("potential types is empty"));
+
+                    potential_inputs.push(potential_type);
+                    covered_words.insert(i);
+                }
+
+                i += 1;
+            }
+
+            trace!(
+                "potential parameter inputs, ({:?})",
+                potential_inputs.iter().map(|x| x.to_string()).collect::<Vec<String>>()
+            );
+
+            let (decoded_inputs, params) = try_decode(&potential_inputs, &calldata[4..])
+                .map_err(|e| Error::Eyre(eyre!("dynamically decoding calldata failed: {}", e)))?;
+            // build a ResolvedFunction to add to matches
+            let resolved_function = ResolvedFunction {
+                name: format!("Unresolved_{function_selector}"),
+                signature: format!(
+                    "Unresolved_{}({})",
+                    function_selector,
+                    params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>().join(", ")
+                ),
+                inputs: params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>(),
+                decoded_inputs: Some(decoded_inputs),
+            };
+
+            matches.push(resolved_function);
+        } // End of raw decoding
     }
 
     let selected_match = matches.first().expect("matches is empty").clone();
@@ -366,57 +378,17 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     let multicall_results = if let Some(decoded_inputs) = &selected_match.decoded_inputs {
         let mut multicall_decoded = None;
 
-        // First check if this is a known multicall selector
-        let is_known_multicall = matches!(
-            function_selector.as_str(),
-            "1749e1e3" | // multicall((address,uint256,bytes)[])
-            "252dba42" | // aggregate((address,bytes)[])
-            "82ad56cb" | // aggregate3((address,bool,bytes)[])
-            "174dea71" // aggregate3Value((address,bool,uint256,bytes)[])
-        );
-
-        if is_known_multicall {
-            // For known multicall functions with unresolved signatures,
-            // try to decode the first parameter as a multicall array
-            if let Some(first_input) = decoded_inputs.first() {
-                // Try to interpret as array of tuples even if raw decoding produced different
-                // structure
-                match try_decode_as_multicall_array(byte_args) {
-                    Ok(multicall_value) => {
-                        if is_multicall_pattern(&multicall_value) {
-                            debug!("Detected known multicall selector, attempting decode");
-                            match decode_multicall(&multicall_value, &args).await {
-                                Ok(results) => {
-                                    info!("Successfully decoded {} multicall items from known selector", results.len());
-                                    multicall_decoded = Some(results);
-                                }
-                                Err(e) => {
-                                    warn!("Failed to decode known multicall: {:?}", e);
-                                }
-                            }
-                        }
+        for input in decoded_inputs {
+            if is_multicall_pattern(input) {
+                debug!("Detected multicall pattern");
+                match decode_multicall(input, &args).await {
+                    Ok(results) => {
+                        info!("Successfully decoded {} multicall items", results.len());
+                        multicall_decoded = Some(results);
+                        break;
                     }
-                    Err(_) => {
-                        // Fall back to normal pattern detection
-                    }
-                }
-            }
-        }
-
-        // If not handled as known multicall, check for pattern in decoded inputs
-        if multicall_decoded.is_none() {
-            for input in decoded_inputs {
-                if is_multicall_pattern(input) {
-                    debug!("Detected multicall pattern");
-                    match decode_multicall(input, &args).await {
-                        Ok(results) => {
-                            info!("Successfully decoded {} multicall items", results.len());
-                            multicall_decoded = Some(results);
-                            break;
-                        }
-                        Err(e) => {
-                            warn!("Failed to decode multicall: {:?}", e);
-                        }
+                    Err(e) => {
+                        warn!("Failed to decode multicall: {:?}", e);
                     }
                 }
             }
