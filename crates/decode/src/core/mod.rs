@@ -212,6 +212,8 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
                 DynSolReturns::new(Vec::new()),
             );
 
+            println!("ty: {ty:?}");
+
             if let Ok(result) = ty
                 .abi_decode_input(byte_args)
                 .map_err(|e| Error::Eyre(eyre!("decoding calldata failed: {}", e)))
@@ -252,56 +254,6 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         }
     } else if matches.is_empty() {
         warn!("couldn't find any resolved matches for '{}'", function_selector);
-
-        // Check if this is a known multicall selector that we should handle specially
-        let is_known_multicall = matches!(
-            function_selector.as_str(),
-            "1749e1e3" | // multicall((address,uint256,bytes)[])
-            "252dba42" | // aggregate((address,bytes)[])
-            "82ad56cb" | // aggregate3((address,bool,bytes)[])
-            "174dea71" // aggregate3Value((address,bool,uint256,bytes)[])
-        );
-
-        if is_known_multicall {
-            info!(
-                "detected known multicall selector '{}', using specialized decoding",
-                function_selector
-            );
-
-            // Create the appropriate signature based on selector
-            let signature = match function_selector.as_str() {
-                "1749e1e3" => "multicall((address,uint256,bytes)[])",
-                "252dba42" => "aggregate((address,bytes)[])",
-                "82ad56cb" => "aggregate3((address,bool,bytes)[])",
-                "174dea71" => "aggregate3Value((address,bool,uint256,bytes)[])",
-                _ => unreachable!(),
-            };
-
-            // Parse and decode with the known signature
-            let inputs = parse_function_parameters(signature)
-                .map_err(|e| Error::Eyre(eyre!("parsing multicall parameters failed: {}", e)))?;
-            let ty = DynSolCall::new(
-                Selector::default(),
-                inputs.to_vec(),
-                None,
-                DynSolReturns::new(Vec::new()),
-            );
-
-            match ty.abi_decode_input(byte_args) {
-                Ok(result) => {
-                    matches.push(ResolvedFunction {
-                        name: signature.split('(').next().unwrap_or("unknown").to_string(),
-                        signature: signature.to_string(),
-                        inputs: inputs.iter().map(|ty| ty.to_string()).collect(),
-                        decoded_inputs: Some(result),
-                    });
-                }
-                Err(_) => {
-                    // Fall back to raw decoding if specialized decoding fails
-                    info!("specialized multicall decoding failed, falling back to raw decoding");
-                }
-            }
-        }
 
         if matches.is_empty() {
             info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
