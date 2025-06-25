@@ -8,22 +8,46 @@ use alloy_json_abi::JsonAbi;
 use async_trait::async_trait;
 
 use crate::{
-    ether::types::parse_function_parameters,
+    ether::types::{parse_function_parameters, to_abi_string},
     utils::{
         http::get_json_from_url,
         io::{logging::TraceFactory, types::display},
-        strings::replace_last,
     },
 };
 use eyre::{OptionExt, Result};
 use heimdall_cache::{store_cache, with_cache};
-use serde::{Deserialize, Serialize};
+use serde::{
+    ser::{SerializeMap, Serializer},
+    Deserialize, Serialize,
+};
 use tracing::{debug, trace};
 
 use super::types::DynSolValueExt;
 
+/// Helper function to convert a vector of DynSolType to a vector of strings
+fn dyn_sol_types_to_strings(types: &[DynSolType]) -> Vec<String> {
+    types.iter().map(to_abi_string).collect()
+}
+
+/// Helper struct to represent ABI input format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AbiInput {
+    name: String,
+    #[serde(rename = "type")]
+    type_name: String,
+}
+
+/// Helper function to convert inputs to ABI format
+fn inputs_to_abi_format(inputs: &[String]) -> Vec<AbiInput> {
+    inputs
+        .iter()
+        .enumerate()
+        .map(|(i, type_name)| AbiInput { name: format!("arg{i}"), type_name: type_name.clone() })
+        .collect()
+}
+
 /// A resolved function signature. May contain decoded inputs.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct ResolvedFunction {
     /// The name of the function. For example, `transfer`.
     pub name: String,
@@ -55,7 +79,7 @@ impl ResolvedFunction {
 }}"#,
             &self.name,
             &self.signature,
-            serde_json::to_string(&self.inputs)?,
+            serde_json::to_string(&inputs_to_abi_format(&self.inputs))?,
             if let Some(decoded_inputs) = &self.decoded_inputs {
                 decoded_inputs
                     .iter()
@@ -69,8 +93,21 @@ impl ResolvedFunction {
     }
 }
 
+impl Serialize for ResolvedFunction {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer, {
+        let mut map = serializer.serialize_map(Some(3))?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("signature", &self.signature)?;
+        map.serialize_entry("inputs", &inputs_to_abi_format(&self.inputs))?;
+        // Skip decoded_inputs since it's marked with #[serde(skip)]
+        map.end()
+    }
+}
+
 /// A resolved error signature.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct ResolvedError {
     /// The name of the error. For example, `revert`.
     pub name: String,
@@ -86,8 +123,20 @@ impl ResolvedError {
         parse_function_parameters(&self.signature).expect("invalid signature")
     }
 }
+
+impl Serialize for ResolvedError {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer, {
+        let mut map = serializer.serialize_map(Some(3))?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("signature", &self.signature)?;
+        map.serialize_entry("inputs", &inputs_to_abi_format(&self.inputs))?;
+        map.end()
+    }
+}
 /// A resolved log signature.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct ResolvedLog {
     /// The name of the log. For example, `Transfer`.
     pub name: String,
@@ -101,6 +150,18 @@ impl ResolvedLog {
     /// Returns the inputs of the log as a vector of [`DynSolType`]s.
     pub fn inputs(&self) -> Vec<DynSolType> {
         parse_function_parameters(&self.signature).expect("invalid signature")
+    }
+}
+
+impl Serialize for ResolvedLog {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer, {
+        let mut map = serializer.serialize_map(Some(3))?;
+        map.serialize_entry("name", &self.name)?;
+        map.serialize_entry("signature", &self.signature)?;
+        map.serialize_entry("inputs", &inputs_to_abi_format(&self.inputs))?;
+        map.end()
     }
 }
 /// A trait for resolving a selector into a vector of [`ResolvedFunction`]s, [`ResolvedError`]s, or
@@ -165,13 +226,16 @@ impl ResolveSelector for ResolvedError {
                     None => continue,
                 };
 
+                // Parse the inputs using parse_function_parameters
+                let parsed_inputs = match parse_function_parameters(&text_signature) {
+                    Ok(inputs) => inputs,
+                    Err(_) => continue,
+                };
+
                 signature_list.push(ResolvedError {
                     name: function_parts.0.to_string(),
                     signature: text_signature.to_string(),
-                    inputs: replace_last(function_parts.1, ")", "")
-                        .split(',')
-                        .map(|input| input.to_string())
-                        .collect(),
+                    inputs: dyn_sol_types_to_strings(&parsed_inputs),
                 });
             }
 
@@ -236,13 +300,16 @@ impl ResolveSelector for ResolvedLog {
                     None => continue,
                 };
 
+                // Parse the inputs using parse_function_parameters
+                let parsed_inputs = match parse_function_parameters(&text_signature) {
+                    Ok(inputs) => inputs,
+                    Err(_) => continue,
+                };
+
                 signature_list.push(ResolvedLog {
                     name: function_parts.0.to_string(),
                     signature: text_signature.to_string(),
-                    inputs: replace_last(function_parts.1, ")", "")
-                        .split(',')
-                        .map(|input| input.to_string())
-                        .collect(),
+                    inputs: dyn_sol_types_to_strings(&parsed_inputs),
                 });
             }
 
@@ -307,13 +374,16 @@ impl ResolveSelector for ResolvedFunction {
                     None => continue,
                 };
 
+                // Parse the inputs using parse_function_parameters
+                let parsed_inputs = match parse_function_parameters(&text_signature) {
+                    Ok(inputs) => inputs,
+                    Err(_) => continue,
+                };
+
                 signature_list.push(ResolvedFunction {
                     name: function_parts.0.to_string(),
                     signature: text_signature.to_string(),
-                    inputs: replace_last(function_parts.1, ")", "")
-                        .split(',')
-                        .map(|input| input.to_string())
-                        .collect(),
+                    inputs: dyn_sol_types_to_strings(&parsed_inputs),
                     decoded_inputs: None,
                 });
             }
@@ -337,11 +407,20 @@ pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
 
     json_abi.functions().for_each(|function| {
         let selector = function.selector().to_string().trim_start_matches("0x").to_string();
-        let inputs: Vec<String> = function.inputs.iter().map(|input| input.ty.clone()).collect();
+        let signature = function.signature();
+
+        // Parse inputs using parse_function_parameters for consistency
+        let inputs = match parse_function_parameters(&signature) {
+            Ok(parsed) => dyn_sol_types_to_strings(&parsed),
+            Err(_) => {
+                // Fallback to original method if parsing fails
+                function.inputs.iter().map(|input| input.ty.clone()).collect()
+            }
+        };
 
         let resolved_function = ResolvedFunction {
             name: function.name.clone(),
-            signature: function.signature(),
+            signature,
             inputs,
             decoded_inputs: None,
         };
@@ -350,19 +429,35 @@ pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
     });
     json_abi.events().for_each(|event| {
         let selector = event.selector().to_string().trim_start_matches("0x").to_string();
-        let inputs: Vec<String> = event.inputs.iter().map(|input| input.ty.clone()).collect();
+        let signature = event.signature();
 
-        let resolved_log =
-            ResolvedLog { name: event.name.clone(), signature: event.signature(), inputs };
+        // Parse inputs using parse_function_parameters for consistency
+        let inputs = match parse_function_parameters(&signature) {
+            Ok(parsed) => dyn_sol_types_to_strings(&parsed),
+            Err(_) => {
+                // Fallback to original method if parsing fails
+                event.inputs.iter().map(|input| input.ty.clone()).collect()
+            }
+        };
+
+        let resolved_log = ResolvedLog { name: event.name.clone(), signature, inputs };
 
         store_cache(&format!("selector.{selector}"), Some(vec![resolved_log]), None).ok();
     });
     json_abi.errors().for_each(|error| {
         let selector = error.selector().to_string().trim_start_matches("0x").to_string();
-        let inputs: Vec<String> = error.inputs.iter().map(|input| input.ty.clone()).collect();
+        let signature = error.signature();
 
-        let resolved_error =
-            ResolvedError { name: error.name.clone(), signature: error.signature(), inputs };
+        // Parse inputs using parse_function_parameters for consistency
+        let inputs = match parse_function_parameters(&signature) {
+            Ok(parsed) => dyn_sol_types_to_strings(&parsed),
+            Err(_) => {
+                // Fallback to original method if parsing fails
+                error.inputs.iter().map(|input| input.ty.clone()).collect()
+            }
+        };
+
+        let resolved_error = ResolvedError { name: error.name.clone(), signature, inputs };
 
         store_cache(&format!("selector.{selector}"), Some(vec![resolved_error]), None).ok();
     });
@@ -474,8 +569,12 @@ impl TryFrom<&ResolvedFunction> for TraceFactory {
 mod tests {
     use heimdall_cache::delete_cache;
 
-    use crate::ether::signatures::{
-        score_signature, ResolveSelector, ResolvedError, ResolvedFunction, ResolvedLog,
+    use crate::ether::{
+        signatures::{
+            dyn_sol_types_to_strings, score_signature, ResolveSelector, ResolvedError,
+            ResolvedFunction, ResolvedLog,
+        },
+        types::parse_function_parameters,
     };
 
     #[tokio::test]
@@ -487,6 +586,24 @@ mod tests {
             .expect("failed to resolve signature")
             .expect("failed to resolve signature");
         assert!(!result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn resolve_multicall_signature() {
+        let signature = String::from("1749e1e3");
+        let _ = delete_cache(&format!("selector.{}", &signature));
+        let result = ResolvedFunction::resolve(&signature)
+            .await
+            .expect("failed to resolve signature")
+            .expect("failed to resolve signature");
+
+        // Find the multicall function
+        let multicall = result.iter().find(|f| f.name == "multicall");
+        assert!(multicall.is_some(), "multicall function not found");
+
+        let multicall = multicall.unwrap();
+        // The inputs should be ["tuple[]"] not ["(address", "uint256", "bytes)[]"]
+        assert_eq!(multicall.inputs, vec!["tuple[]"]);
     }
 
     #[tokio::test]
@@ -576,5 +693,34 @@ mod tests {
         let signature = String::from("test_signature");
         let score = score_signature(&signature, None);
         assert_eq!(score, 996);
+    }
+
+    #[test]
+    fn test_complex_signature_parsing() {
+        // Test that we correctly parse complex signatures with nested tuples
+        let test_cases = vec![
+            ("function((uint256,address)[])", vec!["tuple[]"]),
+            ("function(address,(uint256,uint256))", vec!["address", "tuple"]),
+            (
+                "function(uint256[],bytes32,(address,uint256)[])",
+                vec!["uint256[]", "bytes32", "tuple[]"],
+            ),
+            (
+                // This is the problematic multicall signature
+                "multicall((address,uint256,bytes)[])",
+                vec!["tuple[]"],
+            ),
+            (
+                // More complex nested structures
+                "function((address,uint256,bytes)[],(uint256,bool))",
+                vec!["tuple[]", "tuple"],
+            ),
+        ];
+
+        for (signature, expected_inputs) in test_cases {
+            let parsed = parse_function_parameters(signature).unwrap();
+            let string_inputs = dyn_sol_types_to_strings(&parsed);
+            assert_eq!(string_inputs, expected_inputs, "Failed for signature: {}", signature);
+        }
     }
 }

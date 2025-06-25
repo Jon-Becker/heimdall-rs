@@ -46,13 +46,71 @@ impl DecodeResult {
 
     /// Converts the decode result to JSON, including multicall results if present
     pub fn to_json(&self) -> Result<String, Error> {
-        use heimdall_common::ether::types::DynSolValueExt;
+        use heimdall_common::ether::types::{
+            parse_function_parameters, to_abi_string, to_components, DynSolValueExt,
+        };
         use serde_json::json;
+
+        // Helper to convert inputs to ABI format with components
+        let inputs_to_abi_format = |signature: &str| -> Vec<serde_json::Value> {
+            match parse_function_parameters(signature) {
+                Ok(types) => {
+                    types
+                        .iter()
+                        .enumerate()
+                        .map(|(i, sol_type)| {
+                            let mut param = json!({
+                                "name": format!("arg{}", i),
+                                "type": to_abi_string(sol_type)
+                            });
+
+                            // Add components if it's a tuple type
+                            let components = to_components(sol_type);
+                            if !components.is_empty() {
+                                param["components"] = json!(components
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(j, comp)| {
+                                        let mut comp_json = json!({
+                                            "name": format!("arg{}", j),
+                                            "type": comp.ty.clone()
+                                        });
+
+                                        // Recursively add nested components
+                                        if !comp.components.is_empty() {
+                                            comp_json["components"] = json!(comp
+                                                .components
+                                                .iter()
+                                                .enumerate()
+                                                .map(|(k, nested)| {
+                                                    json!({
+                                                        "name": format!("arg{}", k),
+                                                        "type": nested.ty.clone()
+                                                    })
+                                                })
+                                                .collect::<Vec<_>>());
+                                        }
+
+                                        comp_json
+                                    })
+                                    .collect::<Vec<_>>());
+                            }
+
+                            param
+                        })
+                        .collect()
+                }
+                Err(_) => {
+                    // Fallback to simple format if parsing fails
+                    vec![]
+                }
+            }
+        };
 
         let mut result = json!({
             "name": self.decoded.name,
             "signature": self.decoded.signature,
-            "inputs": self.decoded.inputs,
+            "inputs": inputs_to_abi_format(&self.decoded.signature),
             "decoded_inputs": if let Some(decoded_inputs) = &self.decoded.decoded_inputs {
                 decoded_inputs
                     .iter()
@@ -80,7 +138,7 @@ impl DecodeResult {
                     mc_json["decoded"] = json!({
                         "name": decoded.decoded.name,
                         "signature": decoded.decoded.signature,
-                        "inputs": decoded.decoded.inputs,
+                        "inputs": inputs_to_abi_format(&decoded.decoded.signature),
                         "decoded_inputs": if let Some(decoded_inputs) = &decoded.decoded.decoded_inputs {
                             decoded_inputs
                                 .iter()
