@@ -8,7 +8,7 @@ use alloy_json_abi::JsonAbi;
 use async_trait::async_trait;
 
 use crate::{
-    ether::types::{parse_function_parameters, to_abi_string},
+    ether::types::{dyn_sol_types_to_strings, inputs_to_abi_format, parse_function_parameters},
     utils::{
         http::get_json_from_url,
         io::{logging::TraceFactory, types::display},
@@ -23,28 +23,6 @@ use serde::{
 use tracing::{debug, trace};
 
 use super::types::DynSolValueExt;
-
-/// Helper function to convert a vector of DynSolType to a vector of strings
-fn dyn_sol_types_to_strings(types: &[DynSolType]) -> Vec<String> {
-    types.iter().map(to_abi_string).collect()
-}
-
-/// Helper struct to represent ABI input format
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AbiInput {
-    name: String,
-    #[serde(rename = "type")]
-    type_name: String,
-}
-
-/// Helper function to convert inputs to ABI format
-fn inputs_to_abi_format(inputs: &[String]) -> Vec<AbiInput> {
-    inputs
-        .iter()
-        .enumerate()
-        .map(|(i, type_name)| AbiInput { name: format!("arg{i}"), type_name: type_name.clone() })
-        .collect()
-}
 
 /// A resolved function signature. May contain decoded inputs.
 #[derive(Debug, Clone, Deserialize, PartialEq)]

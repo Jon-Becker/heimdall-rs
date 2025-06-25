@@ -12,6 +12,6 @@ mod interfaces;
 mod utils;
 
 // re-export the public interface
-pub use core::{decode, DecodeResult};
+pub use core::decode;
 pub use error::Error;
-pub use interfaces::{DecodeArgs, DecodeArgsBuilder};
+pub use interfaces::{DecodeArgs, DecodeArgsBuilder, DecodeResult};

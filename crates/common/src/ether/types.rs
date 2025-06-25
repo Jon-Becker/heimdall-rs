@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 
 use crate::utils::strings::find_balanced_encapsulator;
 use eyre::Result;
+use serde::{Deserialize, Serialize};
 
 /// Enum representing the padding of a type.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -220,6 +221,30 @@ pub fn to_type(string: &str) -> DynSolType {
     }
 
     arg_type
+}
+
+/// Helper function to convert a vector of DynSolType to a vector of strings
+pub fn dyn_sol_types_to_strings(types: &[DynSolType]) -> Vec<String> {
+    types.iter().map(to_abi_string).collect()
+}
+
+/// Helper struct to represent ABI input format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AbiInput {
+    /// The name of the input parameter (e.g., "arg0", "arg1")
+    pub name: String,
+    /// The Solidity type of the input parameter (e.g., "uint256", "address")
+    #[serde(rename = "type")]
+    pub type_name: String,
+}
+
+/// Helper function to convert inputs to ABI format
+pub fn inputs_to_abi_format(inputs: &[String]) -> Vec<AbiInput> {
+    inputs
+        .iter()
+        .enumerate()
+        .map(|(i, type_name)| AbiInput { name: format!("arg{i}"), type_name: type_name.clone() })
+        .collect()
 }
 
 /// Convert a given DynSolType to its abi-safe "type" string representation

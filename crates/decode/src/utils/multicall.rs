@@ -7,9 +7,9 @@ use heimdall_common::utils::{
 use tracing::{debug, trace};
 
 use crate::{
-    core::{decode, DecodeResult},
+    core::decode,
     error::Error,
-    interfaces::DecodeArgs,
+    interfaces::{DecodeArgs, DecodeResult},
 };
 
 /// Detects if a decoded value represents a multicall pattern.
