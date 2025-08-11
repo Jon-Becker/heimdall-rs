@@ -79,6 +79,53 @@ pub(crate) fn build_cfg(
     Ok(())
 }
 
+/// Post-process the CFG to add missing fallback link from dispatcher
+pub(crate) fn add_fallback_link(contract_cfg: &mut Graph<String, String>) {
+    // Find the root node (node 0 - the dispatcher)
+    let root_idx = NodeIndex::new(0);
+
+    // Check if root node exists and contains a JUMPI to the fallback
+    if let Some(root_weight) = contract_cfg.node_weight(root_idx) {
+        // Look for the fallback destination in the root node
+        // The pattern is typically: PUSH2 <fallback_addr> JUMPI at the beginning
+        let lines: Vec<&str> = root_weight.lines().collect();
+
+        // Find the JUMPI instruction and its destination
+        for (i, line) in lines.iter().enumerate() {
+            if line.contains("JUMPI") && i > 0 {
+                // Get the previous line which should have the PUSH with the destination
+                if let Some(push_line) = lines.get(i - 1) {
+                    if push_line.contains("PUSH") {
+                        // Extract the destination address from the PUSH instruction
+                        let parts: Vec<&str> = push_line.split_whitespace().collect();
+                        if parts.len() >= 3 {
+                            let fallback_dest = parts[2];
+
+                            // Find the fallback node
+                            let fallback_prefix = format!("{} JUMPDEST", fallback_dest);
+                            for idx in contract_cfg.node_indices() {
+                                if idx != root_idx {
+                                    if let Some(node_weight) = contract_cfg.node_weight(idx) {
+                                        if node_weight.starts_with(&fallback_prefix) {
+                                            // Check if edge already exists
+                                            if !contract_cfg.contains_edge(root_idx, idx) {
+                                                // Add edge from root to fallback
+                                                contract_cfg.add_edge(root_idx, idx, String::new());
+                                            }
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                break; // Only process the first JUMPI (the dispatcher's fallback check)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
