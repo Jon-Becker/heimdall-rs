@@ -100,10 +100,6 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     let mut contract_cfg = Graph::new();
     let mut seen_nodes: HashSet<String> = HashSet::new();
     build_cfg(&map, &mut contract_cfg, None, false, &mut seen_nodes)?;
-
-    // Post-process: Add link from dispatcher to fallback if missing
-    graph::add_fallback_link(&mut contract_cfg);
-
     debug!("building cfg took {:?}", start_cfg_time.elapsed());
 
     debug!("cfg generated in {:?}", start_time.elapsed());

@@ -288,54 +288,33 @@ impl VM {
                 );
 
                 // we need to create a trace for the path that wasn't taken.
-                if !jump_taken {
-                    // push a new vm trace to the children
-                    let mut trace_vm = vm.clone();
-                    trace_vm.instruction =
-                        last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
-                        Ok(None) => {}
-                        Err(e) => {
-                            warn!("error executing branch: {:?}", e);
-                            return Ok(None);
-                        }
+                // For JUMPI, we always need to explore both branches:
+                // 1. The jump destination (when condition is true)
+                // 2. The next instruction (when condition is false)
+                
+                // Branch 1: Jump is taken - go to jump destination
+                let mut jump_vm = vm.clone();
+                jump_vm.instruction = last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
+                match jump_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                    Ok(None) => {}
+                    Err(e) => {
+                        warn!("error executing jump branch: {:?}", e);
                     }
-
-                    // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
-                        Ok(None) => {}
-                        Err(e) => {
-                            warn!("error executing branch: {:?}", e);
-                            return Ok(None);
-                        }
-                    }
-                    break;
-                } else {
-                    // push a new vm trace to the children
-                    let mut trace_vm = vm.clone();
-                    trace_vm.instruction = last_instruction.instruction + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
-                        Ok(None) => {}
-                        Err(e) => {
-                            warn!("error executing branch: {:?}", e);
-                            return Ok(None);
-                        }
-                    }
-
-                    // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
-                        Ok(None) => {}
-                        Err(e) => {
-                            warn!("error executing branch: {:?}", e);
-                            return Ok(None);
-                        }
-                    }
-                    break;
                 }
+
+                // Branch 2: Jump is not taken - continue to next instruction
+                let mut continue_vm = vm.clone();
+                continue_vm.instruction = last_instruction.instruction + 1;
+                match continue_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                    Ok(None) => {}
+                    Err(e) => {
+                        warn!("error executing continue branch: {:?}", e);
+                    }
+                }
+                
+                break;
             }
 
             // when the vm exits, this path is complete
