@@ -2055,8 +2055,9 @@ mod tests {
         let result = vm.memory.read(0, 32);
         let expected = [
             &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..], // 0x00-0x0F: copied data
-            &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..] // 0x10-0x1F: original data
-        ].concat();
+            &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..], // 0x10-0x1F: original data
+        ]
+        .concat();
         assert_eq!(result, expected);
     }
 
