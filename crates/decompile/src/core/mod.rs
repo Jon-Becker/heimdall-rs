@@ -22,7 +22,7 @@ use heimdall_common::{
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
 use heimdall_vm::{
     core::vm::VM,
-    ext::selectors::{find_function_selectors, resolve_selectors},
+    ext::selectors::{find_function_selectors, get_enhanced_selectors, resolve_selectors},
 };
 use std::time::{Duration, Instant};
 
@@ -135,7 +135,21 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // find all the function selectors in the bytecode
     let start_selectors_time = Instant::now();
-    let selectors = find_function_selectors(&evm, &assembly);
+    // Try enhanced selector detection first for better accuracy and Vyper support
+    let selectors = match get_enhanced_selectors(&contract_bytecode, &assembly).await {
+        Ok(enhanced_selectors) if !enhanced_selectors.is_empty() => {
+            info!(
+                "using enhanced selector detection (found {} selectors)",
+                enhanced_selectors.len()
+            );
+            enhanced_selectors
+        }
+        _ => {
+            // Fallback to original method if enhanced detection fails or finds nothing
+            warn!("falling back to basic selector detection");
+            find_function_selectors(&evm, &assembly)
+        }
+    };
     debug!("finding function selectors took {:?}", start_selectors_time.elapsed());
 
     // resolve selectors (if enabled)
