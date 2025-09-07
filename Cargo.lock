@@ -2474,6 +2474,7 @@ dependencies = [
  "alloy-dyn-abi",
  "alloy-json-abi",
  "clap",
+ "criterion",
  "derive_builder 0.12.0",
  "eyre",
  "fancy-regex",

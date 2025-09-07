@@ -39,3 +39,10 @@ tokio.workspace = true
 
 heimdall-disassembler.workspace = true
 heimdall-vm.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "ir_pipeline"
+harness = false
