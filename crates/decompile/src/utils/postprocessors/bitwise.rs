@@ -75,7 +75,8 @@ pub(crate) fn bitwise_mask_postprocessor(
                 .ok_or_eyre("failed to get cast subject")?
                 .replace(';', "");
 
-            // Find the last assignment operator (=) that's not part of a comparison (==, !=, <=, >=)
+            // Find the last assignment operator (=) that's not part of a comparison (==, !=, <=,
+            // >=)
             let mut subject = part_before_bitmask.clone();
             let chars: Vec<char> = part_before_bitmask.chars().collect();
 
@@ -87,10 +88,10 @@ pub(crate) fn bitwise_mask_postprocessor(
                     let next_char = chars.get(i + 1).copied();
 
                     let is_assignment = prev_char != Some('=') &&
-                                        prev_char != Some('!') &&
-                                        prev_char != Some('<') &&
-                                        prev_char != Some('>') &&
-                                        next_char != Some('=');
+                        prev_char != Some('!') &&
+                        prev_char != Some('<') &&
+                        prev_char != Some('>') &&
+                        next_char != Some('=');
 
                     if is_assignment {
                         subject = chars[i + 1..].iter().collect::<String>().trim().to_string();

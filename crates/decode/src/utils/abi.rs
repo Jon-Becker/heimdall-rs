@@ -27,7 +27,7 @@ pub(crate) fn try_decode(
 
     // For non-standard sized calldata that isn't a multiple of 32 bytes,
     // we need to pad it to ensure proper ABI decoding
-    let padded_args = if !byte_args.is_empty() && byte_args.len() % 32 != 0 {
+    let padded_args = if !byte_args.is_empty() && !byte_args.len().is_multiple_of(32) {
         let mut padded = byte_args.to_vec();
         // Pad to the next multiple of 32 bytes
         let padding_needed = 32 - (byte_args.len() % 32);

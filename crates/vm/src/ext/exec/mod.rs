@@ -128,6 +128,7 @@ impl VM {
             let state = match vm.step() {
                 Ok(state) => state,
                 Err(e) => {
+                    warn!("executing branch failed during step: {:?}", e);
                     return Ok(None);
                 }
             };
