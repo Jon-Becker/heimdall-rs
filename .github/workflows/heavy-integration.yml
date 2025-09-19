@@ -2,8 +2,8 @@ name: heavy integration
 
 on:
   schedule:
-    # Runs at 10PM utc
-    - cron: "0 22 * * *"
+    # Runs at 10PM utc every week
+    - cron: '0 22 * * 0'
   workflow_dispatch:
 
 concurrency:
@@ -17,7 +17,7 @@ jobs:
   heavy-integration:
     name: heavy (long-running) integration tests
     runs-on: buildjet-16vcpu-ubuntu-2204
-    timeout-minutes: 120
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v3
