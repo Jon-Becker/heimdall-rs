@@ -226,8 +226,14 @@ impl WrappedOpcode {
                     // convert to usize
                     match usize::from_str_radix(&solidified_slot.replacen("0x", "", 1), 16) {
                         Ok(slot) => {
-                            solidified_wrapped_opcode
-                                .push_str(format!("arg{}", (slot - 4) / 32).as_str());
+                            if slot < 4 {
+                                // Reading from function selector bytes
+                                solidified_wrapped_opcode
+                                    .push_str(format!("msg.data[0x{:02x}]", slot).as_str());
+                            } else {
+                                solidified_wrapped_opcode
+                                    .push_str(format!("arg{}", (slot - 4) / 32).as_str());
+                            }
                         }
                         Err(_) => {
                             if solidified_slot.contains("0x04 + ") ||

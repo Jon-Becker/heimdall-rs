@@ -125,7 +125,12 @@ impl VM {
             }
 
             // execute the next instruction. if the instruction panics, invalidate this path
-            let state = vm.step()?;
+            let state = match vm.step() {
+                Ok(state) => state,
+                Err(e) => {
+                    return Ok(None);
+                }
+            };
             let last_instruction = state.last_instruction.clone();
 
             // update vm_trace
