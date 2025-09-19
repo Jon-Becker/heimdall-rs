@@ -70,15 +70,35 @@ pub(crate) fn bitwise_mask_postprocessor(
             let (_, cast_types) = byte_size_to_type(cast_size);
 
             // get the cast subject
-            let mut subject = line
+            let part_before_bitmask = line
                 .get(0..bitmask.start())
                 .ok_or_eyre("failed to get cast subject")?
-                .replace(';', "")
-                .split('=')
-                .collect::<Vec<&str>>()
-                .last()
-                .unwrap()
-                .to_string();
+                .replace(';', "");
+
+            // Find the last assignment operator (=) that's not part of a comparison (==, !=, <=,
+            // >=)
+            let mut subject = part_before_bitmask.clone();
+            let chars: Vec<char> = part_before_bitmask.chars().collect();
+
+            // Search for assignment operators from the end
+            for (i, &ch) in chars.iter().enumerate().rev() {
+                if ch == '=' {
+                    // Check if it's a single = (assignment) and not part of ==, !=, <=, >=
+                    let prev_char = if i > 0 { chars.get(i - 1).copied() } else { None };
+                    let next_char = chars.get(i + 1).copied();
+
+                    let is_assignment = prev_char != Some('=') &&
+                        prev_char != Some('!') &&
+                        prev_char != Some('<') &&
+                        prev_char != Some('>') &&
+                        next_char != Some('=');
+
+                    if is_assignment {
+                        subject = chars[i + 1..].iter().collect::<String>().trim().to_string();
+                        break;
+                    }
+                }
+            }
 
             // attempt to find matching parentheses
             let subject_range = find_balanced_encapsulator_backwards(&subject, ('(', ')'))
