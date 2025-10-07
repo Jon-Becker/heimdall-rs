@@ -70,10 +70,11 @@ Heimdall has been cited in the following academic papers & theses:
 
 
 
-- Aimar, D. (2023). *Extraction, indexing, and analysis of Ethereum smart contracts data* [Master’s Thesis, Politecnico di Torino]. Webthesis. http://webthesis.biblio.polito.it/id/eprint/28450
+- Aimar, D. (2023). *Extraction, indexing, and analysis of Ethereum smart contracts data* [Master’s thesis, Politecnico di Torino]. Webthesis. http://webthesis.biblio.polito.it/id/eprint/28450
 - Chen, Z., Beillahi, S. M., Barahimi, P., Minwalla, C., Du, H., Veneris, A., & Long, F. (2025). *Secure smart contract with control flow integrity*. arXiv. https://doi.org/10.48550/arXiv.2504.05509
-- Darwish, M. (2024). *From bytecode to safety: Decompiling smart contracts for vulnerability analysis* [Bachelor’s Thesis, Linnaeus University]. DiVA Portal. https://urn.kb.se/resolve?urn=urn:nbn:se:lnu:diva-129903
+- Darwish, M. (2024). *From bytecode to safety: Decompiling smart contracts for vulnerability analysis* [Bachelor’s thesis, Linnaeus University]. DiVA Portal. https://urn.kb.se/resolve?urn=urn:nbn:se:lnu:diva-129903
 - Forissier, T. (2024). *EVeilM: EVM bytecode obfuscation* [Master’s thesis, KTH Royal Institute of Technology]. DiVA Portal. https://urn.kb.se/resolve?urn=urn:nbn:se:kth:diva-359674
+- Gkioka, M. (2025). *Domain transfer via decompilation: Enhancing code LLMs’ performance for blockchain applications* [Master’s thesis, National and Kapodistrian University of Athens]. Pergamos. https://pergamos.lib.uoa.gr/uoa/dl/object/5296079
 - Lagouvardos, S., Bollanos, Y., Debono, M., Grech, N. & Smaragdakis, Y. (2025). *Precise static identification of Ethereum storage variables*. arXiv. https://doi.org/10.48550/arXiv.2503.20690
 - Lagouvardos, S., Bollanos, Y., Grech, N., & Smaragdakis, Y. (2025). *The incredible shrinking context…in a decompiler near you*. arXiv. https://doi.org/10.48550/arXiv.2409.11157
 - Solmaz, O., Heimbach, L., Vonlanthen, Y., & Wattenhofer, R. (2025). *Optimistic MEV in Ethereum layer 2s: Why blockspace is always in demand*. arXiv. https://doi.org/10.48550/arXiv.2506.14768
