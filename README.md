@@ -77,6 +77,7 @@ Heimdall has been cited in the following academic papers & theses:
 - Gkioka, M. (2025). *Domain transfer via decompilation: Enhancing code LLMs’ performance for blockchain applications* [Master’s thesis, National and Kapodistrian University of Athens]. Pergamos. https://pergamos.lib.uoa.gr/uoa/dl/object/5296079
 - Lagouvardos, S., Bollanos, Y., Debono, M., Grech, N. & Smaragdakis, Y. (2025). *Precise static identification of Ethereum storage variables*. arXiv. https://doi.org/10.48550/arXiv.2503.20690
 - Lagouvardos, S., Bollanos, Y., Grech, N., & Smaragdakis, Y. (2025). *The incredible shrinking context…in a decompiler near you*. arXiv. https://doi.org/10.48550/arXiv.2409.11157
+- Liu, Y., Li, X., & Li, Y. (2025). *DeepTx: Real-time transaction risk analysis via multi-modal features and LLM reasoning*. arXiv. https://doi.org/10.48550/arXiv.2510.18438
 - Solmaz, O., Heimbach, L., Vonlanthen, Y., & Wattenhofer, R. (2025). *Optimistic MEV in Ethereum layer 2s: Why blockspace is always in demand*. arXiv. https://doi.org/10.48550/arXiv.2506.14768
 - Ye, M., Lin, X., Nan, Y., Wu, J., & Zheng, Z. (2024). Midas: Mining profitable exploits in on-chain smart contracts via feedback-driven fuzzing and differential analysis. In M. Christakis & M. Pradel (Eds.), *ISSTA 2024: Proceedings of the 33rd ACM SIGSOFT International Symposium on Software Testing and Analysis* (pp. 794–805). Association for Computing Machinery. https://doi.org/10.1145/3650212.3680321
 
