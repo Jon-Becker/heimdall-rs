@@ -103,7 +103,7 @@ impl Stack {
     /// stack.push(U256::from(0x02), WrappedOpcode::default());
     ///
     /// // stack is now [0x02, 0x01, 0x00]
-    /// let frames = stack.pop_n(2);
+    /// let frames = stack.pop_n(2).unwrap();
     /// assert_eq!(frames[0].value, U256::from(0x02));
     /// assert_eq!(frames[1].value, U256::from(0x01));
     ///
@@ -112,8 +112,11 @@ impl Stack {
     ///
     /// // stack is now []
     /// ```
-    pub fn pop_n(&mut self, n: usize) -> Vec<StackFrame> {
-        self.stack.drain(0..n).collect::<Vec<StackFrame>>()
+    pub fn pop_n(&mut self, n: usize) -> Result<Vec<StackFrame>> {
+        if n > self.stack.len() {
+            return Err(eyre::eyre!("stack underflow"));
+        }
+        Ok(self.stack.drain(0..n).collect::<Vec<StackFrame>>())
     }
 
     /// Swap the top value and the nth value on the stack.
@@ -307,7 +310,7 @@ mod tests {
         stack.push(U256::from(1), WrappedOpcode::default());
         stack.push(U256::from(2), WrappedOpcode::default());
         stack.push(U256::from(3), WrappedOpcode::default());
-        let values = stack.pop_n(2);
+        let values = stack.pop_n(2).unwrap();
         assert_eq!(values.len(), 2);
         assert_eq!(values[0].value, U256::from(3));
         assert_eq!(values[1].value, U256::from(2));

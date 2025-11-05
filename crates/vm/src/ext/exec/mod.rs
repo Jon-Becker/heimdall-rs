@@ -17,7 +17,7 @@ use crate::{
         },
     },
 };
-use eyre::{OptionExt, Result};
+use eyre::Result;
 use hashbrown::HashMap;
 use heimdall_common::utils::strings::decode_hex;
 use std::time::Instant;
@@ -55,7 +55,13 @@ impl VM {
         // step through the bytecode until we reach the entry point
         while self.bytecode.len() >= self.instruction as usize && (self.instruction <= entry_point)
         {
-            self.step()?;
+            match self.step() {
+                Ok(_) => {},
+                Err(e) => {
+                    warn!("failed to reach entry point for selector 0x{}: {:?}", selector, e);
+                    return Err(e);
+                }
+            }
 
             // this shouldn't be necessary, but it's safer to have it
             if self.exitcode != 255 || !self.returndata.is_empty() {
@@ -67,11 +73,19 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        Ok((
-            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)
-                .map(|x| x.ok_or_eyre("symbolic execution failed"))??,
-            branch_count,
-        ))
+        let trace = match self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)? {
+            Some(trace) => trace,
+            None => {
+                warn!("symbolic execution returned no valid traces for selector 0x{}", selector);
+                VMTrace {
+                    instruction: self.instruction,
+                    gas_used: self.gas_used,
+                    operations: Vec::new(),
+                    children: Vec::new(),
+                }
+            }
+        };
+        Ok((trace, branch_count))
     }
 
     /// Performs symbolic execution on the entire contract to map out control flow
@@ -92,11 +106,19 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        Ok((
-            self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)
-                .map(|x| x.ok_or_eyre("symbolic execution failed"))??,
-            branch_count,
-        ))
+        let trace = match self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)? {
+            Some(trace) => trace,
+            None => {
+                warn!("symbolic execution returned no valid traces");
+                VMTrace {
+                    instruction: self.instruction,
+                    gas_used: self.gas_used,
+                    operations: Vec::new(),
+                    children: Vec::new(),
+                }
+            }
+        };
+        Ok((trace, branch_count))
     }
 
     fn recursive_map(
