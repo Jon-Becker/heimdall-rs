@@ -1193,7 +1193,7 @@ impl VM {
                 let offset = self.stack.pop()?.value;
                 let size = self.stack.pop()?.value;
                 let topics =
-                    self.stack.pop_n(topic_count as usize).iter().map(|x| x.value).collect();
+                    self.stack.pop_n(topic_count as usize)?.iter().map(|x| x.value).collect();
 
                 // Safely convert U256 to usize
                 let offset: usize = offset.try_into().unwrap_or(usize::MAX);
@@ -1221,7 +1221,7 @@ impl VM {
 
             // CREATE
             0xF0 => {
-                self.stack.pop_n(3);
+                self.stack.pop_n(3)?;
 
                 self.stack.push(*CREATE_ADDRESS, operation);
             }
@@ -1229,7 +1229,7 @@ impl VM {
             // CALL, CALLCODE
             0xF1 | 0xF2 => {
                 let address = self.stack.pop()?.value;
-                self.stack.pop_n(6);
+                self.stack.pop_n(6)?;
 
                 // consume dynamic gas
                 if !self.address_access_set.contains(&address) {
@@ -1261,7 +1261,7 @@ impl VM {
             // DELEGATECALL, STATICCALL
             0xF4 | 0xFA => {
                 let address = self.stack.pop()?.value;
-                self.stack.pop_n(5);
+                self.stack.pop_n(5)?;
 
                 // consume dynamic gas
                 if !self.address_access_set.contains(&address) {
@@ -1276,7 +1276,7 @@ impl VM {
 
             // CREATE2
             0xF5 => {
-                self.stack.pop_n(4);
+                self.stack.pop_n(4)?;
 
                 self.stack.push(*CREATE2_ADDRESS, operation);
             }
@@ -2055,8 +2055,9 @@ mod tests {
         let result = vm.memory.read(0, 32);
         let expected = [
             &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..], // 0x00-0x0F: copied data
-            &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..] // 0x10-0x1F: original data
-        ].concat();
+            &decode_hex("101112131415161718191a1b1c1d1e1f").expect("failed to parse hex")[..], // 0x10-0x1F: original data
+        ]
+        .concat();
         assert_eq!(result, expected);
     }
 
