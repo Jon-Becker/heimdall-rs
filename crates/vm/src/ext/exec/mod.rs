@@ -56,7 +56,7 @@ impl VM {
         while self.bytecode.len() >= self.instruction as usize && (self.instruction <= entry_point)
         {
             match self.step() {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) => {
                     warn!("failed to reach entry point for selector 0x{}: {:?}", selector, e);
                     return Err(e);
