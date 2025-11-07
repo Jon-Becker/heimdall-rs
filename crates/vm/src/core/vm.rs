@@ -13,7 +13,7 @@ use std::time::Instant;
 #[cfg(feature = "step-tracing")]
 use tracing::trace;
 
-use crate::core::opcodes::OpCodeInfo;
+use crate::core::opcodes::{self, OpCodeInfo};
 
 use super::{
     constants::{COINBASE_ADDRESS, CREATE2_ADDRESS, CREATE_ADDRESS},
@@ -311,10 +311,10 @@ impl VM {
         b: &StackFrame,
         operation: WrappedOpcode,
     ) {
-        let simplified_operation = if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-            (0x5f..=0x7f).contains(&b.operation.opcode)
+        let simplified_operation = if (opcodes::PUSH0..=opcodes::PUSH32).contains(&a.operation.opcode) &&
+            (opcodes::PUSH0..=opcodes::PUSH32).contains(&b.operation.opcode)
         {
-            WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
+            WrappedOpcode::new(opcodes::PUSH32, vec![WrappedInput::Raw(result)])
         } else {
             operation
         };
@@ -327,8 +327,8 @@ impl VM {
         a: &StackFrame,
         operation: WrappedOpcode,
     ) {
-        let simplified_operation = if (0x5f..=0x7f).contains(&a.operation.opcode) {
-            WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result)])
+        let simplified_operation = if (opcodes::PUSH0..=opcodes::PUSH32).contains(&a.operation.opcode) {
+            WrappedOpcode::new(opcodes::PUSH32, vec![WrappedInput::Raw(result)])
         } else {
             operation
         };
@@ -342,10 +342,10 @@ impl VM {
         b: &StackFrame,
         operation: WrappedOpcode,
     ) {
-        let simplified_operation = if (0x5f..=0x7f).contains(&a.operation.opcode) &&
-            (0x5f..=0x7f).contains(&b.operation.opcode)
+        let simplified_operation = if (opcodes::PUSH0..=opcodes::PUSH32).contains(&a.operation.opcode) &&
+            (opcodes::PUSH0..=opcodes::PUSH32).contains(&b.operation.opcode)
         {
-            WrappedOpcode::new(0x7f, vec![WrappedInput::Raw(result.into_raw())])
+            WrappedOpcode::new(opcodes::PUSH32, vec![WrappedInput::Raw(result.into_raw())])
         } else {
             operation
         };
@@ -422,8 +422,7 @@ impl VM {
 
         // execute the operation
         match opcode {
-            // STOP
-            0x00 => {
+            opcodes::STOP => {
                 self.exit(10, Vec::new());
                 return Ok(Instruction {
                     instruction: last_instruction,
@@ -435,32 +434,28 @@ impl VM {
                 });
             }
 
-            // ADD
-            0x01 => {
+            opcodes::ADD => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value.overflowing_add(b.value).0;
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // MUL
-            0x02 => {
+            opcodes::MUL => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value.overflowing_mul(b.value).0;
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // SUB
-            0x03 => {
+            opcodes::SUB => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value.overflowing_sub(b.value).0;
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // DIV
-            0x04 => {
+            opcodes::DIV => {
                 let numerator = self.stack.pop()?;
                 let denominator = self.stack.pop()?;
                 let result = if !denominator.value.is_zero() {
@@ -471,8 +466,7 @@ impl VM {
                 self.push_with_optimization(result, &numerator, &denominator, operation);
             }
 
-            // SDIV
-            0x05 => {
+            opcodes::SDIV => {
                 let numerator = self.stack.pop()?;
                 let denominator = self.stack.pop()?;
                 let result = if !denominator.value.is_zero() {
@@ -483,8 +477,7 @@ impl VM {
                 self.push_with_optimization_signed(result, &numerator, &denominator, operation);
             }
 
-            // MOD
-            0x06 => {
+            opcodes::MOD => {
                 let a = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
                 let result =
@@ -492,8 +485,7 @@ impl VM {
                 self.push_with_optimization(result, &a, &modulus, operation);
             }
 
-            // SMOD
-            0x07 => {
+            opcodes::SMOD => {
                 let a = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
                 let result = if !modulus.value.is_zero() {
@@ -504,34 +496,31 @@ impl VM {
                 self.push_with_optimization_signed(result, &a, &modulus, operation);
             }
 
-            // ADDMOD
-            0x08 => {
+            opcodes::ADDMOD => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
                 let result = if !modulus.value.is_zero() {
-                    a.value.overflowing_add(b.value).0.rem(modulus.value)
+                    a.value.add_mod(b.value, modulus.value)
                 } else {
                     U256::ZERO
                 };
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // MULMOD
-            0x09 => {
+            opcodes::MULMOD => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let modulus = self.stack.pop()?;
                 let result = if !modulus.value.is_zero() {
-                    a.value.overflowing_mul(b.value).0.rem(modulus.value)
+                    a.value.mul_mod(b.value, modulus.value)
                 } else {
                     U256::ZERO
                 };
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // EXP
-            0x0A => {
+            opcodes::EXP => {
                 let a = self.stack.pop()?;
                 let exponent = self.stack.pop()?;
                 let result = a.value.overflowing_pow(exponent.value).0;
@@ -544,8 +533,7 @@ impl VM {
                 self.push_with_optimization(result, &a, &exponent, operation);
             }
 
-            // SIGNEXTEND
-            0x0B => {
+            opcodes::SIGNEXTEND => {
                 let x = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
 
@@ -560,80 +548,69 @@ impl VM {
                 self.stack.push(result, operation)
             }
 
-            // LT
-            0x10 => {
+            opcodes::LT => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
                 self.push_boolean(a.lt(&b), operation);
             }
 
-            // GT
-            0x11 => {
+            opcodes::GT => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
                 self.push_boolean(a.gt(&b), operation);
             }
 
-            // SLT
-            0x12 => {
+            opcodes::SLT => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
                 self.push_boolean(sign_uint(a).lt(&sign_uint(b)), operation);
             }
 
-            // SGT
-            0x13 => {
+            opcodes::SGT => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
                 self.push_boolean(sign_uint(a).gt(&sign_uint(b)), operation);
             }
 
-            // EQ
-            0x14 => {
+            opcodes::EQ => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
                 self.push_boolean(a.eq(&b), operation);
             }
 
-            // ISZERO
-            0x15 => {
+            opcodes::ISZERO => {
                 let a = self.stack.pop()?.value;
                 self.push_boolean(a.is_zero(), operation);
             }
 
-            // AND
-            0x16 => {
+            opcodes::AND => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value & b.value;
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // OR
-            0x17 => {
+            opcodes::OR => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value | b.value;
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // XOR
-            0x18 => {
+            opcodes::XOR => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value ^ b.value;
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // NOT
-            0x19 => {
+            opcodes::NOT => {
                 let a = self.stack.pop()?;
                 let result = !a.value;
                 self.push_with_optimization_single(result, &a, operation);
             }
 
-            // BYTE
-            0x1A => {
+            opcodes::BYTE => {
                 let b = self.stack.pop()?.value;
                 let a = self.stack.pop()?.value;
                 let result = if b >= U256::from(32u32) {
@@ -644,8 +621,7 @@ impl VM {
                 self.stack.push(result, operation);
             }
 
-            // SHL
-            0x1B => {
+            opcodes::SHL => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result =
@@ -653,8 +629,7 @@ impl VM {
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // SHR
-            0x1C => {
+            opcodes::SHR => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result =
@@ -662,8 +637,7 @@ impl VM {
                 self.push_with_optimization(result, &a, &b, operation);
             }
 
-            // SAR
-            0x1D => {
+            opcodes::SAR => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let usize_a: usize = a.value.try_into().unwrap_or(usize::MAX);
@@ -672,8 +646,7 @@ impl VM {
                 self.push_with_optimization_signed(result, &a, &b, operation);
             }
 
-            // SHA3
-            0x20 => {
+            opcodes::SHA3 => {
                 let offset = self.stack.pop()?.value;
                 let size = self.stack.pop()?.value;
 
@@ -692,13 +665,11 @@ impl VM {
                 self.stack.push(U256::from_be_bytes(result.0), operation);
             }
 
-            // ADDRESS
-            0x30 => {
+            opcodes::ADDRESS => {
                 self.stack.push(Self::address_to_u256(&self.address), operation);
             }
 
-            // BALANCE
-            0x31 => {
+            opcodes::BALANCE => {
                 let address = self.stack.pop()?.value;
 
                 // consume dynamic gas
@@ -713,23 +684,19 @@ impl VM {
                 self.stack.push(U256::from(1), operation);
             }
 
-            // ORIGIN
-            0x32 => {
+            opcodes::ORIGIN => {
                 self.stack.push(Self::address_to_u256(&self.origin), operation);
             }
 
-            // CALLER
-            0x33 => {
+            opcodes::CALLER => {
                 self.stack.push(Self::address_to_u256(&self.caller), operation);
             }
 
-            // CALLVALUE
-            0x34 => {
+            opcodes::CALLVALUE => {
                 self.stack.push(U256::from(self.value), operation);
             }
 
-            // CALLDATALOAD
-            0x35 => {
+            opcodes::CALLDATALOAD => {
                 let i = self.stack.pop()?.value;
 
                 // Safely convert U256 to usize
@@ -750,15 +717,13 @@ impl VM {
                 self.stack.push(result, operation);
             }
 
-            // CALLDATASIZE
-            0x36 => {
+            opcodes::CALLDATASIZE => {
                 let result = U256::from(self.calldata.len());
 
                 self.stack.push(result, operation);
             }
 
-            // CALLDATACOPY
-            0x37 => {
+            opcodes::CALLDATACOPY => {
                 let dest_offset = self.stack.pop()?.value;
                 let offset = self.stack.pop()?.value;
                 let size = self.stack.pop()?.value;
@@ -784,15 +749,13 @@ impl VM {
                 );
             }
 
-            // CODESIZE
-            0x38 => {
+            opcodes::CODESIZE => {
                 let result = U256::from(self.bytecode.len() as u128);
 
                 self.stack.push(result, operation);
             }
 
-            // CODECOPY
-            0x39 => {
+            opcodes::CODECOPY => {
                 let dest_offset = self.stack.pop()?.value;
                 let offset = self.stack.pop()?.value;
                 let size = self.stack.pop()?.value;
@@ -818,13 +781,11 @@ impl VM {
                 );
             }
 
-            // GASPRICE
-            0x3A => {
+            opcodes::GASPRICE => {
                 self.stack.push(U256::from(1), operation);
             }
 
-            // EXTCODESIZE
-            0x3B => {
+            opcodes::EXTCODESIZE => {
                 let address = self.stack.pop()?.value;
 
                 // consume dynamic gas
@@ -838,8 +799,7 @@ impl VM {
                 self.stack.push(U256::from(1), operation);
             }
 
-            // EXTCODECOPY
-            0x3C => {
+            opcodes::EXTCODECOPY => {
                 let address = self.stack.pop()?.value;
                 let dest_offset = self.stack.pop()?.value;
                 self.stack.pop()?;
@@ -874,13 +834,11 @@ impl VM {
                 );
             }
 
-            // RETURNDATASIZE
-            0x3D => {
+            opcodes::RETURNDATASIZE => {
                 self.stack.push(U256::from(1u8), operation);
             }
 
-            // RETURNDATACOPY
-            0x3E => {
+            opcodes::RETURNDATACOPY => {
                 let dest_offset = self.stack.pop()?.value;
                 self.stack.pop()?;
                 let size = self.stack.pop()?.value;
@@ -907,46 +865,40 @@ impl VM {
                 );
             }
 
-            // EXTCODEHASH and BLOCKHASH
-            0x3F | 0x40 => {
+            opcodes::EXTCODEHASH | opcodes::BLOCKHASH => {
                 let address = self.stack.pop()?.value;
 
                 // consume dynamic gas
-                if opcode == 0x3f && !self.address_access_set.contains(&address) {
+                if opcode == opcodes::EXTCODEHASH && !self.address_access_set.contains(&address) {
                     self.consume_gas(2600);
                     self.address_access_set.insert(address);
-                } else if opcode == 0x3f {
+                } else if opcode == opcodes::EXTCODEHASH {
                     self.consume_gas(100);
                 }
 
                 self.stack.push(U256::ZERO, operation);
             }
 
-            // COINBASE
-            0x41 => {
+            opcodes::COINBASE => {
                 self.stack.push(*COINBASE_ADDRESS, operation);
             }
 
-            // TIMESTAMP
-            0x42 => {
+            opcodes::TIMESTAMP => {
                 let timestamp =
                     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
 
                 self.stack.push(U256::from(timestamp), operation);
             }
 
-            // NUMBER -> BLOBBASEFEE
-            (0x43..=0x4a) => {
+            (opcodes::NUMBER..=opcodes::BLOBBASEFEE) => {
                 self.stack.push(U256::from(1u8), operation);
             }
 
-            // POP
-            0x50 => {
+            opcodes::POP => {
                 self.stack.pop()?;
             }
 
-            // MLOAD
-            0x51 => {
+            opcodes::MLOAD => {
                 let i = self.stack.pop()?.value;
                 let i: usize = i.try_into().unwrap_or(usize::MAX);
 
@@ -959,8 +911,7 @@ impl VM {
                 self.stack.push(result, operation);
             }
 
-            // MSTORE
-            0x52 => {
+            opcodes::MSTORE => {
                 let offset = self.stack.pop()?.value;
                 let value = self.stack.pop()?.value;
 
@@ -980,8 +931,7 @@ impl VM {
                 );
             }
 
-            // MSTORE8
-            0x53 => {
+            opcodes::MSTORE8 => {
                 let offset = self.stack.pop()?.value;
                 let value = self.stack.pop()?.value;
 
@@ -1001,8 +951,7 @@ impl VM {
                 );
             }
 
-            // SLOAD
-            0x54 => {
+            opcodes::SLOAD => {
                 let key = self.stack.pop()?.value;
 
                 // consume dynamic gas
@@ -1012,8 +961,7 @@ impl VM {
                 self.stack.push(U256::from(self.storage.load(key)), operation)
             }
 
-            // SSTORE
-            0x55 => {
+            opcodes::SSTORE => {
                 let key = self.stack.pop()?.value;
                 let value = self.stack.pop()?.value;
 
@@ -1024,8 +972,7 @@ impl VM {
                 self.storage.store(key, value);
             }
 
-            // JUMP
-            0x56 => {
+            opcodes::JUMP => {
                 let pc = self.stack.pop()?.value;
 
                 // Safely convert U256 to u128
@@ -1037,7 +984,7 @@ impl VM {
                         .len()
                         .try_into()
                         .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                    (self.bytecode[pc as usize] != 0x5b)
+                    (self.bytecode[pc as usize] != opcodes::JUMPDEST)
                 {
                     self.exit(790, Vec::new());
                     return Ok(Instruction {
@@ -1053,8 +1000,7 @@ impl VM {
                 }
             }
 
-            // JUMPI
-            0x57 => {
+            opcodes::JUMPI => {
                 let pc = self.stack.pop()?.value;
                 let condition = self.stack.pop()?.value;
 
@@ -1069,7 +1015,7 @@ impl VM {
                             .len()
                             .try_into()
                             .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                        (self.bytecode[pc as usize] != 0x5b)
+                        (self.bytecode[pc as usize] != opcodes::JUMPDEST)
                     {
                         self.exit(790, Vec::new());
                         return Ok(Instruction {
@@ -1086,24 +1032,20 @@ impl VM {
                 }
             }
 
-            // JUMPDEST
-            0x5B => {}
+            opcodes::JUMPDEST => {}
 
-            // TLOAD
-            0x5C => {
+            opcodes::TLOAD => {
                 let key = self.stack.pop()?.value;
                 self.stack.push(U256::from(self.storage.tload(key)), operation)
             }
 
-            // TSTORE
-            0x5D => {
+            opcodes::TSTORE => {
                 let key = self.stack.pop()?.value;
                 let value = self.stack.pop()?.value;
                 self.storage.tstore(key, value);
             }
 
-            // MCOPY
-            0x5E => {
+            opcodes::MCOPY => {
                 let dest_offset = self.stack.pop()?.value;
                 let offset = self.stack.pop()?.value;
                 let size = self.stack.pop()?.value;
@@ -1130,28 +1072,23 @@ impl VM {
                 );
             }
 
-            // PC
-            0x58 => {
+            opcodes::PC => {
                 self.stack.push(U256::from(self.instruction), operation);
             }
 
-            // MSIZE
-            0x59 => {
+            opcodes::MSIZE => {
                 self.stack.push(U256::from(self.memory.size()), operation);
             }
 
-            // GAS
-            0x5a => {
+            opcodes::GAS => {
                 self.stack.push(U256::from(self.gas_remaining), operation);
             }
 
-            // PUSH0
-            0x5f => {
+            opcodes::PUSH0 => {
                 self.stack.push(U256::ZERO, operation);
             }
 
-            // PUSH1 -> PUSH32
-            (0x60..=0x7F) => {
+            (opcodes::PUSH1..=opcodes::PUSH32) => {
                 // Get the number of bytes to push
                 let num_bytes = (opcode - 95) as u128;
 
@@ -1169,8 +1106,7 @@ impl VM {
                 self.stack.push(U256::from_be_slice(bytes), operation);
             }
 
-            // DUP1 -> DUP16
-            (0x80..=0x8F) => {
+            (opcodes::DUP1..=opcodes::DUP16) => {
                 // Get the number of items to swap
                 let index = opcode - 127;
 
@@ -1178,8 +1114,7 @@ impl VM {
                 self.stack.dup(index as usize);
             }
 
-            // SWAP1 -> SWAP16
-            (0x90..=0x9F) => {
+            (opcodes::SWAP1..=opcodes::SWAP16) => {
                 // Get the number of items to swap
                 let index = opcode - 143;
 
@@ -1187,8 +1122,7 @@ impl VM {
                 self.stack.swap(index as usize);
             }
 
-            // LOG0 -> LOG4
-            (0xA0..=0xA4) => {
+            (opcodes::LOG0..=opcodes::LOG4) => {
                 let topic_count = opcode - 160;
                 let offset = self.stack.pop()?.value;
                 let size = self.stack.pop()?.value;
@@ -1219,15 +1153,13 @@ impl VM {
                 ))
             }
 
-            // CREATE
-            0xF0 => {
+            opcodes::CREATE => {
                 self.stack.pop_n(3)?;
 
                 self.stack.push(*CREATE_ADDRESS, operation);
             }
 
-            // CALL, CALLCODE
-            0xF1 | 0xF2 => {
+            opcodes::CALL | opcodes::CALLCODE => {
                 let address = self.stack.pop()?.value;
                 self.stack.pop_n(6)?;
 
@@ -1242,8 +1174,7 @@ impl VM {
                 self.stack.push(U256::from(1u8), operation);
             }
 
-            // RETURN
-            0xF3 => {
+            opcodes::RETURN => {
                 let offset = self.stack.pop()?.value;
                 let size = self.stack.pop()?.value;
 
@@ -1258,8 +1189,7 @@ impl VM {
                 self.exit(0, self.memory.read(offset, size));
             }
 
-            // DELEGATECALL, STATICCALL
-            0xF4 | 0xFA => {
+            opcodes::DELEGATECALL | opcodes::STATICCALL => {
                 let address = self.stack.pop()?.value;
                 self.stack.pop_n(5)?;
 
@@ -1274,15 +1204,13 @@ impl VM {
                 self.stack.push(U256::from(1u8), operation);
             }
 
-            // CREATE2
-            0xF5 => {
+            opcodes::CREATE2 => {
                 self.stack.pop_n(4)?;
 
                 self.stack.push(*CREATE2_ADDRESS, operation);
             }
 
-            // REVERT
-            0xFD => {
+            opcodes::REVERT => {
                 let offset = self.stack.pop()?.value;
                 let size = self.stack.pop()?.value;
 
@@ -1293,7 +1221,6 @@ impl VM {
                 self.exit(1, self.memory.read(offset, size));
             }
 
-            // INVALID & SELFDESTRUCT
             _ => {
                 self.exit(1, Vec::new());
             }
@@ -1690,7 +1617,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert_eq!(vm.stack.peek(1).value, U256::from_str("0x04").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x09").expect("failed to parse hex"));
     }
 
     #[test]
