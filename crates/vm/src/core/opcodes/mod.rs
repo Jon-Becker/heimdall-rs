@@ -154,129 +154,75 @@ macro_rules! opcodes {
                 macro_rules! [<w_$name:lower>] {
                     // zero inputs
                     () => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: Vec::new(),
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, Vec::new())
                     };
                     // one input
                     ($arg:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg.into()])
                     };
                     // two inputs
                     ($arg1:expr, $arg2:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into()])
                     };
                     // three inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into()])
                     };
                     // four inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into()])
                     };
                     // five inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into()])
                     };
                     // six inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into()])
                     };
                     // seven inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into()])
                     };
                     // eight inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into()])
                     };
                     // nine inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into()])
                     };
                     // ten inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr, $arg10:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into()])
                     };
                     // eleven inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr, $arg10:expr, $arg11:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into()])
                     };
                     // twelve inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr, $arg10:expr, $arg11:expr, $arg12:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into()])
                     };
                     // thirteen inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr, $arg10:expr, $arg11:expr, $arg12:expr, $arg13:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into()])
                     };
                     // fourteen inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr, $arg10:expr, $arg11:expr, $arg12:expr, $arg13:expr, $arg14:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into(), $arg14.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into(), $arg14.into()])
                     };
                     // fifteen inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr, $arg10:expr, $arg11:expr, $arg12:expr, $arg13:expr, $arg14:expr, $arg15:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into(), $arg14.into(), $arg15.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into(), $arg14.into(), $arg15.into()])
                     };
                     // sixteen inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr, $arg10:expr, $arg11:expr, $arg12:expr, $arg13:expr, $arg14:expr, $arg15:expr, $arg16:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into(), $arg14.into(), $arg15.into(), $arg16.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into(), $arg14.into(), $arg15.into(), $arg16.into()])
                     };
                     // seventeen inputs
                     ($arg1:expr, $arg2:expr, $arg3:expr, $arg4:expr, $arg5:expr, $arg6:expr, $arg7:expr, $arg8:expr, $arg9:expr, $arg10:expr, $arg11:expr, $arg12:expr, $arg13:expr, $arg14:expr, $arg15:expr, $arg16:expr, $arg17:expr) => {
-                        $crate::core::opcodes::WrappedOpcode {
-                            opcode: $val,
-                            inputs: vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into(), $arg14.into(), $arg15.into(), $arg16.into(), $arg17.into()],
-                        }
+                        $crate::core::opcodes::WrappedOpcode::new($val, vec![$arg1.into(), $arg2.into(), $arg3.into(), $arg4.into(), $arg5.into(), $arg6.into(), $arg7.into(), $arg8.into(), $arg9.into(), $arg10.into(), $arg11.into(), $arg12.into(), $arg13.into(), $arg14.into(), $arg15.into(), $arg16.into(), $arg17.into()])
                     };
                 }
             }

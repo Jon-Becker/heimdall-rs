@@ -2627,6 +2627,7 @@ dependencies = [
  "indicatif",
  "lazy_static",
  "memory-stats",
+ "once_cell",
  "paste",
  "rand 0.8.5",
  "reqwest",
