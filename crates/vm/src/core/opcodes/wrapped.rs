@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use alloy::primitives::U256;
+use once_cell::sync::OnceCell;
 
 use crate::core::opcodes::opcode_name;
 
@@ -11,7 +14,10 @@ pub enum WrappedInput {
     /// A raw value input (typically from a PUSH instruction)
     Raw(U256),
     /// An opcode result as input (indicating data dependency)
-    Opcode(WrappedOpcode),
+    ///
+    /// Uses Arc for cheap cloning and shared ownership, preventing exponential
+    /// memory growth in deeply nested operation trees.
+    Opcode(Arc<WrappedOpcode>),
 }
 
 /// A [`WrappedOpcode`] is an EVM opcode with its inputs wrapped in a [`WrappedInput`].
@@ -19,7 +25,11 @@ pub enum WrappedInput {
 /// This structure is used to represent opcodes and their arguments in a way
 /// that can capture the relationships between operations, allowing for analysis
 /// of execution flow and dependencies.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+///
+/// The structure uses Arc-wrapped inputs to enable O(1) cloning and shared memory,
+/// preventing exponential slowdown in deeply nested expression trees common in
+/// cryptographic operations like MULMOD.
+#[derive(Debug)]
 pub struct WrappedOpcode {
     /// The opcode value as a byte.
     ///
@@ -31,16 +41,64 @@ pub struct WrappedOpcode {
     /// For example, an ADD opcode would typically have two inputs, which could be
     /// either raw values or the results of other operations.
     pub inputs: Vec<WrappedInput>,
+
+    /// Cached depth value, computed once on first access.
+    ///
+    /// This prevents repeated O(n) tree traversals, making depth() O(1) after
+    /// first access instead of O(2^depth).
+    cached_depth: OnceCell<u32>,
 }
 
 impl WrappedOpcode {
+    /// Creates a new WrappedOpcode with the given opcode and inputs.
+    pub fn new(opcode: u8, inputs: Vec<WrappedInput>) -> Self {
+        Self { opcode, inputs, cached_depth: OnceCell::new() }
+    }
+
     /// Returns the maximum recursion depth of its inputs.
     ///
     /// The depth is calculated as the maximum depth of any input plus 1.
     /// A depth of 1 means the opcode has only raw inputs (or no inputs).
     /// Greater depths indicate a chain of operations.
+    ///
+    /// This method is memoized - the depth is computed once and cached for O(1)
+    /// subsequent accesses.
     pub fn depth(&self) -> u32 {
-        self.inputs.iter().map(|x| x.depth()).max().unwrap_or(0) + 1
+        *self
+            .cached_depth
+            .get_or_init(|| self.inputs.iter().map(|x| x.depth()).max().unwrap_or(0) + 1)
+    }
+}
+
+impl Clone for WrappedOpcode {
+    fn clone(&self) -> Self {
+        Self {
+            opcode: self.opcode,
+            inputs: self.inputs.clone(),
+            // Don't clone the cached depth - let it be recomputed if needed
+            cached_depth: OnceCell::new(),
+        }
+    }
+}
+
+impl PartialEq for WrappedOpcode {
+    fn eq(&self, other: &Self) -> bool {
+        self.opcode == other.opcode && self.inputs == other.inputs
+    }
+}
+
+impl Eq for WrappedOpcode {}
+
+impl std::hash::Hash for WrappedOpcode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.opcode.hash(state);
+        self.inputs.hash(state);
+    }
+}
+
+impl Default for WrappedOpcode {
+    fn default() -> Self {
+        Self { opcode: 0, inputs: Vec::new(), cached_depth: OnceCell::new() }
     }
 }
 
@@ -102,8 +160,9 @@ impl From<WrappedOpcode> for WrappedInput {
     /// Converts a [`WrappedOpcode`] into a [`WrappedInput::Opcode`].
     ///
     /// This implementation allows for more ergonomic code when creating
-    /// [`WrappedInput`]s from operations.
+    /// [`WrappedInput`]s from operations. The opcode is automatically wrapped
+    /// in an Arc for efficient sharing.
     fn from(val: WrappedOpcode) -> Self {
-        WrappedInput::Opcode(val)
+        WrappedInput::Opcode(Arc::new(val))
     }
 }

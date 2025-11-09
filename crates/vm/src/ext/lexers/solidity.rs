@@ -409,11 +409,6 @@ impl WrappedOpcode {
 
         solidified_wrapped_opcode
     }
-
-    /// creates a new WrappedOpcode from a set of raw inputs
-    pub fn new(opcode: u8, inputs: Vec<WrappedInput>) -> WrappedOpcode {
-        WrappedOpcode { opcode, inputs }
-    }
 }
 
 impl WrappedInput {

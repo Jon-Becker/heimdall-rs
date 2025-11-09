@@ -1,5 +1,7 @@
 //! Benchmark for testing CFG (Control Flow Graph) functionality performance.
 
+#![allow(missing_docs)]
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use heimdall_cfg::{cfg, CfgArgsBuilder};
 use tokio::runtime::Runtime;

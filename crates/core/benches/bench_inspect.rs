@@ -1,5 +1,7 @@
 //! Benchmark for testing inspect functionality performance.
 
+#![allow(missing_docs)]
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use heimdall_inspect::{inspect, InspectArgsBuilder};
 use tokio::runtime::Runtime;

@@ -70,7 +70,10 @@ mod tests {
         );
         let complex_add_operation = WrappedOpcode::new(
             0x01,
-            vec![WrappedInput::Opcode(add_operation_wrapped), WrappedInput::Raw(U256::from(3u8))],
+            vec![
+                WrappedInput::Opcode(add_operation_wrapped.into()),
+                WrappedInput::Raw(U256::from(3u8)),
+            ],
         );
         assert_eq!(complex_add_operation.yulify(), "add(add(0x01, 0x02), 0x03)");
     }

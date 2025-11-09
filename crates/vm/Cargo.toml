@@ -41,6 +41,7 @@ eyre.workspace = true
 heimdall-common.workspace = true
 alloy.workspace = true
 hashbrown.workspace = true
+once_cell.workspace = true
 paste = { workspace = true }
 
 [features]

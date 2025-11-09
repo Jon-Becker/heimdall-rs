@@ -1,5 +1,7 @@
 //! Benchmark for testing decode functionality performance.
 
+#![allow(missing_docs)]
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use heimdall_decoder::{decode, DecodeArgsBuilder};
 use tokio::runtime::Runtime;

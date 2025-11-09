@@ -208,3 +208,114 @@ pub(super) fn historical_diffs_approximately_equal(
 
     true
 }
+
+/// Check if any stack position shows a consistent pattern (increasing, decreasing, or alternating)
+/// across more than 32 iterations. This indicates a loop counter or iterator.
+pub(super) fn stack_position_shows_pattern(stack: &Stack, historical_stacks: &[Stack]) -> bool {
+    // Start checking after just 10 iterations to catch loops earlier
+    if historical_stacks.len() < 10 {
+        return false;
+    }
+
+    trace!("checking stack pattern with {} historical stacks", historical_stacks.len());
+
+    // Determine the maximum stack size to check all positions
+    let max_size = stack.size().max(historical_stacks.iter().map(|s| s.size()).max().unwrap_or(0));
+
+    // For each stack position, collect values across all historical stacks
+    for position in 0..max_size {
+        let mut values: Vec<U256> = Vec::new();
+
+        // Collect values at this position from all historical stacks
+        for hist_stack in historical_stacks {
+            if let Some(frame) = hist_stack.stack.get(position) {
+                values.push(frame.value);
+            }
+        }
+
+        // Also include current stack value
+        if let Some(frame) = stack.stack.get(position) {
+            values.push(frame.value);
+        }
+
+        // Need at least 10 values to detect a meaningful pattern
+        if values.len() < 10 {
+            continue;
+        }
+
+        // Check for patterns
+        if is_consistently_increasing(&values) {
+            trace!(
+                "jump matches loop-detection heuristic: 'stack_position_shows_pattern' \
+                 (increasing at position {})",
+                position
+            );
+            return true;
+        }
+
+        if is_consistently_decreasing(&values) {
+            trace!(
+                "jump matches loop-detection heuristic: 'stack_position_shows_pattern' \
+                 (decreasing at position {})",
+                position
+            );
+            return true;
+        }
+
+        if is_consistently_alternating(&values) {
+            trace!(
+                "jump matches loop-detection heuristic: 'stack_position_shows_pattern' \
+                 (alternating at position {})",
+                position
+            );
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Check if values show a strong increasing trend (>= 60% of pairs increase)
+fn is_consistently_increasing(values: &[U256]) -> bool {
+    if values.len() < 2 {
+        return false;
+    }
+
+    let total_pairs = values.len() - 1;
+    let increasing_pairs = values.windows(2).filter(|pair| pair[1] > pair[0]).count();
+
+    // Require at least 60% of pairs to be increasing
+    increasing_pairs as f64 / total_pairs as f64 >= 0.6
+}
+
+/// Check if values show a strong decreasing trend (>= 60% of pairs decrease)
+fn is_consistently_decreasing(values: &[U256]) -> bool {
+    if values.len() < 2 {
+        return false;
+    }
+
+    let total_pairs = values.len() - 1;
+    let decreasing_pairs = values.windows(2).filter(|pair| pair[1] < pair[0]).count();
+
+    // Require at least 60% of pairs to be decreasing
+    decreasing_pairs as f64 / total_pairs as f64 >= 0.6
+}
+
+/// Check if values show a strong alternating pattern (>= 60% of triples alternate)
+fn is_consistently_alternating(values: &[U256]) -> bool {
+    if values.len() < 3 {
+        return false;
+    }
+
+    let total_triples = values.len() - 2;
+    let alternating_triples = values
+        .windows(3)
+        .filter(|triple| {
+            (triple[1] > triple[0] && triple[2] < triple[1]) ||
+                (triple[1] < triple[0] && triple[2] > triple[1])
+        })
+        .count();
+
+    // Require at least 60% of triples to alternate
+    alternating_triples as f64 / total_triples as f64 >= 0.6
+}

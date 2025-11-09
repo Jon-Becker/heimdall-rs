@@ -1,5 +1,7 @@
 //! Benchmark for testing disassemble functionality performance.
 
+#![allow(missing_docs)]
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
 use tokio::runtime::Runtime;
