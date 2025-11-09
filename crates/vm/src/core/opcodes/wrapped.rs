@@ -64,9 +64,9 @@ impl WrappedOpcode {
     /// This method is memoized - the depth is computed once and cached for O(1)
     /// subsequent accesses.
     pub fn depth(&self) -> u32 {
-        *self.cached_depth.get_or_init(|| {
-            self.inputs.iter().map(|x| x.depth()).max().unwrap_or(0) + 1
-        })
+        *self
+            .cached_depth
+            .get_or_init(|| self.inputs.iter().map(|x| x.depth()).max().unwrap_or(0) + 1)
     }
 }
 

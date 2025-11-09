@@ -71,7 +71,7 @@ mod integration_tests {
         // Verify multicall was detected (the key check)
         assert!(result.multicall_results.is_some(), "Multicall results should be present");
         let multicall_results = result.multicall_results.unwrap();
-        assert!(multicall_results.len() >= 1, "Should have at least one multicall result");
+        assert!(!multicall_results.is_empty(), "Should have at least one multicall result");
 
         // The signature should either contain multicall or be unresolved (if signature lookup
         // fails)

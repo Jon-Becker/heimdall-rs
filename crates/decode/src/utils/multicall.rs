@@ -326,7 +326,7 @@ mod tests {
     fn test_decode_multicall_item_validation() {
         // Test that multicall patterns with valid calldata structure are recognized
         let selector = decode_hex("4585e33b").unwrap();
-        let mut calldata = selector.clone();
+        let mut calldata = selector;
         calldata.extend(vec![0u8; 64]); // Add some padding for a simple call
 
         let multicall = DynSolValue::Array(vec![DynSolValue::Tuple(vec![

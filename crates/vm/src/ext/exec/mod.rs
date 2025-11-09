@@ -269,7 +269,8 @@ impl VM {
                             return Ok(None);
                         }
 
-                        // check if any stack position shows a consistent pattern (increasing/decreasing/alternating)
+                        // check if any stack position shows a consistent pattern
+                        // (increasing/decreasing/alternating)
                         if stack_position_shows_pattern(&vm.stack, historical_stacks) {
                             trace!("jump terminated.");
                             trace!(

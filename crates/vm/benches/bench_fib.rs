@@ -1,5 +1,7 @@
 //! Benchmark for testing VM performance with Fibonacci sequence calculations.
 
+#![allow(missing_docs)]
+
 use alloy::primitives::Address;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use heimdall_common::utils::strings::decode_hex;

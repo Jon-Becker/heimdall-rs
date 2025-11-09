@@ -211,10 +211,7 @@ pub(super) fn historical_diffs_approximately_equal(
 
 /// Check if any stack position shows a consistent pattern (increasing, decreasing, or alternating)
 /// across more than 32 iterations. This indicates a loop counter or iterator.
-pub(super) fn stack_position_shows_pattern(
-    stack: &Stack,
-    historical_stacks: &[Stack],
-) -> bool {
+pub(super) fn stack_position_shows_pattern(stack: &Stack, historical_stacks: &[Stack]) -> bool {
     // Start checking after just 10 iterations to catch loops earlier
     if historical_stacks.len() < 10 {
         return false;
@@ -223,9 +220,7 @@ pub(super) fn stack_position_shows_pattern(
     trace!("checking stack pattern with {} historical stacks", historical_stacks.len());
 
     // Determine the maximum stack size to check all positions
-    let max_size = stack
-        .size()
-        .max(historical_stacks.iter().map(|s| s.size()).max().unwrap_or(0));
+    let max_size = stack.size().max(historical_stacks.iter().map(|s| s.size()).max().unwrap_or(0));
 
     // For each stack position, collect values across all historical stacks
     for position in 0..max_size {
@@ -313,10 +308,13 @@ fn is_consistently_alternating(values: &[U256]) -> bool {
     }
 
     let total_triples = values.len() - 2;
-    let alternating_triples = values.windows(3).filter(|triple| {
-        (triple[1] > triple[0] && triple[2] < triple[1]) ||
-            (triple[1] < triple[0] && triple[2] > triple[1])
-    }).count();
+    let alternating_triples = values
+        .windows(3)
+        .filter(|triple| {
+            (triple[1] > triple[0] && triple[2] < triple[1]) ||
+                (triple[1] < triple[0] && triple[2] > triple[1])
+        })
+        .count();
 
     // Require at least 60% of triples to alternate
     alternating_triples as f64 / total_triples as f64 >= 0.6
