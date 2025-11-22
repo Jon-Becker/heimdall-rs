@@ -707,9 +707,9 @@ mod tests {
         // Test case where num_dyn_params > num_params, which would cause underflow
         // This signature has more dynamic param matches than actual params (due to counting)
         let signature = "bytes(bytes[])"; // 1 param, but matches "bytes" twice and has 1 bracket
-        // num_params = 1, num_dyn_params = 2 + 1 = 3
-        // Without saturating_sub: 1 - 3 would underflow
-        // With saturating_sub: 1.saturating_sub(3) = 0
+                                          // num_params = 1, num_dyn_params = 2 + 1 = 3
+                                          // Without saturating_sub: 1 - 3 would underflow
+                                          // With saturating_sub: 1.saturating_sub(3) = 0
         let score = score_signature(&signature, Some(0));
         // Should not panic, should return a valid score (greater than 0)
         assert!(score > 0);
@@ -719,9 +719,9 @@ mod tests {
     fn test_score_signature_handles_overflow_in_score_reduction() {
         // Test case where num_words > num_static_params
         let signature = "func()"; // 1 param (count from commas + 1), 0 dynamic params
-        // num_params = 1, num_dyn_params = 0, num_static_params = 1
-        // If num_words = 10, then num_words - num_static_params = 9
-        // This would reduce score by 90
+                                  // num_params = 1, num_dyn_params = 0, num_static_params = 1
+                                  // If num_words = 10, then num_words - num_static_params = 9
+                                  // This would reduce score by 90
         let score = score_signature(&signature, Some(10));
         // Should not panic and should be reduced appropriately
         // Initial score calculation:
