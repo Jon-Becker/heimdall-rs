@@ -1,6 +1,7 @@
 pub mod bytecode;
 pub mod calldata;
 pub mod compiler;
+pub mod etherscan;
 pub mod provider;
 pub mod rpc;
 pub mod signatures;

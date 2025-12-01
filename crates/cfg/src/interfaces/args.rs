@@ -46,7 +46,7 @@ pub struct CfgArgs {
 impl CfgArgs {
     /// Get the bytecode for the target
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
-        get_bytecode_from_target(&self.target, &self.rpc_url).await
+        get_bytecode_from_target(&self.target, &self.rpc_url, "").await
     }
 }
 

@@ -84,6 +84,11 @@ async fn main() -> Result<()> {
                 cmd.openai_api_key = configuration.openai_api_key;
             }
 
+            // if the user has not specified an etherscan api key, use the default
+            if cmd.etherscan_api_key.as_str() == "" {
+                cmd.etherscan_api_key = configuration.etherscan_api_key;
+            }
+
             // if the user has passed an output filename, override the default filename
             let mut abi_filename: String = "abi.json".to_string();
             let mut decompiled_output_filename: String = "decompiled".to_string();

@@ -63,6 +63,10 @@ pub struct DecompilerArgs {
     /// Your OpenAI API key, used for explaining calldata.
     #[clap(long, default_value = "", hide_default_value = true)]
     pub openai_api_key: String,
+
+    /// Your Etherscan API key, used for fetching creation bytecode of self-destructed contracts.
+    #[clap(long, default_value = "", hide_default_value = true)]
+    pub etherscan_api_key: String,
 }
 
 impl DecompilerArgs {
@@ -71,10 +75,13 @@ impl DecompilerArgs {
     /// This method fetches the bytecode from a file, address, or directly from a hex string,
     /// depending on the target type provided in the arguments.
     ///
+    /// For self-destructed contracts, if an Etherscan API key is configured and the chain is
+    /// supported, this will attempt to fetch the creation bytecode from the deployment transaction.
+    ///
     /// # Returns
     /// The raw bytecode as a vector of bytes
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
-        get_bytecode_from_target(&self.target, &self.rpc_url).await
+        get_bytecode_from_target(&self.target, &self.rpc_url, &self.etherscan_api_key).await
     }
 }
 
@@ -94,6 +101,7 @@ impl DecompilerArgsBuilder {
             abi: Some(None),
             llm_postprocess: Some(false),
             openai_api_key: Some(String::new()),
+            etherscan_api_key: Some(String::new()),
         }
     }
 }

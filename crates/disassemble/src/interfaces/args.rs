@@ -67,7 +67,7 @@ impl DisassemblerArgs {
     /// # Returns
     /// The raw bytecode as a vector of bytes
     pub async fn get_bytecode(&self) -> Result<Vec<u8>> {
-        get_bytecode_from_target(&self.target, &self.rpc_url).await
+        get_bytecode_from_target(&self.target, &self.rpc_url, "").await
     }
 }
 

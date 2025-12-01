@@ -28,6 +28,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to decompile");
@@ -60,6 +61,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to decompile");
@@ -85,6 +87,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to decompile");
@@ -110,6 +113,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to decompile");
@@ -135,6 +139,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to decompile");
@@ -174,6 +179,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to decompile");
@@ -202,6 +208,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
 
         })
         .await
@@ -237,6 +244,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
 
         })
         .await
@@ -263,6 +271,7 @@ mod integration_tests {
             abi: None,
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
 
         })
         .await
@@ -282,6 +291,7 @@ mod integration_tests {
             rpc_url: String::from(""),
             openai_api_key: String::from(""),
             llm_postprocess: false,
+            etherscan_api_key: String::from(""),
             default: true,
             skip_resolving: true,
             include_solidity: true,

@@ -105,7 +105,12 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
 
     if contract_bytecode.is_empty() {
-        return Err(Error::Eyre(eyre!("contract bytecode is empty")));
+        return Err(Error::Eyre(eyre!(
+            "contract bytecode is empty. This may be a self-destructed contract. \
+            try passing an Etherscan API key to attempt to fetch creation bytecode: \
+            \
+            `--etherscan_api_key <YOUR_KEY>`"
+        )));
     }
 
     // perform versioning and compiler heuristics
