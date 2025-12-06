@@ -31,8 +31,7 @@ jobs:
         env:
           RPC_URL: ${{ secrets.RPC_URL }}
           WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
-        run: |
-          cargo nextest r --no-fail-fast --release
+        run: make test
 
   doctest:
     runs-on: ubuntu-latest
@@ -43,7 +42,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - run: cargo test --workspace --doc
+      - run: make test-doc
 
   clippy:
     runs-on: ubuntu-latest
@@ -68,7 +67,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
-      - run: cargo +nightly fmt --check --all
+      - run: make fmt-check
 
   check:
     runs-on: ubuntu-latest
@@ -78,4 +77,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustc
-      - run: cargo check --workspace --all-targets --all-features
+      - run: make check
