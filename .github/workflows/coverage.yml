@@ -1,0 +1,71 @@
+name: coverage
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage:
+    name: coverage check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: taiki-e/install-action@nextest
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Get base branch coverage
+        env:
+          RPC_URL: ${{ secrets.RPC_URL }}
+          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
+        run: |
+          git checkout ${{ github.base_ref }}
+          make test-cov-json
+          BASE_COV=$(jq '.data[0].totals.lines.percent' coverage.json)
+          echo "BASE_COVERAGE=$BASE_COV" >> $GITHUB_ENV
+          rm coverage.json
+          git checkout -
+
+      - name: Get PR branch coverage
+        env:
+          RPC_URL: ${{ secrets.RPC_URL }}
+          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
+        run: |
+          make test-cov-json
+          PR_COV=$(jq '.data[0].totals.lines.percent' coverage.json)
+          echo "PR_COVERAGE=$PR_COV" >> $GITHUB_ENV
+
+      - name: Compare coverage
+        run: |
+          echo "Base branch coverage: $BASE_COVERAGE%"
+          echo "PR branch coverage: $PR_COVERAGE%"
+
+          DIFF=$(echo "$PR_COVERAGE - $BASE_COVERAGE" | bc)
+          echo "Coverage difference: $DIFF%"
+
+          # Check if coverage dropped by more than 2%
+          THRESHOLD=-2
+          if (( $(echo "$DIFF < $THRESHOLD" | bc -l) )); then
+            echo "::error::Coverage dropped by more than 2% (dropped by ${DIFF}%)"
+            exit 1
+          fi
+
+          echo "Coverage check passed"

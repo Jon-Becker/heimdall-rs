@@ -1,4 +1,4 @@
-.PHONY: all build build-release check clean fmt format lint lint-fix test test-doc test-heavy test-cov bench install help
+.PHONY: all build build-release check clean fmt format lint lint-fix test test-doc test-heavy test-cov test-cov-json bench install help
 
 # Clippy flags used across the project
 CLIPPY_ALLOW := --allow clippy::new_without_default \
@@ -22,7 +22,8 @@ help:
 	@echo "  make test          - Run tests with nextest"
 	@echo "  make test-doc      - Run doc tests"
 	@echo "  make test-heavy    - Run ignored/heavy integration tests"
-	@echo "  make test-cov      - Run tests with coverage"
+	@echo "  make test-cov      - Run tests with coverage (cobertura XML)"
+	@echo "  make test-cov-json - Run tests with coverage (JSON)"
 	@echo "  make bench         - Run benchmarks"
 	@echo "  make install       - Install heimdall CLI"
 
@@ -59,8 +60,14 @@ test-doc:
 test-heavy:
 	cargo nextest r --no-fail-fast --release --run-ignored all
 
+# Ignore pattern for coverage
+COV_IGNORE := --ignore-filename-regex='.*dump.*\.rs|.*rpc\.rs|.*logging\.rs|.*http\.rs|.*transpose\.rs|.*resources.*\.rs|.*test(s)?\.rs|main\.rs|.*lib\.rs'
+
 test-cov:
-	cargo llvm-cov --release --ignore-filename-regex='.*dump.*\.rs|.*rpc\.rs|.*logging\.rs|.*http\.rs|.*transpose\.rs|.*resources.*\.rs|.*test(s)?\.rs|main\.rs|.*lib\.rs' --cobertura --output-path coverage.xml
+	cargo llvm-cov --release $(COV_IGNORE) --cobertura --output-path coverage.xml
+
+test-cov-json:
+	cargo llvm-cov --release $(COV_IGNORE) --json --output-path coverage.json
 
 bench:
 	cargo bench -p heimdall-core
