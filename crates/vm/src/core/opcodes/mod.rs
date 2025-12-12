@@ -294,6 +294,7 @@ opcodes! {
     0x1b => SHL => stack_io(2, 1), min_gas(3);
     0x1c => SHR => stack_io(2, 1), min_gas(3);
     0x1d => SAR => stack_io(2, 1), min_gas(3);
+    0x1e => CLZ => stack_io(1, 1), min_gas(5);
 
     0x20 => SHA3 => stack_io(2, 1), min_gas(30);
 

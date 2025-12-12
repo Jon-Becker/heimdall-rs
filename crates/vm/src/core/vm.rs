@@ -21,8 +21,9 @@ use super::{
     log::Log,
     memory::Memory,
     opcodes::{WrappedInput, WrappedOpcode},
-    stack::{Stack, StackFrame},
+    stack::Stack,
     storage::Storage,
+    types::{address_to_u256, safe_copy_data},
 };
 
 /// The [`VM`] struct represents an EVM instance. \
@@ -293,78 +294,6 @@ impl VM {
     /// // vm._step(); // 0x00 EXIT
     /// // assert_eq!(vm.exitcode, 10);
     /// ```
-
-    fn push_boolean(&mut self, condition: bool, operation: WrappedOpcode) {
-        let value = if condition { U256::from(1u8) } else { U256::ZERO };
-        self.stack.push(value, operation);
-    }
-
-    fn address_to_u256(address: &Address) -> U256 {
-        let mut result = [0u8; 32];
-        result[12..].copy_from_slice(address.as_ref());
-        U256::from_be_bytes(result)
-    }
-
-    fn push_with_optimization(
-        &mut self,
-        result: U256,
-        a: &StackFrame,
-        b: &StackFrame,
-        operation: WrappedOpcode,
-    ) {
-        let simplified_operation = if (opcodes::PUSH0..=opcodes::PUSH32)
-            .contains(&a.operation.opcode) &&
-            (opcodes::PUSH0..=opcodes::PUSH32).contains(&b.operation.opcode)
-        {
-            WrappedOpcode::new(opcodes::PUSH32, vec![WrappedInput::Raw(result)])
-        } else {
-            operation
-        };
-        self.stack.push(result, simplified_operation);
-    }
-
-    fn push_with_optimization_single(
-        &mut self,
-        result: U256,
-        a: &StackFrame,
-        operation: WrappedOpcode,
-    ) {
-        let simplified_operation =
-            if (opcodes::PUSH0..=opcodes::PUSH32).contains(&a.operation.opcode) {
-                WrappedOpcode::new(opcodes::PUSH32, vec![WrappedInput::Raw(result)])
-            } else {
-                operation
-            };
-        self.stack.push(result, simplified_operation);
-    }
-
-    fn push_with_optimization_signed(
-        &mut self,
-        result: I256,
-        a: &StackFrame,
-        b: &StackFrame,
-        operation: WrappedOpcode,
-    ) {
-        let simplified_operation = if (opcodes::PUSH0..=opcodes::PUSH32)
-            .contains(&a.operation.opcode) &&
-            (opcodes::PUSH0..=opcodes::PUSH32).contains(&b.operation.opcode)
-        {
-            WrappedOpcode::new(opcodes::PUSH32, vec![WrappedInput::Raw(result.into_raw())])
-        } else {
-            operation
-        };
-        self.stack.push(result.into_raw(), simplified_operation);
-    }
-
-    fn safe_copy_data(source: &[u8], offset: usize, size: usize) -> Vec<u8> {
-        let end_offset = offset.saturating_add(size).min(source.len());
-        let mut value = source.get(offset..end_offset).unwrap_or(&[]).to_owned();
-        if value.len() < size {
-            value.resize(size, 0u8);
-        }
-        value
-    }
-
     fn _step(&mut self) -> Result<Instruction> {
         // sanity check
         if self.bytecode.len() < self.instruction as usize {
@@ -442,21 +371,21 @@ impl VM {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value.overflowing_add(b.value).0;
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::MUL => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value.overflowing_mul(b.value).0;
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::SUB => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value.overflowing_sub(b.value).0;
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::DIV => {
@@ -467,7 +396,7 @@ impl VM {
                 } else {
                     U256::ZERO
                 };
-                self.push_with_optimization(result, &numerator, &denominator, operation);
+                self.stack.push_with_optimization(result, &numerator, &denominator, operation);
             }
 
             opcodes::SDIV => {
@@ -478,7 +407,12 @@ impl VM {
                 } else {
                     I256::ZERO
                 };
-                self.push_with_optimization_signed(result, &numerator, &denominator, operation);
+                self.stack.push_with_optimization_signed(
+                    result,
+                    &numerator,
+                    &denominator,
+                    operation,
+                );
             }
 
             opcodes::MOD => {
@@ -486,7 +420,7 @@ impl VM {
                 let modulus = self.stack.pop()?;
                 let result =
                     if !modulus.value.is_zero() { a.value.rem(modulus.value) } else { U256::ZERO };
-                self.push_with_optimization(result, &a, &modulus, operation);
+                self.stack.push_with_optimization(result, &a, &modulus, operation);
             }
 
             opcodes::SMOD => {
@@ -497,7 +431,7 @@ impl VM {
                 } else {
                     I256::ZERO
                 };
-                self.push_with_optimization_signed(result, &a, &modulus, operation);
+                self.stack.push_with_optimization_signed(result, &a, &modulus, operation);
             }
 
             opcodes::ADDMOD => {
@@ -509,7 +443,7 @@ impl VM {
                 } else {
                     U256::ZERO
                 };
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::MULMOD => {
@@ -521,7 +455,7 @@ impl VM {
                 } else {
                     U256::ZERO
                 };
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::EXP => {
@@ -534,7 +468,7 @@ impl VM {
                 let gas_cost = 50 * exponent_byte_size;
                 self.consume_gas(gas_cost as u128);
 
-                self.push_with_optimization(result, &a, &exponent, operation);
+                self.stack.push_with_optimization(result, &a, &exponent, operation);
             }
 
             opcodes::SIGNEXTEND => {
@@ -555,63 +489,63 @@ impl VM {
             opcodes::LT => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
-                self.push_boolean(a.lt(&b), operation);
+                self.stack.push_boolean(a.lt(&b), operation);
             }
 
             opcodes::GT => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
-                self.push_boolean(a.gt(&b), operation);
+                self.stack.push_boolean(a.gt(&b), operation);
             }
 
             opcodes::SLT => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
-                self.push_boolean(sign_uint(a).lt(&sign_uint(b)), operation);
+                self.stack.push_boolean(sign_uint(a).lt(&sign_uint(b)), operation);
             }
 
             opcodes::SGT => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
-                self.push_boolean(sign_uint(a).gt(&sign_uint(b)), operation);
+                self.stack.push_boolean(sign_uint(a).gt(&sign_uint(b)), operation);
             }
 
             opcodes::EQ => {
                 let a = self.stack.pop()?.value;
                 let b = self.stack.pop()?.value;
-                self.push_boolean(a.eq(&b), operation);
+                self.stack.push_boolean(a.eq(&b), operation);
             }
 
             opcodes::ISZERO => {
                 let a = self.stack.pop()?.value;
-                self.push_boolean(a.is_zero(), operation);
+                self.stack.push_boolean(a.is_zero(), operation);
             }
 
             opcodes::AND => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value & b.value;
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::OR => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value | b.value;
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::XOR => {
                 let a = self.stack.pop()?;
                 let b = self.stack.pop()?;
                 let result = a.value ^ b.value;
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::NOT => {
                 let a = self.stack.pop()?;
                 let result = !a.value;
-                self.push_with_optimization_single(result, &a, operation);
+                self.stack.push_with_optimization_single(result, &a, operation);
             }
 
             opcodes::BYTE => {
@@ -630,7 +564,7 @@ impl VM {
                 let b = self.stack.pop()?;
                 let result =
                     if a.value > U256::from(255u8) { U256::ZERO } else { b.value.shl(a.value) };
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::SHR => {
@@ -638,7 +572,7 @@ impl VM {
                 let b = self.stack.pop()?;
                 let result =
                     if a.value > U256::from(255u8) { U256::ZERO } else { b.value.shr(a.value) };
-                self.push_with_optimization(result, &a, &b, operation);
+                self.stack.push_with_optimization(result, &a, &b, operation);
             }
 
             opcodes::SAR => {
@@ -647,7 +581,13 @@ impl VM {
                 let usize_a: usize = a.value.try_into().unwrap_or(usize::MAX);
                 let result =
                     if !b.value.is_zero() { sign_uint(b.value).shr(usize_a) } else { I256::ZERO };
-                self.push_with_optimization_signed(result, &a, &b, operation);
+                self.stack.push_with_optimization_signed(result, &a, &b, operation);
+            }
+
+            opcodes::CLZ => {
+                let a = self.stack.pop()?;
+                let result = U256::from(a.value.leading_zeros());
+                self.stack.push_with_optimization_single(result, &a, operation);
             }
 
             opcodes::SHA3 => {
@@ -670,7 +610,7 @@ impl VM {
             }
 
             opcodes::ADDRESS => {
-                self.stack.push(Self::address_to_u256(&self.address), operation);
+                self.stack.push(address_to_u256(&self.address), operation);
             }
 
             opcodes::BALANCE => {
@@ -689,11 +629,11 @@ impl VM {
             }
 
             opcodes::ORIGIN => {
-                self.stack.push(Self::address_to_u256(&self.origin), operation);
+                self.stack.push(address_to_u256(&self.origin), operation);
             }
 
             opcodes::CALLER => {
-                self.stack.push(Self::address_to_u256(&self.caller), operation);
+                self.stack.push(address_to_u256(&self.caller), operation);
             }
 
             opcodes::CALLVALUE => {
@@ -737,7 +677,7 @@ impl VM {
                 let size: usize =
                     size.try_into().unwrap_or(self.calldata.len()).min(self.calldata.len());
 
-                let value = Self::safe_copy_data(&self.calldata, offset, size);
+                let value = safe_copy_data(&self.calldata, offset, size);
 
                 // consume dynamic gas
                 let minimum_word_size = size.div_ceil(32) as u128;
@@ -769,7 +709,7 @@ impl VM {
                 let size: usize =
                     size.try_into().unwrap_or(self.bytecode.len()).min(self.bytecode.len());
 
-                let value = Self::safe_copy_data(&self.bytecode, offset, size);
+                let value = safe_copy_data(&self.bytecode, offset, size);
 
                 // consume dynamic gas
                 let minimum_word_size = size.div_ceil(32) as u128;
@@ -983,12 +923,13 @@ impl VM {
                 let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
                 // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                if (pc <=
-                    self.bytecode
+                if (pc
+                    <= self
+                        .bytecode
                         .len()
                         .try_into()
-                        .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                    (self.bytecode[pc as usize] != opcodes::JUMPDEST)
+                        .expect("impossible case: bytecode is larger than u128::MAX"))
+                    && (self.bytecode[pc as usize] != opcodes::JUMPDEST)
                 {
                     self.exit(790, Vec::new());
                     return Ok(Instruction {
@@ -1014,12 +955,13 @@ impl VM {
                 if !condition.is_zero() {
                     // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
                     // destination)
-                    if (pc <
-                        self.bytecode
+                    if (pc
+                        < self
+                            .bytecode
                             .len()
                             .try_into()
-                            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                        (self.bytecode[pc as usize] != opcodes::JUMPDEST)
+                            .expect("impossible case: bytecode is larger than u128::MAX"))
+                        && (self.bytecode[pc as usize] != opcodes::JUMPDEST)
                     {
                         self.exit(790, Vec::new());
                         return Ok(Instruction {
@@ -1060,7 +1002,7 @@ impl VM {
                     self.memory.size().try_into().expect("failed to convert u128 to usize");
                 let size: usize = size.try_into().unwrap_or(memory_size).min(memory_size);
 
-                let value = Self::safe_copy_data(&self.memory.memory, offset, size);
+                let value = safe_copy_data(&self.memory.memory, offset, size);
 
                 // consume dynamic gas
                 let minimum_word_size = size.div_ceil(32) as u128;
@@ -1140,9 +1082,9 @@ impl VM {
                 let data = self.memory.read(offset, size);
 
                 // consume dynamic gas
-                let gas_cost = (375 * (topic_count as u128)) +
-                    8 * (size as u128) +
-                    self.memory.expansion_cost(offset, size);
+                let gas_cost = (375 * (topic_count as u128))
+                    + 8 * (size as u128)
+                    + self.memory.expansion_cost(offset, size);
                 self.consume_gas(gas_cost);
 
                 // no need for a panic check because the length of events should never be larger
@@ -1328,9 +1270,9 @@ impl VM {
         let mut vm_clone = self.clone();
 
         for _ in 0..n {
-            if vm_clone.bytecode.len() < vm_clone.instruction as usize ||
-                vm_clone.exitcode != 255 ||
-                !vm_clone.returndata.is_empty()
+            if vm_clone.bytecode.len() < vm_clone.instruction as usize
+                || vm_clone.exitcode != 255
+                || !vm_clone.returndata.is_empty()
             {
                 break;
             }
