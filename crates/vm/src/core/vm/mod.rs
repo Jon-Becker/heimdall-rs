@@ -9,8 +9,5 @@ mod execution;
 /// Opcode handlers organized by category.
 pub mod handlers;
 
-#[cfg(test)]
-mod tests;
-
 pub use self::core::VM;
 pub use execution::{ExecutionResult, Instruction, State};

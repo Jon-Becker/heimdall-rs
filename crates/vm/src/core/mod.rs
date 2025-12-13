@@ -1,3 +1,6 @@
+/// Known chain IDs for common networks
+pub mod chains;
+
 /// Constants used throughout the VM implementation
 pub mod constants;
 

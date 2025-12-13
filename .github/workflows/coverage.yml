@@ -54,18 +54,74 @@ jobs:
           echo "PR_COVERAGE=$PR_COV" >> $GITHUB_ENV
 
       - name: Compare coverage
+        id: coverage
         run: |
           echo "Base branch coverage: $BASE_COVERAGE%"
           echo "PR branch coverage: $PR_COVERAGE%"
 
           DIFF=$(echo "$PR_COVERAGE - $BASE_COVERAGE" | bc)
           echo "Coverage difference: $DIFF%"
+          echo "COVERAGE_DIFF=$DIFF" >> $GITHUB_ENV
 
           # Check if coverage dropped by more than 2%
           THRESHOLD=-2
           if (( $(echo "$DIFF < $THRESHOLD" | bc -l) )); then
             echo "::error::Coverage dropped by more than 2% (dropped by ${DIFF}%)"
-            exit 1
+            echo "COVERAGE_FAILED=true" >> $GITHUB_ENV
+          else
+            echo "COVERAGE_FAILED=false" >> $GITHUB_ENV
           fi
 
           echo "Coverage check passed"
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const baseCov = parseFloat(process.env.BASE_COVERAGE).toFixed(2);
+            const prCov = parseFloat(process.env.PR_COVERAGE).toFixed(2);
+            const diff = parseFloat(process.env.COVERAGE_DIFF).toFixed(2);
+            const failed = process.env.COVERAGE_FAILED === 'true';
+
+            const icon = diff >= 0 ? ':white_check_mark:' : (failed ? ':x:' : ':warning:');
+            const sign = diff >= 0 ? '+' : '';
+
+            const body = `## ${icon} Coverage Report
+
+            | Metric | Value |
+            |--------|-------|
+            | Base branch | ${baseCov}% |
+            | PR branch | ${prCov}% |
+            | Diff | ${sign}${diff}% |
+
+            ${failed ? '**Coverage dropped by more than 2%!**' : ''}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' && comment.body.includes('Coverage Report')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Fail if coverage dropped
+        if: env.COVERAGE_FAILED == 'true'
+        run: exit 1

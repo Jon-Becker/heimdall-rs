@@ -486,3 +486,58 @@ opcodes! {
     0xfe => INVALID => terminating;
     0xff => SELFDESTRUCT => stack_io(1, 0), min_gas(5000), terminating, non_pure, non_view;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hardfork_opcode_info_activation() {
+        // PUSH0 was activated in Shanghai
+        let push0_info = OpCodeInfo::for_fork(PUSH0, HardFork::Shanghai);
+        assert!(push0_info.is_some());
+        assert_eq!(push0_info.unwrap().name(), "PUSH0");
+
+        // PUSH0 should not be active before Shanghai
+        let push0_info_london = OpCodeInfo::for_fork(PUSH0, HardFork::London);
+        assert!(push0_info_london.is_none());
+
+        // SHL was activated in Constantinople
+        let shl_info = OpCodeInfo::for_fork(SHL, HardFork::Constantinople);
+        assert!(shl_info.is_some());
+
+        // SHL should not be active in Byzantium
+        let shl_info_byzantium = OpCodeInfo::for_fork(SHL, HardFork::Byzantium);
+        assert!(shl_info_byzantium.is_none());
+
+        // TLOAD was activated in Cancun
+        let tload_info = OpCodeInfo::for_fork(TLOAD, HardFork::Cancun);
+        assert!(tload_info.is_some());
+
+        // TLOAD should not be active in Shanghai
+        let tload_info_shanghai = OpCodeInfo::for_fork(TLOAD, HardFork::Shanghai);
+        assert!(tload_info_shanghai.is_none());
+
+        // DELEGATECALL was activated in Homestead
+        let delegatecall_info = OpCodeInfo::for_fork(DELEGATECALL, HardFork::Homestead);
+        assert!(delegatecall_info.is_some());
+
+        // DELEGATECALL should not be active in Frontier
+        let delegatecall_info_frontier = OpCodeInfo::for_fork(DELEGATECALL, HardFork::Frontier);
+        assert!(delegatecall_info_frontier.is_none());
+
+        // ADD should always be active (Frontier opcode)
+        let add_info = OpCodeInfo::for_fork(ADD, HardFork::Frontier);
+        assert!(add_info.is_some());
+    }
+
+    #[test]
+    fn test_hardfork_latest_resolves_to_cancun() {
+        // Latest should include all Cancun opcodes
+        let tload_info = OpCodeInfo::for_fork(TLOAD, HardFork::Latest);
+        assert!(tload_info.is_some());
+
+        let blobhash_info = OpCodeInfo::for_fork(BLOBHASH, HardFork::Latest);
+        assert!(blobhash_info.is_some());
+    }
+}
