@@ -46,6 +46,11 @@ impl MultiTransportProvider {
         Ok(self.provider.get_code_at(address).await?.to_vec())
     }
 
+    /// Get the bytecode at the given address at a specific block number.
+    pub async fn get_code_at_block(&self, address: Address, block_number: u64) -> Result<Vec<u8>> {
+        Ok(self.provider.get_code_at(address).block_id(block_number.into()).await?.to_vec())
+    }
+
     /// Get the transaction by hash.
     pub async fn get_transaction_by_hash(&self, tx_hash: TxHash) -> Result<Option<Transaction>> {
         Ok(self.provider.get_transaction_by_hash(tx_hash).await?)

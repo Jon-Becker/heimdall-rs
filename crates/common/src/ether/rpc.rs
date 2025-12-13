@@ -75,6 +75,51 @@ pub async fn get_code(contract_address: Address, rpc_url: &str) -> Result<Vec<u8
     .await
 }
 
+/// Get the block number where a contract was deployed using binary search
+///
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_creation_block;
+/// use alloy::primitives::address;
+///
+/// // let block = get_creation_block(address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"), "https://eth.llamarpc.com").await?;
+/// ```
+pub async fn get_creation_block(contract_address: Address, rpc_url: &str) -> Result<u64> {
+    if rpc_url.is_empty() {
+        bail!("cannot get_creation_block, rpc_url is empty");
+    }
+
+    // Get the latest block number
+    let latest = latest_block_number(rpc_url).await? as u64;
+
+    // First, verify the contract exists at the latest block
+    let current_code = get_code(contract_address, rpc_url).await?;
+    if current_code.is_empty() {
+        bail!("contract does not exist at address {}", contract_address);
+    }
+
+    // Binary search to find the first block where the contract exists
+    let mut low = 0u64;
+    let mut high = latest;
+
+    while low < high {
+        let mid = low + (high - low) / 2;
+
+        let code = Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
+            let provider = MultiTransportProvider::connect(rpc_url).await?;
+            provider.get_code_at_block(contract_address, mid).await
+        })
+        .await?;
+
+        if code.is_empty() {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+
+    Ok(low)
+}
+
 /// Get the raw transaction data of the provided transaction hash \
 ///
 /// ```no_run
