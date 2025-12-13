@@ -532,8 +532,8 @@ mod tests {
     }
 
     #[test]
-    fn test_hardfork_latest_resolves_to_cancun() {
-        // Latest should include all Cancun opcodes
+    fn test_hardfork_latest_resolves_to_fusaka() {
+        // Latest should include all opcodes up to Fusaka
         let tload_info = OpCodeInfo::for_fork(TLOAD, HardFork::Latest);
         assert!(tload_info.is_some());
 

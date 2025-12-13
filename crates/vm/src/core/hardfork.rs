@@ -9,7 +9,7 @@ pub enum HardFork {
     Frontier = 0,
     /// First planned hard fork (March 2016)
     Homestead = 1,
-    /// DAO fork response (July 2016) - no opcode changes
+    /// DAO fork response (July 2016)
     DaoFork = 2,
     /// First of Metropolis series (October 2017)
     Byzantium = 3,
@@ -19,23 +19,27 @@ pub enum HardFork {
     Petersburg = 5,
     /// October 2019 fork
     Istanbul = 6,
-    /// January 2020 fork - no opcode changes
+    /// January 2020 fork
     MuirGlacier = 7,
-    /// April 2021 fork - no opcode changes
+    /// April 2021 fork
     Berlin = 8,
     /// August 2021 fork
     London = 9,
-    /// December 2021 fork - no opcode changes
+    /// December 2021 fork
     ArrowGlacier = 10,
-    /// June 2022 fork - no opcode changes
+    /// June 2022 fork
     GrayGlacier = 11,
-    /// The Merge (September 2022) - no opcode changes
+    /// The Merge (September 2022)
     Paris = 12,
     /// April 2023 fork
     Shanghai = 13,
     /// March 2024 fork
     Cancun = 14,
-    /// Latest hard fork (default)
+    /// May 2025 fork (Prague-Electra)
+    Pectra = 15,
+    /// December 2025 fork (Fulu-Osaka)
+    Fusaka = 16,
+    /// Latest hard fork
     #[default]
     Latest = 255,
 }
@@ -45,7 +49,7 @@ impl HardFork {
     #[inline]
     pub const fn effective(self) -> Self {
         match self {
-            Self::Latest => Self::Cancun,
+            Self::Latest => Self::Fusaka,
             other => other,
         }
     }
@@ -58,7 +62,7 @@ impl HardFork {
 
     /// Returns the active hard fork for a given chain ID and block number.
     ///
-    /// For post-merge forks (Shanghai, Cancun), the `timestamp` parameter should be
+    /// For post-merge forks, the `timestamp` parameter should be
     /// provided as these forks activate based on timestamp rather than block number.
     ///
     /// Returns `HardFork::Latest` for unknown chains (assumes all opcodes are active).
@@ -75,6 +79,12 @@ impl HardFork {
     fn from_mainnet(block_number: u64, timestamp: Option<u64>) -> Self {
         // Post-merge forks use timestamp
         if let Some(ts) = timestamp {
+            if ts >= 1764798551 {
+                return Self::Fusaka;
+            }
+            if ts >= 1746612311 {
+                return Self::Pectra;
+            }
             if ts >= 1710338135 {
                 return Self::Cancun;
             }
@@ -107,6 +117,12 @@ impl HardFork {
         // Sepolia launched post-London, so earlier forks are at block 0
         // Post-merge forks use timestamp
         if let Some(ts) = timestamp {
+            if ts >= 1760427360 {
+                return Self::Fusaka;
+            }
+            if ts >= 1741159776 {
+                return Self::Pectra;
+            }
             if ts >= 1706655072 {
                 return Self::Cancun;
             }
@@ -129,6 +145,12 @@ impl HardFork {
         // Holesky launched post-merge (September 2023)
         // Post-merge forks use timestamp
         if let Some(ts) = timestamp {
+            if ts >= 1759308480 {
+                return Self::Fusaka;
+            }
+            if ts >= 1740434112 {
+                return Self::Pectra;
+            }
             if ts >= 1707305664 {
                 return Self::Cancun;
             }
@@ -202,6 +224,20 @@ mod tests {
     }
 
     #[test]
+    fn test_mainnet_pectra() {
+        // Pectra activated at timestamp 1746612311 (May 7, 2025)
+        assert_eq!(HardFork::from_chain(1, 22_000_000, Some(1746612311)), HardFork::Pectra);
+        assert_eq!(HardFork::from_chain(1, 22_000_000, Some(1750000000)), HardFork::Pectra);
+    }
+
+    #[test]
+    fn test_mainnet_fusaka() {
+        // Fusaka activated at timestamp 1764798551 (December 3, 2025)
+        assert_eq!(HardFork::from_chain(1, 23_000_000, Some(1764798551)), HardFork::Fusaka);
+        assert_eq!(HardFork::from_chain(1, 24_000_000, Some(1800000000)), HardFork::Fusaka);
+    }
+
+    #[test]
     fn test_sepolia() {
         // Pre-merge Sepolia
         assert_eq!(HardFork::from_chain(11155111, 1_000_000, None), HardFork::London);
@@ -211,6 +247,10 @@ mod tests {
         assert_eq!(HardFork::from_chain(11155111, 3_000_000, Some(1677557088)), HardFork::Shanghai);
         // Cancun
         assert_eq!(HardFork::from_chain(11155111, 5_000_000, Some(1706655072)), HardFork::Cancun);
+        // Pectra
+        assert_eq!(HardFork::from_chain(11155111, 7_000_000, Some(1741159776)), HardFork::Pectra);
+        // Fusaka
+        assert_eq!(HardFork::from_chain(11155111, 8_000_000, Some(1760427360)), HardFork::Fusaka);
     }
 
     #[test]
@@ -227,6 +267,8 @@ mod tests {
     #[test]
     fn test_hardfork_ordering() {
         // Test that hardfork ordering is correct
+        assert!(HardFork::Fusaka.is_active(HardFork::Pectra));
+        assert!(HardFork::Pectra.is_active(HardFork::Cancun));
         assert!(HardFork::Cancun.is_active(HardFork::Shanghai));
         assert!(HardFork::Shanghai.is_active(HardFork::London));
         assert!(HardFork::London.is_active(HardFork::Istanbul));
@@ -238,6 +280,7 @@ mod tests {
         // Earlier forks should not activate later opcodes
         assert!(!HardFork::Frontier.is_active(HardFork::Homestead));
         assert!(!HardFork::Byzantium.is_active(HardFork::Constantinople));
-        assert!(!HardFork::Shanghai.is_active(HardFork::Cancun));
+        assert!(!HardFork::Cancun.is_active(HardFork::Pectra));
+        assert!(!HardFork::Pectra.is_active(HardFork::Fusaka));
     }
 }
