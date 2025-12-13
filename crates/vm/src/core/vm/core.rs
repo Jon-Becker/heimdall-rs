@@ -383,14 +383,30 @@ impl VM {
             opcodes::CALLVALUE => handlers::environment::callvalue(self, operation)?,
             opcodes::CALLDATALOAD => handlers::environment::calldataload(self, operation)?,
             opcodes::CALLDATASIZE => handlers::environment::calldatasize(self, operation)?,
-            opcodes::CALLDATACOPY => handlers::environment::calldatacopy(self, operation)?,
+            opcodes::CALLDATACOPY => handlers::environment::calldatacopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
             opcodes::CODESIZE => handlers::environment::codesize(self, operation)?,
-            opcodes::CODECOPY => handlers::environment::codecopy(self, operation)?,
+            opcodes::CODECOPY => handlers::environment::codecopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
             opcodes::GASPRICE => handlers::environment::gasprice(self, operation)?,
             opcodes::EXTCODESIZE => handlers::environment::extcodesize(self, operation)?,
-            opcodes::EXTCODECOPY => handlers::environment::extcodecopy(self, operation)?,
+            opcodes::EXTCODECOPY => handlers::environment::extcodecopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
             opcodes::RETURNDATASIZE => handlers::environment::returndatasize(self, operation)?,
-            opcodes::RETURNDATACOPY => handlers::environment::returndatacopy(self, operation)?,
+            opcodes::RETURNDATACOPY => handlers::environment::returndatacopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
             opcodes::EXTCODEHASH => handlers::environment::extcodehash(self, operation)?,
             opcodes::BLOCKHASH => handlers::environment::blockhash(self, operation)?,
 
@@ -402,8 +418,16 @@ impl VM {
 
             opcodes::POP => handlers::stack::pop(self)?,
             opcodes::MLOAD => handlers::memory::mload(self, operation)?,
-            opcodes::MSTORE => handlers::memory::mstore(self, operation)?,
-            opcodes::MSTORE8 => handlers::memory::mstore8(self, operation)?,
+            opcodes::MSTORE => handlers::memory::mstore(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
+            opcodes::MSTORE8 => handlers::memory::mstore8(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
             opcodes::SLOAD => handlers::storage::sload(self, operation)?,
             opcodes::SSTORE => handlers::storage::sstore(self)?,
 
@@ -424,7 +448,11 @@ impl VM {
             opcodes::JUMPDEST => handlers::control::jumpdest()?,
             opcodes::TLOAD => handlers::storage::tload(self, operation)?,
             opcodes::TSTORE => handlers::storage::tstore(self)?,
-            opcodes::MCOPY => handlers::memory::mcopy(self, operation)?,
+            opcodes::MCOPY => handlers::memory::mcopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
             opcodes::PC => handlers::control::pc(self, operation)?,
             opcodes::MSIZE => handlers::memory::msize(self, operation)?,
             opcodes::GAS => handlers::control::gas(self, operation)?,

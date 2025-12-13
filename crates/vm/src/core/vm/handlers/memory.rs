@@ -21,7 +21,10 @@ pub fn mload(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// MSTORE - Save word to memory
-pub fn mstore(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+pub fn mstore(
+    vm: &mut VM,
+    #[cfg(feature = "experimental")] operation: WrappedOpcode,
+) -> Result<()> {
     let offset = vm.stack.pop()?.value;
     let value = vm.stack.pop()?.value;
 
@@ -43,7 +46,10 @@ pub fn mstore(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// MSTORE8 - Save byte to memory
-pub fn mstore8(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+pub fn mstore8(
+    vm: &mut VM,
+    #[cfg(feature = "experimental")] operation: WrappedOpcode,
+) -> Result<()> {
     let offset = vm.stack.pop()?.value;
     let value = vm.stack.pop()?.value;
 
@@ -71,7 +77,7 @@ pub fn msize(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// MCOPY - Copy memory areas
-pub fn mcopy(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+pub fn mcopy(vm: &mut VM, #[cfg(feature = "experimental")] operation: WrappedOpcode) -> Result<()> {
     let dest_offset = vm.stack.pop()?.value;
     let offset = vm.stack.pop()?.value;
     let size = vm.stack.pop()?.value;
