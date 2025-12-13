@@ -11,6 +11,7 @@ use hashbrown::HashMap;
 use heimdall_common::{
     ether::{
         compiler::detect_compiler,
+        rpc::get_creation_block,
         signatures::{
             cache_signatures_from_abi, score_signature, ResolvedError, ResolvedFunction,
             ResolvedLog,
@@ -103,6 +104,21 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         .await
         .map_err(|e| Error::FetchError(format!("fetching target bytecode failed: {e}")))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
+
+    let start_get_creation_block_time = Instant::now();
+    if let Ok(address) = args.target.parse::<Address>() {
+        if !args.rpc_url.is_empty() {
+            match get_creation_block(address, &args.rpc_url).await {
+                Ok(block) => {
+                    debug!("contract creation block: {}", block);
+                }
+                Err(e) => {
+                    debug!("failed to get creation block: {}", e);
+                }
+            }
+        }
+    }
+    debug!("getting creation block took {:?}", start_get_creation_block_time.elapsed());
 
     if contract_bytecode.is_empty() {
         return Err(Error::Eyre(eyre!(

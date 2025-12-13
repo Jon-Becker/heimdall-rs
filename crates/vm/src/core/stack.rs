@@ -4,11 +4,11 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
-use alloy::primitives::U256;
+use alloy::primitives::{I256, U256};
 use eyre::{OptionExt, Result};
 use hashbrown::hash_map::DefaultHashBuilder;
 
-use super::opcodes::WrappedOpcode;
+use super::opcodes::{WrappedInput, WrappedOpcode, PUSH0, PUSH32};
 
 /// The [`Stack`] struct represents the EVM stack.
 /// It is a LIFO data structure that holds a VecDeque of [`StackFrame`]s.
@@ -274,6 +274,70 @@ impl Stack {
     /// ```
     pub fn hash(&self) -> u64 {
         DefaultHashBuilder::default().hash_one(&self.stack)
+    }
+
+    /// Push a boolean value onto the stack.
+    /// Converts `true` to 1 and `false` to 0.
+    pub fn push_boolean(&mut self, condition: bool, operation: WrappedOpcode) {
+        let value = if condition { U256::from(1u8) } else { U256::ZERO };
+        self.push(value, operation);
+    }
+
+    /// Push a value with optimization for constant folding.
+    /// If both input operands came from PUSH instructions, simplifies the tracked
+    /// operation to a single PUSH32 with the computed result.
+    pub fn push_with_optimization(
+        &mut self,
+        result: U256,
+        a: &StackFrame,
+        b: &StackFrame,
+        operation: WrappedOpcode,
+    ) {
+        let simplified_operation = if (PUSH0..=PUSH32).contains(&a.operation.opcode) &&
+            (PUSH0..=PUSH32).contains(&b.operation.opcode)
+        {
+            WrappedOpcode::new(PUSH32, vec![WrappedInput::Raw(result)])
+        } else {
+            operation
+        };
+        self.push(result, simplified_operation);
+    }
+
+    /// Push a value with optimization for single-operand operations.
+    /// If the input operand came from a PUSH instruction, simplifies the tracked
+    /// operation to a single PUSH32 with the computed result.
+    pub fn push_with_optimization_single(
+        &mut self,
+        result: U256,
+        a: &StackFrame,
+        operation: WrappedOpcode,
+    ) {
+        let simplified_operation = if (PUSH0..=PUSH32).contains(&a.operation.opcode) {
+            WrappedOpcode::new(PUSH32, vec![WrappedInput::Raw(result)])
+        } else {
+            operation
+        };
+        self.push(result, simplified_operation);
+    }
+
+    /// Push a signed value with optimization for constant folding.
+    /// If both input operands came from PUSH instructions, simplifies the tracked
+    /// operation to a single PUSH32 with the computed result.
+    pub fn push_with_optimization_signed(
+        &mut self,
+        result: I256,
+        a: &StackFrame,
+        b: &StackFrame,
+        operation: WrappedOpcode,
+    ) {
+        let simplified_operation = if (PUSH0..=PUSH32).contains(&a.operation.opcode) &&
+            (PUSH0..=PUSH32).contains(&b.operation.opcode)
+        {
+            WrappedOpcode::new(PUSH32, vec![WrappedInput::Raw(result.into_raw())])
+        } else {
+            operation
+        };
+        self.push(result.into_raw(), simplified_operation);
     }
 }
 

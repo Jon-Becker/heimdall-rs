@@ -1,6 +1,10 @@
 use std::{collections::VecDeque, ops::Range};
 
-use alloy::{dyn_abi::DynSolType, sol_types::SolValue};
+use alloy::{
+    dyn_abi::DynSolType,
+    primitives::{Address, U256},
+    sol_types::SolValue,
+};
 use eyre::{eyre, Result};
 use heimdall_common::{
     constants::TYPE_CAST_REGEX,
@@ -271,6 +275,30 @@ pub fn get_potential_types_for_word(word: &[u8]) -> (usize, Vec<String>) {
     // get number of bytes padded
     let data_size = word.len() - padding_size;
     byte_size_to_type(data_size)
+}
+
+/// Converts an Ethereum address to a U256 value.
+///
+/// The address is placed in the lower 20 bytes of the 32-byte U256,
+/// with the upper 12 bytes set to zero (left-padded).
+pub fn address_to_u256(address: &Address) -> U256 {
+    let mut result = [0u8; 32];
+    result[12..].copy_from_slice(address.as_ref());
+    U256::from_be_bytes(result)
+}
+
+/// Safely copies data from a source slice with bounds checking and zero-padding.
+///
+/// If the requested range extends beyond the source, the result is zero-padded
+/// to the requested size. Returns an empty vector with zero-padding if the offset
+/// is beyond the source length.
+pub fn safe_copy_data(source: &[u8], offset: usize, size: usize) -> Vec<u8> {
+    let end_offset = offset.saturating_add(size).min(source.len());
+    let mut value = source.get(offset..end_offset).unwrap_or(&[]).to_owned();
+    if value.len() < size {
+        value.resize(size, 0u8);
+    }
+    value
 }
 
 #[cfg(test)]

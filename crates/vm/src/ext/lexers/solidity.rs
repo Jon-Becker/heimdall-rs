@@ -8,11 +8,11 @@ use heimdall_common::{
 
 use crate::core::opcodes::{
     WrappedInput, WrappedOpcode, ADD, ADDMOD, ADDRESS, AND, BALANCE, BASEFEE, BLOCKHASH, BYTE,
-    CALL, CALLCODE, CALLDATALOAD, CALLDATASIZE, CALLER, CALLVALUE, CHAINID, CODESIZE, COINBASE,
-    DELEGATECALL, DIV, EQ, EXP, EXTCODEHASH, EXTCODESIZE, GAS, GASLIMIT, GASPRICE, GT, ISZERO, LT,
-    MLOAD, MOD, MSIZE, MUL, MULMOD, NOT, NUMBER, OR, ORIGIN, PREVRANDAO, PUSH0, RETURNDATASIZE,
-    SAR, SDIV, SELFBALANCE, SGT, SHA3, SHL, SHR, SLOAD, SLT, SMOD, STATICCALL, SUB, TIMESTAMP,
-    TLOAD, XOR,
+    CALL, CALLCODE, CALLDATALOAD, CALLDATASIZE, CALLER, CALLVALUE, CHAINID, CLZ, CODESIZE,
+    COINBASE, DELEGATECALL, DIV, EQ, EXP, EXTCODEHASH, EXTCODESIZE, GAS, GASLIMIT, GASPRICE, GT,
+    ISZERO, LT, MLOAD, MOD, MSIZE, MUL, MULMOD, NOT, NUMBER, OR, ORIGIN, PREVRANDAO, PUSH0,
+    RETURNDATASIZE, SAR, SDIV, SELFBALANCE, SGT, SHA3, SHL, SHR, SLOAD, SLT, SMOD, STATICCALL, SUB,
+    TIMESTAMP, TLOAD, XOR,
 };
 
 /// Checks if a given address is a supported precompiled contract address
@@ -197,6 +197,10 @@ impl WrappedOpcode {
             }
             BYTE => {
                 solidified_wrapped_opcode.push_str(self.inputs[1]._solidify().as_str());
+            }
+            CLZ => {
+                solidified_wrapped_opcode
+                    .push_str(format!("clz({})", self.inputs[0]._solidify()).as_str());
             }
             SHA3 => {
                 solidified_wrapped_opcode
