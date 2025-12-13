@@ -21,3 +21,5 @@ pub mod types;
 
 /// Core virtual machine implementation
 pub mod vm;
+
+pub use vm::{ExecutionResult, Instruction, State, VM};
