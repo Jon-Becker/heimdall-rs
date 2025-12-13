@@ -86,7 +86,7 @@ jobs:
             const icon = diff >= 0 ? ':white_check_mark:' : (failed ? ':x:' : ':warning:');
             const sign = diff >= 0 ? '+' : '';
 
-            const body = `## ${icon} Coverage Report
+            const body = `## ${icon} Coverage Report for ${context.sha}
 
             | Metric | Value |
             |--------|-------|
