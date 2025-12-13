@@ -39,3 +39,5 @@ largest1k
 
 bun.lockb
 node_modules
+
+.conductor
