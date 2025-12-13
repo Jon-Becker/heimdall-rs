@@ -4,6 +4,7 @@ use alloy::primitives::{Address, U256};
 use heimdall_common::utils::strings::decode_hex;
 
 use super::VM;
+use crate::core::{hardfork::HardFork, opcodes::OpCodeInfo};
 
 // creates a new test VM with calldata.
 fn new_test_vm(bytecode: &str) -> VM {
@@ -709,4 +710,166 @@ fn test_usdt_sim() {
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         ]
     );
+}
+
+// Helper to create a test VM with a specific hardfork
+fn new_test_vm_with_fork(bytecode: &str, fork: HardFork) -> VM {
+    new_test_vm(bytecode).with_hardfork(fork)
+}
+
+#[test]
+fn test_hardfork_opcode_info_activation() {
+    use crate::core::opcodes;
+
+    // PUSH0 was activated in Shanghai
+    let push0_info = OpCodeInfo::for_fork(opcodes::PUSH0, HardFork::Shanghai);
+    assert!(push0_info.is_some());
+    assert_eq!(push0_info.unwrap().name(), "PUSH0");
+
+    // PUSH0 should not be active before Shanghai
+    let push0_info_london = OpCodeInfo::for_fork(opcodes::PUSH0, HardFork::London);
+    assert!(push0_info_london.is_none());
+
+    // SHL was activated in Constantinople
+    let shl_info = OpCodeInfo::for_fork(opcodes::SHL, HardFork::Constantinople);
+    assert!(shl_info.is_some());
+
+    // SHL should not be active in Byzantium
+    let shl_info_byzantium = OpCodeInfo::for_fork(opcodes::SHL, HardFork::Byzantium);
+    assert!(shl_info_byzantium.is_none());
+
+    // TLOAD was activated in Cancun
+    let tload_info = OpCodeInfo::for_fork(opcodes::TLOAD, HardFork::Cancun);
+    assert!(tload_info.is_some());
+
+    // TLOAD should not be active in Shanghai
+    let tload_info_shanghai = OpCodeInfo::for_fork(opcodes::TLOAD, HardFork::Shanghai);
+    assert!(tload_info_shanghai.is_none());
+
+    // DELEGATECALL was activated in Homestead
+    let delegatecall_info = OpCodeInfo::for_fork(opcodes::DELEGATECALL, HardFork::Homestead);
+    assert!(delegatecall_info.is_some());
+
+    // DELEGATECALL should not be active in Frontier
+    let delegatecall_info_frontier =
+        OpCodeInfo::for_fork(opcodes::DELEGATECALL, HardFork::Frontier);
+    assert!(delegatecall_info_frontier.is_none());
+
+    // ADD should always be active (Frontier opcode)
+    let add_info = OpCodeInfo::for_fork(opcodes::ADD, HardFork::Frontier);
+    assert!(add_info.is_some());
+}
+
+#[test]
+fn test_hardfork_latest_resolves_to_cancun() {
+    use crate::core::opcodes;
+
+    // Latest should include all Cancun opcodes
+    let tload_info = OpCodeInfo::for_fork(opcodes::TLOAD, HardFork::Latest);
+    assert!(tload_info.is_some());
+
+    let blobhash_info = OpCodeInfo::for_fork(opcodes::BLOBHASH, HardFork::Latest);
+    assert!(blobhash_info.is_some());
+}
+
+#[test]
+fn test_vm_push0_active_in_shanghai() {
+    // PUSH0 followed by STOP: 0x5f 0x00
+    let mut vm = new_test_vm_with_fork("0x5f00", HardFork::Shanghai);
+    vm.execute().expect("execution failed!");
+
+    // Should have pushed 0 onto the stack
+    assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+    assert_eq!(vm.exitcode, 10); // STOP exit code
+}
+
+#[test]
+fn test_vm_push0_unknown_before_shanghai() {
+    // PUSH0 (0x5f) should be treated as unknown before Shanghai
+    let mut vm = new_test_vm_with_fork("0x5f00", HardFork::London);
+    vm.execute().expect("execution failed!");
+
+    // Should exit with code 1 (invalid opcode)
+    assert_eq!(vm.exitcode, 1);
+}
+
+#[test]
+fn test_vm_shl_active_in_constantinople() {
+    // PUSH1 0x02, PUSH1 0x01, SHL, STOP: shift 1 left by 2 bits = 4
+    // 0x6002 6001 1b 00
+    let mut vm = new_test_vm_with_fork("0x600260011b00", HardFork::Constantinople);
+    vm.execute().expect("execution failed!");
+
+    assert_eq!(vm.stack.peek(0).value, U256::from(4));
+    assert_eq!(vm.exitcode, 10);
+}
+
+#[test]
+fn test_vm_shl_unknown_before_constantinople() {
+    // SHL (0x1b) should be unknown before Constantinople
+    let mut vm = new_test_vm_with_fork("0x600260011b00", HardFork::Byzantium);
+    vm.execute().expect("execution failed!");
+
+    // Should exit with code 1 (invalid opcode)
+    assert_eq!(vm.exitcode, 1);
+}
+
+#[test]
+fn test_vm_tload_active_in_cancun() {
+    // PUSH1 0x00, TLOAD, STOP: load from transient storage slot 0
+    // 0x6000 5c 00
+    let mut vm = new_test_vm_with_fork("0x60005c00", HardFork::Cancun);
+    vm.execute().expect("execution failed!");
+
+    // Should have loaded 0 from empty transient storage
+    assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+    assert_eq!(vm.exitcode, 10);
+}
+
+#[test]
+fn test_vm_tload_unknown_before_cancun() {
+    // TLOAD (0x5c) should be unknown before Cancun
+    let mut vm = new_test_vm_with_fork("0x60005c00", HardFork::Shanghai);
+    vm.execute().expect("execution failed!");
+
+    // Should exit with code 1 (invalid opcode)
+    assert_eq!(vm.exitcode, 1);
+}
+
+#[test]
+fn test_vm_default_hardfork_is_latest() {
+    // Default VM should use Latest hardfork and support all opcodes
+    let mut vm = new_test_vm("0x5f00"); // PUSH0, STOP
+    vm.execute().expect("execution failed!");
+
+    // PUSH0 should work with default (Latest) hardfork
+    assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+    assert_eq!(vm.exitcode, 10);
+}
+
+#[test]
+fn test_vm_frontier_opcodes_always_work() {
+    // ADD should work at any hardfork
+    // PUSH1 0x01, PUSH1 0x02, ADD, STOP
+    let mut vm = new_test_vm_with_fork("0x6001600201", HardFork::Frontier);
+    vm.execute().expect("execution failed!");
+
+    assert_eq!(vm.stack.peek(0).value, U256::from(3));
+}
+
+#[test]
+fn test_hardfork_ordering() {
+    // Test that hardfork ordering is correct
+    assert!(HardFork::Cancun.is_active(HardFork::Shanghai));
+    assert!(HardFork::Shanghai.is_active(HardFork::London));
+    assert!(HardFork::London.is_active(HardFork::Istanbul));
+    assert!(HardFork::Istanbul.is_active(HardFork::Constantinople));
+    assert!(HardFork::Constantinople.is_active(HardFork::Byzantium));
+    assert!(HardFork::Byzantium.is_active(HardFork::Homestead));
+    assert!(HardFork::Homestead.is_active(HardFork::Frontier));
+
+    // Earlier forks should not activate later opcodes
+    assert!(!HardFork::Frontier.is_active(HardFork::Homestead));
+    assert!(!HardFork::Byzantium.is_active(HardFork::Constantinople));
+    assert!(!HardFork::Shanghai.is_active(HardFork::Cancun));
 }

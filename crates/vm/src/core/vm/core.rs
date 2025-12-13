@@ -9,7 +9,10 @@ use std::time::Instant;
 #[cfg(feature = "step-tracing")]
 use tracing::trace;
 
-use crate::core::opcodes::{self, OpCodeInfo, WrappedInput, WrappedOpcode};
+use crate::core::{
+    hardfork::HardFork,
+    opcodes::{self, OpCodeInfo, WrappedInput, WrappedOpcode},
+};
 
 use super::super::{
     log::Log,
@@ -76,6 +79,9 @@ pub struct VM {
     /// A set of addresses that have been accessed during execution (used for gas calculation).
     pub address_access_set: HashSet<U256>,
 
+    /// The hard fork to use for opcode activation.
+    pub hardfork: HardFork,
+
     /// Counter for operations executed (only available with step-tracing feature).
     #[cfg(feature = "step-tracing")]
     pub operation_count: u128,
@@ -129,11 +135,18 @@ impl VM {
             returndata: Vec::new(),
             exitcode: 255,
             address_access_set: HashSet::new(),
+            hardfork: HardFork::default(),
             #[cfg(feature = "step-tracing")]
             operation_count: 0,
             #[cfg(feature = "step-tracing")]
             start_time: Instant::now(),
         }
+    }
+
+    /// Sets the hard fork for opcode activation.
+    pub fn with_hardfork(mut self, hardfork: HardFork) -> Self {
+        self.hardfork = hardfork;
+        self
     }
 
     /// Exits current execution with the given code and returndata.
@@ -306,7 +319,21 @@ impl VM {
         let start_time = Instant::now();
 
         // add the opcode to the trace
-        let opcode_info = OpCodeInfo::from(opcode);
+        let opcode_info = match OpCodeInfo::for_fork(opcode, self.hardfork) {
+            Some(info) => info,
+            None => {
+                // Opcode not active at this hardfork - treat as invalid
+                self.exit(1, Vec::new());
+                return Ok(Instruction {
+                    instruction: last_instruction,
+                    opcode,
+                    inputs: Vec::new(),
+                    outputs: Vec::new(),
+                    input_operations: Vec::new(),
+                    output_operations: Vec::new(),
+                });
+            }
+        };
         let input_frames = self.stack.peek_n(opcode_info.inputs() as usize);
         let input_operations =
             input_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();

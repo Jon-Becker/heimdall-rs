@@ -1,6 +1,9 @@
 /// Constants used throughout the VM implementation
 pub mod constants;
 
+/// Ethereum hard fork definitions
+pub mod hardfork;
+
 /// Log implementation for event handling
 pub mod log;
 
@@ -22,4 +25,5 @@ pub mod types;
 /// Core virtual machine implementation
 pub mod vm;
 
+pub use hardfork::HardFork;
 pub use vm::{ExecutionResult, Instruction, State, VM};

@@ -13,6 +13,8 @@ pub mod wrapped;
 use paste::paste;
 pub use wrapped::*;
 
+use super::hardfork::HardFork;
+
 /// Information about opcode, such as name, and stack inputs and outputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OpCodeInfo {
@@ -30,12 +32,23 @@ pub struct OpCodeInfo {
     view: bool,
     /// Whether the opcode is pure (does not read state).
     pure: bool,
+    /// The hard fork that activated this opcode.
+    activated: HardFork,
 }
 
 impl OpCodeInfo {
     /// Creates a new opcode info with the given name and default values.
     pub const fn new(name: &'static str) -> Self {
-        Self { name, inputs: 0, outputs: 0, terminating: false, gas: 0, view: true, pure: true }
+        Self {
+            name,
+            inputs: 0,
+            outputs: 0,
+            terminating: false,
+            gas: 0,
+            view: true,
+            pure: true,
+            activated: HardFork::Frontier,
+        }
     }
 
     /// Returns the name of the opcode.
@@ -79,20 +92,45 @@ impl OpCodeInfo {
     pub const fn is_pure(&self) -> bool {
         self.pure
     }
+
+    /// Returns the hard fork that activated this opcode.
+    #[inline]
+    pub const fn activated(&self) -> HardFork {
+        self.activated
+    }
+
+    /// Returns true if this opcode is active at the given hard fork.
+    #[inline]
+    pub const fn is_active_at(&self, fork: HardFork) -> bool {
+        fork.is_active(self.activated)
+    }
 }
+
+/// Unknown opcode info returned when an opcode is not recognized.
+pub const UNKNOWN_OPCODE: OpCodeInfo = OpCodeInfo {
+    name: "unknown",
+    inputs: 0,
+    outputs: 0,
+    terminating: true,
+    gas: 0,
+    view: false,
+    pure: false,
+    activated: HardFork::Latest,
+};
 
 impl From<u8> for OpCodeInfo {
     #[inline]
     fn from(opcode: u8) -> Self {
-        OPCODE_INFO_TABLE[opcode as usize].unwrap_or(OpCodeInfo {
-            name: "unknown",
-            inputs: 0,
-            outputs: 0,
-            terminating: true,
-            gas: 0,
-            view: false,
-            pure: false,
-        })
+        OPCODE_INFO_TABLE[opcode as usize].unwrap_or(UNKNOWN_OPCODE)
+    }
+}
+
+impl OpCodeInfo {
+    /// Gets opcode info for a specific hard fork.
+    /// Returns None if the opcode is not active at the given fork.
+    #[inline]
+    pub fn for_fork(opcode: u8, fork: HardFork) -> Option<Self> {
+        OPCODE_INFO_TABLE[opcode as usize].filter(|info| info.is_active_at(fork))
     }
 }
 
@@ -129,6 +167,13 @@ pub const fn non_view(mut op: OpCodeInfo) -> OpCodeInfo {
 #[inline]
 pub const fn non_pure(mut op: OpCodeInfo) -> OpCodeInfo {
     op.pure = false;
+    op
+}
+
+/// Sets the hard fork that activated this opcode.
+#[inline]
+pub const fn activated(mut op: OpCodeInfo, fork: HardFork) -> OpCodeInfo {
+    op.activated = fork;
     op
 }
 
@@ -266,6 +311,7 @@ pub fn opcode_name(opcode: u8) -> &'static str {
 }
 
 opcodes! {
+    // Frontier (genesis) opcodes
     0x00 => STOP => terminating;
 
     0x01 => ADD => stack_io(2, 1), min_gas(3);
@@ -291,9 +337,10 @@ opcodes! {
     0x18 => XOR => stack_io(2, 1), min_gas(3);
     0x19 => NOT => stack_io(1, 1), min_gas(3);
     0x1a => BYTE => stack_io(2, 1), min_gas(3);
-    0x1b => SHL => stack_io(2, 1), min_gas(3);
-    0x1c => SHR => stack_io(2, 1), min_gas(3);
-    0x1d => SAR => stack_io(2, 1), min_gas(3);
+    // Constantinople (EIP-145)
+    0x1b => SHL => stack_io(2, 1), min_gas(3), activated(HardFork::Constantinople);
+    0x1c => SHR => stack_io(2, 1), min_gas(3), activated(HardFork::Constantinople);
+    0x1d => SAR => stack_io(2, 1), min_gas(3), activated(HardFork::Constantinople);
 
     0x20 => SHA3 => stack_io(2, 1), min_gas(30);
 
@@ -310,20 +357,26 @@ opcodes! {
     0x3a => GASPRICE => stack_io(0, 1), min_gas(2), non_pure;
     0x3b => EXTCODESIZE => stack_io(1, 1), min_gas(100), non_pure;
     0x3c => EXTCODECOPY => stack_io(4, 0), min_gas(100), non_pure;
-    0x3d => RETURNDATASIZE => stack_io(0, 1), min_gas(2);
-    0x3e => RETURNDATACOPY => stack_io(3, 0), min_gas(3);
-    0x3f => EXTCODEHASH => stack_io(1, 1), min_gas(100), non_pure;
+    // Byzantium (EIP-211)
+    0x3d => RETURNDATASIZE => stack_io(0, 1), min_gas(2), activated(HardFork::Byzantium);
+    0x3e => RETURNDATACOPY => stack_io(3, 0), min_gas(3), activated(HardFork::Byzantium);
+    // Constantinople (EIP-1052)
+    0x3f => EXTCODEHASH => stack_io(1, 1), min_gas(100), non_pure, activated(HardFork::Constantinople);
     0x40 => BLOCKHASH => stack_io(1, 1), min_gas(20), non_pure;
     0x41 => COINBASE => stack_io(0, 1), min_gas(2), non_pure;
     0x42 => TIMESTAMP => stack_io(0, 1), min_gas(2), non_pure;
     0x43 => NUMBER => stack_io(0, 1), min_gas(2), non_pure;
     0x44 => PREVRANDAO => stack_io(0, 1), min_gas(2), non_pure;
     0x45 => GASLIMIT => stack_io(0, 1), min_gas(2), non_pure;
-    0x46 => CHAINID => stack_io(0, 1), min_gas(2), non_pure;
-    0x47 => SELFBALANCE => stack_io(0, 1), min_gas(5), non_pure;
-    0x48 => BASEFEE => stack_io(0, 1), min_gas(2), non_pure;
-    0x49 => BLOBHASH => stack_io(0, 1), min_gas(3), non_pure;
-    0x4a => BLOBBASEFEE => stack_io(0, 1), min_gas(2), non_pure;
+    // Istanbul (EIP-1344)
+    0x46 => CHAINID => stack_io(0, 1), min_gas(2), non_pure, activated(HardFork::Istanbul);
+    // Istanbul (EIP-1884)
+    0x47 => SELFBALANCE => stack_io(0, 1), min_gas(5), non_pure, activated(HardFork::Istanbul);
+    // London (EIP-3198)
+    0x48 => BASEFEE => stack_io(0, 1), min_gas(2), non_pure, activated(HardFork::London);
+    // Cancun (EIP-4844)
+    0x49 => BLOBHASH => stack_io(0, 1), min_gas(3), non_pure, activated(HardFork::Cancun);
+    0x4a => BLOBBASEFEE => stack_io(0, 1), min_gas(2), non_pure, activated(HardFork::Cancun);
 
     0x50 => POP => stack_io(1, 0), min_gas(2);
     0x51 => MLOAD => stack_io(1, 1), min_gas(3);
@@ -337,11 +390,14 @@ opcodes! {
     0x59 => MSIZE => stack_io(0, 1), min_gas(2);
     0x5a => GAS => stack_io(0, 1), min_gas(2);
     0x5b => JUMPDEST => min_gas(1);
-    0x5c => TLOAD => stack_io(1, 1), min_gas(100);
-    0x5d => TSTORE => stack_io(2, 0), min_gas(100);
-    0x5e => MCOPY => stack_io(3, 0), min_gas(3);
+    // Cancun (EIP-1153)
+    0x5c => TLOAD => stack_io(1, 1), min_gas(100), activated(HardFork::Cancun);
+    0x5d => TSTORE => stack_io(2, 0), min_gas(100), activated(HardFork::Cancun);
+    // Cancun (EIP-5656)
+    0x5e => MCOPY => stack_io(3, 0), min_gas(3), activated(HardFork::Cancun);
 
-    0x5f => PUSH0 => stack_io(0, 1), min_gas(3);
+    // Shanghai (EIP-3855)
+    0x5f => PUSH0 => stack_io(0, 1), min_gas(3), activated(HardFork::Shanghai);
     0x60 => PUSH1 => stack_io(0, 1), min_gas(3);
     0x61 => PUSH2 => stack_io(0, 1), min_gas(3);
     0x62 => PUSH3 => stack_io(0, 1), min_gas(3);
@@ -419,10 +475,14 @@ opcodes! {
     0xf1 => CALL => stack_io(7, 1), min_gas(100), non_pure, non_view;
     0xf2 => CALLCODE => stack_io(7, 1), min_gas(100), non_pure, non_view;
     0xf3 => RETURN => stack_io(2, 0), terminating;
-    0xf4 => DELEGATECALL => stack_io(6, 1), min_gas(100), non_pure, non_view;
-    0xf5 => CREATE2 => stack_io(4, 1), min_gas(32000), non_pure, non_view;
-    0xfa => STATICCALL => stack_io(6, 1), min_gas(100), non_pure, non_view;
-    0xfd => REVERT => stack_io(2, 0), terminating;
+    // Homestead (EIP-7)
+    0xf4 => DELEGATECALL => stack_io(6, 1), min_gas(100), non_pure, non_view, activated(HardFork::Homestead);
+    // Constantinople (EIP-1014)
+    0xf5 => CREATE2 => stack_io(4, 1), min_gas(32000), non_pure, non_view, activated(HardFork::Constantinople);
+    // Byzantium (EIP-214)
+    0xfa => STATICCALL => stack_io(6, 1), min_gas(100), non_pure, non_view, activated(HardFork::Byzantium);
+    // Byzantium (EIP-140)
+    0xfd => REVERT => stack_io(2, 0), terminating, activated(HardFork::Byzantium);
     0xfe => INVALID => terminating;
     0xff => SELFDESTRUCT => stack_io(1, 0), min_gas(5000), terminating, non_pure, non_view;
 }
