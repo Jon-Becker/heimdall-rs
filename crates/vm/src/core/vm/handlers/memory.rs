@@ -21,7 +21,7 @@ pub fn mload(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// MSTORE - Save word to memory
-pub fn mstore(vm: &mut VM, _operation: WrappedOpcode) -> Result<()> {
+pub fn mstore(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let offset = vm.stack.pop()?.value;
     let value = vm.stack.pop()?.value;
 
@@ -43,7 +43,7 @@ pub fn mstore(vm: &mut VM, _operation: WrappedOpcode) -> Result<()> {
 }
 
 /// MSTORE8 - Save byte to memory
-pub fn mstore8(vm: &mut VM, _operation: WrappedOpcode) -> Result<()> {
+pub fn mstore8(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let offset = vm.stack.pop()?.value;
     let value = vm.stack.pop()?.value;
 
@@ -71,15 +71,14 @@ pub fn msize(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// MCOPY - Copy memory areas
-pub fn mcopy(vm: &mut VM, _operation: WrappedOpcode) -> Result<()> {
+pub fn mcopy(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let dest_offset = vm.stack.pop()?.value;
     let offset = vm.stack.pop()?.value;
     let size = vm.stack.pop()?.value;
 
     let dest_offset: usize = dest_offset.try_into().unwrap_or(u128::MAX as usize);
     let offset: usize = offset.try_into().unwrap_or(u128::MAX as usize);
-    let memory_size: usize =
-        vm.memory.size().try_into().expect("failed to convert u128 to usize");
+    let memory_size: usize = vm.memory.size().try_into().expect("failed to convert u128 to usize");
     let size: usize = size.try_into().unwrap_or(memory_size).min(memory_size);
 
     let value = VM::safe_copy_data(&vm.memory.memory, offset, size);

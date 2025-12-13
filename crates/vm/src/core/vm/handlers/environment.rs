@@ -77,7 +77,7 @@ pub fn calldatasize(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// CALLDATACOPY - Copy input data in current environment to memory
-pub fn calldatacopy(vm: &mut VM, _operation: WrappedOpcode) -> Result<()> {
+pub fn calldatacopy(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let dest_offset = vm.stack.pop()?.value;
     let offset = vm.stack.pop()?.value;
     let size = vm.stack.pop()?.value;
@@ -111,7 +111,7 @@ pub fn codesize(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// CODECOPY - Copy code running in current environment to memory
-pub fn codecopy(vm: &mut VM, _operation: WrappedOpcode) -> Result<()> {
+pub fn codecopy(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let dest_offset = vm.stack.pop()?.value;
     let offset = vm.stack.pop()?.value;
     let size = vm.stack.pop()?.value;
@@ -160,7 +160,7 @@ pub fn extcodesize(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// EXTCODECOPY - Copy an account's code to memory
-pub fn extcodecopy(vm: &mut VM, _operation: WrappedOpcode) -> Result<()> {
+pub fn extcodecopy(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let address = vm.stack.pop()?.value;
     let dest_offset = vm.stack.pop()?.value;
     vm.stack.pop()?;
@@ -202,7 +202,7 @@ pub fn returndatasize(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 }
 
 /// RETURNDATACOPY - Copy output data from the previous call to memory
-pub fn returndatacopy(vm: &mut VM, _operation: WrappedOpcode) -> Result<()> {
+pub fn returndatacopy(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let dest_offset = vm.stack.pop()?.value;
     vm.stack.pop()?;
     let size = vm.stack.pop()?.value;

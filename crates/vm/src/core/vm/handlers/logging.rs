@@ -17,18 +17,14 @@ pub fn log_n(vm: &mut VM, topic_count: u8) -> Result<()> {
     let data = vm.memory.read(offset, size);
 
     // consume dynamic gas
-    let gas_cost = (375 * (topic_count as u128)) +
-        8 * (size as u128) +
-        vm.memory.expansion_cost(offset, size);
+    let gas_cost =
+        (375 * (topic_count as u128)) + 8 * (size as u128) + vm.memory.expansion_cost(offset, size);
     vm.consume_gas(gas_cost);
 
     // no need for a panic check because the length of events should never be larger
     // than a u128
     vm.events.push(Log::new(
-        vm.events
-            .len()
-            .try_into()
-            .expect("impossible case: log_index is larger than u128::MAX"),
+        vm.events.len().try_into().expect("impossible case: log_index is larger than u128::MAX"),
         topics,
         &data,
     ));

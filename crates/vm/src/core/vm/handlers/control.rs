@@ -6,7 +6,12 @@ use crate::core::opcodes::{self, WrappedOpcode};
 use super::super::{core::VM, execution::Instruction};
 
 /// STOP - Halts execution
-pub fn stop(vm: &mut VM, last_instruction: u128, inputs: &[U256], input_operations: &[WrappedOpcode]) -> Instruction {
+pub fn stop(
+    vm: &mut VM,
+    last_instruction: u128,
+    inputs: &[U256],
+    input_operations: &[WrappedOpcode],
+) -> Instruction {
     vm.exit(10, Vec::new());
     Instruction {
         instruction: last_instruction,
@@ -19,7 +24,12 @@ pub fn stop(vm: &mut VM, last_instruction: u128, inputs: &[U256], input_operatio
 }
 
 /// JUMP - Alter the program counter
-pub fn jump(vm: &mut VM, last_instruction: u128, inputs: &[U256], input_operations: &[WrappedOpcode]) -> Option<Instruction> {
+pub fn jump(
+    vm: &mut VM,
+    last_instruction: u128,
+    inputs: &[U256],
+    input_operations: &[WrappedOpcode],
+) -> Option<Instruction> {
     let pc = vm.stack.pop().ok()?.value;
 
     // Safely convert U256 to u128
@@ -49,7 +59,12 @@ pub fn jump(vm: &mut VM, last_instruction: u128, inputs: &[U256], input_operatio
 }
 
 /// JUMPI - Conditionally alter the program counter
-pub fn jumpi(vm: &mut VM, last_instruction: u128, inputs: &[U256], input_operations: &[WrappedOpcode]) -> Option<Instruction> {
+pub fn jumpi(
+    vm: &mut VM,
+    last_instruction: u128,
+    inputs: &[U256],
+    input_operations: &[WrappedOpcode],
+) -> Option<Instruction> {
     let pc = vm.stack.pop().ok()?.value;
     let condition = vm.stack.pop().ok()?.value;
 

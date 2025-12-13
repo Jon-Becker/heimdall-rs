@@ -11,7 +11,12 @@ use tracing::trace;
 
 use crate::core::opcodes::{self, OpCodeInfo, WrappedInput, WrappedOpcode};
 
-use super::super::{log::Log, memory::Memory, stack::Stack, stack::StackFrame, storage::Storage};
+use super::super::{
+    log::Log,
+    memory::Memory,
+    stack::{Stack, StackFrame},
+    storage::Storage,
+};
 
 use super::{
     execution::{ExecutionResult, Instruction, State},
@@ -333,7 +338,12 @@ impl VM {
         // execute the operation
         match opcode {
             opcodes::STOP => {
-                return Ok(handlers::control::stop(self, last_instruction, &inputs, &input_operations));
+                return Ok(handlers::control::stop(
+                    self,
+                    last_instruction,
+                    &inputs,
+                    &input_operations,
+                ));
             }
 
             opcodes::ADD => handlers::arithmetic::add(self, operation)?,

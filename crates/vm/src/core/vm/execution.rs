@@ -1,11 +1,7 @@
 use alloy::primitives::U256;
 
 use super::super::{
-    log::Log,
-    memory::Memory,
-    opcodes::WrappedOpcode,
-    stack::Stack,
-    storage::Storage,
+    log::Log, memory::Memory, opcodes::WrappedOpcode, stack::Stack, storage::Storage,
 };
 
 /// [`ExecutionResult`] is the result of a single contract execution.

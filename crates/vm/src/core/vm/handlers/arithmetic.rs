@@ -39,8 +39,11 @@ pub fn sub(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 pub fn div(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let numerator = vm.stack.pop()?;
     let denominator = vm.stack.pop()?;
-    let result =
-        if !denominator.value.is_zero() { numerator.value.div(denominator.value) } else { U256::ZERO };
+    let result = if !denominator.value.is_zero() {
+        numerator.value.div(denominator.value)
+    } else {
+        U256::ZERO
+    };
     vm.push_with_optimization(result, &numerator, &denominator, operation);
     Ok(())
 }

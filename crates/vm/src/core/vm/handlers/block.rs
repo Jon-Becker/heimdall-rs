@@ -15,8 +15,7 @@ pub fn coinbase(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// TIMESTAMP - Get the block's timestamp
 pub fn timestamp(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
-    let timestamp =
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
     vm.stack.push(U256::from(timestamp), operation);
     Ok(())
 }
