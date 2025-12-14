@@ -3,6 +3,7 @@ use derive_builder::Builder;
 use eyre::Result;
 use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
+use heimdall_vm::core::hardfork::HardFork;
 
 #[derive(Debug, Clone, Parser, Builder)]
 #[clap(
@@ -67,6 +68,11 @@ pub struct DecompilerArgs {
     /// Your Etherscan API key, used for fetching creation bytecode of self-destructed contracts.
     #[clap(long, default_value = "", hide_default_value = true)]
     pub etherscan_api_key: String,
+
+    /// The hardfork to use for opcode recognition. Opcodes introduced after this hardfork
+    /// will be treated as unknown. Defaults to 'latest'.
+    #[clap(long, short = 'f', default_value = "latest")]
+    pub hardfork: HardFork,
 }
 
 impl DecompilerArgs {
@@ -102,6 +108,7 @@ impl DecompilerArgsBuilder {
             llm_postprocess: Some(false),
             openai_api_key: Some(String::new()),
             etherscan_api_key: Some(String::new()),
+            hardfork: Some(HardFork::Latest),
         }
     }
 }

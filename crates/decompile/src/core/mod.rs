@@ -126,12 +126,14 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         Address::default(),
         0,
         u128::MAX,
-    );
+    )
+    .with_hardfork(args.hardfork);
 
     // disassemble the contract's bytecode
     let assembly = disassemble(
         DisassemblerArgsBuilder::new()
             .target(encode_hex(&contract_bytecode))
+            .hardfork(args.hardfork)
             .build()
             .expect("impossible case: failed to build disassembly arguments"),
     )
