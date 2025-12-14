@@ -21,6 +21,7 @@ heimdall-config = { workspace = true }
 heimdall-common = { workspace = true }
 heimdall-cache = { workspace = true }
 heimdall-vm = { workspace = true }
+alloy = { workspace = true }
 thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
 eyre.workspace = true

@@ -2636,6 +2636,7 @@ dependencies = [
 name = "heimdall-disassembler"
 version = "0.9.2"
 dependencies = [
+ "alloy",
  "clap",
  "eyre",
  "heimdall-cache",

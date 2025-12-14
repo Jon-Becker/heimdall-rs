@@ -19,6 +19,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -38,6 +39,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -57,6 +59,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -76,6 +79,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -95,6 +99,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -118,6 +123,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -146,6 +152,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Pectra,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");

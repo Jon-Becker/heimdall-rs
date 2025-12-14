@@ -190,42 +190,38 @@ pub async fn get_contract_creation_block(contract_address: Address, rpc_url: &st
 
     let chain_id = chain_id(rpc_url).await.unwrap_or(1);
 
-    with_cache(
-        &format!("contract_creation_block.{}.{}", chain_id, contract_address),
-        || async {
-            let provider = MultiTransportProvider::connect(rpc_url).await?;
+    with_cache(&format!("contract_creation_block.{}.{}", chain_id, contract_address), || async {
+        let provider = MultiTransportProvider::connect(rpc_url).await?;
 
-            // Verify the contract exists at the latest block
-            let latest_code = provider.get_code_at(contract_address).await?;
-            if latest_code.is_empty() {
-                bail!("contract does not exist at address {}", contract_address);
+        // Verify the contract exists at the latest block
+        let latest_code = provider.get_code_at(contract_address).await?;
+        if latest_code.is_empty() {
+            bail!("contract does not exist at address {}", contract_address);
+        }
+
+        // Get the latest block number
+        let latest_block = provider.get_block_number().await?;
+
+        // Binary search for the creation block
+        let mut low: u64 = 0;
+        let mut high: u64 = latest_block;
+
+        while low < high {
+            let mid = low + (high - low) / 2;
+
+            // Check if contract exists at block `mid`
+            let code =
+                provider.get_code_at_block(contract_address, BlockId::Number(mid.into())).await?;
+
+            if code.is_empty() {
+                low = mid + 1;
+            } else {
+                high = mid;
             }
+        }
 
-            // Get the latest block number
-            let latest_block = provider.get_block_number().await?;
-
-            // Binary search for the creation block
-            let mut low: u64 = 0;
-            let mut high: u64 = latest_block;
-
-            while low < high {
-                let mid = low + (high - low) / 2;
-
-                // Check if contract exists at block `mid`
-                let code = provider
-                    .get_code_at_block(contract_address, BlockId::Number(mid.into()))
-                    .await?;
-
-                if code.is_empty() {
-                    low = mid + 1;
-                } else {
-                    high = mid;
-                }
-            }
-
-            Ok(low)
-        },
-    )
+        Ok(low)
+    })
     .await
 }
 
