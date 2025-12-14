@@ -19,6 +19,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -38,6 +39,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -57,6 +59,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -76,6 +79,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -95,6 +99,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -118,6 +123,7 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");
@@ -146,6 +152,54 @@ mod integration_tests {
             name: String::from(""),
             output: String::from(""),
             hardfork: HardFork::Pectra,
+            etherscan_api_key: String::from(""),
+        })
+        .await
+        .expect("failed to disassemble");
+
+        assert_eq!(expected, assembly);
+    }
+
+    #[tokio::test]
+    async fn test_disassemble_auto_hardfork() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        // WETH contract deployed at block 4719568 (Byzantium era)
+        // Auto hardfork detection should correctly identify this
+        let result = disassemble(DisassemblerArgs {
+            target: String::from("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
+            rpc_url,
+            decimal_counter: true,
+            name: String::from(""),
+            output: String::from(""),
+            hardfork: HardFork::Auto,
+            etherscan_api_key: String::from(""),
+        })
+        .await
+        .expect("failed to disassemble with auto hardfork");
+
+        // Verify the disassembly succeeded and contains expected opcodes
+        assert!(result.contains("PUSH1"));
+        assert!(result.contains("MSTORE"));
+    }
+
+    #[tokio::test]
+    async fn test_disassemble_auto_hardfork_fallback() {
+        // When no RPC URL is provided, auto hardfork should fall back to Latest
+        let bytecode = "366000600037611000600036600073";
+        let expected = String::from("0 CALLDATASIZE \n1 PUSH1 00\n3 PUSH1 00\n5 CALLDATACOPY \n6 PUSH2 1000\n9 PUSH1 00\n11 CALLDATASIZE \n12 PUSH1 00\n");
+
+        let assembly = disassemble(DisassemblerArgs {
+            target: bytecode.to_owned(),
+            rpc_url: String::from(""),
+            decimal_counter: true,
+            name: String::from(""),
+            output: String::from(""),
+            hardfork: HardFork::Auto,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to disassemble");

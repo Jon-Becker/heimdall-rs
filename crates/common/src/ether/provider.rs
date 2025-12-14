@@ -1,5 +1,6 @@
 //! Create a custom data transport to use with a Provider.
 use alloy::{
+    eips::BlockId,
     network::Ethereum,
     primitives::{Address, TxHash},
     providers::{ext::TraceApi, Provider, ProviderBuilder, RootProvider},
@@ -44,6 +45,11 @@ impl MultiTransportProvider {
     /// Get the bytecode at the given address.
     pub async fn get_code_at(&self, address: Address) -> Result<Vec<u8>> {
         Ok(self.provider.get_code_at(address).await?.to_vec())
+    }
+
+    /// Get the bytecode at the given address at a specific block.
+    pub async fn get_code_at_block(&self, address: Address, block: BlockId) -> Result<Vec<u8>> {
+        Ok(self.provider.get_code_at(address).block_id(block).await?.to_vec())
     }
 
     /// Get the transaction by hash.

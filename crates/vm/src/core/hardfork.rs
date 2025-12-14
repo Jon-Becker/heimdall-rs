@@ -41,17 +41,19 @@ pub enum HardFork {
     Pectra = 15,
     /// December 2025 fork (Fulu-Osaka)
     Fusaka = 16,
+    /// Automatically detect hardfork based on contract creation block
+    Auto = 254,
     /// Latest hard fork
     #[default]
     Latest = 255,
 }
 
 impl HardFork {
-    /// Returns the effective hard fork, resolving `Latest` to the actual latest fork.
+    /// Returns the effective hard fork, resolving `Latest` and `Auto` to the actual latest fork.
     #[inline]
     pub const fn effective(self) -> Self {
         match self {
-            Self::Latest => Self::Fusaka,
+            Self::Latest | Self::Auto => Self::Fusaka,
             other => other,
         }
     }
@@ -189,6 +191,7 @@ impl FromStr for HardFork {
             "cancun" => Ok(Self::Cancun),
             "pectra" => Ok(Self::Pectra),
             "fusaka" => Ok(Self::Fusaka),
+            "auto" => Ok(Self::Auto),
             "latest" => Ok(Self::Latest),
             _ => Err(format!("unknown hardfork: {}", s)),
         }
@@ -215,6 +218,7 @@ impl std::fmt::Display for HardFork {
             Self::Cancun => write!(f, "cancun"),
             Self::Pectra => write!(f, "pectra"),
             Self::Fusaka => write!(f, "fusaka"),
+            Self::Auto => write!(f, "auto"),
             Self::Latest => write!(f, "latest"),
         }
     }

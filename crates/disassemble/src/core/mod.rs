@@ -24,7 +24,11 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     let start_time = Instant::now();
     let mut program_counter = 0;
     let mut asm = String::new();
-    let hardfork = args.hardfork;
+
+    // Resolve hardfork (handles Auto detection if needed)
+    let start_hardfork_resolve = Instant::now();
+    let hardfork = args.get_hardfork().await;
+    debug!("resolved hardfork: {} (took {:?})", hardfork, start_hardfork_resolve.elapsed());
 
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
