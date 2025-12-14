@@ -96,6 +96,11 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
     }
 
+    // Resolve hardfork (handles Auto detection if needed)
+    let start_hardfork_resolve = Instant::now();
+    let hardfork = args.get_hardfork().await;
+    debug!("resolved hardfork: {} (took {:?})", hardfork, start_hardfork_resolve.elapsed());
+
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
     let contract_bytecode = args
@@ -127,13 +132,13 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         0,
         u128::MAX,
     )
-    .with_hardfork(args.hardfork);
+    .with_hardfork(hardfork);
 
     // disassemble the contract's bytecode
     let assembly = disassemble(
         DisassemblerArgsBuilder::new()
             .target(encode_hex(&contract_bytecode))
-            .hardfork(args.hardfork)
+            .hardfork(hardfork)
             .build()
             .expect("impossible case: failed to build disassembly arguments"),
     )
