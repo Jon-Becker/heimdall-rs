@@ -2,7 +2,7 @@
 
 use crate::ether::provider::MultiTransportProvider;
 use alloy::{
-    eips::BlockNumberOrTag,
+    eips::{BlockId, BlockNumberOrTag},
     primitives::{Address, TxHash},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
@@ -172,6 +172,63 @@ pub async fn get_block_state_diff(
     .await
 }
 
+/// Get the block number at which a contract was created using binary search.
+///
+/// This function performs a binary search to find the earliest block at which
+/// the contract code exists at the given address.
+///
+/// ```no_run
+/// use heimdall_common::ether::rpc::get_contract_creation_block;
+/// use alloy::primitives::address;
+///
+/// // let block = get_contract_creation_block(address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"), "https://eth.llamarpc.com").await?;
+/// ```
+pub async fn get_contract_creation_block(contract_address: Address, rpc_url: &str) -> Result<u64> {
+    if rpc_url.is_empty() {
+        bail!("cannot get_contract_creation_block, rpc_url is empty");
+    }
+
+    let chain_id = chain_id(rpc_url).await.unwrap_or(1);
+
+    with_cache(
+        &format!("contract_creation_block.{}.{}", chain_id, contract_address),
+        || async {
+            let provider = MultiTransportProvider::connect(rpc_url).await?;
+
+            // Verify the contract exists at the latest block
+            let latest_code = provider.get_code_at(contract_address).await?;
+            if latest_code.is_empty() {
+                bail!("contract does not exist at address {}", contract_address);
+            }
+
+            // Get the latest block number
+            let latest_block = provider.get_block_number().await?;
+
+            // Binary search for the creation block
+            let mut low: u64 = 0;
+            let mut high: u64 = latest_block;
+
+            while low < high {
+                let mid = low + (high - low) / 2;
+
+                // Check if contract exists at block `mid`
+                let code = provider
+                    .get_code_at_block(contract_address, BlockId::Number(mid.into()))
+                    .await?;
+
+                if code.is_empty() {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+
+            Ok(low)
+        },
+    )
+    .await
+}
+
 /// Tests for RPC functionality.
 #[cfg(test)]
 pub mod tests {
@@ -267,6 +324,22 @@ pub mod tests {
             .expect("get_block_logs() returned an error!");
 
         assert!(!logs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_contract_creation_block() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        // WETH contract on mainnet, deployed at block 4719568
+        let contract_address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
+        let creation_block = get_contract_creation_block(contract_address, &rpc_url)
+            .await
+            .expect("get_contract_creation_block() returned an error!");
+
+        assert_eq!(creation_block, 4719568);
     }
 
     #[tokio::test]

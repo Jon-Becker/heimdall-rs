@@ -90,6 +90,27 @@ pub async fn get_creation_bytecode(
     .await
 }
 
+/// Fetch the contract creation block number from Etherscan V2 API.
+///
+/// This function queries Etherscan to find the creation transaction, then fetches
+/// the transaction to get the block number it was included in.
+pub async fn get_contract_creation_block(
+    address: Address,
+    rpc_url: &str,
+    chain_id: u64,
+    api_key: &str,
+) -> Result<u64> {
+    with_cache(&format!("etherscan_creation_block.{}.{}", chain_id, address), || async {
+        let tx_hash = get_contract_creation_tx(address, chain_id, api_key).await?;
+        debug!("found creation transaction: {}", tx_hash);
+
+        let transaction = get_transaction(tx_hash, rpc_url).await?;
+
+        transaction.block_number.ok_or_else(|| eyre!("creation transaction has no block number"))
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
