@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 /// Ethereum hard forks in chronological order.
 ///
 /// Each hard fork may introduce new opcodes or change existing behavior.
@@ -162,6 +164,59 @@ impl HardFork {
         // Holesky launched with Shanghai-equivalent state
         let _ = block_number;
         Self::Shanghai
+    }
+}
+
+impl FromStr for HardFork {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "frontier" => Ok(Self::Frontier),
+            "homestead" => Ok(Self::Homestead),
+            "daofork" | "dao" => Ok(Self::DaoFork),
+            "byzantium" => Ok(Self::Byzantium),
+            "constantinople" => Ok(Self::Constantinople),
+            "petersburg" => Ok(Self::Petersburg),
+            "istanbul" => Ok(Self::Istanbul),
+            "muirglacier" | "muir_glacier" => Ok(Self::MuirGlacier),
+            "berlin" => Ok(Self::Berlin),
+            "london" => Ok(Self::London),
+            "arrowglacier" | "arrow_glacier" => Ok(Self::ArrowGlacier),
+            "grayglacier" | "gray_glacier" => Ok(Self::GrayGlacier),
+            "paris" | "merge" => Ok(Self::Paris),
+            "shanghai" => Ok(Self::Shanghai),
+            "cancun" => Ok(Self::Cancun),
+            "pectra" => Ok(Self::Pectra),
+            "fusaka" => Ok(Self::Fusaka),
+            "latest" => Ok(Self::Latest),
+            _ => Err(format!("unknown hardfork: {}", s)),
+        }
+    }
+}
+
+impl std::fmt::Display for HardFork {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Frontier => write!(f, "frontier"),
+            Self::Homestead => write!(f, "homestead"),
+            Self::DaoFork => write!(f, "daofork"),
+            Self::Byzantium => write!(f, "byzantium"),
+            Self::Constantinople => write!(f, "constantinople"),
+            Self::Petersburg => write!(f, "petersburg"),
+            Self::Istanbul => write!(f, "istanbul"),
+            Self::MuirGlacier => write!(f, "muirglacier"),
+            Self::Berlin => write!(f, "berlin"),
+            Self::London => write!(f, "london"),
+            Self::ArrowGlacier => write!(f, "arrowglacier"),
+            Self::GrayGlacier => write!(f, "grayglacier"),
+            Self::Paris => write!(f, "paris"),
+            Self::Shanghai => write!(f, "shanghai"),
+            Self::Cancun => write!(f, "cancun"),
+            Self::Pectra => write!(f, "pectra"),
+            Self::Fusaka => write!(f, "fusaka"),
+            Self::Latest => write!(f, "latest"),
+        }
     }
 }
 

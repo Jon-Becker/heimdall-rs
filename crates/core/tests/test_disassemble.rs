@@ -4,7 +4,7 @@
 mod integration_tests {
     use std::{io::Write, path::PathBuf};
 
-    use heimdall_disassembler::{disassemble, DisassemblerArgs, DisassemblerArgsBuilder};
+    use heimdall_disassembler::{disassemble, DisassemblerArgs, DisassemblerArgsBuilder, HardFork};
     use serde_json::Value;
 
     #[tokio::test]
@@ -18,6 +18,7 @@ mod integration_tests {
             decimal_counter: false,
             name: String::from(""),
             output: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to disassemble");
@@ -36,6 +37,7 @@ mod integration_tests {
             decimal_counter: true,
             name: String::from(""),
             output: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to disassemble");
@@ -54,6 +56,7 @@ mod integration_tests {
             decimal_counter: false,
             name: String::from(""),
             output: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to disassemble");
@@ -72,6 +75,7 @@ mod integration_tests {
             decimal_counter: true,
             name: String::from(""),
             output: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to disassemble");
@@ -90,6 +94,7 @@ mod integration_tests {
             decimal_counter: true,
             name: String::from(""),
             output: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to disassemble");
@@ -112,6 +117,7 @@ mod integration_tests {
             decimal_counter: true,
             name: String::from(""),
             output: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to disassemble");
@@ -129,6 +135,8 @@ mod integration_tests {
             std::process::exit(0);
         });
 
+        // This contract was deployed before Fusaka, so use Pectra hardfork
+        // to show CLZ (0x1e) as unknown (it's part of the contract metadata)
         let expected = String::from("0 PUSH1 80\n2 PUSH1 40\n4 MSTORE \n5 PUSH20 ffffffffffffffffffffffffffffffffffffffff\n26 PUSH1 00\n28 SLOAD \n29 AND \n30 CALLDATASIZE \n31 PUSH1 00\n33 DUP1 \n34 CALLDATACOPY \n35 PUSH1 00\n37 DUP1 \n38 CALLDATASIZE \n39 PUSH1 00\n41 DUP5 \n42 GAS \n43 DELEGATECALL \n44 RETURNDATASIZE \n45 PUSH1 00\n47 DUP1 \n48 RETURNDATACOPY \n49 PUSH1 00\n51 DUP2 \n52 EQ \n53 ISZERO \n54 PUSH1 3d\n56 JUMPI \n57 RETURNDATASIZE \n58 PUSH1 00\n60 REVERT \n61 JUMPDEST \n62 RETURNDATASIZE \n63 PUSH1 00\n65 RETURN \n66 INVALID \n67 LOG1 \n68 PUSH6 627a7a723058\n75 SHA3 \n76 unknown \n77 PUSH30 648b83cfac072cbccefc2ffc62a6999d4a050ee87a721942de1da9670db8\n108 STOP \n109 unknown \n");
 
         let assembly = disassemble(DisassemblerArgs {
@@ -137,6 +145,7 @@ mod integration_tests {
             decimal_counter: true,
             name: String::from(""),
             output: String::from(""),
+            hardfork: HardFork::Pectra,
         })
         .await
         .expect("failed to disassemble");
