@@ -313,6 +313,66 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn test_decompile_auto_hardfork() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        // Test auto hardfork detection with a real contract
+        let result = decompile(DecompilerArgs {
+            target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+            abi: None,
+            openai_api_key: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Auto,
+        })
+        .await
+        .expect("failed to decompile with auto hardfork");
+
+        // Verify the decompilation succeeded
+        assert!(result.source.is_some());
+        assert!(!result.source.as_ref().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_decompile_auto_hardfork_fallback() {
+        // When target is bytecode (not an address), auto hardfork should fall back to Latest
+        let bytecode = "6080604052348015600e575f5ffd5b50603e80601a5f395ff3fe60806040525f5ffd";
+
+        let result = decompile(DecompilerArgs {
+            target: bytecode.to_string(),
+            rpc_url: String::from(""),
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+            abi: None,
+            openai_api_key: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Auto,
+        })
+        .await
+        .expect("failed to decompile with auto hardfork fallback");
+
+        // Verify the decompilation succeeded
+        assert!(result.source.is_some());
+    }
+
+    #[tokio::test]
     #[ignore]
     async fn heavy_integration_test() {
         let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

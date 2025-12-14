@@ -69,6 +69,60 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn test_cfg_auto_hardfork() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        // Test auto hardfork detection with a real contract
+        let result = heimdall_cfg::cfg(CfgArgs {
+            target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
+            rpc_url,
+            default: true,
+            color_edges: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+            hardfork: HardFork::Auto,
+            etherscan_api_key: String::from(""),
+        })
+        .await
+        .expect("failed to generate cfg with auto hardfork");
+
+        let output: String = format!("{}", Dot::with_config(&result.graph, &[]));
+
+        // Verify the CFG was generated successfully
+        assert!(!output.is_empty());
+        assert!(output.contains("digraph"));
+    }
+
+    #[tokio::test]
+    async fn test_cfg_auto_hardfork_fallback() {
+        // When target is bytecode (not an address), auto hardfork should fall back to Latest
+        let bytecode = "6080604052";
+
+        let result = heimdall_cfg::cfg(CfgArgs {
+            target: bytecode.to_string(),
+            rpc_url: String::from(""),
+            default: true,
+            color_edges: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+            hardfork: HardFork::Auto,
+            etherscan_api_key: String::from(""),
+        })
+        .await
+        .expect("failed to generate cfg with auto hardfork fallback");
+
+        let output: String = format!("{}", Dot::with_config(&result.graph, &[]));
+
+        // Verify the CFG was generated successfully
+        assert!(!output.is_empty());
+    }
+
+    #[tokio::test]
     #[ignore]
     async fn heavy_integration_test() {
         let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
