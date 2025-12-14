@@ -3,6 +3,7 @@ use derive_builder::Builder;
 use eyre::Result;
 use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
+use heimdall_vm::core::hardfork::HardFork;
 
 /// Arguments for the CFG subcommand
 #[derive(Debug, Clone, Parser, Builder)]
@@ -41,6 +42,11 @@ pub struct CfgArgs {
     /// Timeout for symbolic execution
     #[clap(long, short, default_value = "10000", hide_default_value = true)]
     pub timeout: u64,
+
+    /// The hardfork to use for opcode recognition. Opcodes introduced after this hardfork
+    /// will be treated as unknown. Defaults to 'latest'.
+    #[clap(long, short = 'f', default_value = "latest")]
+    pub hardfork: HardFork,
 }
 
 impl CfgArgs {
@@ -61,6 +67,7 @@ impl CfgArgsBuilder {
             output: Some(String::new()),
             name: Some(String::new()),
             timeout: Some(10000),
+            hardfork: Some(HardFork::Latest),
         }
     }
 }

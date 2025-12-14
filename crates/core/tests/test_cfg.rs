@@ -5,7 +5,7 @@ mod integration_tests {
     use memory_stats::memory_stats;
     use std::path::PathBuf;
 
-    use heimdall_cfg::{cfg, CfgArgs, CfgArgsBuilder};
+    use heimdall_cfg::{cfg, CfgArgs, CfgArgsBuilder, HardFork};
     use petgraph::dot::Dot;
     use serde_json::Value;
 
@@ -24,6 +24,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to generate cfg");
@@ -53,6 +54,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to generate cfg");

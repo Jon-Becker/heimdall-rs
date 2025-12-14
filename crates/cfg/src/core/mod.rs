@@ -78,7 +78,8 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
         Address::default(),
         0,
         u128::MAX,
-    );
+    )
+    .with_hardfork(args.hardfork);
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));
     let start_sym_exec_time = Instant::now();
