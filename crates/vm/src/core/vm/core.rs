@@ -1,28 +1,29 @@
 use hashbrown::HashSet;
-use std::{
-    ops::{Div, Rem, Shl, Shr},
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::sync::Arc;
 
-use alloy::primitives::{keccak256, Address, I256, U256};
+use alloy::primitives::{Address, I256, U256};
 use eyre::{OptionExt, Result};
-use heimdall_common::utils::strings::sign_uint;
 
 #[cfg(feature = "step-tracing")]
 use std::time::Instant;
 #[cfg(feature = "step-tracing")]
 use tracing::trace;
 
-use crate::core::opcodes::{self, OpCodeInfo};
+use crate::core::{
+    hardfork::HardFork,
+    opcodes::{self, OpCodeInfo, WrappedInput, WrappedOpcode},
+};
 
-use super::{
-    constants::{COINBASE_ADDRESS, CREATE2_ADDRESS, CREATE_ADDRESS},
+use super::super::{
     log::Log,
     memory::Memory,
-    opcodes::{WrappedInput, WrappedOpcode},
     stack::{Stack, StackFrame},
     storage::Storage,
+};
+
+use super::{
+    execution::{ExecutionResult, Instruction, State},
+    handlers,
 };
 
 /// The [`VM`] struct represents an EVM instance. \
@@ -78,6 +79,9 @@ pub struct VM {
     /// A set of addresses that have been accessed during execution (used for gas calculation).
     pub address_access_set: HashSet<U256>,
 
+    /// The hard fork to use for opcode activation.
+    pub hardfork: HardFork,
+
     /// Counter for operations executed (only available with step-tracing feature).
     #[cfg(feature = "step-tracing")]
     pub operation_count: u128,
@@ -85,80 +89,6 @@ pub struct VM {
     /// The time when execution started (only available with step-tracing feature).
     #[cfg(feature = "step-tracing")]
     pub start_time: Instant,
-}
-
-/// [`ExecutionResult`] is the result of a single contract execution.
-#[derive(Clone, Debug)]
-pub struct ExecutionResult {
-    /// The amount of gas consumed during the execution.
-    pub gas_used: u128,
-
-    /// The amount of gas left after execution completes.
-    pub gas_remaining: u128,
-
-    /// The data returned by the execution.
-    pub returndata: Vec<u8>,
-
-    /// The exit code of the execution (0 for success, non-zero for errors).
-    pub exitcode: u128,
-
-    /// The events (logs) emitted during execution.
-    pub events: Vec<Log>,
-
-    /// The final instruction pointer value after execution.
-    pub instruction: u128,
-}
-
-/// [`State`] is the state of the EVM after executing a single instruction. It is returned by the
-/// [`VM::step`] function, and is used by heimdall for tracing contract execution.
-#[derive(Clone, Debug)]
-pub struct State {
-    /// The instruction that was just executed.
-    pub last_instruction: Instruction,
-
-    /// The total amount of gas used so far during execution.
-    pub gas_used: u128,
-
-    /// The amount of gas remaining for execution.
-    pub gas_remaining: u128,
-
-    /// The current state of the EVM stack.
-    pub stack: Stack,
-
-    /// The current state of the EVM memory.
-    pub memory: Memory,
-
-    /// The current state of the contract storage.
-    pub storage: Storage,
-
-    /// The events (logs) emitted so far during execution.
-    pub events: Vec<Log>,
-}
-
-/// [`Instruction`] is a single EVM instruction. It is returned by the [`VM::step`] function, and
-/// contains necessary tracing information, such as the opcode executed, it's inputs and outputs, as
-/// well as their parent operations.
-#[derive(Clone, Debug)]
-pub struct Instruction {
-    /// The position of this instruction in the bytecode.
-    pub instruction: u128,
-
-    /// The opcode value of the instruction.
-    pub opcode: u8,
-
-    /// The raw values of the inputs to this instruction.
-    pub inputs: Vec<U256>,
-
-    /// The raw values of the outputs produced by this instruction.
-    pub outputs: Vec<U256>,
-
-    /// The wrapped operations that produced the inputs to this instruction.
-    /// This allows for tracking data flow and operation dependencies.
-    pub input_operations: Vec<WrappedOpcode>,
-
-    /// The wrapped operations that will consume the outputs of this instruction.
-    /// This allows for forward tracking of data flow.
-    pub output_operations: Vec<WrappedOpcode>,
 }
 
 impl VM {
@@ -205,11 +135,18 @@ impl VM {
             returndata: Vec::new(),
             exitcode: 255,
             address_access_set: HashSet::new(),
+            hardfork: HardFork::default(),
             #[cfg(feature = "step-tracing")]
             operation_count: 0,
             #[cfg(feature = "step-tracing")]
             start_time: Instant::now(),
         }
+    }
+
+    /// Sets the hard fork for opcode activation.
+    pub fn with_hardfork(mut self, hardfork: HardFork) -> Self {
+        self.hardfork = hardfork;
+        self
     }
 
     /// Exits current execution with the given code and returndata.
@@ -273,39 +210,21 @@ impl VM {
         true
     }
 
-    /// Executes the next instruction in the bytecode. Returns information about the instruction
-    /// executed.
-    ///
-    /// ```no_run
-    /// use heimdall_vm::core::vm::VM;
-    /// use alloy::primitives::Address;
-    ///
-    /// let mut vm = VM::new(
-    ///     &vec![0x00],
-    ///     &vec![],
-    ///     "0x0000000000000000000000000000000000000000".parse::<Address>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000001".parse::<Address>().expect("failed to parse Address"),
-    ///     "0x0000000000000000000000000000000000000002".parse::<Address>().expect("failed to parse Address"),
-    ///     0,
-    ///     1000000000000000000,
-    /// );
-    ///
-    /// // vm._step(); // 0x00 EXIT
-    /// // assert_eq!(vm.exitcode, 10);
-    /// ```
-
-    fn push_boolean(&mut self, condition: bool, operation: WrappedOpcode) {
+    /// Push a boolean value onto the stack
+    pub(crate) fn push_boolean(&mut self, condition: bool, operation: WrappedOpcode) {
         let value = if condition { U256::from(1u8) } else { U256::ZERO };
         self.stack.push(value, operation);
     }
 
-    fn address_to_u256(address: &Address) -> U256 {
+    /// Convert an address to U256
+    pub(crate) fn address_to_u256(address: &Address) -> U256 {
         let mut result = [0u8; 32];
         result[12..].copy_from_slice(address.as_ref());
         U256::from_be_bytes(result)
     }
 
-    fn push_with_optimization(
+    /// Push with optimization for two operands
+    pub(crate) fn push_with_optimization(
         &mut self,
         result: U256,
         a: &StackFrame,
@@ -323,7 +242,8 @@ impl VM {
         self.stack.push(result, simplified_operation);
     }
 
-    fn push_with_optimization_single(
+    /// Push with optimization for single operand
+    pub(crate) fn push_with_optimization_single(
         &mut self,
         result: U256,
         a: &StackFrame,
@@ -338,7 +258,8 @@ impl VM {
         self.stack.push(result, simplified_operation);
     }
 
-    fn push_with_optimization_signed(
+    /// Push with optimization for signed operations
+    pub(crate) fn push_with_optimization_signed(
         &mut self,
         result: I256,
         a: &StackFrame,
@@ -356,7 +277,8 @@ impl VM {
         self.stack.push(result.into_raw(), simplified_operation);
     }
 
-    fn safe_copy_data(source: &[u8], offset: usize, size: usize) -> Vec<u8> {
+    /// Safely copy data from source with bounds checking
+    pub(crate) fn safe_copy_data(source: &[u8], offset: usize, size: usize) -> Vec<u8> {
         let end_offset = offset.saturating_add(size).min(source.len());
         let mut value = source.get(offset..end_offset).unwrap_or(&[]).to_owned();
         if value.len() < size {
@@ -365,6 +287,8 @@ impl VM {
         value
     }
 
+    /// Executes the next instruction in the bytecode. Returns information about the instruction
+    /// executed.
     fn _step(&mut self) -> Result<Instruction> {
         // sanity check
         if self.bytecode.len() < self.instruction as usize {
@@ -395,7 +319,21 @@ impl VM {
         let start_time = Instant::now();
 
         // add the opcode to the trace
-        let opcode_info = OpCodeInfo::from(opcode);
+        let opcode_info = match OpCodeInfo::for_fork(opcode, self.hardfork) {
+            Some(info) => info,
+            None => {
+                // Opcode not active at this hardfork - treat as invalid
+                self.exit(1, Vec::new());
+                return Ok(Instruction {
+                    instruction: last_instruction,
+                    opcode,
+                    inputs: Vec::new(),
+                    outputs: Vec::new(),
+                    input_operations: Vec::new(),
+                    output_operations: Vec::new(),
+                });
+            }
+        };
         let input_frames = self.stack.peek_n(opcode_info.inputs() as usize);
         let input_operations =
             input_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
@@ -410,7 +348,7 @@ impl VM {
             .iter()
             .map(|x| WrappedInput::Opcode(Arc::new(x.to_owned())))
             .collect::<Vec<WrappedInput>>();
-        let mut operation = WrappedOpcode::new(opcode, wrapped_inputs);
+        let operation = WrappedOpcode::new(opcode, wrapped_inputs);
 
         // if step-tracing feature is enabled, print the current operation
         #[cfg(feature = "step-tracing")]
@@ -427,803 +365,143 @@ impl VM {
         // execute the operation
         match opcode {
             opcodes::STOP => {
-                self.exit(10, Vec::new());
-                return Ok(Instruction {
-                    instruction: last_instruction,
-                    opcode,
-                    inputs,
-                    outputs: Vec::new(),
-                    input_operations,
-                    output_operations: Vec::new(),
-                });
+                return Ok(handlers::control::stop(
+                    self,
+                    last_instruction,
+                    &inputs,
+                    &input_operations,
+                ));
             }
 
-            opcodes::ADD => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let result = a.value.overflowing_add(b.value).0;
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::MUL => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let result = a.value.overflowing_mul(b.value).0;
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::SUB => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let result = a.value.overflowing_sub(b.value).0;
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::DIV => {
-                let numerator = self.stack.pop()?;
-                let denominator = self.stack.pop()?;
-                let result = if !denominator.value.is_zero() {
-                    numerator.value.div(denominator.value)
-                } else {
-                    U256::ZERO
-                };
-                self.push_with_optimization(result, &numerator, &denominator, operation);
-            }
-
-            opcodes::SDIV => {
-                let numerator = self.stack.pop()?;
-                let denominator = self.stack.pop()?;
-                let result = if !denominator.value.is_zero() {
-                    sign_uint(numerator.value).div(sign_uint(denominator.value))
-                } else {
-                    I256::ZERO
-                };
-                self.push_with_optimization_signed(result, &numerator, &denominator, operation);
-            }
-
-            opcodes::MOD => {
-                let a = self.stack.pop()?;
-                let modulus = self.stack.pop()?;
-                let result =
-                    if !modulus.value.is_zero() { a.value.rem(modulus.value) } else { U256::ZERO };
-                self.push_with_optimization(result, &a, &modulus, operation);
-            }
-
-            opcodes::SMOD => {
-                let a = self.stack.pop()?;
-                let modulus = self.stack.pop()?;
-                let result = if !modulus.value.is_zero() {
-                    sign_uint(a.value).rem(sign_uint(modulus.value))
-                } else {
-                    I256::ZERO
-                };
-                self.push_with_optimization_signed(result, &a, &modulus, operation);
-            }
-
-            opcodes::ADDMOD => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let modulus = self.stack.pop()?;
-                let result = if !modulus.value.is_zero() {
-                    a.value.add_mod(b.value, modulus.value)
-                } else {
-                    U256::ZERO
-                };
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::MULMOD => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let modulus = self.stack.pop()?;
-                let result = if !modulus.value.is_zero() {
-                    a.value.mul_mod(b.value, modulus.value)
-                } else {
-                    U256::ZERO
-                };
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::EXP => {
-                let a = self.stack.pop()?;
-                let exponent = self.stack.pop()?;
-                let result = a.value.overflowing_pow(exponent.value).0;
-
-                // consume dynamic gas
-                let exponent_byte_size = exponent.value.bit_len() / 8;
-                let gas_cost = 50 * exponent_byte_size;
-                self.consume_gas(gas_cost as u128);
-
-                self.push_with_optimization(result, &a, &exponent, operation);
-            }
-
-            opcodes::SIGNEXTEND => {
-                let x = self.stack.pop()?.value;
-                let b = self.stack.pop()?.value;
-
-                let t = x * U256::from(8u32) + U256::from(7u32);
-                let sign_bit = U256::from(1u32) << t;
-
-                // (b & sign_bit - 1) - (b & sign_bit)
-                let result = (b & (sign_bit.overflowing_sub(U256::from(1u32)).0))
-                    .overflowing_sub(b & sign_bit)
-                    .0;
-
-                self.stack.push(result, operation)
-            }
-
-            opcodes::LT => {
-                let a = self.stack.pop()?.value;
-                let b = self.stack.pop()?.value;
-                self.push_boolean(a.lt(&b), operation);
-            }
-
-            opcodes::GT => {
-                let a = self.stack.pop()?.value;
-                let b = self.stack.pop()?.value;
-                self.push_boolean(a.gt(&b), operation);
-            }
-
-            opcodes::SLT => {
-                let a = self.stack.pop()?.value;
-                let b = self.stack.pop()?.value;
-                self.push_boolean(sign_uint(a).lt(&sign_uint(b)), operation);
-            }
-
-            opcodes::SGT => {
-                let a = self.stack.pop()?.value;
-                let b = self.stack.pop()?.value;
-                self.push_boolean(sign_uint(a).gt(&sign_uint(b)), operation);
-            }
-
-            opcodes::EQ => {
-                let a = self.stack.pop()?.value;
-                let b = self.stack.pop()?.value;
-                self.push_boolean(a.eq(&b), operation);
-            }
-
-            opcodes::ISZERO => {
-                let a = self.stack.pop()?.value;
-                self.push_boolean(a.is_zero(), operation);
-            }
-
-            opcodes::AND => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let result = a.value & b.value;
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::OR => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let result = a.value | b.value;
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::XOR => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let result = a.value ^ b.value;
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::NOT => {
-                let a = self.stack.pop()?;
-                let result = !a.value;
-                self.push_with_optimization_single(result, &a, operation);
-            }
-
-            opcodes::BYTE => {
-                let b = self.stack.pop()?.value;
-                let a = self.stack.pop()?.value;
-                let result = if b >= U256::from(32u32) {
-                    U256::ZERO
-                } else {
-                    a / (U256::from(256u32).pow(U256::from(31u32) - b)) % U256::from(256u32)
-                };
-                self.stack.push(result, operation);
-            }
-
-            opcodes::SHL => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let result =
-                    if a.value > U256::from(255u8) { U256::ZERO } else { b.value.shl(a.value) };
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::SHR => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let result =
-                    if a.value > U256::from(255u8) { U256::ZERO } else { b.value.shr(a.value) };
-                self.push_with_optimization(result, &a, &b, operation);
-            }
-
-            opcodes::SAR => {
-                let a = self.stack.pop()?;
-                let b = self.stack.pop()?;
-                let usize_a: usize = a.value.try_into().unwrap_or(usize::MAX);
-                let result =
-                    if !b.value.is_zero() { sign_uint(b.value).shr(usize_a) } else { I256::ZERO };
-                self.push_with_optimization_signed(result, &a, &b, operation);
-            }
-
-            opcodes::SHA3 => {
-                let offset = self.stack.pop()?.value;
-                let size = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
-
-                let data = self.memory.read(offset, size);
-                let result = keccak256(data);
-
-                // consume dynamic gas
-                let minimum_word_size = size.div_ceil(32) as u128;
-                let gas_cost = 6 * minimum_word_size + self.memory.expansion_cost(offset, size);
-                self.consume_gas(gas_cost);
-
-                self.stack.push(U256::from_be_bytes(result.0), operation);
-            }
-
-            opcodes::ADDRESS => {
-                self.stack.push(Self::address_to_u256(&self.address), operation);
-            }
-
-            opcodes::BALANCE => {
-                let address = self.stack.pop()?.value;
-
-                // consume dynamic gas
-                if !self.address_access_set.contains(&address) {
-                    self.consume_gas(2600);
-                    self.address_access_set.insert(address);
-                } else {
-                    self.consume_gas(100);
-                }
-
-                // balance is set to 1 wei because we won't run into div by 0 errors
-                self.stack.push(U256::from(1), operation);
-            }
-
-            opcodes::ORIGIN => {
-                self.stack.push(Self::address_to_u256(&self.origin), operation);
-            }
-
-            opcodes::CALLER => {
-                self.stack.push(Self::address_to_u256(&self.caller), operation);
-            }
-
-            opcodes::CALLVALUE => {
-                self.stack.push(U256::from(self.value), operation);
-            }
-
-            opcodes::CALLDATALOAD => {
-                let i = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let i: usize = i.try_into().unwrap_or(usize::MAX);
-
-                let result = if i.saturating_add(32) > self.calldata.len() {
-                    let mut value = [0u8; 32];
-
-                    if i <= self.calldata.len() {
-                        value[..self.calldata.len() - i].copy_from_slice(&self.calldata[i..]);
-                    }
-
-                    U256::from_be_bytes(value)
-                } else {
-                    U256::from_be_slice(&self.calldata[i..i + 32])
-                };
-
-                self.stack.push(result, operation);
-            }
-
-            opcodes::CALLDATASIZE => {
-                let result = U256::from(self.calldata.len());
-
-                self.stack.push(result, operation);
-            }
-
-            opcodes::CALLDATACOPY => {
-                let dest_offset = self.stack.pop()?.value;
-                let offset = self.stack.pop()?.value;
-                let size = self.stack.pop()?.value;
-
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize =
-                    size.try_into().unwrap_or(self.calldata.len()).min(self.calldata.len());
-
-                let value = Self::safe_copy_data(&self.calldata, offset, size);
-
-                // consume dynamic gas
-                let minimum_word_size = size.div_ceil(32) as u128;
-                let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
-                self.consume_gas(gas_cost);
-
-                self.memory.store_with_opcode(
-                    dest_offset,
-                    size,
-                    &value,
-                    #[cfg(feature = "experimental")]
-                    operation,
-                );
-            }
-
-            opcodes::CODESIZE => {
-                let result = U256::from(self.bytecode.len() as u128);
-
-                self.stack.push(result, operation);
-            }
-
-            opcodes::CODECOPY => {
-                let dest_offset = self.stack.pop()?.value;
-                let offset = self.stack.pop()?.value;
-                let size = self.stack.pop()?.value;
-
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize =
-                    size.try_into().unwrap_or(self.bytecode.len()).min(self.bytecode.len());
-
-                let value = Self::safe_copy_data(&self.bytecode, offset, size);
-
-                // consume dynamic gas
-                let minimum_word_size = size.div_ceil(32) as u128;
-                let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
-                self.consume_gas(gas_cost);
-
-                self.memory.store_with_opcode(
-                    dest_offset,
-                    size,
-                    &value,
-                    #[cfg(feature = "experimental")]
-                    operation,
-                );
-            }
-
-            opcodes::GASPRICE => {
-                self.stack.push(U256::from(1), operation);
-            }
-
-            opcodes::EXTCODESIZE => {
-                let address = self.stack.pop()?.value;
-
-                // consume dynamic gas
-                if !self.address_access_set.contains(&address) {
-                    self.consume_gas(2600);
-                    self.address_access_set.insert(address);
-                } else {
-                    self.consume_gas(100);
-                }
-
-                self.stack.push(U256::from(1), operation);
-            }
-
-            opcodes::EXTCODECOPY => {
-                let address = self.stack.pop()?.value;
-                let dest_offset = self.stack.pop()?.value;
-                self.stack.pop()?;
-                let size = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(0);
-                let mut size: usize = size.try_into().unwrap_or(256);
-                size = size.max(256);
-
-                let mut value = Vec::with_capacity(size);
-                value.fill(0xff);
-
-                // consume dynamic gas
-                let minimum_word_size = size.div_ceil(32) as u128;
-                let gas_cost =
-                    3 * minimum_word_size + self.memory.expansion_cost(dest_offset, size);
-                self.consume_gas(gas_cost);
-                if !self.address_access_set.contains(&address) {
-                    self.consume_gas(2600);
-                    self.address_access_set.insert(address);
-                } else {
-                    self.consume_gas(100);
-                }
-
-                self.memory.store_with_opcode(
-                    dest_offset,
-                    size,
-                    &value,
-                    #[cfg(feature = "experimental")]
-                    operation,
-                );
-            }
-
-            opcodes::RETURNDATASIZE => {
-                self.stack.push(U256::from(1u8), operation);
-            }
-
-            opcodes::RETURNDATACOPY => {
-                let dest_offset = self.stack.pop()?.value;
-                self.stack.pop()?;
-                let size = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(0);
-                let size: usize = size.try_into().unwrap_or(256);
-
-                let mut value = Vec::with_capacity(size);
-                value.fill(0xff);
-
-                // consume dynamic gas
-                let minimum_word_size = size.div_ceil(32) as u128;
-                let gas_cost =
-                    3 * minimum_word_size + self.memory.expansion_cost(dest_offset, size);
-                self.consume_gas(gas_cost);
-
-                self.memory.store_with_opcode(
-                    dest_offset,
-                    size,
-                    &value,
-                    #[cfg(feature = "experimental")]
-                    operation,
-                );
-            }
-
-            opcodes::EXTCODEHASH | opcodes::BLOCKHASH => {
-                let address = self.stack.pop()?.value;
-
-                // consume dynamic gas
-                if opcode == opcodes::EXTCODEHASH && !self.address_access_set.contains(&address) {
-                    self.consume_gas(2600);
-                    self.address_access_set.insert(address);
-                } else if opcode == opcodes::EXTCODEHASH {
-                    self.consume_gas(100);
-                }
-
-                self.stack.push(U256::ZERO, operation);
-            }
-
-            opcodes::COINBASE => {
-                self.stack.push(*COINBASE_ADDRESS, operation);
-            }
-
-            opcodes::TIMESTAMP => {
-                let timestamp =
-                    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-
-                self.stack.push(U256::from(timestamp), operation);
-            }
-
+            opcodes::ADD => handlers::arithmetic::add(self, operation)?,
+            opcodes::MUL => handlers::arithmetic::mul(self, operation)?,
+            opcodes::SUB => handlers::arithmetic::sub(self, operation)?,
+            opcodes::DIV => handlers::arithmetic::div(self, operation)?,
+            opcodes::SDIV => handlers::arithmetic::sdiv(self, operation)?,
+            opcodes::MOD => handlers::arithmetic::modulo(self, operation)?,
+            opcodes::SMOD => handlers::arithmetic::smod(self, operation)?,
+            opcodes::ADDMOD => handlers::arithmetic::addmod(self, operation)?,
+            opcodes::MULMOD => handlers::arithmetic::mulmod(self, operation)?,
+            opcodes::EXP => handlers::arithmetic::exp(self, operation)?,
+            opcodes::SIGNEXTEND => handlers::arithmetic::signextend(self, operation)?,
+
+            opcodes::LT => handlers::comparison::lt(self, operation)?,
+            opcodes::GT => handlers::comparison::gt(self, operation)?,
+            opcodes::SLT => handlers::comparison::slt(self, operation)?,
+            opcodes::SGT => handlers::comparison::sgt(self, operation)?,
+            opcodes::EQ => handlers::comparison::eq(self, operation)?,
+            opcodes::ISZERO => handlers::comparison::iszero(self, operation)?,
+
+            opcodes::AND => handlers::bitwise::and(self, operation)?,
+            opcodes::OR => handlers::bitwise::or(self, operation)?,
+            opcodes::XOR => handlers::bitwise::xor(self, operation)?,
+            opcodes::NOT => handlers::bitwise::not(self, operation)?,
+            opcodes::BYTE => handlers::bitwise::byte(self, operation)?,
+            opcodes::SHL => handlers::bitwise::shl(self, operation)?,
+            opcodes::SHR => handlers::bitwise::shr(self, operation)?,
+            opcodes::SAR => handlers::bitwise::sar(self, operation)?,
+
+            opcodes::SHA3 => handlers::crypto::sha3(self, operation)?,
+
+            opcodes::ADDRESS => handlers::environment::address(self, operation)?,
+            opcodes::BALANCE => handlers::environment::balance(self, operation)?,
+            opcodes::ORIGIN => handlers::environment::origin(self, operation)?,
+            opcodes::CALLER => handlers::environment::caller(self, operation)?,
+            opcodes::CALLVALUE => handlers::environment::callvalue(self, operation)?,
+            opcodes::CALLDATALOAD => handlers::environment::calldataload(self, operation)?,
+            opcodes::CALLDATASIZE => handlers::environment::calldatasize(self, operation)?,
+            opcodes::CALLDATACOPY => handlers::environment::calldatacopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
+            opcodes::CODESIZE => handlers::environment::codesize(self, operation)?,
+            opcodes::CODECOPY => handlers::environment::codecopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
+            opcodes::GASPRICE => handlers::environment::gasprice(self, operation)?,
+            opcodes::EXTCODESIZE => handlers::environment::extcodesize(self, operation)?,
+            opcodes::EXTCODECOPY => handlers::environment::extcodecopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
+            opcodes::RETURNDATASIZE => handlers::environment::returndatasize(self, operation)?,
+            opcodes::RETURNDATACOPY => handlers::environment::returndatacopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
+            opcodes::EXTCODEHASH => handlers::environment::extcodehash(self, operation)?,
+            opcodes::BLOCKHASH => handlers::environment::blockhash(self, operation)?,
+
+            opcodes::COINBASE => handlers::block::coinbase(self, operation)?,
+            opcodes::TIMESTAMP => handlers::block::timestamp(self, operation)?,
             (opcodes::NUMBER..=opcodes::BLOBBASEFEE) => {
-                self.stack.push(U256::from(1u8), operation);
+                handlers::block::block_info_stub(self, operation)?
             }
 
-            opcodes::POP => {
-                self.stack.pop()?;
-            }
-
-            opcodes::MLOAD => {
-                let i = self.stack.pop()?.value;
-                let i: usize = i.try_into().unwrap_or(usize::MAX);
-
-                let result = U256::from_be_slice(self.memory.read(i, 32).as_slice());
-
-                // consume dynamic gas
-                let gas_cost = self.memory.expansion_cost(i, 32);
-                self.consume_gas(gas_cost);
-
-                self.stack.push(result, operation);
-            }
-
-            opcodes::MSTORE => {
-                let offset = self.stack.pop()?.value;
-                let value = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-
-                // consume dynamic gas
-                let gas_cost = self.memory.expansion_cost(offset, 32);
-                self.consume_gas(gas_cost);
-
-                self.memory.store_with_opcode(
-                    offset,
-                    32,
-                    &value.to_be_bytes_vec(),
-                    #[cfg(feature = "experimental")]
-                    operation,
-                );
-            }
-
-            opcodes::MSTORE8 => {
-                let offset = self.stack.pop()?.value;
-                let value = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-
-                // consume dynamic gas
-                let gas_cost = self.memory.expansion_cost(offset, 1);
-                self.consume_gas(gas_cost);
-
-                self.memory.store_with_opcode(
-                    offset,
-                    1,
-                    &[value.to_be_bytes_vec()[31]],
-                    #[cfg(feature = "experimental")]
-                    operation,
-                );
-            }
-
-            opcodes::SLOAD => {
-                let key = self.stack.pop()?.value;
-
-                // consume dynamic gas
-                let gas_cost = self.storage.access_cost(key);
-                self.consume_gas(gas_cost);
-
-                self.stack.push(U256::from(self.storage.load(key)), operation)
-            }
-
-            opcodes::SSTORE => {
-                let key = self.stack.pop()?.value;
-                let value = self.stack.pop()?.value;
-
-                // consume dynamic gas
-                let gas_cost = self.storage.storage_cost(key, value);
-                self.consume_gas(gas_cost);
-
-                self.storage.store(key, value);
-            }
+            opcodes::POP => handlers::stack::pop(self)?,
+            opcodes::MLOAD => handlers::memory::mload(self, operation)?,
+            opcodes::MSTORE => handlers::memory::mstore(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
+            opcodes::MSTORE8 => handlers::memory::mstore8(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
+            opcodes::SLOAD => handlers::storage::sload(self, operation)?,
+            opcodes::SSTORE => handlers::storage::sstore(self)?,
 
             opcodes::JUMP => {
-                let pc = self.stack.pop()?.value;
-
-                // Safely convert U256 to u128
-                let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
-
-                // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-                if (pc <=
-                    self.bytecode
-                        .len()
-                        .try_into()
-                        .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                    (self.bytecode[pc as usize] != opcodes::JUMPDEST)
+                if let Some(instruction) =
+                    handlers::control::jump(self, last_instruction, &inputs, &input_operations)
                 {
-                    self.exit(790, Vec::new());
-                    return Ok(Instruction {
-                        instruction: last_instruction,
-                        opcode,
-                        inputs,
-                        outputs: Vec::new(),
-                        input_operations,
-                        output_operations: Vec::new(),
-                    });
-                } else {
-                    self.instruction = pc + 1;
+                    return Ok(instruction);
                 }
             }
-
             opcodes::JUMPI => {
-                let pc = self.stack.pop()?.value;
-                let condition = self.stack.pop()?.value;
-
-                // Safely convert U256 to u128
-                let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
-
-                if !condition.is_zero() {
-                    // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
-                    // destination)
-                    if (pc <
-                        self.bytecode
-                            .len()
-                            .try_into()
-                            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-                        (self.bytecode[pc as usize] != opcodes::JUMPDEST)
-                    {
-                        self.exit(790, Vec::new());
-                        return Ok(Instruction {
-                            instruction: last_instruction,
-                            opcode,
-                            inputs,
-                            outputs: Vec::new(),
-                            input_operations,
-                            output_operations: Vec::new(),
-                        });
-                    } else {
-                        self.instruction = pc + 1;
-                    }
+                if let Some(instruction) =
+                    handlers::control::jumpi(self, last_instruction, &inputs, &input_operations)
+                {
+                    return Ok(instruction);
                 }
             }
+            opcodes::JUMPDEST => handlers::control::jumpdest()?,
+            opcodes::TLOAD => handlers::storage::tload(self, operation)?,
+            opcodes::TSTORE => handlers::storage::tstore(self)?,
+            opcodes::MCOPY => handlers::memory::mcopy(
+                self,
+                #[cfg(feature = "experimental")]
+                operation,
+            )?,
+            opcodes::PC => handlers::control::pc(self, operation)?,
+            opcodes::MSIZE => handlers::memory::msize(self, operation)?,
+            opcodes::GAS => handlers::control::gas(self, operation)?,
 
-            opcodes::JUMPDEST => {}
-
-            opcodes::TLOAD => {
-                let key = self.stack.pop()?.value;
-                self.stack.push(U256::from(self.storage.tload(key)), operation)
-            }
-
-            opcodes::TSTORE => {
-                let key = self.stack.pop()?.value;
-                let value = self.stack.pop()?.value;
-                self.storage.tstore(key, value);
-            }
-
-            opcodes::MCOPY => {
-                let dest_offset = self.stack.pop()?.value;
-                let offset = self.stack.pop()?.value;
-                let size = self.stack.pop()?.value;
-
-                let dest_offset: usize = dest_offset.try_into().unwrap_or(u128::MAX as usize);
-                let offset: usize = offset.try_into().unwrap_or(u128::MAX as usize);
-                let memory_size: usize =
-                    self.memory.size().try_into().expect("failed to convert u128 to usize");
-                let size: usize = size.try_into().unwrap_or(memory_size).min(memory_size);
-
-                let value = Self::safe_copy_data(&self.memory.memory, offset, size);
-
-                // consume dynamic gas
-                let minimum_word_size = size.div_ceil(32) as u128;
-                let gas_cost = 3 * minimum_word_size + self.memory.expansion_cost(offset, size);
-                self.consume_gas(gas_cost);
-
-                self.memory.store_with_opcode(
-                    dest_offset,
-                    size,
-                    &value,
-                    #[cfg(feature = "experimental")]
-                    operation,
-                );
-            }
-
-            opcodes::PC => {
-                self.stack.push(U256::from(self.instruction), operation);
-            }
-
-            opcodes::MSIZE => {
-                self.stack.push(U256::from(self.memory.size()), operation);
-            }
-
-            opcodes::GAS => {
-                self.stack.push(U256::from(self.gas_remaining), operation);
-            }
-
-            opcodes::PUSH0 => {
-                self.stack.push(U256::ZERO, operation);
-            }
-
-            (opcodes::PUSH1..=opcodes::PUSH32) => {
-                // Get the number of bytes to push
-                let num_bytes = (opcode - 95) as u128;
-
-                // Get the bytes to push from bytecode
-                let bytes = &self.bytecode
-                    [(self.instruction - 1) as usize..(self.instruction - 1 + num_bytes) as usize];
-                self.instruction += num_bytes;
-
-                // update the operation's inputs
-                let new_operation_inputs = vec![WrappedInput::Raw(U256::from_be_slice(bytes))];
-
-                operation.inputs = new_operation_inputs;
-
-                // Push the bytes to the stack
-                self.stack.push(U256::from_be_slice(bytes), operation);
-            }
-
-            (opcodes::DUP1..=opcodes::DUP16) => {
-                // Get the number of items to swap
-                let index = opcode - 127;
-
-                // Perform the swap
-                self.stack.dup(index as usize);
-            }
-
-            (opcodes::SWAP1..=opcodes::SWAP16) => {
-                // Get the number of items to swap
-                let index = opcode - 143;
-
-                // Perform the swap
-                self.stack.swap(index as usize);
-            }
+            opcodes::PUSH0 => handlers::stack::push0(self, operation)?,
+            (opcodes::PUSH1..=opcodes::PUSH32) => handlers::stack::push_n(self, opcode, operation)?,
+            (opcodes::DUP1..=opcodes::DUP16) => handlers::stack::dup_n(self, opcode)?,
+            (opcodes::SWAP1..=opcodes::SWAP16) => handlers::stack::swap_n(self, opcode)?,
 
             (opcodes::LOG0..=opcodes::LOG4) => {
                 let topic_count = opcode - 160;
-                let offset = self.stack.pop()?.value;
-                let size = self.stack.pop()?.value;
-                let topics =
-                    self.stack.pop_n(topic_count as usize)?.iter().map(|x| x.value).collect();
-
-                // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
-
-                let data = self.memory.read(offset, size);
-
-                // consume dynamic gas
-                let gas_cost = (375 * (topic_count as u128)) +
-                    8 * (size as u128) +
-                    self.memory.expansion_cost(offset, size);
-                self.consume_gas(gas_cost);
-
-                // no need for a panic check because the length of events should never be larger
-                // than a u128
-                self.events.push(Log::new(
-                    self.events
-                        .len()
-                        .try_into()
-                        .expect("impossible case: log_index is larger than u128::MAX"),
-                    topics,
-                    &data,
-                ))
+                handlers::logging::log_n(self, topic_count)?;
             }
 
-            opcodes::CREATE => {
-                self.stack.pop_n(3)?;
-
-                self.stack.push(*CREATE_ADDRESS, operation);
-            }
-
-            opcodes::CALL | opcodes::CALLCODE => {
-                let address = self.stack.pop()?.value;
-                self.stack.pop_n(6)?;
-
-                // consume dynamic gas
-                if !self.address_access_set.contains(&address) {
-                    self.consume_gas(2600);
-                    self.address_access_set.insert(address);
-                } else {
-                    self.consume_gas(100);
-                }
-
-                self.stack.push(U256::from(1u8), operation);
-            }
-
-            opcodes::RETURN => {
-                let offset = self.stack.pop()?.value;
-                let size = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
-
-                // consume dynamic gas
-                let gas_cost = self.memory.expansion_cost(offset, size);
-                self.consume_gas(gas_cost);
-
-                self.exit(0, self.memory.read(offset, size));
-            }
-
-            opcodes::DELEGATECALL | opcodes::STATICCALL => {
-                let address = self.stack.pop()?.value;
-                self.stack.pop_n(5)?;
-
-                // consume dynamic gas
-                if !self.address_access_set.contains(&address) {
-                    self.consume_gas(2600);
-                    self.address_access_set.insert(address);
-                } else {
-                    self.consume_gas(100);
-                }
-
-                self.stack.push(U256::from(1u8), operation);
-            }
-
-            opcodes::CREATE2 => {
-                self.stack.pop_n(4)?;
-
-                self.stack.push(*CREATE2_ADDRESS, operation);
-            }
-
-            opcodes::REVERT => {
-                let offset = self.stack.pop()?.value;
-                let size = self.stack.pop()?.value;
-
-                // Safely convert U256 to usize
-                let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-                let size: usize = size.try_into().unwrap_or(usize::MAX);
-
-                self.exit(1, self.memory.read(offset, size));
-            }
+            opcodes::CREATE => handlers::system::create(self, operation)?,
+            opcodes::CALL => handlers::system::call(self, operation)?,
+            opcodes::CALLCODE => handlers::system::callcode(self, operation)?,
+            opcodes::RETURN => handlers::system::op_return(self)?,
+            opcodes::DELEGATECALL => handlers::system::delegatecall(self, operation)?,
+            opcodes::CREATE2 => handlers::system::create2(self, operation)?,
+            opcodes::STATICCALL => handlers::system::staticcall(self, operation)?,
+            opcodes::REVERT => handlers::system::revert(self)?,
 
             _ => {
                 self.exit(1, Vec::new());
@@ -1442,12 +720,13 @@ impl VM {
 
 #[cfg(test)]
 mod tests {
-
     use std::str::FromStr;
 
+    use alloy::primitives::{Address, U256};
     use heimdall_common::utils::strings::decode_hex;
 
-    use super::*;
+    use super::VM;
+    use crate::core::hardfork::HardFork;
 
     // creates a new test VM with calldata.
     fn new_test_vm(bytecode: &str) -> VM {
@@ -1897,7 +1176,9 @@ mod tests {
 
     #[test]
     fn test_mcopy() {
-        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020602060005e");
+        let mut vm = new_test_vm(
+            "0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020602060005e",
+        );
         vm.execute().expect("execution failed!");
         assert_eq!(
             vm.memory.read(0, 64),
@@ -1910,7 +1191,9 @@ mod tests {
     fn test_mcopy_clamping_source_beyond_memory() {
         // Test copying from offset beyond current memory size
         // Store 32 bytes at memory[0x20], then try to copy from offset 0x40 (beyond memory)
-        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020604060005e");
+        let mut vm = new_test_vm(
+            "0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020604060005e",
+        );
         vm.execute().expect("execution failed!");
 
         // Should copy zeros since source is beyond memory
@@ -1922,7 +1205,9 @@ mod tests {
     fn test_mcopy_clamping_partial_source_beyond_memory() {
         // Test copying where source starts in memory but extends beyond it
         // Store 32 bytes at memory[0x20], then copy 64 bytes from offset 0x30
-        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526040603060005e");
+        let mut vm = new_test_vm(
+            "0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526040603060005e",
+        );
         vm.execute().expect("execution failed!");
 
         // Should copy the available 16 bytes from memory[0x30-0x3F] then pad with zeros
@@ -1938,7 +1223,9 @@ mod tests {
     #[test]
     fn test_mcopy_clamping_zero_size() {
         // Test copying zero bytes
-        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526000602060005e");
+        let mut vm = new_test_vm(
+            "0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526000602060005e",
+        );
         vm.execute().expect("execution failed!");
 
         // Memory should only contain the original store at 0x20, destination at 0x00 should be
@@ -1958,7 +1245,9 @@ mod tests {
         // Test copying more bytes than available memory
         // Store 32 bytes at 0x20, then copy 64 bytes from 0x20 to 0x00
         // The copy overlaps, so source data at 0x20+ gets overwritten by destination
-        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526040602060005e");
+        let mut vm = new_test_vm(
+            "0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526040602060005e",
+        );
         vm.execute().expect("execution failed!");
 
         // Since we copy 64 bytes from 0x20 to 0x00, and only 32 bytes exist at source:
@@ -1978,7 +1267,9 @@ mod tests {
     fn test_mcopy_clamping_simple_overlap() {
         // Test a simpler overlapping copy case
         // Store data, then copy within the same memory region
-        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6000526010601060005e");
+        let mut vm = new_test_vm(
+            "0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6000526010601060005e",
+        );
         vm.execute().expect("execution failed!");
 
         // Original data at 0x00: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
@@ -1996,7 +1287,9 @@ mod tests {
     fn test_mcopy_clamping_large_offsets() {
         // Test with very large U256 offsets that get clamped to usize::MAX
         // This tests the try_into().unwrap_or() clamping behavior
-        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020608060005e");
+        let mut vm = new_test_vm(
+            "0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526020608060005e",
+        );
         vm.execute().expect("execution failed!");
 
         // Should handle large offset gracefully and copy zeros (since source is beyond memory)
@@ -2008,7 +1301,9 @@ mod tests {
     fn test_mcopy_clamping_exact_memory_boundary() {
         // Test copying exactly at memory boundary
         // Store 32 bytes, then copy from the last valid offset
-        let mut vm = new_test_vm("0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526001603f60005e");
+        let mut vm = new_test_vm(
+            "0x7f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f6020526001603f60005e",
+        );
         vm.execute().expect("execution failed!");
 
         // Should copy the last byte of memory and pad with zero
@@ -2042,7 +1337,9 @@ mod tests {
 
     #[test]
     fn test_mload_mstore() {
-        let mut vm = new_test_vm("0x7f00000000000000000000000000000000000000000000000000000000000000FF600052600051600151");
+        let mut vm = new_test_vm(
+            "0x7f00000000000000000000000000000000000000000000000000000000000000FF600052600051600151",
+        );
         vm.execute().expect("execution failed!");
 
         assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").expect("failed to parse hex"));
@@ -2145,5 +1442,95 @@ mod tests {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
             ]
         );
+    }
+
+    // Helper to create a test VM with a specific hardfork
+    fn new_test_vm_with_fork(bytecode: &str, fork: HardFork) -> VM {
+        new_test_vm(bytecode).with_hardfork(fork)
+    }
+
+    #[test]
+    fn test_vm_push0_active_in_shanghai() {
+        // PUSH0 followed by STOP: 0x5f 0x00
+        let mut vm = new_test_vm_with_fork("0x5f00", HardFork::Shanghai);
+        vm.execute().expect("execution failed!");
+
+        // Should have pushed 0 onto the stack
+        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.exitcode, 10); // STOP exit code
+    }
+
+    #[test]
+    fn test_vm_push0_unknown_before_shanghai() {
+        // PUSH0 (0x5f) should be treated as unknown before Shanghai
+        let mut vm = new_test_vm_with_fork("0x5f00", HardFork::London);
+        vm.execute().expect("execution failed!");
+
+        // Should exit with code 1 (invalid opcode)
+        assert_eq!(vm.exitcode, 1);
+    }
+
+    #[test]
+    fn test_vm_shl_active_in_constantinople() {
+        // PUSH1 0x02, PUSH1 0x01, SHL, STOP: shift 1 left by 2 bits = 4
+        // 0x6002 6001 1b 00
+        let mut vm = new_test_vm_with_fork("0x600260011b00", HardFork::Constantinople);
+        vm.execute().expect("execution failed!");
+
+        assert_eq!(vm.stack.peek(0).value, U256::from(4));
+        assert_eq!(vm.exitcode, 10);
+    }
+
+    #[test]
+    fn test_vm_shl_unknown_before_constantinople() {
+        // SHL (0x1b) should be unknown before Constantinople
+        let mut vm = new_test_vm_with_fork("0x600260011b00", HardFork::Byzantium);
+        vm.execute().expect("execution failed!");
+
+        // Should exit with code 1 (invalid opcode)
+        assert_eq!(vm.exitcode, 1);
+    }
+
+    #[test]
+    fn test_vm_tload_active_in_cancun() {
+        // PUSH1 0x00, TLOAD, STOP: load from transient storage slot 0
+        // 0x6000 5c 00
+        let mut vm = new_test_vm_with_fork("0x60005c00", HardFork::Cancun);
+        vm.execute().expect("execution failed!");
+
+        // Should have loaded 0 from empty transient storage
+        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.exitcode, 10);
+    }
+
+    #[test]
+    fn test_vm_tload_unknown_before_cancun() {
+        // TLOAD (0x5c) should be unknown before Cancun
+        let mut vm = new_test_vm_with_fork("0x60005c00", HardFork::Shanghai);
+        vm.execute().expect("execution failed!");
+
+        // Should exit with code 1 (invalid opcode)
+        assert_eq!(vm.exitcode, 1);
+    }
+
+    #[test]
+    fn test_vm_default_hardfork_is_latest() {
+        // Default VM should use Latest hardfork and support all opcodes
+        let mut vm = new_test_vm("0x5f00"); // PUSH0, STOP
+        vm.execute().expect("execution failed!");
+
+        // PUSH0 should work with default (Latest) hardfork
+        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.exitcode, 10);
+    }
+
+    #[test]
+    fn test_vm_frontier_opcodes_always_work() {
+        // ADD should work at any hardfork
+        // PUSH1 0x01, PUSH1 0x02, ADD, STOP
+        let mut vm = new_test_vm_with_fork("0x6001600201", HardFork::Frontier);
+        vm.execute().expect("execution failed!");
+
+        assert_eq!(vm.stack.peek(0).value, U256::from(3));
     }
 }

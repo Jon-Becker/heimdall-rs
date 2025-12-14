@@ -14,3 +14,23 @@ jobs:
           package: "heimdall-core"
           branchName: ${{ github.base_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Delete old benchmark comments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const benchmarkComments = comments.filter(
+              c => c.user.login === 'github-actions[bot]' && c.body.includes('Benchmark for')
+            );
+            // Delete all but the most recent benchmark comment
+            for (const comment of benchmarkComments.slice(0, -1)) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: comment.id,
+              });
+            }
