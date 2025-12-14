@@ -341,6 +341,8 @@ opcodes! {
     0x1b => SHL => stack_io(2, 1), min_gas(3), activated(HardFork::Constantinople);
     0x1c => SHR => stack_io(2, 1), min_gas(3), activated(HardFork::Constantinople);
     0x1d => SAR => stack_io(2, 1), min_gas(3), activated(HardFork::Constantinople);
+    // Fusaka (EIP-7939)
+    0x1e => CLZ => stack_io(1, 1), min_gas(5), activated(HardFork::Fusaka);
 
     0x20 => SHA3 => stack_io(2, 1), min_gas(30);
 
@@ -529,6 +531,15 @@ mod tests {
         // ADD should always be active (Frontier opcode)
         let add_info = OpCodeInfo::for_fork(ADD, HardFork::Frontier);
         assert!(add_info.is_some());
+
+        // CLZ was activated in Fusaka (EIP-7939)
+        let clz_info = OpCodeInfo::for_fork(CLZ, HardFork::Fusaka);
+        assert!(clz_info.is_some());
+        assert_eq!(clz_info.unwrap().name(), "CLZ");
+
+        // CLZ should not be active before Fusaka
+        let clz_info_pectra = OpCodeInfo::for_fork(CLZ, HardFork::Pectra);
+        assert!(clz_info_pectra.is_none());
     }
 
     #[test]
@@ -539,5 +550,9 @@ mod tests {
 
         let blobhash_info = OpCodeInfo::for_fork(BLOBHASH, HardFork::Latest);
         assert!(blobhash_info.is_some());
+
+        // CLZ should be active at Latest (which resolves to Fusaka)
+        let clz_info = OpCodeInfo::for_fork(CLZ, HardFork::Latest);
+        assert!(clz_info.is_some());
     }
 }

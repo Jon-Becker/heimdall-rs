@@ -400,6 +400,7 @@ impl VM {
             opcodes::SHL => handlers::bitwise::shl(self, operation)?,
             opcodes::SHR => handlers::bitwise::shr(self, operation)?,
             opcodes::SAR => handlers::bitwise::sar(self, operation)?,
+            opcodes::CLZ => handlers::bitwise::clz(self, operation)?,
 
             opcodes::SHA3 => handlers::crypto::sha3(self, operation)?,
 
@@ -1507,6 +1508,57 @@ mod tests {
     fn test_vm_tload_unknown_before_cancun() {
         // TLOAD (0x5c) should be unknown before Cancun
         let mut vm = new_test_vm_with_fork("0x60005c00", HardFork::Shanghai);
+        vm.execute().expect("execution failed!");
+
+        // Should exit with code 1 (invalid opcode)
+        assert_eq!(vm.exitcode, 1);
+    }
+
+    #[test]
+    fn test_vm_clz_active_in_fusaka() {
+        // PUSH1 0x01, CLZ, STOP: count leading zeros of 1 = 255
+        // 0x6001 1e 00
+        let mut vm = new_test_vm_with_fork("0x60011e00", HardFork::Fusaka);
+        vm.execute().expect("execution failed!");
+
+        // CLZ(1) = 255 (255 leading zeros in a 256-bit integer)
+        assert_eq!(vm.stack.peek(0).value, U256::from(255));
+        assert_eq!(vm.exitcode, 10);
+    }
+
+    #[test]
+    fn test_vm_clz_zero_input() {
+        // PUSH1 0x00, CLZ, STOP: count leading zeros of 0 = 256
+        // 0x6000 1e 00
+        let mut vm = new_test_vm_with_fork("0x60001e00", HardFork::Fusaka);
+        vm.execute().expect("execution failed!");
+
+        // CLZ(0) = 256 (special case per EIP-7939)
+        assert_eq!(vm.stack.peek(0).value, U256::from(256));
+        assert_eq!(vm.exitcode, 10);
+    }
+
+    #[test]
+    fn test_vm_clz_high_bit_set() {
+        // PUSH32 with high bit set (0x80...00), CLZ, STOP
+        // CLZ of a value with the highest bit set = 0
+        // 0x7f 8000...00 (32 bytes) 1e 00
+        let mut vm = new_test_vm_with_fork(
+            "0x7f800000000000000000000000000000000000000000000000000000000000000\
+             01e00",
+            HardFork::Fusaka,
+        );
+        vm.execute().expect("execution failed!");
+
+        // CLZ(0x80...00) = 0 (no leading zeros)
+        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.exitcode, 10);
+    }
+
+    #[test]
+    fn test_vm_clz_unknown_before_fusaka() {
+        // CLZ (0x1e) should be unknown before Fusaka
+        let mut vm = new_test_vm_with_fork("0x60011e00", HardFork::Pectra);
         vm.execute().expect("execution failed!");
 
         // Should exit with code 1 (invalid opcode)
