@@ -53,6 +53,11 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     // init
     let start_time = Instant::now();
 
+    // Resolve hardfork (handles Auto detection if needed)
+    let start_hardfork_resolve = Instant::now();
+    let hardfork = args.get_hardfork().await;
+    debug!("resolved hardfork: {} (took {:?})", hardfork, start_hardfork_resolve.elapsed());
+
     // get the bytecode from the target
     let start_fetch_time = Instant::now();
     let contract_bytecode = args
@@ -79,7 +84,7 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
         0,
         u128::MAX,
     )
-    .with_hardfork(args.hardfork);
+    .with_hardfork(hardfork);
 
     info!("performing symbolic execution on '{}'", args.target.truncate(64));
     let start_sym_exec_time = Instant::now();

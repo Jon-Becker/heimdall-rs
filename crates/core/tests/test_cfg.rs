@@ -25,6 +25,7 @@ mod integration_tests {
             name: String::from(""),
             timeout: 10000,
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to generate cfg");
@@ -55,6 +56,7 @@ mod integration_tests {
             name: String::from(""),
             timeout: 10000,
             hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to generate cfg");
