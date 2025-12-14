@@ -2,6 +2,7 @@ use clap::Parser;
 use eyre::Result;
 use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
+use heimdall_vm::core::hardfork::HardFork;
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -34,6 +35,11 @@ pub struct DisassemblerArgs {
     /// The output directory to write the output to or 'print' to print to the console
     #[clap(long = "output", short = 'o', default_value = "output", hide_default_value = true)]
     pub output: String,
+
+    /// The hardfork to use for opcode recognition. Opcodes introduced after this hardfork
+    /// will be shown as 'unknown'. Defaults to 'latest'.
+    #[clap(long, short = 'f', default_value = "latest")]
+    pub hardfork: HardFork,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +62,9 @@ pub struct DisassemblerArgsBuilder {
 
     /// The output directory to write the output to or 'print' to print to the console
     output: Option<String>,
+
+    /// The hardfork to use for opcode recognition.
+    hardfork: Option<HardFork>,
 }
 
 impl DisassemblerArgs {
@@ -86,6 +95,7 @@ impl DisassemblerArgsBuilder {
             decimal_counter: Some(false),
             name: Some(String::new()),
             output: Some(String::new()),
+            hardfork: Some(HardFork::Latest),
         }
     }
 
@@ -119,6 +129,12 @@ impl DisassemblerArgsBuilder {
         self
     }
 
+    /// Sets the hardfork for opcode recognition
+    pub fn hardfork(&mut self, hardfork: HardFork) -> &mut Self {
+        self.hardfork = Some(hardfork);
+        self
+    }
+
     /// Builds the DisassemblerArgs from the builder
     ///
     /// # Returns
@@ -132,6 +148,7 @@ impl DisassemblerArgsBuilder {
                 .ok_or_else(|| eyre::eyre!("decimal_counter is required"))?,
             name: self.name.clone().ok_or_else(|| eyre::eyre!("name is required"))?,
             output: self.output.clone().ok_or_else(|| eyre::eyre!("output is required"))?,
+            hardfork: self.hardfork.ok_or_else(|| eyre::eyre!("hardfork is required"))?,
         })
     }
 }

@@ -83,3 +83,11 @@ pub fn sar(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     vm.push_with_optimization_signed(result, &a, &b, operation);
     Ok(())
 }
+
+/// CLZ - Count leading zeros operation (EIP-7939)
+pub fn clz(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+    let a = vm.stack.pop()?;
+    let result = U256::from(a.value.leading_zeros());
+    vm.push_with_optimization_single(result, &a, operation);
+    Ok(())
+}

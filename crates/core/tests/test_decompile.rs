@@ -5,7 +5,7 @@ mod integration_tests {
     use std::path::PathBuf;
 
     use alloy_json_abi::JsonAbi;
-    use heimdall_decompiler::{decompile, DecompilerArgs, DecompilerArgsBuilder};
+    use heimdall_decompiler::{decompile, DecompilerArgs, DecompilerArgsBuilder, HardFork};
     use serde_json::Value;
 
     #[tokio::test]
@@ -29,6 +29,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -62,6 +63,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -88,6 +90,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -114,6 +117,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -140,6 +144,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -180,6 +185,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -209,7 +215,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
-
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -245,7 +251,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
-
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -272,7 +278,7 @@ mod integration_tests {
             openai_api_key: String::from(""),
             llm_postprocess: false,
             etherscan_api_key: String::from(""),
-
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
@@ -300,7 +306,7 @@ mod integration_tests {
             name: String::from(""),
             timeout: 10000,
             abi: None,
-
+            hardfork: HardFork::Latest,
         })
         .await
         .expect("failed to decompile");
