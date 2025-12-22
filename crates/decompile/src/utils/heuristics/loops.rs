@@ -83,7 +83,8 @@ pub(crate) fn loop_heuristic<'a>(
         }
 
         // Check if we're at the loop's JUMPI (condition check)
-        // We emit the loop header here because the loop header JUMPDEST is skipped during trace creation
+        // We emit the loop header here because the loop header JUMPDEST is skipped during trace
+        // creation
         if let Some(mut loop_info) = is_loop_condition(state, detected_loops) {
             // Check if we've already entered this loop (don't emit twice)
             let already_in_loop = analyzer_state
@@ -113,7 +114,10 @@ pub(crate) fn loop_heuristic<'a>(
                 // We've seen this loop condition before - close the loop
                 trace!("closing loop at condition pc={}", current_pc);
                 function.logic.push("}".to_string());
-                analyzer_state.loop_state.active_loops.retain(|l| l.condition_pc != loop_info.condition_pc);
+                analyzer_state
+                    .loop_state
+                    .active_loops
+                    .retain(|l| l.condition_pc != loop_info.condition_pc);
                 analyzer_state.loop_state.depth = analyzer_state.loop_state.depth.saturating_sub(1);
             }
 
@@ -168,18 +172,15 @@ pub(crate) fn is_loop_overhead(state: &State, active_loops: &[LoopInfo]) -> bool
     for loop_info in active_loops {
         // Suppress induction variable updates (they're in the for-loop header)
         if let Some(ref iv) = loop_info.induction_var {
-            let solidified = instruction
-                .input_operations
-                .first()
-                .map(|op| op.solidify())
-                .unwrap_or_default();
+            let solidified =
+                instruction.input_operations.first().map(|op| op.solidify()).unwrap_or_default();
 
             // Check if this is the increment/decrement of the induction var
-            if solidified.contains(&iv.name)
-                && (solidified.contains("+ 1")
-                    || solidified.contains("+ 0x01")
-                    || solidified.contains("- 1")
-                    || solidified.contains("- 0x01"))
+            if solidified.contains(&iv.name) &&
+                (solidified.contains("+ 1") ||
+                    solidified.contains("+ 0x01") ||
+                    solidified.contains("- 1") ||
+                    solidified.contains("- 0x01"))
             {
                 return true;
             }
@@ -200,11 +201,8 @@ pub(crate) fn is_overflow_check_operation(state: &State) -> bool {
     let instruction = &state.last_instruction;
 
     // Get the solidified representation of the operation
-    let solidified = instruction
-        .input_operations
-        .first()
-        .map(|op| op.solidify())
-        .unwrap_or_default();
+    let solidified =
+        instruction.input_operations.first().map(|op| op.solidify()).unwrap_or_default();
 
     // Pattern 1: Overflow comparison - !(x > x + 1) or similar
     // These appear as conditions like "!number > (number + 0x01)"

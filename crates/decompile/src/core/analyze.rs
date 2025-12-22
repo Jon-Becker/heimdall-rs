@@ -159,10 +159,7 @@ impl Analyzer {
 
             // Debug: Log detected loops for this branch
             if !branch.detected_loops.is_empty() {
-                debug!(
-                    "branch has {} detected loops",
-                    branch.detected_loops.len()
-                );
+                debug!("branch has {} detected loops", branch.detected_loops.len());
                 for loop_info in &branch.detected_loops {
                     debug!(
                         "  loop: header_pc={}, condition_pc={}, condition='{}'",
@@ -214,7 +211,8 @@ impl Analyzer {
                 let mut child_with_loops = child.clone();
                 for loop_info in &branch.detected_loops {
                     if !child_with_loops.detected_loops.iter().any(|l| {
-                        l.header_pc == loop_info.header_pc && l.condition_pc == loop_info.condition_pc
+                        l.header_pc == loop_info.header_pc &&
+                            l.condition_pc == loop_info.condition_pc
                     }) {
                         child_with_loops.detected_loops.push(loop_info.clone());
                     }

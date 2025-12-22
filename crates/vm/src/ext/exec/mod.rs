@@ -230,12 +230,12 @@ impl VM {
                                     trace!(
                                         "jump matches loop-detection heuristic: 'jump_path_already_handled'"
                                     );
-                                    detected_loop_info =
-                                        Some((Vec::new(), cond.clone()));
+                                    detected_loop_info = Some((Vec::new(), cond.clone()));
                                     break;
                                 }
 
-                                // calculate the difference of the current stack and the historical stack
+                                // calculate the difference of the current stack and the historical
+                                // stack
                                 let diff = stack_diff(&vm.stack, hist_stack);
                                 if diff.is_empty() {
                                     trace!(
@@ -245,7 +245,13 @@ impl VM {
                                     break;
                                 }
 
-                                trace!("stack diff: [{}]", diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", "));
+                                trace!(
+                                    "stack diff: [{}]",
+                                    diff.iter()
+                                        .map(|frame| format!("{}", frame.value))
+                                        .collect::<Vec<String>>()
+                                        .join(", ")
+                                );
 
                                 // check if the jump condition appears to be recursive
                                 if jump_condition_appears_recursive(&diff, cond) {
@@ -287,7 +293,8 @@ impl VM {
                                 );
                                 historical_stacks.push(vm.stack.clone());
 
-                                // Create LoopInfo with header_pc (jump target) and condition_pc (JUMPI)
+                                // Create LoopInfo with header_pc (jump target) and condition_pc
+                                // (JUMPI)
                                 let header_pc: u128 =
                                     last_instruction.inputs[0].try_into().unwrap_or(0);
                                 let condition_pc = last_instruction.instruction;
@@ -306,9 +313,6 @@ impl VM {
 
                                 // Extract modified storage slots
                                 loop_info.modified_storage = extract_modified_storage(&diff);
-
-                                // Capture loop body operations from trace
-                                loop_info.body_operations = vm_trace.operations.clone();
 
                                 trace!(
                                     "detected loop: header_pc={}, condition_pc={}, condition={}",
@@ -351,9 +355,7 @@ impl VM {
                                     last_instruction.inputs[0].try_into().unwrap_or(0);
                                 let condition_pc = last_instruction.instruction;
 
-                                let mut loop_info =
-                                    LoopInfo::new(header_pc, condition_pc, condition);
-                                loop_info.body_operations = vm_trace.operations.clone();
+                                let loop_info = LoopInfo::new(header_pc, condition_pc, condition);
                                 vm_trace.detected_loops.push(loop_info);
 
                                 return Ok(Some(vm_trace));
@@ -385,8 +387,7 @@ impl VM {
                                     last_instruction.inputs[0].try_into().unwrap_or(0);
                                 let condition_pc = last_instruction.instruction;
 
-                                let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
-                                loop_info.body_operations = vm_trace.operations.clone();
+                                let loop_info = LoopInfo::new(header_pc, condition_pc, condition);
                                 vm_trace.detected_loops.push(loop_info);
 
                                 return Ok(Some(vm_trace));

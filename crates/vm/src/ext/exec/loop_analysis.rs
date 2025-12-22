@@ -1,10 +1,10 @@
 use alloy::primitives::U256;
 
-use crate::core::{stack::StackFrame, vm::State};
+use crate::core::stack::StackFrame;
 
 /// Check if a condition is tautologically false (e.g., "0 > 1", "(0 > 0x01)").
 /// These cannot be valid loop conditions and should be skipped.
-pub fn is_tautologically_false_condition(condition: &str) -> bool {
+pub(crate) fn is_tautologically_false_condition(condition: &str) -> bool {
     // Strip outer whitespace first
     let mut trimmed = condition.trim();
 
@@ -20,8 +20,7 @@ pub fn is_tautologically_false_condition(condition: &str) -> bool {
     }
 
     // Pattern: "0 > X" where X > 0 (always false for unsigned)
-    if trimmed.starts_with("0 >") || trimmed.starts_with("0x0 >") || trimmed.starts_with("0x00 >")
-    {
+    if trimmed.starts_with("0 >") || trimmed.starts_with("0x0 >") || trimmed.starts_with("0x00 >") {
         return true;
     }
 
@@ -60,8 +59,8 @@ pub fn is_tautologically_false_condition(condition: &str) -> bool {
 /// Parse a constant value (decimal or hex)
 fn parse_const(s: &str) -> Option<u64> {
     let trimmed = s.trim();
-    if trimmed.starts_with("0x") {
-        u64::from_str_radix(&trimmed[2..], 16).ok()
+    if let Some(hex_str) = trimmed.strip_prefix("0x") {
+        u64::from_str_radix(hex_str, 16).ok()
     } else {
         trimmed.parse::<u64>().ok()
     }
@@ -84,9 +83,6 @@ pub struct LoopInfo {
 
     /// Detected induction variable name, if any
     pub induction_var: Option<InductionVariable>,
-
-    /// Operations captured from one iteration of the loop body
-    pub body_operations: Vec<State>,
 
     /// Whether this appears to be a bounded loop (for) vs unbounded (while)
     pub is_bounded: bool,
@@ -118,7 +114,7 @@ pub struct InductionVariable {
 }
 
 /// Direction of loop induction variable
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum InductionDirection {
     /// Incrementing (i++)
     Ascending,
@@ -140,7 +136,6 @@ impl LoopInfo {
             exit_condition: negate_condition(&normalized),
             condition: normalized,
             induction_var: None,
-            body_operations: Vec::new(),
             is_bounded: false,
             modified_storage: Vec::new(),
             modified_memory: Vec::new(),
@@ -296,25 +291,25 @@ fn normalize_loop_condition(condition: &str) -> String {
 
 /// Check if a string contains a comparison operator
 fn contains_comparison(s: &str) -> bool {
-    s.contains(" < ")
-        || s.contains(" > ")
-        || s.contains(" <= ")
-        || s.contains(" >= ")
-        || s.contains(" == ")
-        || s.contains(" != ")
+    s.contains(" < ") ||
+        s.contains(" > ") ||
+        s.contains(" <= ") ||
+        s.contains(" >= ") ||
+        s.contains(" == ") ||
+        s.contains(" != ")
 }
 
 /// Check if a value looks like a loop counter value (small number or zero)
 fn is_likely_counter_value(s: &str) -> bool {
     let trimmed = s.trim().trim_start_matches('(').trim_end_matches(')');
     // Match "0", "0x0", "0x00", "0x01", "1", etc.
-    trimmed == "0"
-        || trimmed == "1"
-        || trimmed == "0x0"
-        || trimmed == "0x00"
-        || trimmed == "0x01"
-        || trimmed == "0x1"
-        || trimmed.parse::<u64>().map(|n| n <= 1).unwrap_or(false)
+    trimmed == "0" ||
+        trimmed == "1" ||
+        trimmed == "0x0" ||
+        trimmed == "0x00" ||
+        trimmed == "0x01" ||
+        trimmed == "0x1" ||
+        trimmed.parse::<u64>().map(|n| n <= 1).unwrap_or(false)
 }
 
 /// Check if a value looks like a loop bound (argument or variable)
@@ -323,10 +318,10 @@ fn is_likely_bound(s: &str) -> bool {
     // Arguments look like "arg0", "arg1", etc.
     // Variables look like "var_a", "var_b", etc.
     // Also could be storage reads like "storage[0x00]"
-    trimmed.starts_with("arg")
-        || trimmed.starts_with("var_")
-        || trimmed.contains("storage[")
-        || trimmed.contains("memory[")
+    trimmed.starts_with("arg") ||
+        trimmed.starts_with("var_") ||
+        trimmed.contains("storage[") ||
+        trimmed.contains("memory[")
 }
 
 /// Negate a boolean condition for loop exit
@@ -445,8 +440,7 @@ fn infer_induction_from_condition(condition: &str) -> Option<InductionVariable> 
             // LHS should look like a variable
             if !lhs.is_empty() && !is_hex_constant(lhs) && !is_decimal_constant(lhs) {
                 // For "i > 0", the counter decrements from some init value to 0
-                let bound_val =
-                    if rhs == "0" || rhs == "0x0" || rhs == "0x00" { "0" } else { rhs };
+                let bound_val = if rhs == "0" || rhs == "0x0" || rhs == "0x00" { "0" } else { rhs };
 
                 return Some(InductionVariable {
                     name: simplify_var_name(lhs),
@@ -465,9 +459,9 @@ fn infer_induction_from_condition(condition: &str) -> Option<InductionVariable> 
 /// Check if a string is a hexadecimal constant
 fn is_hex_constant(s: &str) -> bool {
     let trimmed = s.trim();
-    trimmed.starts_with("0x")
-        && trimmed[2..].chars().all(|c| c.is_ascii_hexdigit())
-        && trimmed.len() > 2
+    trimmed.starts_with("0x") &&
+        trimmed[2..].chars().all(|c| c.is_ascii_hexdigit()) &&
+        trimmed.len() > 2
 }
 
 /// Check if a string is a decimal constant

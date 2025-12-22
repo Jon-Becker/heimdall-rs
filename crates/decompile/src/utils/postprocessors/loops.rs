@@ -57,9 +57,7 @@ pub(crate) fn loop_postprocessor(
             if let Some(old_var_match) = caps.get(0) {
                 let old_var = old_var_match.as_str();
                 // Store the mapping for later replacement in the loop body
-                state
-                    .memory_map
-                    .insert(old_var.to_string(), var_name.to_string());
+                state.memory_map.insert(old_var.to_string(), var_name.to_string());
                 *line = line.replace(old_var, var_name);
             }
         }

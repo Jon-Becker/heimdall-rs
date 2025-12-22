@@ -50,13 +50,13 @@ fn is_overflow_check_condition(condition: &str) -> bool {
                 let lhs = rest[..pos].trim();
 
                 // If LHS is a zero-ish value, this is likely a loop entry check
-                if lhs == "0"
-                    || lhs == "0x0"
-                    || lhs == "0x00"
-                    || lhs == "0x01"
-                    || lhs == "1"
-                    || lhs == "(0)"
-                    || lhs == "(0x00)"
+                if lhs == "0" ||
+                    lhs == "0x0" ||
+                    lhs == "0x00" ||
+                    lhs == "0x01" ||
+                    lhs == "1" ||
+                    lhs == "(0)" ||
+                    lhs == "(0x00)"
                 {
                     return true;
                 }

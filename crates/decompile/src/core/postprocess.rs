@@ -178,6 +178,9 @@ impl PostprocessOrchestrator {
             });
         });
 
+        // Remove empty lines that were cleared by postprocessors
+        function.logic.retain(|line| !line.trim().is_empty());
+
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
         state.storage_map.iter().for_each(|(_, v)| {
