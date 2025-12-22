@@ -12,9 +12,19 @@ lazy_static! {
         r"require\s*\(\s*(\w+)\s*==\s*\1\s*[,)]"
     ).unwrap();
 
-    // Match impossible checks like "require(!0 < x)" or "require(0 > x)"
+    // Match impossible checks like "require(!0 < x)" or "require(!((0 > x)))"
+    // These come from inverted loop conditions being misinterpreted as require statements
+    // Format 1: require(!0 < x) - direct negation of zero
+    // Format 2: require(!((0 > x))) - negation wrapping comparison
     static ref IMPOSSIBLE_CHECK: Regex = Regex::new(
-        r"require\s*\(\s*(!0|!0x0)\s*(<|<=|>|>=)"
+        r"require\s*\(\s*(!0|!0x0|!0x00|!0x01|!1)\s*(<|<=|>|>=)|require\s*\(\s*!\s*\(\s*\(?\s*(0|0x0|0x00)\s*(>|>=|<|<=)"
+    ).unwrap();
+
+    // Match panic code assignments - both before and after variable renaming:
+    // - Before: "memory[0] = 0x11;" or "memory[0x40] = 0x11;"
+    // - After: "var_a = 0x11;"
+    static ref PANIC_CODE_ASSIGNMENT: Regex = Regex::new(
+        r"^\s*(var_[a-zA-Z0-9_]+|memory\[[^\]]+\])\s*=\s*(0x11|0x12|17|18)\s*;"
     ).unwrap();
 
     // Match Solidity 0.8+ panic codes
@@ -82,6 +92,12 @@ pub(crate) fn remove_overflow_checks(
         return Ok(());
     }
 
+    // Check for panic code assignments (memory[0] = 0x11, var_a = 0x11)
+    if PANIC_CODE_ASSIGNMENT.is_match(line).unwrap_or(false) {
+        line.clear();
+        return Ok(());
+    }
+
     Ok(())
 }
 
@@ -114,5 +130,43 @@ mod tests {
         assert!(is_tautological_require("require(x == x, \"error\");"));
         assert!(!is_tautological_require("require(arg0 == arg1);"));
         assert!(!is_tautological_require("if (x == x) {"));
+    }
+
+    #[test]
+    fn test_impossible_check_regex() {
+        // Should match inverted loop conditions - format 1
+        assert!(IMPOSSIBLE_CHECK.is_match("require(!0 < arg0);").unwrap());
+        assert!(IMPOSSIBLE_CHECK.is_match("require(!0x0 < arg0);").unwrap());
+        assert!(IMPOSSIBLE_CHECK.is_match("require(!0x00 < arg0);").unwrap());
+        assert!(IMPOSSIBLE_CHECK.is_match("require(!0x01 < arg0);").unwrap());
+        assert!(IMPOSSIBLE_CHECK.is_match("require(!1 <= arg0);").unwrap());
+
+        // Should match format 2: require(!((0 > x)))
+        assert!(IMPOSSIBLE_CHECK.is_match("require(!((0 > 0x01)));").unwrap());
+        assert!(IMPOSSIBLE_CHECK.is_match("require(!(0 > 0x01));").unwrap());
+        assert!(IMPOSSIBLE_CHECK.is_match("require(!((0x0 >= 1)));").unwrap());
+
+        // Should not match normal requires
+        assert!(!IMPOSSIBLE_CHECK.is_match("require(arg0 > 0);").unwrap());
+        assert!(!IMPOSSIBLE_CHECK.is_match("require(x < y);").unwrap());
+    }
+
+    #[test]
+    fn test_panic_code_assignment_regex() {
+        // Should match panic code assignments - var format
+        assert!(PANIC_CODE_ASSIGNMENT.is_match("var_a = 0x11;").unwrap());
+        assert!(PANIC_CODE_ASSIGNMENT.is_match("var_b = 0x12;").unwrap());
+        assert!(PANIC_CODE_ASSIGNMENT.is_match("  var_abc = 17;").unwrap());
+        assert!(PANIC_CODE_ASSIGNMENT.is_match("var_x = 18;").unwrap());
+
+        // Should match panic code assignments - memory format
+        assert!(PANIC_CODE_ASSIGNMENT.is_match("memory[0] = 0x11;").unwrap());
+        assert!(PANIC_CODE_ASSIGNMENT.is_match("memory[0x40] = 0x12;").unwrap());
+        assert!(PANIC_CODE_ASSIGNMENT.is_match("  memory[0x00] = 17;").unwrap());
+
+        // Should not match other assignments
+        assert!(!PANIC_CODE_ASSIGNMENT.is_match("var_a = 0x10;").unwrap());
+        assert!(!PANIC_CODE_ASSIGNMENT.is_match("number = 0x11;").unwrap());
+        assert!(!PANIC_CODE_ASSIGNMENT.is_match("storage[0] = 0x11;").unwrap());
     }
 }

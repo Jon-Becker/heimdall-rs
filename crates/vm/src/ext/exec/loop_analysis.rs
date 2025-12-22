@@ -2,6 +2,71 @@ use alloy::primitives::U256;
 
 use crate::core::{stack::StackFrame, vm::State};
 
+/// Check if a condition is tautologically false (e.g., "0 > 1", "(0 > 0x01)").
+/// These cannot be valid loop conditions and should be skipped.
+pub fn is_tautologically_false_condition(condition: &str) -> bool {
+    // Strip outer whitespace first
+    let mut trimmed = condition.trim();
+
+    // Remove leading negation (!) - we're looking at the inner condition
+    if trimmed.starts_with('!') {
+        trimmed = trimmed[1..].trim();
+    }
+
+    // Strip all outer parentheses (could be nested like "((...))")
+    while trimmed.starts_with('(') && trimmed.ends_with(')') {
+        trimmed = &trimmed[1..trimmed.len() - 1];
+        trimmed = trimmed.trim();
+    }
+
+    // Pattern: "0 > X" where X > 0 (always false for unsigned)
+    if trimmed.starts_with("0 >") || trimmed.starts_with("0x0 >") || trimmed.starts_with("0x00 >")
+    {
+        return true;
+    }
+
+    // Pattern: "X < 0" (always false for unsigned)
+    if trimmed.ends_with("< 0") || trimmed.ends_with("< 0x0") || trimmed.ends_with("< 0x00") {
+        return true;
+    }
+
+    // Pattern: constant comparisons that are always false
+    // e.g., "0 > 0x01", "1 > 2", etc.
+    for op in [" > ", " >= ", " < ", " <= "] {
+        if let Some(pos) = trimmed.find(op) {
+            let lhs = trimmed[..pos].trim();
+            let rhs = trimmed[pos + op.len()..].trim();
+
+            // Try to parse both sides as numbers
+            if let (Some(lhs_val), Some(rhs_val)) = (parse_const(lhs), parse_const(rhs)) {
+                let result = match op {
+                    " > " => lhs_val > rhs_val,
+                    " >= " => lhs_val >= rhs_val,
+                    " < " => lhs_val < rhs_val,
+                    " <= " => lhs_val <= rhs_val,
+                    _ => return false,
+                };
+                // If the result is always false, this isn't a valid loop condition
+                if !result {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Parse a constant value (decimal or hex)
+fn parse_const(s: &str) -> Option<u64> {
+    let trimmed = s.trim();
+    if trimmed.starts_with("0x") {
+        u64::from_str_radix(&trimmed[2..], 16).ok()
+    } else {
+        trimmed.parse::<u64>().ok()
+    }
+}
+
 /// Represents a detected loop in the control flow
 #[derive(Clone, Debug, Default)]
 pub struct LoopInfo {
@@ -194,6 +259,28 @@ fn normalize_loop_condition(condition: &str) -> String {
                 if is_likely_counter_value(lhs) && is_likely_bound(rhs) {
                     // This was ISZERO(LT(counter, limit)) solidified incorrectly
                     // The actual condition is: counter < limit
+                    return format!("i{}{}", normalized_op, rhs);
+                }
+
+                // If rhs is a counter value and lhs looks like a bound, it's reversed
+                // e.g., "!arg0 > 0x01" -> "i < arg0"
+                if is_likely_counter_value(rhs) && is_likely_bound(lhs) {
+                    // Flip the comparison operator for proper form
+                    let flipped_op = match normalized_op {
+                        " < " => " > ",
+                        " > " => " < ",
+                        " <= " => " >= ",
+                        " >= " => " <= ",
+                        other => other,
+                    };
+                    return format!("i{}{}", flipped_op, lhs);
+                }
+
+                // If both look like counter values (constants), this is likely an
+                // internal compiler check - use a simple normalized form
+                if is_likely_counter_value(lhs) && is_likely_counter_value(rhs) {
+                    // For patterns like "!0 > 0x01", interpret as a loop check
+                    // The actual counter would be tracked separately
                     return format!("i{}{}", normalized_op, rhs);
                 }
 
@@ -670,5 +757,22 @@ mod tests {
         });
         inner.set_counter_name_for_depth(1);
         assert_eq!(inner.to_solidity(), "for (uint256 j = 0; j < arg0; j++) {");
+    }
+
+    #[test]
+    fn test_is_tautologically_false_condition() {
+        // Always false conditions
+        assert!(is_tautologically_false_condition("0 > 0x01"));
+        assert!(is_tautologically_false_condition("(0 > 0x01)"));
+        assert!(is_tautologically_false_condition("0 > 1"));
+        assert!(is_tautologically_false_condition("1 > 2"));
+        assert!(is_tautologically_false_condition("0 >= 1"));
+        assert!(is_tautologically_false_condition("5 < 3"));
+
+        // Valid loop conditions (not always false)
+        assert!(!is_tautologically_false_condition("i < arg0"));
+        assert!(!is_tautologically_false_condition("0x01 < arg0"));
+        assert!(!is_tautologically_false_condition("1 < 2"));
+        assert!(!is_tautologically_false_condition("i > 0"));
     }
 }

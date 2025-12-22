@@ -9,7 +9,9 @@ use crate::{
     },
     ext::exec::{
         jump_frame::JumpFrame,
-        loop_analysis::{detect_induction_variable, extract_modified_storage},
+        loop_analysis::{
+            detect_induction_variable, extract_modified_storage, is_tautologically_false_condition,
+        },
         util::{
             historical_diffs_approximately_equal, jump_condition_appears_recursive,
             jump_condition_contains_mutated_memory_access,
@@ -267,97 +269,129 @@ impl VM {
 
                         // If a loop was detected, capture the LoopInfo and return the trace
                         if let Some((diff, condition)) = detected_loop_info {
-                            trace!("loop detected, capturing LoopInfo");
-                            trace!(
-                                "adding historical stack {} to jump frame {:?}",
-                                &format!("{:#016x?}", vm.stack.hash()),
-                                jump_frame
-                            );
-                            historical_stacks.push(vm.stack.clone());
+                            // Skip loops with tautologically false conditions (e.g., "0 > 1")
+                            // These are not real loops but rather overflow checks or dead code
+                            if is_tautologically_false_condition(&condition) {
+                                trace!(
+                                    "skipping loop with tautologically false condition: {}",
+                                    condition
+                                );
+                                historical_stacks.push(vm.stack.clone());
+                                // Continue execution without creating a loop
+                            } else {
+                                trace!("loop detected, capturing LoopInfo");
+                                trace!(
+                                    "adding historical stack {} to jump frame {:?}",
+                                    &format!("{:#016x?}", vm.stack.hash()),
+                                    jump_frame
+                                );
+                                historical_stacks.push(vm.stack.clone());
 
-                            // Create LoopInfo with header_pc (jump target) and condition_pc (JUMPI)
-                            let header_pc: u128 =
-                                last_instruction.inputs[0].try_into().unwrap_or(0);
-                            let condition_pc = last_instruction.instruction;
+                                // Create LoopInfo with header_pc (jump target) and condition_pc (JUMPI)
+                                let header_pc: u128 =
+                                    last_instruction.inputs[0].try_into().unwrap_or(0);
+                                let condition_pc = last_instruction.instruction;
 
-                            // Try to detect induction variable from the stack diff
-                            let induction_var = detect_induction_variable(&diff, &Some(condition.clone()));
+                                // Try to detect induction variable from the stack diff
+                                let induction_var =
+                                    detect_induction_variable(&diff, &Some(condition.clone()));
 
-                            let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
+                                let mut loop_info =
+                                    LoopInfo::new(header_pc, condition_pc, condition);
 
-                            if let Some(iv) = induction_var {
-                                loop_info.induction_var = Some(iv);
-                                loop_info.is_bounded = true;
+                                if let Some(iv) = induction_var {
+                                    loop_info.induction_var = Some(iv);
+                                    loop_info.is_bounded = true;
+                                }
+
+                                // Extract modified storage slots
+                                loop_info.modified_storage = extract_modified_storage(&diff);
+
+                                // Capture loop body operations from trace
+                                loop_info.body_operations = vm_trace.operations.clone();
+
+                                trace!(
+                                    "detected loop: header_pc={}, condition_pc={}, condition={}",
+                                    header_pc,
+                                    condition_pc,
+                                    loop_info.condition
+                                );
+
+                                vm_trace.detected_loops.push(loop_info);
+
+                                // Return the trace with the loop info (not None)
+                                return Ok(Some(vm_trace));
                             }
-
-                            // Extract modified storage slots
-                            loop_info.modified_storage = extract_modified_storage(&diff);
-
-                            // Capture loop body operations from trace
-                            loop_info.body_operations = vm_trace.operations.clone();
-
-                            trace!(
-                                "detected loop: header_pc={}, condition_pc={}, condition={}",
-                                header_pc,
-                                condition_pc,
-                                loop_info.condition
-                            );
-
-                            vm_trace.detected_loops.push(loop_info);
-
-                            // Return the trace with the loop info (not None)
-                            return Ok(Some(vm_trace));
                         }
 
                         // check if any stack position shows a consistent pattern
                         // (increasing/decreasing/alternating)
                         if stack_position_shows_pattern(&vm.stack, historical_stacks) {
-                            trace!("loop detected via stack pattern");
-                            trace!(
-                                "adding historical stack {} to jump frame {:?}",
-                                &format!("{:#016x?}", vm.stack.hash()),
-                                jump_frame
-                            );
-                            historical_stacks.push(vm.stack.clone());
-
-                            // Create basic loop info even without detailed condition
-                            let header_pc: u128 =
-                                last_instruction.inputs[0].try_into().unwrap_or(0);
-                            let condition_pc = last_instruction.instruction;
                             let condition =
                                 jump_condition.clone().unwrap_or_else(|| "true".to_string());
 
-                            let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
-                            loop_info.body_operations = vm_trace.operations.clone();
-                            vm_trace.detected_loops.push(loop_info);
+                            // Skip tautologically false conditions
+                            if is_tautologically_false_condition(&condition) {
+                                trace!(
+                                    "skipping loop (stack pattern) with false condition: {}",
+                                    condition
+                                );
+                                historical_stacks.push(vm.stack.clone());
+                            } else {
+                                trace!("loop detected via stack pattern");
+                                trace!(
+                                    "adding historical stack {} to jump frame {:?}",
+                                    &format!("{:#016x?}", vm.stack.hash()),
+                                    jump_frame
+                                );
+                                historical_stacks.push(vm.stack.clone());
 
-                            return Ok(Some(vm_trace));
+                                // Create basic loop info even without detailed condition
+                                let header_pc: u128 =
+                                    last_instruction.inputs[0].try_into().unwrap_or(0);
+                                let condition_pc = last_instruction.instruction;
+
+                                let mut loop_info =
+                                    LoopInfo::new(header_pc, condition_pc, condition);
+                                loop_info.body_operations = vm_trace.operations.clone();
+                                vm_trace.detected_loops.push(loop_info);
+
+                                return Ok(Some(vm_trace));
+                            }
                         }
 
                         if historical_diffs_approximately_equal(&vm.stack, historical_stacks) {
-                            trace!("loop detected via approximate diffs");
-                            trace!(
-                                "adding historical stack {} to jump frame {:?}",
-                                &format!("{:#016x?}", vm.stack.hash()),
-                                jump_frame
-                            );
-                            historical_stacks.push(vm.stack.clone());
-
-                            // Create basic loop info
-                            let header_pc: u128 =
-                                last_instruction.inputs[0].try_into().unwrap_or(0);
-                            let condition_pc = last_instruction.instruction;
                             let condition =
                                 jump_condition.clone().unwrap_or_else(|| "true".to_string());
 
-                            let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
-                            loop_info.body_operations = vm_trace.operations.clone();
-                            vm_trace.detected_loops.push(loop_info);
+                            // Skip tautologically false conditions
+                            if is_tautologically_false_condition(&condition) {
+                                trace!(
+                                    "skipping loop (approx diffs) with false condition: {}",
+                                    condition
+                                );
+                                historical_stacks.push(vm.stack.clone());
+                            } else {
+                                trace!("loop detected via approximate diffs");
+                                trace!(
+                                    "adding historical stack {} to jump frame {:?}",
+                                    &format!("{:#016x?}", vm.stack.hash()),
+                                    jump_frame
+                                );
+                                historical_stacks.push(vm.stack.clone());
 
-                            return Ok(Some(vm_trace));
-                        }
+                                // Create basic loop info
+                                let header_pc: u128 =
+                                    last_instruction.inputs[0].try_into().unwrap_or(0);
+                                let condition_pc = last_instruction.instruction;
 
-                        {
+                                let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
+                                loop_info.body_operations = vm_trace.operations.clone();
+                                vm_trace.detected_loops.push(loop_info);
+
+                                return Ok(Some(vm_trace));
+                            }
+                        } else {
                             trace!(
                                 "adding historical stack {} to jump frame {:?}",
                                 &format!("{:#016x?}", vm.stack.hash()),

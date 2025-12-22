@@ -11,11 +11,13 @@ use crate::{
     Error,
 };
 
-/// Check if a condition looks like a Solidity 0.8+ overflow check.
+/// Check if a condition looks like compiler-generated code that should not
+/// become a require statement.
 ///
-/// These checks appear as require statements with conditions like:
-/// - `!number > (number + 0x01)` - checks that incrementing doesn't overflow
-/// - `number - MAX_UINT256` - underflow check patterns
+/// This includes:
+/// - Solidity 0.8+ overflow checks like `!number > (number + 0x01)`
+/// - Inverted loop conditions like `!0 < arg0` (initial loop entry check)
+/// - Underflow check patterns like `number - MAX_UINT256`
 fn is_overflow_check_condition(condition: &str) -> bool {
     let trimmed = condition.trim();
 
@@ -37,7 +39,32 @@ fn is_overflow_check_condition(condition: &str) -> bool {
         }
     }
 
-    // Pattern 2: Subtraction of a very large value (MAX_UINT256)
+    // Pattern 2: Inverted loop initial condition like "!0 < arg0" or "!0x00 < arg0"
+    // These come from while/for loop entry checks and should not be require statements
+    if trimmed.starts_with('!') && !trimmed.starts_with("!=") {
+        let rest = &trimmed[1..];
+
+        // Check for "0 < arg" or "0x00 < arg" patterns (initial loop iteration check)
+        for op in [" < ", " > ", " <= ", " >= "] {
+            if let Some(pos) = rest.find(op) {
+                let lhs = rest[..pos].trim();
+
+                // If LHS is a zero-ish value, this is likely a loop entry check
+                if lhs == "0"
+                    || lhs == "0x0"
+                    || lhs == "0x00"
+                    || lhs == "0x01"
+                    || lhs == "1"
+                    || lhs == "(0)"
+                    || lhs == "(0x00)"
+                {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Pattern 3: Subtraction of a very large value (MAX_UINT256)
     if trimmed.contains(" - 0x") {
         if let Some(pos) = trimmed.find(" - 0x") {
             let hex_part = &trimmed[pos + 5..];
