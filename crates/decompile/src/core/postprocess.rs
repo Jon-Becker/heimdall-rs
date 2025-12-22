@@ -10,8 +10,9 @@ use crate::{
     utils::{
         constants::STORAGE_ACCESS_REGEX,
         postprocessors::{
-            arithmetic_postprocessor, bitwise_mask_postprocessor, memory_postprocessor,
-            storage_postprocessor, transient_postprocessor, variable_postprocessor, Postprocessor,
+            arithmetic_postprocessor, bitwise_mask_postprocessor, loop_postprocessor,
+            memory_postprocessor, remove_overflow_checks, storage_postprocessor,
+            transient_postprocessor, variable_postprocessor, Postprocessor,
         },
     },
     Error,
@@ -67,12 +68,16 @@ impl PostprocessOrchestrator {
     pub(crate) fn register_postprocessors(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
+                // Run overflow check removal early to clean up spurious requires
+                self.postprocessors.push(Postprocessor::new(remove_overflow_checks));
                 self.postprocessors.push(Postprocessor::new(bitwise_mask_postprocessor));
                 self.postprocessors.push(Postprocessor::new(arithmetic_postprocessor));
                 self.postprocessors.push(Postprocessor::new(memory_postprocessor));
                 self.postprocessors.push(Postprocessor::new(storage_postprocessor));
                 self.postprocessors.push(Postprocessor::new(transient_postprocessor));
                 self.postprocessors.push(Postprocessor::new(variable_postprocessor));
+                // Run loop postprocessor last to rename loop variables
+                self.postprocessors.push(Postprocessor::new(loop_postprocessor));
             }
             AnalyzerType::Yul => {}
             _ => {}

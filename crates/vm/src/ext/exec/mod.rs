@@ -1,4 +1,5 @@
 mod jump_frame;
+mod loop_analysis;
 mod util;
 
 use crate::{
@@ -8,6 +9,7 @@ use crate::{
     },
     ext::exec::{
         jump_frame::JumpFrame,
+        loop_analysis::{detect_induction_variable, extract_modified_storage},
         util::{
             historical_diffs_approximately_equal, jump_condition_appears_recursive,
             jump_condition_contains_mutated_memory_access,
@@ -23,6 +25,8 @@ use hashbrown::HashMap;
 use heimdall_common::utils::strings::decode_hex;
 use std::time::Instant;
 use tracing::{trace, warn};
+
+pub use loop_analysis::{InductionDirection, InductionVariable, LoopInfo};
 
 /// Represents a trace of virtual machine execution including operations and child calls
 ///
@@ -41,6 +45,9 @@ pub struct VMTrace {
 
     /// Child traces resulting from internal calls (CALL, DELEGATECALL, etc.)
     pub children: Vec<VMTrace>,
+
+    /// Detected loops during symbolic execution
+    pub detected_loops: Vec<LoopInfo>,
 }
 
 impl VM {
@@ -83,6 +90,7 @@ impl VM {
                     gas_used: self.gas_used,
                     operations: Vec::new(),
                     children: Vec::new(),
+                    detected_loops: Vec::new(),
                 }
             }
         };
@@ -116,6 +124,7 @@ impl VM {
                     gas_used: self.gas_used,
                     operations: Vec::new(),
                     children: Vec::new(),
+                    detected_loops: Vec::new(),
                 }
             }
         };
@@ -138,6 +147,7 @@ impl VM {
             gas_used: 0,
             operations: Vec::new(),
             children: Vec::new(),
+            detected_loops: Vec::new(),
         };
 
         // step through the bytecode until we find a JUMPI instruction
@@ -207,94 +217,144 @@ impl VM {
                 // perform heuristic checks on historical stacks
                 match handled_jumps.get_mut(&jump_frame) {
                     Some(historical_stacks) => {
-                        // for every stack that we have encountered for this jump, perform some
-                        // heuristic checks to determine if this might be a loop
-                        if historical_stacks.iter().any(|hist_stack| {
-                            if let Some(jump_condition) = &jump_condition {
+                        // Check if this is a loop - find the first historical stack that matches
+                        // loop patterns and capture the stack diff for induction variable detection
+                        let mut detected_loop_info: Option<(Vec<_>, String)> = None;
 
+                        for hist_stack in historical_stacks.iter() {
+                            if let Some(ref cond) = jump_condition {
                                 // check if any historical stack is the same as the current stack
                                 if hist_stack == &vm.stack {
                                     trace!(
                                         "jump matches loop-detection heuristic: 'jump_path_already_handled'"
                                     );
-                                    return true
+                                    detected_loop_info =
+                                        Some((Vec::new(), cond.clone()));
+                                    break;
                                 }
 
                                 // calculate the difference of the current stack and the historical stack
-                                let stack_diff = stack_diff(&vm.stack, hist_stack);
-                                if stack_diff.is_empty() {
-                                    // the stack_diff is empty (the stacks are the same), so we've
-                                    // already handled this path
+                                let diff = stack_diff(&vm.stack, hist_stack);
+                                if diff.is_empty() {
                                     trace!(
                                         "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
                                     );
-                                    return true
+                                    detected_loop_info = Some((diff, cond.clone()));
+                                    break;
                                 }
 
-                                trace!("stack diff: [{}]", stack_diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", "));
+                                trace!("stack diff: [{}]", diff.iter().map(|frame| format!("{}", frame.value)).collect::<Vec<String>>().join(", "));
 
                                 // check if the jump condition appears to be recursive
-                                if jump_condition_appears_recursive(&stack_diff, jump_condition) {
-                                    return true
+                                if jump_condition_appears_recursive(&diff, cond) {
+                                    detected_loop_info = Some((diff, cond.clone()));
+                                    break;
                                 }
 
                                 // check for mutated memory accesses in the jump condition
-                                if jump_condition_contains_mutated_memory_access(
-                                    &stack_diff,
-                                    jump_condition,
-                                ) {
-                                    return true
+                                if jump_condition_contains_mutated_memory_access(&diff, cond) {
+                                    detected_loop_info = Some((diff, cond.clone()));
+                                    break;
                                 }
 
-                                // check for mutated memory accesses in the jump condition
-                                if jump_condition_contains_mutated_storage_access(
-                                    &stack_diff,
-                                    jump_condition,
-                                ) {
-                                    return true
+                                // check for mutated storage accesses in the jump condition
+                                if jump_condition_contains_mutated_storage_access(&diff, cond) {
+                                    detected_loop_info = Some((diff, cond.clone()));
+                                    break;
                                 }
-
                             }
-                            false
-                        }) {
-                            trace!("jump terminated.");
+                        }
+
+                        // If a loop was detected, capture the LoopInfo and return the trace
+                        if let Some((diff, condition)) = detected_loop_info {
+                            trace!("loop detected, capturing LoopInfo");
                             trace!(
                                 "adding historical stack {} to jump frame {:?}",
                                 &format!("{:#016x?}", vm.stack.hash()),
                                 jump_frame
                             );
-
-                            // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return Ok(None);
+
+                            // Create LoopInfo with header_pc (jump target) and condition_pc (JUMPI)
+                            let header_pc: u128 =
+                                last_instruction.inputs[0].try_into().unwrap_or(0);
+                            let condition_pc = last_instruction.instruction;
+
+                            // Try to detect induction variable from the stack diff
+                            let induction_var = detect_induction_variable(&diff, &Some(condition.clone()));
+
+                            let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
+
+                            if let Some(iv) = induction_var {
+                                loop_info.induction_var = Some(iv);
+                                loop_info.is_bounded = true;
+                            }
+
+                            // Extract modified storage slots
+                            loop_info.modified_storage = extract_modified_storage(&diff);
+
+                            // Capture loop body operations from trace
+                            loop_info.body_operations = vm_trace.operations.clone();
+
+                            trace!(
+                                "detected loop: header_pc={}, condition_pc={}, condition={}",
+                                header_pc,
+                                condition_pc,
+                                loop_info.condition
+                            );
+
+                            vm_trace.detected_loops.push(loop_info);
+
+                            // Return the trace with the loop info (not None)
+                            return Ok(Some(vm_trace));
                         }
 
                         // check if any stack position shows a consistent pattern
                         // (increasing/decreasing/alternating)
                         if stack_position_shows_pattern(&vm.stack, historical_stacks) {
-                            trace!("jump terminated.");
+                            trace!("loop detected via stack pattern");
                             trace!(
                                 "adding historical stack {} to jump frame {:?}",
                                 &format!("{:#016x?}", vm.stack.hash()),
                                 jump_frame
                             );
-
-                            // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return Ok(None);
+
+                            // Create basic loop info even without detailed condition
+                            let header_pc: u128 =
+                                last_instruction.inputs[0].try_into().unwrap_or(0);
+                            let condition_pc = last_instruction.instruction;
+                            let condition =
+                                jump_condition.clone().unwrap_or_else(|| "true".to_string());
+
+                            let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
+                            loop_info.body_operations = vm_trace.operations.clone();
+                            vm_trace.detected_loops.push(loop_info);
+
+                            return Ok(Some(vm_trace));
                         }
 
                         if historical_diffs_approximately_equal(&vm.stack, historical_stacks) {
-                            trace!("jump terminated.");
+                            trace!("loop detected via approximate diffs");
                             trace!(
                                 "adding historical stack {} to jump frame {:?}",
                                 &format!("{:#016x?}", vm.stack.hash()),
                                 jump_frame
                             );
-
-                            // this key exists, but the stack is different, so the jump is new
                             historical_stacks.push(vm.stack.clone());
-                            return Ok(None);
+
+                            // Create basic loop info
+                            let header_pc: u128 =
+                                last_instruction.inputs[0].try_into().unwrap_or(0);
+                            let condition_pc = last_instruction.instruction;
+                            let condition =
+                                jump_condition.clone().unwrap_or_else(|| "true".to_string());
+
+                            let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
+                            loop_info.body_operations = vm_trace.operations.clone();
+                            vm_trace.detected_loops.push(loop_info);
+
+                            return Ok(Some(vm_trace));
                         }
 
                         {
@@ -340,7 +400,11 @@ impl VM {
                     trace_vm.instruction =
                         last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                        Ok(Some(child_trace)) => {
+                            // Propagate detected loops from child to parent
+                            vm_trace.detected_loops.extend(child_trace.detected_loops.clone());
+                            vm_trace.children.push(child_trace);
+                        }
                         Ok(None) => {}
                         Err(e) => {
                             warn!("error executing branch: {:?}", e);
@@ -350,7 +414,11 @@ impl VM {
 
                     // push the current path onto the stack
                     match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                        Ok(Some(child_trace)) => {
+                            // Propagate detected loops from child to parent
+                            vm_trace.detected_loops.extend(child_trace.detected_loops.clone());
+                            vm_trace.children.push(child_trace);
+                        }
                         Ok(None) => {}
                         Err(e) => {
                             warn!("error executing branch: {:?}", e);
@@ -363,7 +431,11 @@ impl VM {
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = last_instruction.instruction + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                        Ok(Some(child_trace)) => {
+                            // Propagate detected loops from child to parent
+                            vm_trace.detected_loops.extend(child_trace.detected_loops.clone());
+                            vm_trace.children.push(child_trace);
+                        }
                         Ok(None) => {}
                         Err(e) => {
                             warn!("error executing branch: {:?}", e);
@@ -373,7 +445,11 @@ impl VM {
 
                     // push the current path onto the stack
                     match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
-                        Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
+                        Ok(Some(child_trace)) => {
+                            // Propagate detected loops from child to parent
+                            vm_trace.detected_loops.extend(child_trace.detected_loops.clone());
+                            vm_trace.children.push(child_trace);
+                        }
                         Ok(None) => {}
                         Err(e) => {
                             warn!("error executing branch: {:?}", e);
