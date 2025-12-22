@@ -11,6 +11,46 @@ use crate::{
     Error,
 };
 
+/// Check if a condition looks like a Solidity 0.8+ overflow check.
+///
+/// These checks appear as require statements with conditions like:
+/// - `!number > (number + 0x01)` - checks that incrementing doesn't overflow
+/// - `number - MAX_UINT256` - underflow check patterns
+fn is_overflow_check_condition(condition: &str) -> bool {
+    let trimmed = condition.trim();
+
+    // Pattern 1: !(x > (x + 1)) style overflow check
+    if trimmed.starts_with('!') || trimmed.starts_with("!(") {
+        let inner = trimmed.trim_start_matches('!').trim_start_matches('(').trim_end_matches(')');
+
+        // Check for "var > (var + 1)" pattern
+        if inner.contains(" > ") {
+            if let Some(pos) = inner.find(" > ") {
+                let lhs = inner[..pos].trim();
+                let rhs = inner[pos + 3..].trim();
+
+                // If RHS contains LHS plus an increment, it's an overflow check
+                if rhs.contains(lhs) && (rhs.contains("+ 0x01") || rhs.contains("+ 1")) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Pattern 2: Subtraction of a very large value (MAX_UINT256)
+    if trimmed.contains(" - 0x") {
+        if let Some(pos) = trimmed.find(" - 0x") {
+            let hex_part = &trimmed[pos + 5..];
+            // MAX_UINT256 is 64 'f' characters
+            if hex_part.len() >= 60 && hex_part.chars().take(60).all(|c| c == 'f') {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 pub(crate) fn solidity_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
@@ -167,6 +207,10 @@ pub(crate) fn solidity_heuristic<'a>(
                     revert_logic = match analyzer_state.jumped_conditional.clone() {
                         Some(condition) => {
                             analyzer_state.jumped_conditional = None;
+                            // Skip overflow check patterns
+                            if is_overflow_check_condition(&condition) {
+                                return Ok(());
+                            }
                             format!("require({condition}, \"{revert_string}\");")
                         }
                         None => {
@@ -177,6 +221,12 @@ pub(crate) fn solidity_heuristic<'a>(
                                         Some(condition) => condition,
                                         None => break,
                                     };
+
+                                    // Skip overflow check patterns
+                                    if is_overflow_check_condition(&conditional) {
+                                        function.logic.remove(i);
+                                        return Ok(());
+                                    }
 
                                     function.logic[i] =
                                         format!("require({conditional}, \"{revert_string}\");");
@@ -203,6 +253,10 @@ pub(crate) fn solidity_heuristic<'a>(
                     revert_logic = match analyzer_state.jumped_conditional.clone() {
                         Some(condition) => {
                             analyzer_state.jumped_conditional = None;
+                            // Skip overflow check patterns
+                            if is_overflow_check_condition(&condition) {
+                                return Ok(());
+                            }
                             if custom_error_placeholder == *"()" {
                                 format!("require({condition});",)
                             } else {
@@ -217,6 +271,12 @@ pub(crate) fn solidity_heuristic<'a>(
                                         Some(condition) => condition,
                                         None => break,
                                     };
+
+                                    // Skip overflow check patterns
+                                    if is_overflow_check_condition(&conditional) {
+                                        function.logic.remove(i);
+                                        return Ok(());
+                                    }
 
                                     if custom_error_placeholder == *"()" {
                                         function.logic[i] = format!("require({conditional});",);

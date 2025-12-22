@@ -84,7 +84,7 @@ pub(crate) fn loop_heuristic<'a>(
 
         // Check if we're at the loop's JUMPI (condition check)
         // We emit the loop header here because the loop header JUMPDEST is skipped during trace creation
-        if let Some(loop_info) = is_loop_condition(state, detected_loops) {
+        if let Some(mut loop_info) = is_loop_condition(state, detected_loops) {
             // Check if we've already entered this loop (don't emit twice)
             let already_in_loop = analyzer_state
                 .loop_state
@@ -93,6 +93,9 @@ pub(crate) fn loop_heuristic<'a>(
                 .any(|l| l.condition_pc == loop_info.condition_pc);
 
             if !already_in_loop {
+                // Set the counter name based on current nesting depth
+                loop_info.set_counter_name_for_depth(analyzer_state.loop_state.depth);
+
                 // First time seeing this loop condition - emit the loop header
                 trace!(
                     "emitting loop header at condition pc={}: {}",
@@ -121,13 +124,7 @@ pub(crate) fn loop_heuristic<'a>(
         }
 
         // Check if we're at a loop header (fallback, in case trace includes JUMPDEST)
-        if let Some(loop_info) = is_loop_header(state, detected_loops) {
-            trace!(
-                "matched loop header at pc={}, emitting: {}",
-                current_pc,
-                loop_info.to_solidity()
-            );
-
+        if let Some(mut loop_info) = is_loop_header(state, detected_loops) {
             // Check if we've already entered this loop
             let already_in_loop = analyzer_state
                 .loop_state
@@ -136,6 +133,15 @@ pub(crate) fn loop_heuristic<'a>(
                 .any(|l| l.header_pc == loop_info.header_pc);
 
             if !already_in_loop {
+                // Set the counter name based on current nesting depth
+                loop_info.set_counter_name_for_depth(analyzer_state.loop_state.depth);
+
+                trace!(
+                    "matched loop header at pc={}, emitting: {}",
+                    current_pc,
+                    loop_info.to_solidity()
+                );
+
                 function.logic.push(loop_info.to_solidity());
                 analyzer_state.loop_state.active_loops.push(loop_info.clone());
                 analyzer_state.loop_state.loop_headers.insert(loop_info.header_pc);
@@ -153,6 +159,11 @@ pub(crate) fn loop_heuristic<'a>(
 /// Check if an operation is part of loop overhead that should be suppressed
 pub(crate) fn is_loop_overhead(state: &State, active_loops: &[LoopInfo]) -> bool {
     let instruction = &state.last_instruction;
+
+    // Check for overflow check patterns (Solidity 0.8+)
+    if is_overflow_check_operation(state) {
+        return true;
+    }
 
     for loop_info in active_loops {
         // Suppress induction variable updates (they're in the for-loop header)
@@ -176,6 +187,99 @@ pub(crate) fn is_loop_overhead(state: &State, active_loops: &[LoopInfo]) -> bool
     }
 
     false
+}
+
+/// Check if an operation is part of Solidity 0.8+ overflow checking.
+///
+/// Solidity 0.8+ generates overflow checks for arithmetic operations.
+/// These typically include:
+/// - Comparison patterns like `!(x > x + 1)` which check for overflow
+/// - Panic code assignments like `var = 0x11` (overflow) or `var = 0x12` (underflow)
+/// - MSTORE operations storing the panic selector
+pub(crate) fn is_overflow_check_operation(state: &State) -> bool {
+    let instruction = &state.last_instruction;
+
+    // Get the solidified representation of the operation
+    let solidified = instruction
+        .input_operations
+        .first()
+        .map(|op| op.solidify())
+        .unwrap_or_default();
+
+    // Pattern 1: Overflow comparison - !(x > x + 1) or similar
+    // These appear as conditions like "!number > (number + 0x01)"
+    // or as require statements with inverted overflow checks
+    if is_overflow_comparison(&solidified) {
+        return true;
+    }
+
+    // Pattern 2: Panic code assignment - storing 0x11 (overflow) or 0x12 (underflow)
+    // These are typically MSTORE or assignment operations with the panic code
+    if is_panic_code_value(&solidified) {
+        return true;
+    }
+
+    // Pattern 3: Panic selector storage (0x4e487b71)
+    if solidified.contains("0x4e487b71") {
+        return true;
+    }
+
+    false
+}
+
+/// Check if an expression looks like an overflow comparison.
+///
+/// Solidity 0.8+ generates patterns like:
+/// - `!(x > (x + 1))` - checks that adding 1 doesn't wrap around
+/// - `x - MAX_VALUE` - underflow check patterns
+fn is_overflow_comparison(expr: &str) -> bool {
+    let trimmed = expr.trim();
+
+    // Pattern: !(x > (x + 1)) or !x > (x + 0x01)
+    // This checks: "if x + 1 would overflow, revert"
+    if trimmed.starts_with('!') || trimmed.starts_with("!(") {
+        let inner = trimmed.trim_start_matches('!').trim_start_matches('(').trim_end_matches(')');
+
+        // Check for pattern: "var > (var + 1)" or "var > var + 0x01"
+        if inner.contains(" > ") {
+            if let Some(pos) = inner.find(" > ") {
+                let lhs = inner[..pos].trim();
+                let rhs = inner[pos + 3..].trim();
+
+                // RHS should contain LHS + some increment
+                if rhs.contains(lhs) && (rhs.contains("+ 0x01") || rhs.contains("+ 1")) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Pattern: subtraction with max value (underflow check)
+    // e.g., "number - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    if trimmed.contains(" - 0x") {
+        // Check for subtraction of a very large hex value (likely MAX_UINT256)
+        if let Some(pos) = trimmed.find(" - 0x") {
+            let hex_part = &trimmed[pos + 5..];
+            // MAX_UINT256 is 64 'f' characters
+            if hex_part.len() >= 60 && hex_part.chars().take(60).all(|c| c == 'f') {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Check if a value is a Solidity panic code.
+///
+/// Panic codes used for arithmetic errors:
+/// - 0x11: Arithmetic overflow
+/// - 0x12: Division by zero or modulo zero (also underflow for subtraction)
+fn is_panic_code_value(expr: &str) -> bool {
+    let trimmed = expr.trim();
+
+    // Direct panic code values
+    trimmed == "0x11" || trimmed == "0x12" || trimmed == "17" || trimmed == "18"
 }
 
 /// Filter out Solidity 0.8+ overflow check panic paths

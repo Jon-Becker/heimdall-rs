@@ -67,16 +67,46 @@ pub enum InductionDirection {
 impl LoopInfo {
     /// Create a new LoopInfo from PC positions and condition
     pub fn new(header_pc: u128, condition_pc: u128, condition: String) -> Self {
+        // Normalize the condition (unwrap ISZERO, fix operand order, etc.)
+        let normalized = normalize_loop_condition(&condition);
         Self {
             header_pc,
             condition_pc,
-            exit_condition: negate_condition(&condition),
-            condition,
+            exit_condition: negate_condition(&normalized),
+            condition: normalized,
             induction_var: None,
             body_operations: Vec::new(),
             is_bounded: false,
             modified_storage: Vec::new(),
             modified_memory: Vec::new(),
+        }
+    }
+
+    /// Set the loop counter name based on nesting depth.
+    ///
+    /// For nested loops, this assigns unique names (i, j, k, l, m, n, ...).
+    /// This should be called when the loop is about to be emitted, with the
+    /// current nesting depth as the parameter.
+    pub fn set_counter_name_for_depth(&mut self, depth: usize) {
+        let counter_name = counter_name_for_depth(depth);
+
+        // Update the induction variable name if present
+        if let Some(ref mut iv) = self.induction_var {
+            let old_name = iv.name.clone();
+            iv.name = counter_name.clone();
+
+            // Update the condition to use the new name
+            if self.condition.contains(&old_name) {
+                self.condition = self.condition.replace(&old_name, &counter_name);
+                self.exit_condition = self.exit_condition.replace(&old_name, &counter_name);
+            }
+        } else {
+            // Even without an induction variable, update the condition if it uses "i"
+            if self.condition.contains("i ") || self.condition.starts_with("i ") {
+                self.condition = self.condition.replacen("i ", &format!("{} ", counter_name), 1);
+                self.exit_condition =
+                    self.exit_condition.replacen("i ", &format!("{} ", counter_name), 1);
+            }
         }
     }
 
@@ -100,6 +130,116 @@ impl LoopInfo {
             }
         }
     }
+}
+
+/// Generate a counter variable name for the given nesting depth.
+///
+/// Returns: i, j, k, l, m, n for depths 0-5, then idx6, idx7, etc.
+fn counter_name_for_depth(depth: usize) -> String {
+    const COUNTER_NAMES: [&str; 6] = ["i", "j", "k", "l", "m", "n"];
+    if depth < COUNTER_NAMES.len() {
+        COUNTER_NAMES[depth].to_string()
+    } else {
+        format!("idx{}", depth)
+    }
+}
+
+/// Normalize a loop condition extracted from JUMPI.
+///
+/// EVM uses inverted logic for conditional jumps: JUMPI jumps when condition is TRUE.
+/// For loops like `while (i < limit)`, the bytecode is typically:
+///   LT(i, limit) -> ISZERO -> JUMPI
+/// This means "jump out of loop when i >= limit".
+///
+/// The raw solidified condition comes out as `!(i < limit)` or malformed `!i < limit`.
+/// This function normalizes it back to `i < limit` for proper loop representation.
+fn normalize_loop_condition(condition: &str) -> String {
+    let trimmed = condition.trim();
+
+    // Pattern 1: "!(comparison)" - properly wrapped negation
+    // e.g., "!(i < arg0)" -> "i < arg0"
+    if trimmed.starts_with("!(") && trimmed.ends_with(')') {
+        let inner = &trimmed[2..trimmed.len() - 1];
+        // Only unwrap if inner contains a comparison operator
+        if contains_comparison(inner) {
+            return inner.trim().to_string();
+        }
+    }
+
+    // Pattern 2: "!X op Y" - malformed negation where ! applies to left operand only
+    // e.g., "!0x01 < arg0" -> need to extract and fix
+    // e.g., "!0 > 0x01" -> need to extract and fix
+    if trimmed.starts_with('!') && !trimmed.starts_with("!=") {
+        let rest = &trimmed[1..];
+
+        // Find the comparison operator
+        for (op, normalized_op) in [
+            (" < ", " < "),
+            (" > ", " > "),
+            (" <= ", " <= "),
+            (" >= ", " >= "),
+            (" == ", " == "),
+            (" != ", " != "),
+        ] {
+            if let Some(pos) = rest.find(op) {
+                let lhs = rest[..pos].trim();
+                let rhs = rest[pos + op.len()..].trim();
+
+                // The `!` was incorrectly applied to lhs - this is the loop counter
+                // For ISZERO(LT(counter, limit)), the condition should be counter < limit
+                // The lhs here might be "0" or "0x01" (representing the counter value)
+
+                // If lhs is a simple value and rhs looks like an argument, swap the comparison
+                // to get proper "counter < limit" form
+                if is_likely_counter_value(lhs) && is_likely_bound(rhs) {
+                    // This was ISZERO(LT(counter, limit)) solidified incorrectly
+                    // The actual condition is: counter < limit
+                    return format!("i{}{}", normalized_op, rhs);
+                }
+
+                // Otherwise, try to reconstruct sensibly
+                return format!("{}{}{}", lhs, normalized_op, rhs);
+            }
+        }
+    }
+
+    // Pattern 3: Already looks correct or can't be normalized further
+    trimmed.to_string()
+}
+
+/// Check if a string contains a comparison operator
+fn contains_comparison(s: &str) -> bool {
+    s.contains(" < ")
+        || s.contains(" > ")
+        || s.contains(" <= ")
+        || s.contains(" >= ")
+        || s.contains(" == ")
+        || s.contains(" != ")
+}
+
+/// Check if a value looks like a loop counter value (small number or zero)
+fn is_likely_counter_value(s: &str) -> bool {
+    let trimmed = s.trim().trim_start_matches('(').trim_end_matches(')');
+    // Match "0", "0x0", "0x00", "0x01", "1", etc.
+    trimmed == "0"
+        || trimmed == "1"
+        || trimmed == "0x0"
+        || trimmed == "0x00"
+        || trimmed == "0x01"
+        || trimmed == "0x1"
+        || trimmed.parse::<u64>().map(|n| n <= 1).unwrap_or(false)
+}
+
+/// Check if a value looks like a loop bound (argument or variable)
+fn is_likely_bound(s: &str) -> bool {
+    let trimmed = s.trim();
+    // Arguments look like "arg0", "arg1", etc.
+    // Variables look like "var_a", "var_b", etc.
+    // Also could be storage reads like "storage[0x00]"
+    trimmed.starts_with("arg")
+        || trimmed.starts_with("var_")
+        || trimmed.contains("storage[")
+        || trimmed.contains("memory[")
 }
 
 /// Negate a boolean condition for loop exit
@@ -136,12 +276,12 @@ fn negate_condition(condition: &str) -> String {
     format!("!({})", condition)
 }
 
-/// Attempt to detect an induction variable from the stack diff
+/// Attempt to detect an induction variable from the stack diff and/or condition
 pub(super) fn detect_induction_variable(
     stack_diff: &[StackFrame],
     jump_condition: &Option<String>,
 ) -> Option<InductionVariable> {
-    // Look for increment/decrement patterns in the stack diff
+    // First, try to detect from stack diff (most accurate when it works)
     for frame in stack_diff {
         let solidified = frame.operation.solidify();
 
@@ -172,7 +312,81 @@ pub(super) fn detect_induction_variable(
         }
     }
 
+    // Fallback: try to infer from the condition itself
+    // This handles cases where stack diff doesn't capture the increment
+    if let Some(cond) = jump_condition {
+        if let Some(iv) = infer_induction_from_condition(cond) {
+            return Some(iv);
+        }
+    }
+
     None
+}
+
+/// Infer an induction variable from a loop condition pattern.
+///
+/// For conditions like "i < arg0" or "var_a < limit", we can infer
+/// that the left-hand side is likely an induction variable.
+fn infer_induction_from_condition(condition: &str) -> Option<InductionVariable> {
+    let normalized = normalize_loop_condition(condition);
+
+    // Look for patterns like "X < Y" where X is the counter and Y is the bound
+    for op in [" < ", " <= "] {
+        if let Some(pos) = normalized.find(op) {
+            let lhs = normalized[..pos].trim();
+            let rhs = normalized[pos + op.len()..].trim();
+
+            // LHS should look like a variable, not a constant
+            if !lhs.is_empty() && !is_hex_constant(lhs) && !is_decimal_constant(lhs) {
+                return Some(InductionVariable {
+                    name: simplify_var_name(lhs),
+                    init: "0".to_string(),
+                    step: "+ 1".to_string(),
+                    bound: Some(rhs.to_string()),
+                    direction: InductionDirection::Ascending,
+                });
+            }
+        }
+    }
+
+    // Look for decrementing patterns like "X > Y" or "X >= Y"
+    for op in [" > ", " >= "] {
+        if let Some(pos) = normalized.find(op) {
+            let lhs = normalized[..pos].trim();
+            let rhs = normalized[pos + op.len()..].trim();
+
+            // LHS should look like a variable
+            if !lhs.is_empty() && !is_hex_constant(lhs) && !is_decimal_constant(lhs) {
+                // For "i > 0", the counter decrements from some init value to 0
+                let bound_val =
+                    if rhs == "0" || rhs == "0x0" || rhs == "0x00" { "0" } else { rhs };
+
+                return Some(InductionVariable {
+                    name: simplify_var_name(lhs),
+                    init: "?".to_string(), // Unknown init for decrementing
+                    step: "- 1".to_string(),
+                    bound: Some(bound_val.to_string()),
+                    direction: InductionDirection::Descending,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+/// Check if a string is a hexadecimal constant
+fn is_hex_constant(s: &str) -> bool {
+    let trimmed = s.trim();
+    trimmed.starts_with("0x")
+        && trimmed[2..].chars().all(|c| c.is_ascii_hexdigit())
+        && trimmed.len() > 2
+}
+
+/// Check if a string is a decimal constant
+fn is_decimal_constant(s: &str) -> bool {
+    let trimmed = s.trim();
+    !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit())
 }
 
 /// Extract variable name from increment pattern like "var_a + 0x01" or "var_a + 1"
@@ -284,6 +498,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_normalize_loop_condition() {
+        // Pattern 1: Properly wrapped negation
+        assert_eq!(normalize_loop_condition("!(i < arg0)"), "i < arg0");
+        assert_eq!(normalize_loop_condition("!(x > 10)"), "x > 10");
+
+        // Pattern 2: Malformed negation with counter value
+        assert_eq!(normalize_loop_condition("!0x01 < arg0"), "i < arg0");
+        assert_eq!(normalize_loop_condition("!0 < arg0"), "i < arg0");
+        assert_eq!(normalize_loop_condition("!1 < arg0"), "i < arg0");
+
+        // Pattern 3: Already correct
+        assert_eq!(normalize_loop_condition("i < loops"), "i < loops");
+        assert_eq!(normalize_loop_condition("var_a < arg0"), "var_a < arg0");
+    }
+
+    #[test]
     fn test_negate_condition() {
         assert_eq!(negate_condition("i < 10"), "i >= 10");
         assert_eq!(negate_condition("i > 10"), "i <= 10");
@@ -304,6 +534,25 @@ mod tests {
     }
 
     #[test]
+    fn test_infer_induction_from_condition() {
+        // Ascending loop
+        let iv = infer_induction_from_condition("i < arg0").unwrap();
+        assert_eq!(iv.name, "i");
+        assert_eq!(iv.bound, Some("arg0".to_string()));
+        assert_eq!(iv.direction, InductionDirection::Ascending);
+
+        // Descending loop
+        let iv = infer_induction_from_condition("i > 0").unwrap();
+        assert_eq!(iv.name, "i");
+        assert_eq!(iv.bound, Some("0".to_string()));
+        assert_eq!(iv.direction, InductionDirection::Descending);
+
+        // Should not infer from constants
+        assert!(infer_induction_from_condition("0x01 < arg0").is_none());
+        assert!(infer_induction_from_condition("10 < 20").is_none());
+    }
+
+    #[test]
     fn test_loop_info_to_solidity() {
         let mut info = LoopInfo::new(100, 200, "i < loops".to_string());
         assert_eq!(info.to_solidity(), "while (i < loops) {");
@@ -317,5 +566,109 @@ mod tests {
             direction: InductionDirection::Ascending,
         });
         assert_eq!(info.to_solidity(), "for (uint256 i = 0; i < loops; i++) {");
+    }
+
+    #[test]
+    fn test_loop_info_normalizes_condition() {
+        // Test that LoopInfo::new normalizes malformed conditions
+        let info = LoopInfo::new(100, 200, "!0x01 < arg0".to_string());
+        assert_eq!(info.condition, "i < arg0");
+
+        let info = LoopInfo::new(100, 200, "!(i < arg0)".to_string());
+        assert_eq!(info.condition, "i < arg0");
+    }
+
+    #[test]
+    fn test_is_hex_constant() {
+        assert!(is_hex_constant("0x01"));
+        assert!(is_hex_constant("0xff"));
+        assert!(is_hex_constant("0x1234abcd"));
+        assert!(!is_hex_constant("0x")); // Too short
+        assert!(!is_hex_constant("i"));
+        assert!(!is_hex_constant("arg0"));
+    }
+
+    #[test]
+    fn test_is_decimal_constant() {
+        assert!(is_decimal_constant("0"));
+        assert!(is_decimal_constant("1"));
+        assert!(is_decimal_constant("123"));
+        assert!(!is_decimal_constant(""));
+        assert!(!is_decimal_constant("i"));
+        assert!(!is_decimal_constant("0x01"));
+    }
+
+    #[test]
+    fn test_counter_name_for_depth() {
+        assert_eq!(counter_name_for_depth(0), "i");
+        assert_eq!(counter_name_for_depth(1), "j");
+        assert_eq!(counter_name_for_depth(2), "k");
+        assert_eq!(counter_name_for_depth(3), "l");
+        assert_eq!(counter_name_for_depth(4), "m");
+        assert_eq!(counter_name_for_depth(5), "n");
+        assert_eq!(counter_name_for_depth(6), "idx6");
+        assert_eq!(counter_name_for_depth(10), "idx10");
+    }
+
+    #[test]
+    fn test_set_counter_name_for_depth() {
+        // Test renaming with induction variable
+        let mut info = LoopInfo::new(100, 200, "!0x01 < arg0".to_string());
+        info.is_bounded = true;
+        info.induction_var = Some(InductionVariable {
+            name: "i".to_string(),
+            init: "0".to_string(),
+            step: "+ 1".to_string(),
+            bound: Some("arg0".to_string()),
+            direction: InductionDirection::Ascending,
+        });
+
+        // Outer loop (depth 0) should use "i"
+        info.set_counter_name_for_depth(0);
+        assert_eq!(info.induction_var.as_ref().unwrap().name, "i");
+        assert_eq!(info.condition, "i < arg0");
+
+        // Inner loop (depth 1) should use "j"
+        let mut inner_info = LoopInfo::new(100, 200, "!0x01 < arg0".to_string());
+        inner_info.is_bounded = true;
+        inner_info.induction_var = Some(InductionVariable {
+            name: "i".to_string(),
+            init: "0".to_string(),
+            step: "+ 1".to_string(),
+            bound: Some("arg0".to_string()),
+            direction: InductionDirection::Ascending,
+        });
+        inner_info.set_counter_name_for_depth(1);
+        assert_eq!(inner_info.induction_var.as_ref().unwrap().name, "j");
+        assert_eq!(inner_info.condition, "j < arg0");
+    }
+
+    #[test]
+    fn test_nested_loop_to_solidity() {
+        // Outer loop
+        let mut outer = LoopInfo::new(100, 200, "!0x01 < arg0".to_string());
+        outer.is_bounded = true;
+        outer.induction_var = Some(InductionVariable {
+            name: "i".to_string(),
+            init: "0".to_string(),
+            step: "+ 1".to_string(),
+            bound: Some("arg0".to_string()),
+            direction: InductionDirection::Ascending,
+        });
+        outer.set_counter_name_for_depth(0);
+        assert_eq!(outer.to_solidity(), "for (uint256 i = 0; i < arg0; i++) {");
+
+        // Inner loop
+        let mut inner = LoopInfo::new(150, 250, "!0x01 < arg0".to_string());
+        inner.is_bounded = true;
+        inner.induction_var = Some(InductionVariable {
+            name: "i".to_string(),
+            init: "0".to_string(),
+            step: "+ 1".to_string(),
+            bound: Some("arg0".to_string()),
+            direction: InductionDirection::Ascending,
+        });
+        inner.set_counter_name_for_depth(1);
+        assert_eq!(inner.to_solidity(), "for (uint256 j = 0; j < arg0; j++) {");
     }
 }
