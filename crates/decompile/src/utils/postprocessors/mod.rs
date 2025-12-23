@@ -12,7 +12,7 @@ mod variable;
 // re-export postprocessors
 pub(crate) use arithmetic::arithmetic_postprocessor;
 pub(crate) use bitwise::bitwise_mask_postprocessor;
-pub(crate) use deadcode::eliminate_dead_variables;
+pub(crate) use deadcode::{eliminate_dead_variables, remove_empty_lines};
 pub(crate) use memory::memory_postprocessor;
 pub(crate) use storage::storage_postprocessor;
 pub(crate) use transient::transient_postprocessor;

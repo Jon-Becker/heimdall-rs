@@ -11,8 +11,8 @@ use crate::{
         constants::STORAGE_ACCESS_REGEX,
         postprocessors::{
             arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
-            memory_postprocessor, storage_postprocessor, transient_postprocessor,
-            variable_postprocessor, Postprocessor,
+            memory_postprocessor, remove_empty_lines, storage_postprocessor,
+            transient_postprocessor, variable_postprocessor, Postprocessor,
         },
     },
     Error,
@@ -180,7 +180,7 @@ impl PostprocessOrchestrator {
         }
 
         // Remove empty lines that were cleared by postprocessors
-        function.logic.retain(|line| !line.trim().is_empty());
+        remove_empty_lines(function, &mut state)?;
 
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
