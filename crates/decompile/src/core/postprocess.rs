@@ -12,7 +12,7 @@ use crate::{
         postprocessors::{
             arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
             memory_postprocessor, remove_empty_lines, storage_postprocessor,
-            transient_postprocessor, variable_postprocessor, Postprocessor,
+            transient_postprocessor, variable_postprocessor, Pass,
         },
     },
     Error,
@@ -41,16 +41,16 @@ pub(crate) struct PostprocessorState {
     pub maybe_getter_for: Option<String>,
 }
 
-/// The [`PostprocessorOrchestrator`] is responsible for managing the cleanup of
-/// generated code from [`AnalyzedFunction`]s passed into [`PostprocessorOrchestrator::postprocess`]
+/// The [`PostprocessOrchestrator`] is responsible for managing the cleanup of
+/// generated code from [`AnalyzedFunction`]s passed into [`PostprocessOrchestrator::postprocess`]
 ///
-/// Depending on [`AnalyzerType`], different postprocessors will be registered and run on the
+/// Depending on [`AnalyzerType`], different passes will be registered and run on the
 /// [`AnalyzedFunction`]
 pub(crate) struct PostprocessOrchestrator {
     /// The type of postprocessor to use. this is taken from the analyzer
     typ: AnalyzerType,
-    /// A list of registered postprocessors
-    postprocessors: Vec<Postprocessor>,
+    /// A list of registered passes
+    passes: Vec<Pass>,
     /// The state shared between postprocessors
     state: PostprocessorState,
 }
@@ -59,25 +59,34 @@ impl PostprocessOrchestrator {
     /// Build a new postprocessor with the given analyzer type
     pub(crate) fn new(typ: AnalyzerType) -> Result<Self, Error> {
         let mut orchestrator =
-            Self { typ, postprocessors: Vec::new(), state: PostprocessorState::default() };
-        orchestrator.register_postprocessors()?;
+            Self { typ, passes: Vec::new(), state: PostprocessorState::default() };
+        orchestrator.register_passes()?;
         Ok(orchestrator)
     }
 
-    /// Register heuristics for the given function and trace
-    pub(crate) fn register_postprocessors(&mut self) -> Result<(), Error> {
+    /// Register passes for the given analyzer type
+    pub(crate) fn register_passes(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
-                self.postprocessors.push(Postprocessor::new(bitwise_mask_postprocessor));
-                self.postprocessors.push(Postprocessor::new(arithmetic_postprocessor));
-                self.postprocessors.push(Postprocessor::new(memory_postprocessor));
-                self.postprocessors.push(Postprocessor::new(storage_postprocessor));
-                self.postprocessors.push(Postprocessor::new(transient_postprocessor));
-                self.postprocessors.push(Postprocessor::new(variable_postprocessor));
+                // Line-level postprocessors that run on each line
+                self.passes.push(Pass::line_level(vec![
+                    bitwise_mask_postprocessor,
+                    arithmetic_postprocessor,
+                    memory_postprocessor,
+                    storage_postprocessor,
+                    transient_postprocessor,
+                    variable_postprocessor,
+                ]));
+
+                // Function-level passes that run on the entire function
+                self.passes.push(Pass::function_level(eliminate_dead_variables));
             }
             AnalyzerType::Yul => {}
             _ => {}
         };
+
+        // Always run empty line removal last
+        self.passes.push(Pass::function_level(remove_empty_lines));
 
         Ok(())
     }
@@ -167,20 +176,10 @@ impl PostprocessOrchestrator {
             }
         }
 
-        // for each line in the function, run the postprocessors
-        function.logic.iter_mut().for_each(|line| {
-            self.postprocessors.iter().for_each(|heuristic| {
-                heuristic.run(line, &mut state).unwrap();
-            });
-        });
-
-        // Eliminate dead variable assignments (runs on all lines at once)
-        if matches!(self.typ, AnalyzerType::Solidity) {
-            eliminate_dead_variables(function, &mut state)?;
+        // Run all registered passes
+        for pass in &self.passes {
+            pass.run(function, &mut state)?;
         }
-
-        // Remove empty lines that were cleared by postprocessors
-        remove_empty_lines(function, &mut state)?;
 
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
