@@ -60,6 +60,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const evalsJson = JSON.parse(fs.readFileSync('heimdall-eval/heimdall/evals.json', 'utf8'));
 
             const entries = Object.entries(evalsJson);
@@ -71,18 +72,69 @@ jobs:
 
             const icon = avgDecomp >= 70 ? ':white_check_mark:' : (avgDecomp >= 50 ? ':warning:' : ':x:');
 
+            // Identify low-scoring evals for detailed breakdown
+            const lowScoringEntries = entries.filter(([_, scores]) => {
+              const cfg = scores.cfg ?? null;
+              const decomp = scores.decompilation ?? null;
+              return (cfg != null && cfg < 70) || (decomp != null && decomp < 70);
+            });
+
             let tableRows = entries.map(([name, scores]) => {
               const cfg = scores.cfg ?? 'N/A';
               const decomp = scores.decompilation ?? 'N/A';
               return `| ${name} | ${cfg} | ${decomp} |`;
             }).join('\n');
 
+            // Collect detailed breakdowns for low-scoring evals
+            let detailsSections = [];
+            for (const [name, scores] of lowScoringEntries) {
+              const cfg = scores.cfg ?? null;
+              const decomp = scores.decompilation ?? null;
+
+              let details = [`### ${name} (CFG: ${cfg ?? 'N/A'}, Decompilation: ${decomp ?? 'N/A'})\n`];
+
+              // Read decompilation eval details if score < 70
+              if (decomp != null && decomp < 70) {
+                const evalPath = path.join('heimdall-eval/heimdall', name, 'eval.json');
+                if (fs.existsSync(evalPath)) {
+                  try {
+                    const evalData = JSON.parse(fs.readFileSync(evalPath, 'utf8'));
+                    details.push(`**Decompilation**\n\`\`\`json\n${JSON.stringify(evalData, null, 2)}\n\`\`\`\n`);
+                  } catch (e) {
+                    details.push(`**Decompilation** - Could not read details\n`);
+                  }
+                }
+              }
+
+              // Read CFG eval details if score < 70
+              if (cfg != null && cfg < 70) {
+                const cfgEvalPath = path.join('heimdall-eval/heimdall', name, 'cfg_eval.json');
+                if (fs.existsSync(cfgEvalPath)) {
+                  try {
+                    const cfgEvalData = JSON.parse(fs.readFileSync(cfgEvalPath, 'utf8'));
+                    details.push(`**CFG**\n\`\`\`json\n${JSON.stringify(cfgEvalData, null, 2)}\n\`\`\`\n`);
+                  } catch (e) {
+                    details.push(`**CFG** - Could not read details\n`);
+                  }
+                }
+              }
+
+              if (details.length > 1) {
+                detailsSections.push(details.join('\n'));
+              }
+            }
+
+            let detailsBlock = '';
+            if (detailsSections.length > 0) {
+              detailsBlock = `\n\n<details>\n<summary>:warning: ${lowScoringEntries.length} eval(s) scoring &lt;70%</summary>\n\n${detailsSections.join('\n---\n\n')}\n</details>`;
+            }
+
             const body = `## ${icon} Eval Report for ${context.sha}
 
             | Test Case | CFG | Decompilation |
             |-----------|-----|---------------|
             ${tableRows}
-            | **Average** | **${avgCfg}** | **${avgDecomp}** |`;
+            | **Average** | **${avgCfg}** | **${avgDecomp}** |${detailsBlock}`;
 
             // Delete old eval comments
             const { data: comments } = await github.rest.issues.listComments({
