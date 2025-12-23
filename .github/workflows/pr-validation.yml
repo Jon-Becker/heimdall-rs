@@ -57,7 +57,8 @@ jobs:
             // Check each section has content beyond the template comments
             const errors = [];
             for (const section of sections) {
-              const sectionRegex = new RegExp(`## ${section}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`, 'm');
+              const escapedSection = section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const sectionRegex = new RegExp(`## ${escapedSection}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`, 'm');
               const match = body.match(sectionRegex);
 
               if (!match) {
