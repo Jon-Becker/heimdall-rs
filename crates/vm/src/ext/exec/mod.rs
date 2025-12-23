@@ -52,6 +52,19 @@ pub struct VMTrace {
     pub detected_loops: Vec<LoopInfo>,
 }
 
+/// Collect detected loops from a child trace into the parent's loop list.
+/// Only adds loops that aren't already present (by header_pc and condition_pc).
+fn collect_child_loops(child: &VMTrace, parent_loops: &mut Vec<LoopInfo>) {
+    for loop_info in &child.detected_loops {
+        let already_exists = parent_loops.iter().any(|l| {
+            l.header_pc == loop_info.header_pc && l.condition_pc == loop_info.condition_pc
+        });
+        if !already_exists {
+            parent_loops.push(loop_info.clone());
+        }
+    }
+}
+
 impl VM {
     /// Run symbolic execution on a given function selector within a contract
     pub fn symbolic_exec_selector(
@@ -436,8 +449,7 @@ impl VM {
                         last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => {
-                            // Propagate detected loops from child to parent
-                            vm_trace.detected_loops.extend(child_trace.detected_loops.clone());
+                            collect_child_loops(&child_trace, &mut vm_trace.detected_loops);
                             vm_trace.children.push(child_trace);
                         }
                         Ok(None) => {}
@@ -450,8 +462,7 @@ impl VM {
                     // push the current path onto the stack
                     match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => {
-                            // Propagate detected loops from child to parent
-                            vm_trace.detected_loops.extend(child_trace.detected_loops.clone());
+                            collect_child_loops(&child_trace, &mut vm_trace.detected_loops);
                             vm_trace.children.push(child_trace);
                         }
                         Ok(None) => {}
@@ -467,8 +478,7 @@ impl VM {
                     trace_vm.instruction = last_instruction.instruction + 1;
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => {
-                            // Propagate detected loops from child to parent
-                            vm_trace.detected_loops.extend(child_trace.detected_loops.clone());
+                            collect_child_loops(&child_trace, &mut vm_trace.detected_loops);
                             vm_trace.children.push(child_trace);
                         }
                         Ok(None) => {}
@@ -481,8 +491,7 @@ impl VM {
                     // push the current path onto the stack
                     match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => {
-                            // Propagate detected loops from child to parent
-                            vm_trace.detected_loops.extend(child_trace.detected_loops.clone());
+                            collect_child_loops(&child_trace, &mut vm_trace.detected_loops);
                             vm_trace.children.push(child_trace);
                         }
                         Ok(None) => {}

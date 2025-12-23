@@ -1,7 +1,7 @@
 use std::{fmt::Display, time::Instant};
 
 use futures::future::BoxFuture;
-use heimdall_vm::ext::exec::VMTrace;
+use heimdall_vm::ext::exec::{LoopInfo, VMTrace};
 use tracing::debug;
 
 use crate::{
@@ -136,7 +136,7 @@ impl Analyzer {
         };
 
         // Perform analysis
-        self.analyze_inner(&trace_root, &mut analyzer_state).await?;
+        self.analyze_inner(&trace_root, &mut analyzer_state, &[]).await?;
 
         debug!(
             "analysis for '{}' completed in {:?}",
@@ -152,15 +152,26 @@ impl Analyzer {
         &'a mut self,
         branch: &'a VMTrace,
         analyzer_state: &'a mut AnalyzerState,
+        parent_loops: &'a [LoopInfo],
     ) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async move {
             // reset jumped conditional, we dont propagate conditionals across branches
             analyzer_state.jumped_conditional = None;
 
+            // Combine parent loops with this branch's loops (avoiding duplicates)
+            let mut all_loops: Vec<LoopInfo> = parent_loops.to_vec();
+            for loop_info in &branch.detected_loops {
+                if !all_loops.iter().any(|l| {
+                    l.header_pc == loop_info.header_pc && l.condition_pc == loop_info.condition_pc
+                }) {
+                    all_loops.push(loop_info.clone());
+                }
+            }
+
             // Debug: Log detected loops for this branch
-            if !branch.detected_loops.is_empty() {
-                debug!("branch has {} detected loops", branch.detected_loops.len());
-                for loop_info in &branch.detected_loops {
+            if !all_loops.is_empty() {
+                debug!("branch has {} detected loops", all_loops.len());
+                for loop_info in &all_loops {
                     debug!(
                         "  loop: header_pc={}, condition_pc={}, condition='{}'",
                         loop_info.header_pc, loop_info.condition_pc, loop_info.condition
@@ -182,14 +193,9 @@ impl Analyzer {
                 }
 
                 // Run loop heuristic FIRST if there are detected loops
-                if !branch.detected_loops.is_empty() {
-                    loop_heuristic(
-                        &mut self.function,
-                        operation,
-                        analyzer_state,
-                        &branch.detected_loops,
-                    )
-                    .await?;
+                if !all_loops.is_empty() {
+                    loop_heuristic(&mut self.function, operation, analyzer_state, &all_loops)
+                        .await?;
                 }
 
                 // Check if we should skip this JUMPI (it's a loop condition)
@@ -205,19 +211,9 @@ impl Analyzer {
             }
 
             // recurse into the children of the current trace branch
-            // Pass detected_loops from parent to children for proper loop structure emission
+            // Pass all_loops to children so they have access to parent loop context
             for child in &branch.children {
-                // Merge parent's detected_loops with child's
-                let mut child_with_loops = child.clone();
-                for loop_info in &branch.detected_loops {
-                    if !child_with_loops.detected_loops.iter().any(|l| {
-                        l.header_pc == loop_info.header_pc &&
-                            l.condition_pc == loop_info.condition_pc
-                    }) {
-                        child_with_loops.detected_loops.push(loop_info.clone());
-                    }
-                }
-                self.analyze_inner(&child_with_loops, analyzer_state).await?;
+                self.analyze_inner(child, analyzer_state, &all_loops).await?;
             }
 
             // check if the ending brackets are needed
