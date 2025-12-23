@@ -3,11 +3,7 @@ use crate::{core::postprocess::PostprocessorState, Error};
 // import postprocessors
 mod arithmetic;
 mod bitwise;
-<<<<<<< Updated upstream
-=======
 mod deadcode;
-mod loops;
->>>>>>> Stashed changes
 mod memory;
 mod storage;
 mod transient;
@@ -16,11 +12,7 @@ mod variable;
 // re-export postprocessors
 pub(crate) use arithmetic::arithmetic_postprocessor;
 pub(crate) use bitwise::bitwise_mask_postprocessor;
-<<<<<<< Updated upstream
-=======
 pub(crate) use deadcode::eliminate_dead_variables;
-pub(crate) use loops::{loop_postprocessor, remove_overflow_checks};
->>>>>>> Stashed changes
 pub(crate) use memory::memory_postprocessor;
 pub(crate) use storage::storage_postprocessor;
 pub(crate) use transient::transient_postprocessor;
