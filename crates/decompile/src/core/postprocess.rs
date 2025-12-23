@@ -10,7 +10,12 @@ use crate::{
     utils::{
         constants::STORAGE_ACCESS_REGEX,
         postprocessors::{
+<<<<<<< Updated upstream
             arithmetic_postprocessor, bitwise_mask_postprocessor, memory_postprocessor,
+=======
+            arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
+            loop_postprocessor, memory_postprocessor, remove_overflow_checks,
+>>>>>>> Stashed changes
             storage_postprocessor, transient_postprocessor, variable_postprocessor, Postprocessor,
         },
     },
@@ -173,6 +178,17 @@ impl PostprocessOrchestrator {
             });
         });
 
+<<<<<<< Updated upstream
+=======
+        // Eliminate dead variable assignments (runs on all lines at once)
+        if matches!(self.typ, AnalyzerType::Solidity) {
+            eliminate_dead_variables(function, &mut state)?;
+        }
+
+        // Remove empty lines that were cleared by postprocessors
+        function.logic.retain(|line| !line.trim().is_empty());
+
+>>>>>>> Stashed changes
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
         state.storage_map.iter().for_each(|(_, v)| {
