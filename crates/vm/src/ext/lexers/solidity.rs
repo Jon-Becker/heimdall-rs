@@ -203,8 +203,13 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode.push_str(self.inputs[1]._solidify().as_str());
             }
             SHA3 => {
+                // SHA3 takes two inputs: offset and size
+                // For mapping slot computation, size is typically 64 bytes (two 32-byte values)
+                // Include size in output to help identify mapping patterns
+                let offset = self.inputs[0]._solidify();
+                let size = self.inputs[1]._solidify();
                 solidified_wrapped_opcode
-                    .push_str(&format!("keccak256(memory[{}])", self.inputs[0]._solidify()));
+                    .push_str(&format!("keccak256(memory[{}:{}])", offset, size));
             }
             ADDRESS => {
                 solidified_wrapped_opcode.push_str("address(this)");

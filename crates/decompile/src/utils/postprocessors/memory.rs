@@ -47,8 +47,17 @@ pub(crate) fn memory_postprocessor(
     if line.trim().starts_with("var_") && line.contains(" = ") {
         let assignment: Vec<String> =
             line.split(" = ").collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();
-        state.variable_map.insert(assignment[0].clone(), assignment[1].replace(';', ""));
+        let value = assignment[1].replace(';', "");
         let var_name = assignment[0].clone();
+
+        // Track history of all values assigned to this variable (for nested mapping detection)
+        state
+            .variable_history
+            .entry(var_name.clone())
+            .or_insert_with(Vec::new)
+            .push(value.clone());
+
+        state.variable_map.insert(var_name.clone(), value);
 
         // infer the type from args and vars in the expression
         for (var, var_type) in state.memory_type_map.iter() {

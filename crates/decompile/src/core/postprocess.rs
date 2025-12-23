@@ -27,6 +27,8 @@ pub(crate) struct PostprocessorState {
     pub memory_map: HashMap<String, String>,
     /// A mapping which holds the last assigned value for a given variable
     pub variable_map: HashMap<String, String>,
+    /// A history of all values assigned to each variable (for nested mapping detection)
+    pub variable_history: HashMap<String, Vec<String>>,
     /// A mapping which holds inferred types for memory variables
     pub memory_type_map: HashMap<String, String>,
     /// A mapping from storage locations to their corresponding variable names
@@ -68,6 +70,15 @@ impl PostprocessOrchestrator {
     pub(crate) fn register_passes(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
+                // Debug pass to print raw logic (uncomment for debugging)
+                // self.passes.push(Pass::function_level(|f, _s| {
+                //     eprintln!("RAW LOGIC for {}:", f.selector);
+                //     for line in &f.logic {
+                //         eprintln!("  {}", line);
+                //     }
+                //     Ok(())
+                // }));
+
                 // Line-level postprocessors that run on each line
                 self.passes.push(Pass::line_level(vec![
                     bitwise_mask_postprocessor,
