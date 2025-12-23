@@ -5,17 +5,23 @@ the requirements below.
 Bug fixes and new features should include tests.
 -->
 
-## Motivation
+## What changed? Why?
 
 <!--
-Explain the context and why you're making that change. What is the problem
-you're trying to solve? In some cases there is not a problem and this can be
-thought of as being the motivation for your change.
+Please provide a summary of the changes and the related issue.
+If it fixes a bug or resolves a feature request, be sure to link to that issue.
+If you have relevant screenshots, please add them here.
 -->
 
-## Solution
+## Notes to reviewers
 
 <!--
-Summarize the solution and provide any necessary context needed to understand
-the code change.
+Please list the key files changed or added as part of this PR.
+-->
+
+## How has it been tested?
+
+<!--
+Please describe the tests that you ran to verify your changes.
+Include screenshots if appropriate.
 -->

@@ -1,0 +1,121 @@
+name: eval
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  eval:
+    name: run eval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout heimdall-rs (PR branch)
+        uses: actions/checkout@v4
+
+      - name: Checkout heimdall-eval
+        uses: actions/checkout@v4
+        with:
+          repository: Jon-Becker/heimdall-eval
+          path: heimdall-eval
+          token: ${{ secrets.EVAL_REPO_TOKEN }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Build heimdall
+        run: cargo build --release --bin heimdall
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Add heimdall to PATH
+        run: echo "${{ github.workspace }}/target/release" >> $GITHUB_PATH
+
+      - name: Run evals
+        working-directory: heimdall-eval
+        run: make run-all
+
+      - name: Run AI evaluation
+        working-directory: heimdall-eval
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          make eval-all
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const evalsJson = JSON.parse(fs.readFileSync('heimdall-eval/heimdall/evals.json', 'utf8'));
+
+            const entries = Object.entries(evalsJson);
+            const cfgScores = entries.map(([_, v]) => v.cfg).filter(x => x != null);
+            const decompScores = entries.map(([_, v]) => v.decompilation).filter(x => x != null);
+
+            const avgCfg = cfgScores.length ? Math.floor(cfgScores.reduce((a, b) => a + b, 0) / cfgScores.length) : 'N/A';
+            const avgDecomp = decompScores.length ? Math.floor(decompScores.reduce((a, b) => a + b, 0) / decompScores.length) : 'N/A';
+
+            const icon = avgDecomp >= 70 ? ':white_check_mark:' : (avgDecomp >= 50 ? ':warning:' : ':x:');
+
+            let tableRows = entries.map(([name, scores]) => {
+              const cfg = scores.cfg ?? 'N/A';
+              const decomp = scores.decompilation ?? 'N/A';
+              return `| ${name} | ${cfg} | ${decomp} |`;
+            }).join('\n');
+
+            const body = `## ${icon} Eval Report for ${context.sha}
+
+            | Test Case | CFG | Decompilation |
+            |-----------|-----|---------------|
+            ${tableRows}
+            | **Average** | **${avgCfg}** | **${avgDecomp}** |`;
+
+            // Delete old eval comments
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const evalComments = comments.filter(
+              c => c.user.login === 'github-actions[bot]' && c.body.includes('Eval Report for')
+            );
+
+            for (const comment of evalComments) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: comment.id,
+              });
+            }
+
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+      - name: Upload eval artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: |
+            heimdall-eval/heimdall/*/eval.json
+            heimdall-eval/heimdall/*/cfg_eval.json
+            heimdall-eval/heimdall/evals.json
