@@ -1,0 +1,36 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  pr-title:
+    name: Code Quality (PR Title)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR Title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const pattern = /^(feat|fix|perf|chore|refactor|deps|docs|test|ci|build|style|revert)(\(.+\))?: .+$/;
+
+            if (!pattern.test(title)) {
+              core.setFailed(`PR title "${title}" does not follow conventional commit format.\n\nExpected format: <type>(<scope>): <description> or <type>: <description>\n\nValid types: feat, fix, perf, chore, refactor, deps, docs, test, ci, build, style, revert\n\nExamples:\n  feat(decompile): add new feature\n  feat: some change\n  deps(vm): bump dependency`);
+            }
+
+  pr-description:
+    name: Code Quality (PR Description)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR Description
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const trimmed = body.trim();
+
+            if (!trimmed || trimmed.length < 10) {
+              core.setFailed('PR description is required and must be at least 10 characters long. Please provide a meaningful description of your changes.');
+            }
