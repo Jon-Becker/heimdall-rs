@@ -72,20 +72,14 @@ jobs:
 
             const icon = avgDecomp >= 70 ? ':white_check_mark:' : (avgDecomp >= 50 ? ':warning:' : ':x:');
 
-            // Separate passing and low-scoring evals
-            const passingEntries = entries.filter(([_, scores]) => {
-              const cfg = scores.cfg ?? null;
-              const decomp = scores.decompilation ?? null;
-              return (cfg == null || cfg >= 70) && (decomp == null || decomp >= 70);
-            });
-
+            // Identify low-scoring evals for detailed breakdown
             const lowScoringEntries = entries.filter(([_, scores]) => {
               const cfg = scores.cfg ?? null;
               const decomp = scores.decompilation ?? null;
               return (cfg != null && cfg < 70) || (decomp != null && decomp < 70);
             });
 
-            let tableRows = passingEntries.map(([name, scores]) => {
+            let tableRows = entries.map(([name, scores]) => {
               const cfg = scores.cfg ?? 'N/A';
               const decomp = scores.decompilation ?? 'N/A';
               return `| ${name} | ${cfg} | ${decomp} |`;
