@@ -70,15 +70,6 @@ impl PostprocessOrchestrator {
     pub(crate) fn register_passes(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
-                // Debug pass to print raw logic (uncomment for debugging)
-                // self.passes.push(Pass::function_level(|f, _s| {
-                //     eprintln!("RAW LOGIC for {}:", f.selector);
-                //     for line in &f.logic {
-                //         eprintln!("  {}", line);
-                //     }
-                //     Ok(())
-                // }));
-
                 // Line-level postprocessors that run on each line
                 self.passes.push(Pass::line_level(vec![
                     bitwise_mask_postprocessor,

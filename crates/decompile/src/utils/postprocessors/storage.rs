@@ -184,8 +184,57 @@ pub(crate) fn storage_postprocessor(
                 .ok_or_else(|| eyre!("failed to extract storage location"))?
         );
 
-        let variable_name = match state.storage_map.get(&storage_loc) {
-            Some(loc) => loc.to_owned(),
+        // For nested mappings, we need to extract keys for the current function's context
+        // even if we've seen this storage location before. The base variable name is shared,
+        // but the keys depend on what was stored in memory in THIS function.
+        let existing_base_name = state.storage_map.get(&storage_loc).map(|loc| {
+            // Extract the base name (e.g., "storage_map_a" from "storage_map_a[x][y]")
+            loc.split('[').next().unwrap_or(loc).to_string()
+        });
+
+        let variable_name = match existing_base_name {
+            Some(base_name) if storage_loc.contains("keccak256") => {
+                // Extract keys for the current function's context
+                let mut inner_key = String::new();
+                let mut outer_key = String::new();
+                let mut is_nested = false;
+
+                // Check if the variable at memory[0x20] contains a keccak256 result
+                if let Some(var_name) = state.memory_map.get("memory[0x20]") {
+                    if let Some(var_value) = state.variable_map.get(var_name) {
+                        if var_value.contains("keccak256") {
+                            if let Some(mem0_var) = state.memory_map.get("memory[0]") {
+                                if let Some(history) = state.variable_history.get(mem0_var) {
+                                    if history.len() >= 2 {
+                                        is_nested = true;
+                                        inner_key = history[0].clone();
+                                        outer_key = history[history.len() - 1].clone();
+
+                                        // Clean up address() wrapping
+                                        if inner_key.starts_with("address(") && inner_key.ends_with(")") {
+                                            inner_key = inner_key[8..inner_key.len()-1].to_string();
+                                        }
+                                        if outer_key.starts_with("address(") && outer_key.ends_with(")") {
+                                            outer_key = outer_key[8..outer_key.len()-1].to_string();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if is_nested {
+                    format!("{}[{}][{}]", base_name, inner_key, outer_key)
+                } else {
+                    // Fallback to existing behavior
+                    state.storage_map.get(&storage_loc).unwrap().clone()
+                }
+            }
+            Some(_) => {
+                // Not a keccak256-based storage, reuse existing name
+                state.storage_map.get(&storage_loc).unwrap().clone()
+            }
             None => {
                 let i = state.storage_map.len() + 1;
 

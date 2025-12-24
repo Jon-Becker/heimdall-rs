@@ -100,11 +100,24 @@ pub(super) fn jump_condition_appears_recursive(
     jump_condition: &str,
 ) -> bool {
     // check if the jump condition appears in the stack diff more than once, this is likely a loop
-    if stack_diff
-        .iter()
-        .map(|frame| frame.operation.solidify())
-        .any(|solidified| jump_condition.contains(&solidified))
-    {
+    // Only consider matches that are:
+    // 1. At least 16 characters long (to avoid matching short common strings like "arg0", "0x0")
+    // 2. Not just simple variable references or constants
+    if stack_diff.iter().map(|frame| frame.operation.solidify()).any(|solidified| {
+        // Skip very short or simple matches that are likely false positives
+        if solidified.len() < 16 {
+            return false;
+        }
+        // Skip if it's just a simple variable, argument, or constant
+        if solidified.starts_with("arg")
+            || solidified.starts_with("var_")
+            || solidified.starts_with("0x")
+            || solidified.parse::<u64>().is_ok()
+        {
+            return false;
+        }
+        jump_condition.contains(&solidified)
+    }) {
         trace!("jump matches loop-detection heuristic: 'jump_condition_appears_recursive'");
         return true;
     }
