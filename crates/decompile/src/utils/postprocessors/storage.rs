@@ -107,13 +107,6 @@ fn count_keccak_depth(s: &str) -> usize {
     count
 }
 
-/// Checks if a variable contains or is derived from a keccak256 result
-fn is_keccak_derived(var: &str, state: &PostprocessorState) -> bool {
-    if let Some(value) = state.variable_map.get(var) {
-        return value.contains("keccak256");
-    }
-    false
-}
 
 /// Handles converting storage operations to variables. For example:
 /// - `storage[0x20]` would become `store_a`, and so on.
@@ -184,10 +177,45 @@ pub(crate) fn storage_postprocessor(
                 .ok_or_else(|| eyre!("failed to extract storage location"))?
         );
 
+        // For mappings, differentiate based on nesting:
+        // - Simple mappings (balanceOf): memory[0x20] contains slot number
+        // - Nested mappings (allowance): memory[0x20] contains keccak256 result
+        //
+        // Check if the variable at memory[0x20] contains a keccak256 result
+        let is_nested = if storage_loc.contains("keccak256") {
+            if let Some(mem20_var) = state.memory_map.get("memory[0x20]") {
+                if let Some(var_value) = state.variable_map.get(mem20_var) {
+                    var_value.contains("keccak256")
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        // Create a normalized storage key that doesn't depend on function-specific variable names.
+        // Different functions assign different names (var_c, var_d) to memory[0:0x40], but the
+        // same logical storage slot should use the same variable name across functions.
+        //
+        // For keccak256-based storage: normalize to "keccak256_simple" or "keccak256_nested"
+        // For direct storage: use the raw storage_loc
+        let storage_key = if storage_loc.contains("keccak256") {
+            if is_nested {
+                "keccak256_nested".to_string()
+            } else {
+                "keccak256_simple".to_string()
+            }
+        } else {
+            storage_loc.clone()
+        };
+
         // For nested mappings, we need to extract keys for the current function's context
         // even if we've seen this storage location before. The base variable name is shared,
         // but the keys depend on what was stored in memory in THIS function.
-        let existing_base_name = state.storage_map.get(&storage_loc).map(|loc| {
+        let existing_base_name = state.storage_map.get(&storage_key).map(|loc| {
             // Extract the base name (e.g., "storage_map_a" from "storage_map_a[x][y]")
             loc.split('[').next().unwrap_or(loc).to_string()
         });
@@ -227,13 +255,30 @@ pub(crate) fn storage_postprocessor(
                 if is_nested {
                     format!("{}[{}][{}]", base_name, inner_key, outer_key)
                 } else {
-                    // Fallback to existing behavior
-                    state.storage_map.get(&storage_loc).unwrap().clone()
+                    // For simple mappings, extract the key from memory[0] for the current function
+                    let mut simple_key = String::new();
+                    if let Some(mem0_var) = state.memory_map.get("memory[0]") {
+                        if let Some(history) = state.variable_history.get(mem0_var) {
+                            if let Some(key) = history.last() {
+                                simple_key = key.clone();
+                                // Clean up address() wrapping
+                                if simple_key.starts_with("address(") && simple_key.ends_with(")") {
+                                    simple_key = simple_key[8..simple_key.len()-1].to_string();
+                                }
+                            }
+                        }
+                    }
+                    if !simple_key.is_empty() {
+                        format!("{}[{}]", base_name, simple_key)
+                    } else {
+                        // Fallback to existing behavior
+                        state.storage_map.get(&storage_key).unwrap().clone()
+                    }
                 }
             }
             Some(_) => {
                 // Not a keccak256-based storage, reuse existing name
-                state.storage_map.get(&storage_loc).unwrap().clone()
+                state.storage_map.get(&storage_key).unwrap().clone()
             }
             None => {
                 let i = state.storage_map.len() + 1;
@@ -255,6 +300,7 @@ pub(crate) fn storage_postprocessor(
                     let mut is_nested = false;
                     let mut inner_key = String::new();
                     let mut outer_key = String::new();
+                    let mut simple_key = String::new();
 
                     // The memory postprocessor runs before storage, so memory[0x20] has been
                     // converted to a variable name. We need to look in memory_map to find the
@@ -289,6 +335,23 @@ pub(crate) fn storage_postprocessor(
                                                 outer_key = outer_key[8..outer_key.len()-1].to_string();
                                             }
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // For simple mappings (single keccak256), look up the key from memory[0]
+                    // The key is stored at memory[0] before the keccak256 is computed
+                    if !is_nested {
+                        if let Some(mem0_var) = state.memory_map.get("memory[0]") {
+                            if let Some(history) = state.variable_history.get(mem0_var) {
+                                if !history.is_empty() {
+                                    // Get the most recent value assigned to memory[0]
+                                    simple_key = history[history.len() - 1].clone();
+                                    // Clean up address() wrapping
+                                    if simple_key.starts_with("address(") && simple_key.ends_with(")") {
+                                        simple_key = simple_key[8..simple_key.len()-1].to_string();
                                     }
                                 }
                             }
@@ -331,6 +394,12 @@ pub(crate) fn storage_postprocessor(
                         }
                     }
 
+                    // If we have a simple key from memory[0], use it
+                    if !is_nested && !simple_key.is_empty() && expanded_keys.len() <= 1 {
+                        expanded_keys.clear();
+                        expanded_keys.push(simple_key);
+                    }
+
                     let variable_name = if expanded_keys.len() > 1 {
                         // Nested mapping: generate multi-level indexing
                         // Keys are in order [inner_key, outer_key, ...]
@@ -353,14 +422,14 @@ pub(crate) fn storage_postprocessor(
                         )
                     };
 
-                    // add the variable to the map
-                    state.storage_map.insert(storage_loc.clone(), variable_name.clone());
+                    // add the variable to the map using the composite key
+                    state.storage_map.insert(storage_key.clone(), variable_name.clone());
                     variable_name
                 } else {
                     let variable_name = format!("store_{}", base26_encode(i));
 
-                    // add the variable to the map
-                    state.storage_map.insert(storage_loc.clone(), variable_name.clone());
+                    // add the variable to the map using the composite key
+                    state.storage_map.insert(storage_key.clone(), variable_name.clone());
                     variable_name
                 }
             }
@@ -381,13 +450,19 @@ pub(crate) fn storage_postprocessor(
         state.variable_map.insert(assignment[0].clone(), assignment[1].replace(';', ""));
 
         // storage loc can be found by searching for the key where value = assignment[0]
+        // For nested mappings, we need to match by base name since the exact keys may differ
+        let base_name = assignment[0].split('[').next().unwrap_or(&assignment[0]);
         let mut storage_loc = state
             .storage_map
             .iter()
-            .find(|(_, value)| value == &&assignment[0])
+            .find(|(_, value)| {
+                let value_base = value.split('[').next().unwrap_or(value);
+                value_base == base_name || *value == &assignment[0]
+            })
             .map(|(key, _)| key.clone())
             .unwrap_or(String::new());
-        let mut var_name = assignment[0].clone();
+        // Always extract the base variable name (without keys) for type mapping
+        let var_name = base_name.to_string();
 
         // if the storage_slot is a variable, replace it with the value
         // ex: storage[var_b] => storage[keccak256(var_a)]
@@ -402,14 +477,12 @@ pub(crate) fn storage_postprocessor(
         }
 
         // default type is bytes32, since it technically can hold any type
-        let mut lhs_type = "bytes32".to_string();
+        let lhs_type = "bytes32".to_string();
         let mut rhs_type = "bytes32".to_string();
 
         // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull
         // types from both the lhs and rhs
         if storage_loc.contains("keccak256") {
-            var_name = var_name.split('[').collect::<Vec<&str>>()[0].to_string();
-
             // Extract keys from the variable name itself (e.g., storage_map_a[msg.sender][arg0])
             // This is more reliable than parsing the storage location for nested mappings
             let var_with_keys = assignment[0].clone();
@@ -455,17 +528,28 @@ pub(crate) fn storage_postprocessor(
                     }
                 }
 
-                // find type for rhs (the value being stored)
-                for (var, var_type) in state.memory_type_map.iter() {
-                    if rhs.contains(var) && !var_type.is_empty() {
-                        rhs_type = var_type.to_string();
-                        break;
-                    }
-                }
-                if rhs_type == "bytes32" &&
-                    ["+", "-", "/", "*"].iter().any(|op| rhs.contains(op))
-                {
+                // If the rhs contains arithmetic operators, the value type is uint256
+                // This check should run FIRST to avoid incorrectly inferring address/other types
+                // from variables that appear in the arithmetic expression
+                if ["+", "-", "/", "*"].iter().any(|op| rhs.contains(op)) {
                     rhs_type = "uint256".to_string();
+                } else {
+                    // find type for rhs (the value being stored)
+                    // Only check for explicit value types, not address types from msg.sender etc.
+                    // that might appear on the rhs as part of storage accesses
+                    for (var, var_type) in state.memory_type_map.iter() {
+                        // Skip sender/origin/coinbase which are address types that appear in
+                        // storage access patterns but don't indicate the VALUE type
+                        if (var == ".sender" || var == ".origin" || var == ".coinbase") &&
+                            var_type == "address"
+                        {
+                            continue;
+                        }
+                        if rhs.contains(var) && !var_type.is_empty() {
+                            rhs_type = var_type.to_string();
+                            break;
+                        }
+                    }
                 }
             }
 
@@ -483,7 +567,19 @@ pub(crate) fn storage_postprocessor(
                 format!("mapping({lhs_type} => {rhs_type})")
             };
 
-            state.storage_type_map.insert(var_name, mapping_type);
+            // Only update type if new type has more nesting or is not yet set
+            // This prevents simple accesses from overwriting nested mapping types
+            let should_update = if let Some(existing) = state.storage_type_map.get(&var_name) {
+                // Count nesting levels by counting "mapping(" occurrences
+                let existing_depth = existing.matches("mapping(").count();
+                let new_depth = mapping_type.matches("mapping(").count();
+                new_depth >= existing_depth
+            } else {
+                true
+            };
+            if should_update {
+                state.storage_type_map.insert(var_name, mapping_type);
+            }
         } else {
             // this is just a normal storage variable, so we can get the type of the rhs from
             // variable type map inheritance
@@ -495,6 +591,68 @@ pub(crate) fn storage_postprocessor(
 
             // add to type map
             state.storage_type_map.insert(var_name, rhs_type);
+        }
+    }
+
+    // Also infer types from return statements like "return storage_map_a[key];"
+    // This handles view functions that only read from storage without assignments
+    if line.trim().starts_with("return ") && line.contains("storage_map_") {
+        // Extract the storage variable from the return statement
+        // e.g., "return storage_map_d[arg0];" -> "storage_map_d[arg0]"
+        let return_expr = line.trim().trim_start_matches("return ").trim_end_matches(';').trim();
+
+        if let Some(bracket_pos) = return_expr.find('[') {
+            let base_name = &return_expr[..bracket_pos];
+            if base_name.starts_with("storage_map_") {
+                // Only update type if not already set (don't overwrite better types from assignments)
+                if !state.storage_type_map.contains_key(base_name) {
+                    // Extract keys from the expression
+                    let mut keys: Vec<String> = Vec::new();
+                    let mut remaining = &return_expr[bracket_pos..];
+                    while remaining.starts_with('[') {
+                        if let Ok(range) = find_balanced_encapsulator(remaining, ('[', ']')) {
+                            if let Some(key) = remaining.get(range.clone()) {
+                                keys.push(key.to_string());
+                            }
+                            remaining = &remaining[range.end + 1..];
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Infer key types from memory_type_map
+                    let mut key_types: Vec<String> = vec!["bytes32".to_string(); keys.len().max(1)];
+                    for (i, key) in keys.iter().enumerate() {
+                        for (var, var_type) in state.memory_type_map.iter() {
+                            if key.contains(var) && !var_type.is_empty() {
+                                if i < key_types.len() {
+                                    key_types[i] = var_type.to_string();
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    // For view functions returning storage values, default to uint256
+                    // as it's the most common value type for mappings
+                    let value_type = "uint256".to_string();
+
+                    // Build the mapping type
+                    let mapping_type = if key_types.len() > 1 {
+                        let mut nested = value_type;
+                        for key_type in key_types.iter().rev() {
+                            nested = format!("mapping({key_type} => {nested})");
+                        }
+                        nested
+                    } else if !key_types.is_empty() {
+                        format!("mapping({} => {})", key_types[0], value_type)
+                    } else {
+                        format!("mapping(bytes32 => {value_type})")
+                    };
+
+                    state.storage_type_map.insert(base_name.to_string(), mapping_type);
+                }
+            }
         }
     }
 
