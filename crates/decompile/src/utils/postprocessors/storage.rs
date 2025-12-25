@@ -7,7 +7,26 @@ use crate::{
     Error,
 };
 
-/// Extracts all mapping keys from a storage location containing nested keccak256 calls.
+/// Expands variables in a string using the variable_map, iteratively resolving references.
+/// Returns the expanded string.
+fn expand_variables(s: &str, state: &PostprocessorState) -> String {
+    let mut expanded = s.to_string();
+    for _ in 0..10 {
+        let mut changed = false;
+        for (var, value) in state.variable_map.iter() {
+            if expanded.contains(var) {
+                expanded = expanded.replace(var, value);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    expanded
+}
+
+/// Extracts all mapping keys from an already-expanded storage location containing nested keccak256 calls.
 /// For nested mappings like `storage[keccak256(outer . keccak256(inner . slot))]`,
 /// this extracts the keys in order: [inner_key, outer_key]
 ///
@@ -18,28 +37,11 @@ use crate::{
 /// So for `allowances[owner][spender]`:
 /// - Inner: keccak256(owner . 0) - the slot for allowances[owner]
 /// - Outer: keccak256(spender . inner_result) - the final slot
-fn extract_mapping_keys(storage_loc: &str, state: &PostprocessorState) -> Vec<String> {
+///
+/// NOTE: The caller must pass an already-expanded string (use expand_variables first).
+fn extract_mapping_keys_from_expanded(expanded: &str) -> Vec<String> {
     let mut keys = Vec::new();
-
-    // First, expand any variables in the storage location to see nested patterns
-    // This includes expanding variables that might contain keccak256 results
-    let mut expanded = storage_loc.to_string();
-    let mut changed = true;
-    let mut iterations = 0;
-    while changed && iterations < 10 {
-        changed = false;
-        iterations += 1;
-        for (var, value) in state.variable_map.iter() {
-            if expanded.contains(var) {
-                expanded = expanded.replace(var, value);
-                changed = true;
-            }
-        }
-    }
-
-    // Now extract all keccak256 arguments
-    extract_keccak_keys_recursive(&expanded, &mut keys);
-
+    extract_keccak_keys_recursive(expanded, &mut keys);
     keys
 }
 
@@ -96,16 +98,6 @@ fn extract_keccak_keys_recursive(s: &str, keys: &mut Vec<String>) {
     }
 }
 
-/// Counts the nesting depth of keccak256 calls
-fn count_keccak_depth(s: &str) -> usize {
-    let mut count = 0;
-    let mut search = s;
-    while let Some(pos) = search.find("keccak256") {
-        count += 1;
-        search = &search[pos + 9..];
-    }
-    count
-}
 
 /// Handles converting storage operations to variables. For example:
 /// - `storage[0x20]` would become `store_a`, and so on.
@@ -374,30 +366,11 @@ pub(crate) fn storage_postprocessor(
                         }
                     }
 
-                    // Also check expanded form for nested patterns from variable_map
-                    let mut expanded_loc = storage_loc.clone();
-                    let mut changed = true;
-                    let mut iterations = 0;
-                    while changed && iterations < 10 {
-                        changed = false;
-                        iterations += 1;
-                        for (var, value) in state.variable_map.iter() {
-                            if expanded_loc.contains(var) {
-                                expanded_loc = expanded_loc.replace(var, value);
-                                changed = true;
-                            }
-                        }
-                    }
+                    // Expand variables once and reuse
+                    let expanded_loc = expand_variables(&storage_loc, state);
 
-                    let depth = count_keccak_depth(&storage_loc);
-                    let expanded_depth = count_keccak_depth(&expanded_loc);
-
-                    let keys = extract_mapping_keys(&storage_loc, state);
-                    let mut expanded_keys = if expanded_depth > depth {
-                        extract_mapping_keys(&expanded_loc, state)
-                    } else {
-                        keys.clone()
-                    };
+                    // Extract keys from the expanded form only (most complete view)
+                    let mut expanded_keys = extract_mapping_keys_from_expanded(&expanded_loc);
 
                     // If we detected a nested mapping but didn't extract keys, add them
                     if is_nested && expanded_keys.len() < 2 {
@@ -519,7 +492,8 @@ pub(crate) fn storage_postprocessor(
 
             // Fallback to extract_mapping_keys if no keys found from variable name
             if keys.is_empty() {
-                keys = extract_mapping_keys(&storage_loc, state);
+                let expanded = expand_variables(&storage_loc, state);
+                keys = extract_mapping_keys_from_expanded(&expanded);
             }
 
             let mut key_types: Vec<String> = vec!["bytes32".to_string(); keys.len().max(1)];
