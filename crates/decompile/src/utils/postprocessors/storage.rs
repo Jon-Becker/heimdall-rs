@@ -52,7 +52,7 @@ fn extract_keccak_keys_recursive(s: &str, keys: &mut Vec<String>) {
     // Find keccak256( and extract its argument
     if let Some(keccak_start) = s.find("keccak256(") {
         if let Ok(arg_range) = find_balanced_encapsulator(&s[keccak_start..], ('(', ')')) {
-            let arg = &s[keccak_start..][arg_range.clone()];
+            let arg = &s[keccak_start..][arg_range];
 
             // Check if this argument contains a nested keccak256
             if arg.contains("keccak256") {
@@ -79,7 +79,7 @@ fn extract_keccak_keys_recursive(s: &str, keys: &mut Vec<String>) {
                 // Handle both formats: "memory[offset]" and "memory[offset:size]"
                 // Extract the key (excluding the storage slot which is typically 0 or 0x00)
                 // Format is usually "key . slot" or "key + slot" or "memory[...]"
-                let parts: Vec<&str> = arg.split(|c| c == '.' || c == '+').collect();
+                let parts: Vec<&str> = arg.split(['.', '+']).collect();
                 if !parts.is_empty() {
                     let key = parts[0].trim().trim_matches(|c: char| c == '(' || c == ')');
                     // Skip if the key is just a slot number or memory reference
@@ -569,7 +569,7 @@ pub(crate) fn storage_postprocessor(
             // Build the mapping type, with nesting for multiple keys
             // For keys [k1, k2], generate: mapping(k1_type => mapping(k2_type => value_type))
             let mapping_type = if key_types.len() > 1 {
-                let mut nested = rhs_type.clone();
+                let mut nested = rhs_type;
                 for key_type in key_types.iter().rev() {
                     nested = format!("mapping({key_type} => {nested})");
                 }
