@@ -83,10 +83,10 @@ fn extract_keccak_keys_recursive(s: &str, keys: &mut Vec<String>) {
                 if !parts.is_empty() {
                     let key = parts[0].trim().trim_matches(|c: char| c == '(' || c == ')');
                     // Skip if the key is just a slot number or memory reference
-                    if !key.is_empty()
-                        && key != "0"
-                        && !key.starts_with("0x0")
-                        && !key.starts_with("memory[")
+                    if !key.is_empty() &&
+                        key != "0" &&
+                        !key.starts_with("0x0") &&
+                        !key.starts_with("memory[")
                     {
                         keys.push(key.to_string());
                     }
@@ -106,7 +106,6 @@ fn count_keccak_depth(s: &str) -> usize {
     }
     count
 }
-
 
 /// Handles converting storage operations to variables. For example:
 /// - `storage[0x20]` would become `store_a`, and so on.
@@ -162,14 +161,15 @@ pub(crate) fn storage_postprocessor(
         }
     }
 
-    // find a storage access
-    let storage_access = match STORAGE_ACCESS_REGEX.find(line).unwrap_or(None) {
-        Some(x) => x.as_str(),
-        None => "",
-    };
+    // Process all storage accesses in the line iteratively to avoid stack overflow
+    while let Some(matched) = STORAGE_ACCESS_REGEX.find(line).unwrap_or(None) {
+        let storage_access = matched.as_str().to_string();
 
-    // handle a single storage access
-    if let Ok(storage_range) = find_balanced_encapsulator(storage_access, ('[', ']')) {
+        // handle a single storage access
+        let storage_range = match find_balanced_encapsulator(&storage_access, ('[', ']')) {
+            Ok(range) => range,
+            Err(_) => break, // Can't parse, exit loop
+        };
         let storage_loc = format!(
             "storage[{}]",
             storage_access
@@ -239,11 +239,17 @@ pub(crate) fn storage_postprocessor(
                                         outer_key = history[history.len() - 1].clone();
 
                                         // Clean up address() wrapping
-                                        if inner_key.starts_with("address(") && inner_key.ends_with(")") {
-                                            inner_key = inner_key[8..inner_key.len()-1].to_string();
+                                        if inner_key.starts_with("address(") &&
+                                            inner_key.ends_with(")")
+                                        {
+                                            inner_key =
+                                                inner_key[8..inner_key.len() - 1].to_string();
                                         }
-                                        if outer_key.starts_with("address(") && outer_key.ends_with(")") {
-                                            outer_key = outer_key[8..outer_key.len()-1].to_string();
+                                        if outer_key.starts_with("address(") &&
+                                            outer_key.ends_with(")")
+                                        {
+                                            outer_key =
+                                                outer_key[8..outer_key.len() - 1].to_string();
                                         }
                                     }
                                 }
@@ -263,7 +269,7 @@ pub(crate) fn storage_postprocessor(
                                 simple_key = key.clone();
                                 // Clean up address() wrapping
                                 if simple_key.starts_with("address(") && simple_key.ends_with(")") {
-                                    simple_key = simple_key[8..simple_key.len()-1].to_string();
+                                    simple_key = simple_key[8..simple_key.len() - 1].to_string();
                                 }
                             }
                         }
@@ -313,8 +319,9 @@ pub(crate) fn storage_postprocessor(
                     if let Some(var_name) = state.memory_map.get("memory[0x20]") {
                         if let Some(var_value) = state.variable_map.get(var_name) {
                             if var_value.contains("keccak256") {
-                                // The variable at memory[0] (var_a) has been assigned multiple times
-                                // for nested mappings. The history looks like:
+                                // The variable at memory[0] (var_a) has been assigned multiple
+                                // times for nested mappings. The
+                                // history looks like:
                                 //   var_a = msg.sender (first key)
                                 //   var_a = arg0       (second key, overwrites first)
                                 // We need both keys to reconstruct the nested mapping.
@@ -328,11 +335,17 @@ pub(crate) fn storage_postprocessor(
                                             outer_key = history[history.len() - 1].clone();
 
                                             // Clean up address() wrapping for cleaner output
-                                            if inner_key.starts_with("address(") && inner_key.ends_with(")") {
-                                                inner_key = inner_key[8..inner_key.len()-1].to_string();
+                                            if inner_key.starts_with("address(") &&
+                                                inner_key.ends_with(")")
+                                            {
+                                                inner_key =
+                                                    inner_key[8..inner_key.len() - 1].to_string();
                                             }
-                                            if outer_key.starts_with("address(") && outer_key.ends_with(")") {
-                                                outer_key = outer_key[8..outer_key.len()-1].to_string();
+                                            if outer_key.starts_with("address(") &&
+                                                outer_key.ends_with(")")
+                                            {
+                                                outer_key =
+                                                    outer_key[8..outer_key.len() - 1].to_string();
                                             }
                                         }
                                     }
@@ -350,8 +363,11 @@ pub(crate) fn storage_postprocessor(
                                     // Get the most recent value assigned to memory[0]
                                     simple_key = history[history.len() - 1].clone();
                                     // Clean up address() wrapping
-                                    if simple_key.starts_with("address(") && simple_key.ends_with(")") {
-                                        simple_key = simple_key[8..simple_key.len()-1].to_string();
+                                    if simple_key.starts_with("address(") &&
+                                        simple_key.ends_with(")")
+                                    {
+                                        simple_key =
+                                            simple_key[8..simple_key.len() - 1].to_string();
                                     }
                                 }
                             }
@@ -403,10 +419,8 @@ pub(crate) fn storage_postprocessor(
                     let variable_name = if expanded_keys.len() > 1 {
                         // Nested mapping: generate multi-level indexing
                         // Keys are in order [inner_key, outer_key, ...]
-                        let indices = expanded_keys
-                            .iter()
-                            .map(|k| format!("[{}]", k))
-                            .collect::<String>();
+                        let indices =
+                            expanded_keys.iter().map(|k| format!("[{}]", k)).collect::<String>();
                         format!("storage_map_{}{}", base26_encode(i), indices)
                     } else if !expanded_keys.is_empty() {
                         // Single mapping
@@ -435,10 +449,9 @@ pub(crate) fn storage_postprocessor(
             }
         };
 
-        // replace the memory location with the new variable name,
-        // then recurse until no more memory locations are found
+        // replace the storage location with the new variable name,
+        // then continue the loop to handle any remaining storage accesses
         *line = line.replace(storage_loc.as_str(), &variable_name);
-        storage_postprocessor(line, state)?;
     }
 
     // if there is an assignment to a memory variable, save it to variable_map
@@ -604,7 +617,8 @@ pub(crate) fn storage_postprocessor(
         if let Some(bracket_pos) = return_expr.find('[') {
             let base_name = &return_expr[..bracket_pos];
             if base_name.starts_with("storage_map_") {
-                // Only update type if not already set (don't overwrite better types from assignments)
+                // Only update type if not already set (don't overwrite better types from
+                // assignments)
                 if !state.storage_type_map.contains_key(base_name) {
                     // Extract keys from the expression
                     let mut keys: Vec<String> = Vec::new();

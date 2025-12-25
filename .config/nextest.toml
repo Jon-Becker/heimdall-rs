@@ -4,3 +4,11 @@ retries = { backoff = "exponential", count = 2, delay = "2s", jitter = true }
 [[profile.default.overrides]]
 filter = 'test(heavy_integration_test)'
 retries = 0
+
+# Config tests share ~/.bifrost/config.toml and must run serially
+[test-groups.config-serial]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = 'package(heimdall-config) & test(test_)'
+test-group = 'config-serial'

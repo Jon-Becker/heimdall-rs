@@ -109,10 +109,10 @@ pub(super) fn jump_condition_appears_recursive(
             return false;
         }
         // Skip if it's just a simple variable, argument, or constant
-        if solidified.starts_with("arg")
-            || solidified.starts_with("var_")
-            || solidified.starts_with("0x")
-            || solidified.parse::<u64>().is_ok()
+        if solidified.starts_with("arg") ||
+            solidified.starts_with("var_") ||
+            solidified.starts_with("0x") ||
+            solidified.parse::<u64>().is_ok()
         {
             return false;
         }

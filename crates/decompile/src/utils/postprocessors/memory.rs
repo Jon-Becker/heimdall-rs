@@ -51,11 +51,7 @@ pub(crate) fn memory_postprocessor(
         let var_name = assignment[0].clone();
 
         // Track history of all values assigned to this variable (for nested mapping detection)
-        state
-            .variable_history
-            .entry(var_name.clone())
-            .or_insert_with(Vec::new)
-            .push(value.clone());
+        state.variable_history.entry(var_name.clone()).or_insert_with(Vec::new).push(value.clone());
 
         state.variable_map.insert(var_name.clone(), value);
 
