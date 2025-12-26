@@ -5,7 +5,7 @@ use heimdall_vm::{
     core::opcodes::{opcode_name, JUMPDEST},
     ext::exec::VMTrace,
 };
-use petgraph::{matrix_graph::NodeIndex, Graph};
+use petgraph::{graph::NodeIndex, Graph};
 use std::collections::HashSet;
 
 /// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the

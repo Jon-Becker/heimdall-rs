@@ -11,8 +11,8 @@ use crate::{
         constants::STORAGE_ACCESS_REGEX,
         postprocessors::{
             arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
-            memory_postprocessor, remove_empty_lines, storage_postprocessor,
-            transient_postprocessor, variable_postprocessor, Pass,
+            loop_postprocessor, memory_postprocessor, remove_empty_lines, remove_overflow_checks,
+            storage_postprocessor, transient_postprocessor, variable_postprocessor, Pass,
         },
     },
     Error,
@@ -69,13 +69,17 @@ impl PostprocessOrchestrator {
         match self.typ {
             AnalyzerType::Solidity => {
                 // Line-level postprocessors that run on each line
+                // Run overflow check removal early to clean up spurious requires
                 self.passes.push(Pass::line_level(vec![
+                    remove_overflow_checks,
                     bitwise_mask_postprocessor,
                     arithmetic_postprocessor,
                     memory_postprocessor,
                     storage_postprocessor,
                     transient_postprocessor,
                     variable_postprocessor,
+                    // Run loop postprocessor last to rename loop variables
+                    loop_postprocessor,
                 ]));
 
                 // Function-level passes that run on the entire function
@@ -180,6 +184,9 @@ impl PostprocessOrchestrator {
         for pass in &self.passes {
             pass.run(function, &mut state)?;
         }
+
+        // Remove empty lines that were cleared by postprocessors
+        function.logic.retain(|line| !line.trim().is_empty());
 
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
