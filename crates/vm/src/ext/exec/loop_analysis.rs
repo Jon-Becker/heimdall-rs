@@ -2,6 +2,7 @@ use crate::core::stack::StackFrame;
 
 /// Check if a condition is tautologically true (e.g., "arg0 == arg0", "X == (address(X))").
 /// These create infinite loops and should be skipped as invalid loop conditions.
+/// Also handles bitmask patterns like "X == (X & 0xff...ff)" which are type-check equivalents.
 pub(crate) fn is_tautologically_true_condition(condition: &str) -> bool {
     let mut trimmed = condition.trim();
 
@@ -53,8 +54,9 @@ pub(crate) fn is_tautologically_true_condition(condition: &str) -> bool {
     false
 }
 
-/// Normalize an expression for comparison by stripping type casts and parentheses.
+/// Normalize an expression for comparison by stripping type casts, bitmasks, and parentheses.
 /// For example: "address(arg0)" -> "arg0", "(arg0)" -> "arg0"
+/// Also handles bitmask patterns like "(arg0) & (0xff...ff)" which are equivalent to type casts.
 fn normalize_for_comparison(expr: &str) -> String {
     let mut result = expr.trim().to_string();
 
@@ -101,7 +103,51 @@ fn normalize_for_comparison(expr: &str) -> String {
         }
     }
 
+    // Strip bitmask patterns like "(X) & (0xff...ff)" which are type-cast equivalents
+    // These are used by Solidity to ensure values fit in certain types
+    // Common masks:
+    // - 0xffffffffffffffffffffffffffffffffffffffff (160 bits = address)
+    // - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff (256 bits)
+    // - 0xff (8 bits), 0xffff (16 bits), etc.
+    if let Some(and_pos) = result.find(" & ") {
+        let lhs = result[..and_pos].trim();
+        let rhs = result[and_pos + 3..].trim();
+
+        // Check if rhs is a bitmask (all f's hex value)
+        if is_bitmask(rhs) {
+            // Return the normalized lhs (the actual value being masked)
+            return normalize_for_comparison(lhs);
+        }
+        // Also check if lhs is the mask and rhs is the value
+        if is_bitmask(lhs) {
+            return normalize_for_comparison(rhs);
+        }
+    }
+
     result
+}
+
+/// Check if a string represents a bitmask (0xff...ff pattern)
+fn is_bitmask(s: &str) -> bool {
+    let mut trimmed = s.trim();
+
+    // Strip parentheses
+    while trimmed.starts_with('(') && trimmed.ends_with(')') {
+        let inner = &trimmed[1..trimmed.len() - 1];
+        if is_balanced_parens(inner) {
+            trimmed = inner.trim();
+        } else {
+            break;
+        }
+    }
+
+    // Check for hex pattern 0xff...ff
+    if let Some(hex_str) = trimmed.strip_prefix("0x") {
+        // Must be non-empty and all 'f' characters (case insensitive)
+        !hex_str.is_empty() && hex_str.chars().all(|c| c == 'f' || c == 'F')
+    } else {
+        false
+    }
 }
 
 /// Check if parentheses are balanced in a string
@@ -846,6 +892,48 @@ mod tests {
 
         // Nested type casts
         assert_eq!(normalize_for_comparison("address(uint256(arg0))"), "arg0");
+
+        // Bitmask patterns (equivalent to type casts)
+        assert_eq!(
+            normalize_for_comparison("(arg1) & (0xffffffffffffffffffffffffffffffffffffffff)"),
+            "arg1"
+        );
+        assert_eq!(
+            normalize_for_comparison("((arg1) & (0xffffffffffffffffffffffffffffffffffffffff))"),
+            "arg1"
+        );
+        assert_eq!(normalize_for_comparison("arg0 & 0xff"), "arg0");
+        assert_eq!(normalize_for_comparison("(arg0) & (0xffff)"), "arg0");
+    }
+
+    #[test]
+    fn test_is_bitmask() {
+        // Valid bitmasks
+        assert!(is_bitmask("0xff"));
+        assert!(is_bitmask("0xffff"));
+        assert!(is_bitmask("0xffffffffffffffffffffffffffffffffffffffff"));
+        assert!(is_bitmask("(0xff)"));
+        assert!(is_bitmask("((0xffff))"));
+        assert!(is_bitmask("0xFFFF")); // uppercase
+
+        // Invalid bitmasks
+        assert!(!is_bitmask("0x01"));
+        assert!(!is_bitmask("0xfe"));
+        assert!(!is_bitmask("arg0"));
+        assert!(!is_bitmask("0x"));
+        assert!(!is_bitmask(""));
+    }
+
+    #[test]
+    fn test_is_tautologically_true_with_bitmask() {
+        // Bitmask patterns that are tautologically true
+        assert!(is_tautologically_true_condition(
+            "arg1 == ((arg1) & (0xffffffffffffffffffffffffffffffffffffffff))"
+        ));
+        assert!(is_tautologically_true_condition("arg0 == (arg0 & 0xff)"));
+        assert!(is_tautologically_true_condition(
+            "((arg1) & (0xffffffffffffffffffffffffffffffffffffffff)) == arg1"
+        ));
     }
 
     #[test]
