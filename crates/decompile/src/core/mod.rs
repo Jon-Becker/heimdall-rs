@@ -229,7 +229,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // Build a map of selector -> argument count from resolved signatures
     // e.g., "transferFrom(address,address,uint256)" -> 3 arguments
-    // Wrapped in Arc to share across async analysis tasks without cloning
     let selector_arg_counts: Arc<HashMap<String, usize>> = Arc::new(
         resolved_selectors
             .iter()
@@ -249,7 +248,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     );
 
     // Build a map of selector -> function name from resolved signatures
-    // Wrapped in Arc to share across async analysis tasks without cloning
     let selector_names: Arc<HashMap<String, String>> = Arc::new(
         resolved_selectors
             .iter()
@@ -262,7 +260,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     let start_analysis_time = Instant::now();
     let handles = symbolic_execution_maps.into_iter().map(|(selector, trace_root)| {
         let mut evm_clone = evm.clone();
-        // Arc::clone is O(1) - just increments refcount, no data copying
         let arg_counts = Arc::clone(&selector_arg_counts);
         let names = Arc::clone(&selector_names);
         async move {

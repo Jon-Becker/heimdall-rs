@@ -60,10 +60,9 @@ pub(crate) struct AnalyzerState {
     pub analyzer_type: AnalyzerType,
     /// Whether to skip resolving internal calls
     pub skip_resolving: bool,
-    /// Map of selector -> argument count for internal call resolution (Arc for O(1) sharing)
+    /// Map of selector -> argument count for internal call resolution
     pub selector_arg_counts: Arc<HashMap<String, usize>>,
-    /// Map of selector -> resolved function name for internal call resolution (Arc for O(1)
-    /// sharing)
+    /// Map of selector -> resolved function name for internal call resolution
     pub selector_names: Arc<HashMap<String, String>>,
 }
 
@@ -80,10 +79,9 @@ pub(crate) struct Analyzer {
     function: AnalyzedFunction,
     /// A list of registered heuristics with the Heuristic Trait
     heuristics: Vec<Heuristic>,
-    /// Map of selector -> argument count for internal call resolution (Arc for O(1) sharing)
+    /// Map of selector -> argument count for internal call resolution
     selector_arg_counts: Arc<HashMap<String, usize>>,
-    /// Map of selector -> resolved function name for internal call resolution (Arc for O(1)
-    /// sharing)
+    /// Map of selector -> resolved function name for internal call resolution
     selector_names: Arc<HashMap<String, String>>,
 }
 
@@ -145,7 +143,6 @@ impl Analyzer {
         self.register_heuristics()?;
 
         // get the analyzer state
-        // Arc::clone is O(1) - just increments refcount
         let mut analyzer_state = AnalyzerState {
             jumped_conditional: None,
             conditional_stack: Vec::new(),
