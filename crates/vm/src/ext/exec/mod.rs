@@ -9,9 +9,7 @@ use crate::{
     },
     ext::exec::{
         jump_frame::JumpFrame,
-        loop_analysis::{
-            detect_induction_variable, extract_modified_storage, is_tautologically_false_condition,
-        },
+        loop_analysis::{detect_induction_variable, is_tautologically_false_condition},
         util::{
             historical_diffs_approximately_equal, jump_condition_appears_recursive,
             jump_condition_contains_mutated_memory_access,
@@ -332,9 +330,6 @@ impl VM {
                                     loop_info.induction_var = Some(iv);
                                     loop_info.is_bounded = true;
                                 }
-
-                                // Extract modified storage slots
-                                loop_info.modified_storage = extract_modified_storage(&diff);
 
                                 trace!(
                                     "detected loop: header_pc={}, condition_pc={}, condition={}",

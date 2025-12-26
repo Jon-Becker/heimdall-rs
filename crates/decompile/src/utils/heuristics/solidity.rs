@@ -18,7 +18,7 @@ use crate::{
 /// - Solidity 0.8+ overflow checks like `!number > (number + 0x01)`
 /// - Inverted loop conditions like `!0 < arg0` (initial loop entry check)
 /// - Underflow check patterns like `number - MAX_UINT256`
-fn is_overflow_check_condition(condition: &str) -> bool {
+pub(crate) fn is_overflow_check_condition(condition: &str) -> bool {
     let trimmed = condition.trim();
 
     // Pattern 1: !(x > (x + 1)) style overflow check

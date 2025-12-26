@@ -102,11 +102,6 @@ fn is_panic_code_assignment(line: &str) -> bool {
     valid_lhs && is_panic_code
 }
 
-/// Check if line contains panic pattern (0x4e487b71 or Panic()
-fn contains_panic_pattern(line: &str) -> bool {
-    line.contains("0x4e487b71") || line.contains("Panic(")
-}
-
 /// Postprocess loop constructs for cleaner output - renames loop variables
 pub(crate) fn loop_postprocessor(
     line: &mut String,
@@ -156,8 +151,8 @@ pub(crate) fn remove_overflow_checks(
         return Ok(());
     }
 
-    // Check for panic patterns
-    if contains_panic_pattern(line) {
+    // Check for panic patterns (0x4e487b71 selector or Panic() calls)
+    if line.contains("0x4e487b71") || line.contains("Panic(") {
         line.clear();
         return Ok(());
     }
@@ -177,17 +172,8 @@ fn is_tautological_require(line: &str) -> bool {
         return false;
     }
 
-    // Pattern: require(x == x)
-    if is_tautological_require_match(line) {
-        return true;
-    }
-
-    // Pattern: require(!0 < x) which is always true for unsigned
-    if is_impossible_check(line) {
-        return true;
-    }
-
-    false
+    // Pattern 1: require(x == x) - tautological equality
+    is_tautological_require_match(line) || is_impossible_check(line)
 }
 
 #[cfg(test)]

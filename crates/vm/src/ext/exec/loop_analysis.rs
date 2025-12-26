@@ -1,5 +1,3 @@
-use alloy::primitives::U256;
-
 use crate::core::stack::StackFrame;
 
 /// Check if a condition is tautologically false (e.g., "0 > 1", "(0 > 0x01)").
@@ -78,20 +76,11 @@ pub struct LoopInfo {
     /// The solidified loop condition (e.g., "i < arg0")
     pub condition: String,
 
-    /// The negated condition for while-loop form
-    pub exit_condition: String,
-
     /// Detected induction variable name, if any
     pub induction_var: Option<InductionVariable>,
 
     /// Whether this appears to be a bounded loop (for) vs unbounded (while)
     pub is_bounded: bool,
-
-    /// Storage slots modified within the loop
-    pub modified_storage: Vec<U256>,
-
-    /// Memory locations modified within the loop
-    pub modified_memory: Vec<U256>,
 }
 
 /// Represents a loop induction variable (counter)
@@ -128,17 +117,12 @@ pub enum InductionDirection {
 impl LoopInfo {
     /// Create a new LoopInfo from PC positions and condition
     pub fn new(header_pc: u128, condition_pc: u128, condition: String) -> Self {
-        // Normalize the condition (unwrap ISZERO, fix operand order, etc.)
-        let normalized = normalize_loop_condition(&condition);
         Self {
             header_pc,
             condition_pc,
-            exit_condition: negate_condition(&normalized),
-            condition: normalized,
+            condition: normalize_loop_condition(&condition),
             induction_var: None,
             is_bounded: false,
-            modified_storage: Vec::new(),
-            modified_memory: Vec::new(),
         }
     }
 
@@ -157,8 +141,6 @@ impl LoopInfo {
                 // Update the condition to use the new name
                 if self.condition.contains(&iv.name) {
                     self.condition = self.condition.replace(&iv.name, counter_name.as_ref());
-                    self.exit_condition =
-                        self.exit_condition.replace(&iv.name, counter_name.as_ref());
                 }
                 iv.name = counter_name.into_owned();
             }
@@ -167,7 +149,6 @@ impl LoopInfo {
             if self.condition.starts_with("i ") || self.condition.contains(" i ") {
                 let replacement = format!("{} ", counter_name);
                 self.condition = self.condition.replacen("i ", &replacement, 1);
-                self.exit_condition = self.exit_condition.replacen("i ", &replacement, 1);
             }
         }
     }
@@ -327,40 +308,6 @@ fn is_likely_bound(s: &str) -> bool {
         trimmed.starts_with("var_") ||
         trimmed.contains("storage[") ||
         trimmed.contains("memory[")
-}
-
-/// Negate a boolean condition for loop exit
-fn negate_condition(condition: &str) -> String {
-    let trimmed = condition.trim();
-
-    // Handle already-negated conditions
-    if trimmed.starts_with('!') && !trimmed.starts_with("!=") {
-        // Remove the negation
-        return trimmed[1..].trim_start_matches('(').trim_end_matches(')').to_string();
-    }
-
-    // Handle comparison operators
-    if trimmed.contains(">=") {
-        return trimmed.replace(">=", "<");
-    }
-    if trimmed.contains("<=") {
-        return trimmed.replace("<=", ">");
-    }
-    if trimmed.contains("==") {
-        return trimmed.replace("==", "!=");
-    }
-    if trimmed.contains("!=") {
-        return trimmed.replace("!=", "==");
-    }
-    if trimmed.contains(" > ") {
-        return trimmed.replace(" > ", " <= ");
-    }
-    if trimmed.contains(" < ") {
-        return trimmed.replace(" < ", " >= ");
-    }
-
-    // Default: wrap with negation
-    format!("!({})", condition)
 }
 
 /// Attempt to detect an induction variable from the stack diff and/or condition
@@ -552,33 +499,6 @@ fn simplify_var_name(name: &str) -> String {
     name.trim().trim_start_matches('(').trim_end_matches(')').trim().to_string()
 }
 
-/// Extract storage slots that are modified in the loop
-pub(super) fn extract_modified_storage(stack_diff: &[StackFrame]) -> Vec<U256> {
-    let mut slots = Vec::new();
-
-    for frame in stack_diff {
-        let solidified = frame.operation.solidify();
-
-        // Look for storage[X] patterns
-        if solidified.contains("storage[") {
-            if let Some(start) = solidified.find("storage[") {
-                if let Some(end) = solidified[start..].find(']') {
-                    let slot_str = &solidified[start + 8..start + end];
-                    if let Some(hex_str) = slot_str.strip_prefix("0x") {
-                        if let Ok(slot) = U256::from_str_radix(hex_str, 16) {
-                            slots.push(slot);
-                        }
-                    } else if let Ok(slot) = U256::from_str_radix(slot_str, 16) {
-                        slots.push(slot);
-                    }
-                }
-            }
-        }
-    }
-
-    slots
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -597,18 +517,6 @@ mod tests {
         // Pattern 3: Already correct
         assert_eq!(normalize_loop_condition("i < loops"), "i < loops");
         assert_eq!(normalize_loop_condition("var_a < arg0"), "var_a < arg0");
-    }
-
-    #[test]
-    fn test_negate_condition() {
-        assert_eq!(negate_condition("i < 10"), "i >= 10");
-        assert_eq!(negate_condition("i > 10"), "i <= 10");
-        assert_eq!(negate_condition("i <= 10"), "i > 10");
-        assert_eq!(negate_condition("i >= 10"), "i < 10");
-        assert_eq!(negate_condition("i == 10"), "i != 10");
-        assert_eq!(negate_condition("i != 10"), "i == 10");
-        assert_eq!(negate_condition("!(x)"), "x");
-        assert_eq!(negate_condition("foo"), "!(foo)");
     }
 
     #[test]

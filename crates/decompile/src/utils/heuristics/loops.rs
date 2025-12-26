@@ -3,6 +3,7 @@ use futures::future::BoxFuture;
 use heimdall_vm::{core::vm::State, ext::exec::LoopInfo};
 use tracing::trace;
 
+use super::is_overflow_check_condition;
 use crate::{core::analyze::AnalyzerState, interfaces::AnalyzedFunction, Error};
 
 /// Analyzer state extension for loop tracking
@@ -207,7 +208,7 @@ pub(crate) fn is_overflow_check_operation(state: &State) -> bool {
             instruction.input_operations.first().map(|op| op.solidify()).unwrap_or_default();
 
         // Pattern 1: Overflow comparison - !(x > x + 1) or similar
-        if is_overflow_comparison(&solidified) {
+        if is_overflow_check_condition(&solidified) {
             return true;
         }
 
@@ -219,49 +220,6 @@ pub(crate) fn is_overflow_check_operation(state: &State) -> bool {
         // Pattern 3: Panic selector storage (0x4e487b71)
         if solidified.contains("0x4e487b71") {
             return true;
-        }
-    }
-
-    false
-}
-
-/// Check if an expression looks like an overflow comparison.
-///
-/// Solidity 0.8+ generates patterns like:
-/// - `!(x > (x + 1))` - checks that adding 1 doesn't wrap around
-/// - `x - MAX_VALUE` - underflow check patterns
-fn is_overflow_comparison(expr: &str) -> bool {
-    let trimmed = expr.trim();
-
-    // Pattern: !(x > (x + 1)) or !x > (x + 0x01)
-    // This checks: "if x + 1 would overflow, revert"
-    if trimmed.starts_with('!') || trimmed.starts_with("!(") {
-        let inner = trimmed.trim_start_matches('!').trim_start_matches('(').trim_end_matches(')');
-
-        // Check for pattern: "var > (var + 1)" or "var > var + 0x01"
-        if inner.contains(" > ") {
-            if let Some(pos) = inner.find(" > ") {
-                let lhs = inner[..pos].trim();
-                let rhs = inner[pos + 3..].trim();
-
-                // RHS should contain LHS + some increment
-                if rhs.contains(lhs) && (rhs.contains("+ 0x01") || rhs.contains("+ 1")) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // Pattern: subtraction with max value (underflow check)
-    // e.g., "number - 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-    if trimmed.contains(" - 0x") {
-        // Check for subtraction of a very large hex value (likely MAX_UINT256)
-        if let Some(pos) = trimmed.find(" - 0x") {
-            let hex_part = &trimmed[pos + 5..];
-            // MAX_UINT256 is 64 'f' characters
-            if hex_part.len() >= 60 && hex_part.chars().take(60).all(|c| c == 'f') {
-                return true;
-            }
         }
     }
 
