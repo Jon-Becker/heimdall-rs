@@ -221,13 +221,12 @@ impl VM {
                         // arg0, ...] We capture the top items as solidified
                         // operations The analyzer will use the arg count to
                         // extract the right number
-                        let arguments: Vec<String> = vm
-                            .stack
-                            .stack
-                            .iter()
-                            .take(16) // Take top 16 items max (more than enough for any function)
-                            .map(|frame| frame.operation.solidify())
-                            .collect();
+                        let stack_len = vm.stack.stack.len();
+                        let take_count = stack_len.min(16);
+                        let mut arguments = Vec::with_capacity(take_count);
+                        for frame in vm.stack.stack.iter().take(take_count) {
+                            arguments.push(frame.operation.solidify());
+                        }
 
                         vm_trace.internal_call = Some(InternalCall {
                             selector: called_selector.clone(),

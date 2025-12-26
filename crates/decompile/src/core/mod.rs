@@ -24,7 +24,10 @@ use heimdall_vm::{
     core::vm::VM,
     ext::selectors::{find_function_selectors, resolve_internal_body, resolve_selectors},
 };
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crate::{
     core::{
@@ -226,35 +229,42 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     // Build a map of selector -> argument count from resolved signatures
     // e.g., "transferFrom(address,address,uint256)" -> 3 arguments
-    let selector_arg_counts: HashMap<String, usize> = resolved_selectors
-        .iter()
-        .filter_map(|(selector, funcs)| {
-            funcs.first().map(|f| {
-                // Count commas in the signature to determine arg count
-                // e.g., "transfer(address,uint256)" has 1 comma = 2 args
-                let sig = &f.signature;
-                let start = sig.find('(').unwrap_or(0);
-                let end = sig.rfind(')').unwrap_or(sig.len());
-                let params = &sig[start + 1..end];
-                let count = if params.is_empty() { 0 } else { params.matches(',').count() + 1 };
-                (selector.clone(), count)
+    // Wrapped in Arc to share across async analysis tasks without cloning
+    let selector_arg_counts: Arc<HashMap<String, usize>> = Arc::new(
+        resolved_selectors
+            .iter()
+            .filter_map(|(selector, funcs)| {
+                funcs.first().map(|f| {
+                    // Count commas in the signature to determine arg count
+                    // e.g., "transfer(address,uint256)" has 1 comma = 2 args
+                    let sig = &f.signature;
+                    let start = sig.find('(').unwrap_or(0);
+                    let end = sig.rfind(')').unwrap_or(sig.len());
+                    let params = &sig[start + 1..end];
+                    let count = if params.is_empty() { 0 } else { params.matches(',').count() + 1 };
+                    (selector.clone(), count)
+                })
             })
-        })
-        .collect();
+            .collect(),
+    );
 
     // Build a map of selector -> function name from resolved signatures
-    let selector_names: HashMap<String, String> = resolved_selectors
-        .iter()
-        .filter_map(|(selector, funcs)| funcs.first().map(|f| (selector.clone(), f.name.clone())))
-        .collect();
+    // Wrapped in Arc to share across async analysis tasks without cloning
+    let selector_names: Arc<HashMap<String, String>> = Arc::new(
+        resolved_selectors
+            .iter()
+            .filter_map(|(selector, funcs)| {
+                funcs.first().map(|f| (selector.clone(), f.name.clone()))
+            })
+            .collect(),
+    );
 
     let start_analysis_time = Instant::now();
-    let selector_arg_counts_clone = selector_arg_counts.clone();
-    let selector_names_clone = selector_names.clone();
     let handles = symbolic_execution_maps.into_iter().map(|(selector, trace_root)| {
         let mut evm_clone = evm.clone();
-        let arg_counts = selector_arg_counts_clone.clone();
-        let names = selector_names_clone.clone();
+        // Arc::clone is O(1) - just increments refcount, no data copying
+        let arg_counts = Arc::clone(&selector_arg_counts);
+        let names = Arc::clone(&selector_names);
         async move {
             let mut analyzer = Analyzer::new(
                 analyzer_type,
