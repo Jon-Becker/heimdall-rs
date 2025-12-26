@@ -107,6 +107,62 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
     function_selectors
 }
 
+/// Resolve the internal function body for a given selector.
+/// The internal body is the target of the first JUMP after the dispatcher entry.
+/// This is where the actual function logic starts, separate from the calldata parsing.
+pub fn resolve_internal_body(vm: &mut VM, selector: &str, entry_point: u128) -> u128 {
+    vm.calldata = decode_hex(selector).expect("Failed to decode selector.");
+
+    // Step until we reach the entry point
+    while vm.bytecode.len() >= vm.instruction as usize && vm.instruction <= entry_point {
+        if vm.step().is_err() {
+            return 0;
+        }
+        if vm.exitcode != 255 || !vm.returndata.is_empty() {
+            return 0;
+        }
+    }
+
+    // Now continue from entry point until we find the first JUMP (0x56)
+    let mut jump_count = 0;
+    while vm.bytecode.len() >= vm.instruction as usize {
+        let state = match vm.step() {
+            Ok(state) => state,
+            Err(_) => return 0,
+        };
+
+        // Look for unconditional JUMP
+        if state.last_instruction.opcode == 0x56 {
+            jump_count += 1;
+            // Usually the first or second JUMP after entry is to the internal body
+            // The first JUMP target is typically the internal function body
+            if jump_count <= 2 {
+                let target: u128 = state.last_instruction.inputs[0].try_into().unwrap_or(0);
+                if target > 0 {
+                    trace!(
+                        "resolved internal body for selector {} at entry {} -> internal body {}",
+                        selector,
+                        entry_point,
+                        target
+                    );
+                    return target;
+                }
+            }
+        }
+
+        if vm.exitcode != 255 || !vm.returndata.is_empty() {
+            break;
+        }
+
+        // Limit search depth
+        if vm.instruction > entry_point + 200 {
+            break;
+        }
+    }
+
+    0
+}
+
 /// resolve a selector's function entry point from the EVM bytecode
 // TODO: update resolve_entry_point logic to support vyper
 pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {

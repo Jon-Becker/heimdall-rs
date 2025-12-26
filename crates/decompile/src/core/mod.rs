@@ -22,7 +22,7 @@ use heimdall_common::{
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
 use heimdall_vm::{
     core::vm::VM,
-    ext::selectors::{find_function_selectors, resolve_selectors},
+    ext::selectors::{find_function_selectors, resolve_internal_body, resolve_selectors},
 };
 use std::time::{Duration, Instant};
 
@@ -150,6 +150,30 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     let selectors = find_function_selectors(&evm, &assembly);
     debug!("finding function selectors took {:?}", start_selectors_time.elapsed());
 
+    // Resolve internal function bodies for each selector
+    // Internal bodies are where the actual function logic lives (after calldata parsing)
+    let mut internal_bodies: HashMap<u128, String> = HashMap::new();
+    for (selector, entry_point) in &selectors {
+        evm.reset();
+        let internal_body = resolve_internal_body(&mut evm, selector, *entry_point);
+        if internal_body > 0 {
+            internal_bodies.insert(internal_body, selector.clone());
+            debug!(
+                "selector {} (entry {}) has internal body at {}",
+                selector, entry_point, internal_body
+            );
+        }
+    }
+
+    // Build a map combining entry points and internal bodies for detection
+    // When tracing a function, we detect internal calls to other functions'
+    // internal bodies (not just their dispatcher entries)
+    let known_entry_points: HashMap<u128, String> = selectors
+        .iter()
+        .map(|(sel, ep)| (*ep, sel.clone()))
+        .chain(internal_bodies.iter().map(|(ib, sel)| (*ib, sel.clone())))
+        .collect();
+
     // resolve selectors (if enabled)
     let resolved_selectors = match args.skip_resolving {
         true => HashMap::new(),
@@ -176,12 +200,13 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     }
 
     let overall_sym_exec_time = Instant::now();
-    for (selector, entry_point) in selectors {
+    for (selector, entry_point) in &selectors {
         let start_sym_exec_time = Instant::now();
         evm.reset();
         let (map, jumpdest_count) = match evm.symbolic_exec_selector(
-            &selector,
-            entry_point,
+            selector,
+            *entry_point,
+            &known_entry_points,
             Instant::now()
                 .checked_add(Duration::from_millis(args.timeout))
                 .expect("invalid timeout"),
@@ -199,14 +224,46 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     debug!("symbolic execution took {:?}", overall_sym_exec_time.elapsed());
     info!("symbolically executed {} selectors", symbolic_execution_maps.len());
 
+    // Build a map of selector -> argument count from resolved signatures
+    // e.g., "transferFrom(address,address,uint256)" -> 3 arguments
+    let selector_arg_counts: HashMap<String, usize> = resolved_selectors
+        .iter()
+        .filter_map(|(selector, funcs)| {
+            funcs.first().map(|f| {
+                // Count commas in the signature to determine arg count
+                // e.g., "transfer(address,uint256)" has 1 comma = 2 args
+                let sig = &f.signature;
+                let start = sig.find('(').unwrap_or(0);
+                let end = sig.rfind(')').unwrap_or(sig.len());
+                let params = &sig[start + 1..end];
+                let count = if params.is_empty() { 0 } else { params.matches(',').count() + 1 };
+                (selector.clone(), count)
+            })
+        })
+        .collect();
+
+    // Build a map of selector -> function name from resolved signatures
+    let selector_names: HashMap<String, String> = resolved_selectors
+        .iter()
+        .filter_map(|(selector, funcs)| {
+            funcs.first().map(|f| (selector.clone(), f.name.clone()))
+        })
+        .collect();
+
     let start_analysis_time = Instant::now();
+    let selector_arg_counts_clone = selector_arg_counts.clone();
+    let selector_names_clone = selector_names.clone();
     let handles = symbolic_execution_maps.into_iter().map(|(selector, trace_root)| {
         let mut evm_clone = evm.clone();
+        let arg_counts = selector_arg_counts_clone.clone();
+        let names = selector_names_clone.clone();
         async move {
             let mut analyzer = Analyzer::new(
                 analyzer_type,
                 args.skip_resolving,
                 AnalyzedFunction::new(&selector, selector == "fallback"),
+                arg_counts,
+                names,
             );
 
             // analyze the symbolic execution trace
