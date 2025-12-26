@@ -1,5 +1,127 @@
 use crate::core::stack::StackFrame;
 
+/// Check if a condition is tautologically true (e.g., "arg0 == arg0", "X == (address(X))").
+/// These create infinite loops and should be skipped as invalid loop conditions.
+pub(crate) fn is_tautologically_true_condition(condition: &str) -> bool {
+    let mut trimmed = condition.trim();
+
+    // Remove leading negation - if the inner condition is tautologically true,
+    // then the negation makes it tautologically false (which is also invalid)
+    let negated = trimmed.starts_with('!');
+    if negated {
+        trimmed = trimmed[1..].trim();
+    }
+
+    // Strip all outer parentheses
+    while trimmed.starts_with('(') && trimmed.ends_with(')') {
+        // Check for balanced parentheses before stripping
+        let inner = &trimmed[1..trimmed.len() - 1];
+        if is_balanced_parens(inner) {
+            trimmed = inner.trim();
+        } else {
+            break;
+        }
+    }
+
+    // Check for X == X patterns (tautologically true equality)
+    if let Some(pos) = trimmed.find(" == ") {
+        let lhs = trimmed[..pos].trim();
+        let rhs = trimmed[pos + 4..].trim();
+
+        // Normalize both sides and compare
+        let lhs_normalized = normalize_for_comparison(lhs);
+        let rhs_normalized = normalize_for_comparison(rhs);
+
+        if lhs_normalized == rhs_normalized && !lhs_normalized.is_empty() {
+            return true;
+        }
+    }
+
+    // Check for X != X patterns (tautologically false inequality, but still invalid loop condition)
+    if let Some(pos) = trimmed.find(" != ") {
+        let lhs = trimmed[..pos].trim();
+        let rhs = trimmed[pos + 4..].trim();
+
+        let lhs_normalized = normalize_for_comparison(lhs);
+        let rhs_normalized = normalize_for_comparison(rhs);
+
+        if lhs_normalized == rhs_normalized && !lhs_normalized.is_empty() {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Normalize an expression for comparison by stripping type casts and parentheses.
+/// For example: "address(arg0)" -> "arg0", "(arg0)" -> "arg0"
+fn normalize_for_comparison(expr: &str) -> String {
+    let mut result = expr.trim().to_string();
+
+    // Strip outer parentheses
+    while result.starts_with('(') && result.ends_with(')') {
+        let inner = &result[1..result.len() - 1];
+        if is_balanced_parens(inner) {
+            result = inner.trim().to_string();
+        } else {
+            break;
+        }
+    }
+
+    // Strip common Solidity type casts: address(...), uint256(...), etc.
+    let type_casts = [
+        "address(",
+        "uint256(",
+        "uint128(",
+        "uint96(",
+        "uint64(",
+        "uint32(",
+        "uint16(",
+        "uint8(",
+        "int256(",
+        "int128(",
+        "int64(",
+        "int32(",
+        "int16(",
+        "int8(",
+        "bytes32(",
+        "bytes20(",
+        "bytes4(",
+        "bool(",
+    ];
+
+    for cast in type_casts {
+        if result.starts_with(cast) && result.ends_with(')') {
+            let inner = &result[cast.len()..result.len() - 1];
+            if is_balanced_parens(inner) {
+                result = inner.trim().to_string();
+                // Recursively normalize in case of nested casts
+                return normalize_for_comparison(&result);
+            }
+        }
+    }
+
+    result
+}
+
+/// Check if parentheses are balanced in a string
+fn is_balanced_parens(s: &str) -> bool {
+    let mut depth = 0;
+    for c in s.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                if depth == 0 {
+                    return false;
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    depth == 0
+}
+
 /// Check if a condition is tautologically false (e.g., "0 > 1", "(0 > 0x01)").
 /// These cannot be valid loop conditions and should be skipped.
 pub(crate) fn is_tautologically_false_condition(condition: &str) -> bool {
@@ -681,5 +803,60 @@ mod tests {
         assert!(!is_tautologically_false_condition("0x01 < arg0"));
         assert!(!is_tautologically_false_condition("1 < 2"));
         assert!(!is_tautologically_false_condition("i > 0"));
+    }
+
+    #[test]
+    fn test_is_tautologically_true_condition() {
+        // Always true conditions (X == X patterns)
+        assert!(is_tautologically_true_condition("arg0 == arg0"));
+        assert!(is_tautologically_true_condition("arg1 == arg1"));
+        assert!(is_tautologically_true_condition("(arg0 == arg0)"));
+        assert!(is_tautologically_true_condition("arg0 == (arg0)"));
+        assert!(is_tautologically_true_condition("(arg0) == arg0"));
+
+        // With type casts (should still be detected)
+        assert!(is_tautologically_true_condition("arg0 == address(arg0)"));
+        assert!(is_tautologically_true_condition("address(arg0) == arg0"));
+        assert!(is_tautologically_true_condition("arg1 == (address(arg1))"));
+        assert!(is_tautologically_true_condition("uint256(arg0) == arg0"));
+
+        // X != X patterns (always false, but still invalid loop condition)
+        assert!(is_tautologically_true_condition("arg0 != arg0"));
+        assert!(is_tautologically_true_condition("arg1 != (address(arg1))"));
+
+        // Valid loop conditions (not tautological)
+        assert!(!is_tautologically_true_condition("i < arg0"));
+        assert!(!is_tautologically_true_condition("arg0 == arg1"));
+        assert!(!is_tautologically_true_condition("arg0 < arg0")); // This is false, but not X == X
+        assert!(!is_tautologically_true_condition("i == 0"));
+        assert!(!is_tautologically_true_condition("arg0 == 0x01"));
+    }
+
+    #[test]
+    fn test_normalize_for_comparison() {
+        // Simple expressions
+        assert_eq!(normalize_for_comparison("arg0"), "arg0");
+        assert_eq!(normalize_for_comparison("(arg0)"), "arg0");
+        assert_eq!(normalize_for_comparison("((arg0))"), "arg0");
+
+        // Type casts
+        assert_eq!(normalize_for_comparison("address(arg0)"), "arg0");
+        assert_eq!(normalize_for_comparison("uint256(arg0)"), "arg0");
+        assert_eq!(normalize_for_comparison("(address(arg0))"), "arg0");
+
+        // Nested type casts
+        assert_eq!(normalize_for_comparison("address(uint256(arg0))"), "arg0");
+    }
+
+    #[test]
+    fn test_is_balanced_parens() {
+        assert!(is_balanced_parens(""));
+        assert!(is_balanced_parens("arg0"));
+        assert!(is_balanced_parens("(arg0)"));
+        assert!(is_balanced_parens("((arg0))"));
+        assert!(is_balanced_parens("a + (b + c)"));
+        assert!(!is_balanced_parens("(arg0"));
+        assert!(!is_balanced_parens("arg0)"));
+        assert!(!is_balanced_parens("((arg0)"));
     }
 }

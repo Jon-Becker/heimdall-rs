@@ -9,7 +9,10 @@ use crate::{
     },
     ext::exec::{
         jump_frame::JumpFrame,
-        loop_analysis::{detect_induction_variable, is_tautologically_false_condition},
+        loop_analysis::{
+            detect_induction_variable, is_tautologically_false_condition,
+            is_tautologically_true_condition,
+        },
         util::{
             historical_diffs_approximately_equal, jump_condition_appears_recursive,
             jump_condition_contains_mutated_memory_access,
@@ -296,10 +299,14 @@ impl VM {
                         // If a loop was detected, capture the LoopInfo and return the trace
                         if let Some((diff, condition)) = detected_loop_info {
                             // Skip loops with tautologically false conditions (e.g., "0 > 1")
-                            // These are not real loops but rather overflow checks or dead code
-                            if is_tautologically_false_condition(&condition) {
+                            // or tautologically true conditions (e.g., "arg0 == arg0")
+                            // These are not real loops but rather overflow checks, dead code,
+                            // or false positives from identical operand comparisons
+                            if is_tautologically_false_condition(&condition) ||
+                                is_tautologically_true_condition(&condition)
+                            {
                                 trace!(
-                                    "skipping loop with tautologically false condition: {}",
+                                    "skipping loop with tautological condition: {}",
                                     condition
                                 );
                                 historical_stacks.push(vm.stack.clone());
@@ -351,10 +358,12 @@ impl VM {
                             let condition =
                                 jump_condition.clone().unwrap_or_else(|| "true".to_string());
 
-                            // Skip tautologically false conditions
-                            if is_tautologically_false_condition(&condition) {
+                            // Skip tautological conditions (always true or always false)
+                            if is_tautologically_false_condition(&condition) ||
+                                is_tautologically_true_condition(&condition)
+                            {
                                 trace!(
-                                    "skipping loop (stack pattern) with false condition: {}",
+                                    "skipping loop (stack pattern) with tautological condition: {}",
                                     condition
                                 );
                                 historical_stacks.push(vm.stack.clone());
@@ -383,10 +392,12 @@ impl VM {
                             let condition =
                                 jump_condition.clone().unwrap_or_else(|| "true".to_string());
 
-                            // Skip tautologically false conditions
-                            if is_tautologically_false_condition(&condition) {
+                            // Skip tautological conditions (always true or always false)
+                            if is_tautologically_false_condition(&condition) ||
+                                is_tautologically_true_condition(&condition)
+                            {
                                 trace!(
-                                    "skipping loop (approx diffs) with false condition: {}",
+                                    "skipping loop (approx diffs) with tautological condition: {}",
                                     condition
                                 );
                                 historical_stacks.push(vm.stack.clone());
