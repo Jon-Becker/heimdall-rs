@@ -1,5 +1,5 @@
+use alloy::primitives::U256;
 use futures::future::BoxFuture;
-use hashbrown::HashSet;
 use heimdall_vm::{core::vm::State, ext::exec::LoopInfo};
 use tracing::trace;
 
@@ -11,54 +11,32 @@ pub(crate) struct LoopAnalyzerState {
     /// Stack of active loops (for nested loops)
     pub active_loops: Vec<LoopInfo>,
 
-    /// Set of PCs that are loop headers
-    pub loop_headers: HashSet<u128>,
-
-    /// Set of PCs that are loop exit points (JUMPI condition PCs)
-    pub loop_exits: HashSet<u128>,
-
     /// Current nesting depth
     pub depth: usize,
 }
 
-/// Check if an operation is a loop header JUMPDEST
-fn is_loop_header(state: &State, detected_loops: &[LoopInfo]) -> Option<LoopInfo> {
-    let instruction = &state.last_instruction;
-
+/// Check if an operation is a loop header JUMPDEST.
+/// Returns the index into detected_loops if found.
+fn find_loop_header_index(state: &State, detected_loops: &[LoopInfo]) -> Option<usize> {
     // JUMPDEST opcode
-    if instruction.opcode != 0x5b {
+    if state.last_instruction.opcode != 0x5b {
         return None;
     }
 
-    let current_pc = instruction.instruction;
-
-    for loop_info in detected_loops {
-        if current_pc == loop_info.header_pc {
-            return Some(loop_info.clone());
-        }
-    }
-
-    None
+    let current_pc = state.last_instruction.instruction;
+    detected_loops.iter().position(|l| l.header_pc == current_pc)
 }
 
-/// Check if an operation is a loop condition JUMPI
-fn is_loop_condition(state: &State, detected_loops: &[LoopInfo]) -> Option<LoopInfo> {
-    let instruction = &state.last_instruction;
-
+/// Check if an operation is a loop condition JUMPI.
+/// Returns the index into detected_loops if found.
+fn find_loop_condition_index(state: &State, detected_loops: &[LoopInfo]) -> Option<usize> {
     // JUMPI opcode
-    if instruction.opcode != 0x57 {
+    if state.last_instruction.opcode != 0x57 {
         return None;
     }
 
-    let current_pc = instruction.instruction;
-
-    for loop_info in detected_loops {
-        if current_pc == loop_info.condition_pc {
-            return Some(loop_info.clone());
-        }
-    }
-
-    None
+    let current_pc = state.last_instruction.instruction;
+    detected_loops.iter().position(|l| l.condition_pc == current_pc)
 }
 
 pub(crate) fn loop_heuristic<'a>(
@@ -68,9 +46,8 @@ pub(crate) fn loop_heuristic<'a>(
     detected_loops: &'a [LoopInfo],
 ) -> BoxFuture<'a, Result<(), Error>> {
     Box::pin(async move {
-        let instruction = &state.last_instruction;
-        let current_pc = instruction.instruction;
-        let opcode = instruction.opcode;
+        let opcode = state.last_instruction.opcode;
+        let current_pc = state.last_instruction.instruction;
 
         // Log opcodes relevant to loops for tracing
         if opcode == 0x5b || opcode == 0x57 {
@@ -85,16 +62,19 @@ pub(crate) fn loop_heuristic<'a>(
         // Check if we're at the loop's JUMPI (condition check)
         // We emit the loop header here because the loop header JUMPDEST is skipped during trace
         // creation
-        if let Some(mut loop_info) = is_loop_condition(state, detected_loops) {
+        if let Some(idx) = find_loop_condition_index(state, detected_loops) {
+            let condition_pc = detected_loops[idx].condition_pc;
+
             // Check if we've already entered this loop (don't emit twice)
             let already_in_loop = analyzer_state
                 .loop_state
                 .active_loops
                 .iter()
-                .any(|l| l.condition_pc == loop_info.condition_pc);
+                .any(|l| l.condition_pc == condition_pc);
 
             if !already_in_loop {
-                // Set the counter name based on current nesting depth
+                // Clone and set counter name only when we need to emit
+                let mut loop_info = detected_loops[idx].clone();
                 loop_info.set_counter_name_for_depth(analyzer_state.loop_state.depth);
 
                 // First time seeing this loop condition - emit the loop header
@@ -106,18 +86,13 @@ pub(crate) fn loop_heuristic<'a>(
                 function.logic.push(loop_info.to_solidity());
 
                 // Track that we're in a loop
-                analyzer_state.loop_state.active_loops.push(loop_info.clone());
-                analyzer_state.loop_state.loop_headers.insert(loop_info.header_pc);
-                analyzer_state.loop_state.loop_exits.insert(loop_info.condition_pc);
+                analyzer_state.loop_state.active_loops.push(loop_info);
                 analyzer_state.loop_state.depth += 1;
             } else {
                 // We've seen this loop condition before - close the loop
                 trace!("closing loop at condition pc={}", current_pc);
                 function.logic.push("}".to_string());
-                analyzer_state
-                    .loop_state
-                    .active_loops
-                    .retain(|l| l.condition_pc != loop_info.condition_pc);
+                analyzer_state.loop_state.active_loops.retain(|l| l.condition_pc != condition_pc);
                 analyzer_state.loop_state.depth = analyzer_state.loop_state.depth.saturating_sub(1);
             }
 
@@ -128,16 +103,16 @@ pub(crate) fn loop_heuristic<'a>(
         }
 
         // Check if we're at a loop header (fallback, in case trace includes JUMPDEST)
-        if let Some(mut loop_info) = is_loop_header(state, detected_loops) {
+        if let Some(idx) = find_loop_header_index(state, detected_loops) {
+            let header_pc = detected_loops[idx].header_pc;
+
             // Check if we've already entered this loop
-            let already_in_loop = analyzer_state
-                .loop_state
-                .active_loops
-                .iter()
-                .any(|l| l.header_pc == loop_info.header_pc);
+            let already_in_loop =
+                analyzer_state.loop_state.active_loops.iter().any(|l| l.header_pc == header_pc);
 
             if !already_in_loop {
-                // Set the counter name based on current nesting depth
+                // Clone and set counter name only when we need to emit
+                let mut loop_info = detected_loops[idx].clone();
                 loop_info.set_counter_name_for_depth(analyzer_state.loop_state.depth);
 
                 trace!(
@@ -147,9 +122,7 @@ pub(crate) fn loop_heuristic<'a>(
                 );
 
                 function.logic.push(loop_info.to_solidity());
-                analyzer_state.loop_state.active_loops.push(loop_info.clone());
-                analyzer_state.loop_state.loop_headers.insert(loop_info.header_pc);
-                analyzer_state.loop_state.loop_exits.insert(loop_info.condition_pc);
+                analyzer_state.loop_state.active_loops.push(loop_info);
                 analyzer_state.loop_state.depth += 1;
             }
 
@@ -162,19 +135,32 @@ pub(crate) fn loop_heuristic<'a>(
 
 /// Check if an operation is part of loop overhead that should be suppressed
 pub(crate) fn is_loop_overhead(state: &State, active_loops: &[LoopInfo]) -> bool {
-    let instruction = &state.last_instruction;
+    let opcode = state.last_instruction.opcode;
 
     // Check for overflow check patterns (Solidity 0.8+)
-    if is_overflow_check_operation(state) {
+    // Only check if opcode could be part of overflow detection
+    // MSTORE = 0x52 (panic selector storage), LT/GT/etc = 0x10-0x15 (comparison)
+    if matches!(opcode, 0x52 | 0x10..=0x15) && is_overflow_check_operation(state) {
         return true;
     }
 
-    for loop_info in active_loops {
-        // Suppress induction variable updates (they're in the for-loop header)
-        if let Some(ref iv) = loop_info.induction_var {
-            let solidified =
-                instruction.input_operations.first().map(|op| op.solidify()).unwrap_or_default();
+    // Early exit if no loops have induction variables
+    if active_loops.iter().all(|l| l.induction_var.is_none()) {
+        return false;
+    }
 
+    // Only check for increment/decrement patterns if opcode is ADD (0x01) or SUB (0x03)
+    // or could be storing to stack/memory after arithmetic
+    if !matches!(opcode, 0x01 | 0x03 | 0x50..=0x5f | 0x80..=0x8f | 0x90..=0x9f) {
+        return false;
+    }
+
+    // Now check for induction variable updates (expensive solidify() call)
+    let solidified =
+        state.last_instruction.input_operations.first().map(|op| op.solidify()).unwrap_or_default();
+
+    for loop_info in active_loops {
+        if let Some(ref iv) = loop_info.induction_var {
             // Check if this is the increment/decrement of the induction var
             if solidified.contains(&iv.name) &&
                 (solidified.contains("+ 1") ||
@@ -199,27 +185,41 @@ pub(crate) fn is_loop_overhead(state: &State, active_loops: &[LoopInfo]) -> bool
 /// - MSTORE operations storing the panic selector
 pub(crate) fn is_overflow_check_operation(state: &State) -> bool {
     let instruction = &state.last_instruction;
+    let opcode = instruction.opcode;
 
-    // Get the solidified representation of the operation
-    let solidified =
-        instruction.input_operations.first().map(|op| op.solidify()).unwrap_or_default();
-
-    // Pattern 1: Overflow comparison - !(x > x + 1) or similar
-    // These appear as conditions like "!number > (number + 0x01)"
-    // or as require statements with inverted overflow checks
-    if is_overflow_comparison(&solidified) {
-        return true;
+    // Quick check: if opcode is MSTORE (0x52), check inputs for panic codes directly
+    if opcode == 0x52 && instruction.inputs.len() >= 2 {
+        // Check if storing panic selector (0x4e487b71) or panic codes (0x11, 0x12)
+        let value = instruction.inputs[1];
+        // Panic selector in high bits or raw panic code
+        if value == U256::from(0x4e487b71u64) ||
+            value == U256::from(0x11u64) ||
+            value == U256::from(0x12u64)
+        {
+            return true;
+        }
     }
 
-    // Pattern 2: Panic code assignment - storing 0x11 (overflow) or 0x12 (underflow)
-    // These are typically MSTORE or assignment operations with the panic code
-    if is_panic_code_value(&solidified) {
-        return true;
-    }
+    // For comparison opcodes, check solidified representation
+    // LT=0x10, GT=0x11, SLT=0x12, SGT=0x13, EQ=0x14, ISZERO=0x15
+    if matches!(opcode, 0x10..=0x15) {
+        let solidified =
+            instruction.input_operations.first().map(|op| op.solidify()).unwrap_or_default();
 
-    // Pattern 3: Panic selector storage (0x4e487b71)
-    if solidified.contains("0x4e487b71") {
-        return true;
+        // Pattern 1: Overflow comparison - !(x > x + 1) or similar
+        if is_overflow_comparison(&solidified) {
+            return true;
+        }
+
+        // Pattern 2: Panic code assignment
+        if is_panic_code_value(&solidified) {
+            return true;
+        }
+
+        // Pattern 3: Panic selector storage (0x4e487b71)
+        if solidified.contains("0x4e487b71") {
+            return true;
+        }
     }
 
     false

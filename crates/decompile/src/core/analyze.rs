@@ -159,11 +159,14 @@ impl Analyzer {
             analyzer_state.jumped_conditional = None;
 
             // Combine parent loops with this branch's loops (avoiding duplicates)
-            let mut all_loops: Vec<LoopInfo> = parent_loops.to_vec();
+            // Pre-allocate with capacity for both parent and potential new loops
+            let mut all_loops: Vec<LoopInfo> =
+                Vec::with_capacity(parent_loops.len() + branch.detected_loops.len());
+            all_loops.extend_from_slice(parent_loops);
+
             for loop_info in &branch.detected_loops {
-                if !all_loops.iter().any(|l| {
-                    l.header_pc == loop_info.header_pc && l.condition_pc == loop_info.condition_pc
-                }) {
+                let key = (loop_info.header_pc, loop_info.condition_pc);
+                if !all_loops.iter().any(|l| (l.header_pc, l.condition_pc) == key) {
                     all_loops.push(loop_info.clone());
                 }
             }

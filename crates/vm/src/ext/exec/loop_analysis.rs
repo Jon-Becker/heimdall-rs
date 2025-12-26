@@ -152,20 +152,22 @@ impl LoopInfo {
 
         // Update the induction variable name if present
         if let Some(ref mut iv) = self.induction_var {
-            let old_name = iv.name.clone();
-            iv.name = counter_name.clone();
-
-            // Update the condition to use the new name
-            if self.condition.contains(&old_name) {
-                self.condition = self.condition.replace(&old_name, &counter_name);
-                self.exit_condition = self.exit_condition.replace(&old_name, &counter_name);
+            // Only clone/allocate if names differ
+            if iv.name != counter_name.as_ref() {
+                // Update the condition to use the new name
+                if self.condition.contains(&iv.name) {
+                    self.condition = self.condition.replace(&iv.name, counter_name.as_ref());
+                    self.exit_condition =
+                        self.exit_condition.replace(&iv.name, counter_name.as_ref());
+                }
+                iv.name = counter_name.into_owned();
             }
         } else {
             // Even without an induction variable, update the condition if it uses "i"
-            if self.condition.contains("i ") || self.condition.starts_with("i ") {
-                self.condition = self.condition.replacen("i ", &format!("{} ", counter_name), 1);
-                self.exit_condition =
-                    self.exit_condition.replacen("i ", &format!("{} ", counter_name), 1);
+            if self.condition.starts_with("i ") || self.condition.contains(" i ") {
+                let replacement = format!("{} ", counter_name);
+                self.condition = self.condition.replacen("i ", &replacement, 1);
+                self.exit_condition = self.exit_condition.replacen("i ", &replacement, 1);
             }
         }
     }
@@ -192,15 +194,18 @@ impl LoopInfo {
     }
 }
 
+/// Counter names for common nesting depths (avoids allocation for depths 0-9)
+const COUNTER_NAMES: [&str; 10] = ["i", "j", "k", "l", "m", "n", "idx6", "idx7", "idx8", "idx9"];
+
 /// Generate a counter variable name for the given nesting depth.
 ///
 /// Returns: i, j, k, l, m, n for depths 0-5, then idx6, idx7, etc.
-fn counter_name_for_depth(depth: usize) -> String {
-    const COUNTER_NAMES: [&str; 6] = ["i", "j", "k", "l", "m", "n"];
+/// For depths 0-9, returns a static string (no allocation).
+fn counter_name_for_depth(depth: usize) -> std::borrow::Cow<'static, str> {
     if depth < COUNTER_NAMES.len() {
-        COUNTER_NAMES[depth].to_string()
+        std::borrow::Cow::Borrowed(COUNTER_NAMES[depth])
     } else {
-        format!("idx{}", depth)
+        std::borrow::Cow::Owned(format!("idx{}", depth))
     }
 }
 
@@ -681,14 +686,14 @@ mod tests {
 
     #[test]
     fn test_counter_name_for_depth() {
-        assert_eq!(counter_name_for_depth(0), "i");
-        assert_eq!(counter_name_for_depth(1), "j");
-        assert_eq!(counter_name_for_depth(2), "k");
-        assert_eq!(counter_name_for_depth(3), "l");
-        assert_eq!(counter_name_for_depth(4), "m");
-        assert_eq!(counter_name_for_depth(5), "n");
-        assert_eq!(counter_name_for_depth(6), "idx6");
-        assert_eq!(counter_name_for_depth(10), "idx10");
+        assert_eq!(counter_name_for_depth(0).as_ref(), "i");
+        assert_eq!(counter_name_for_depth(1).as_ref(), "j");
+        assert_eq!(counter_name_for_depth(2).as_ref(), "k");
+        assert_eq!(counter_name_for_depth(3).as_ref(), "l");
+        assert_eq!(counter_name_for_depth(4).as_ref(), "m");
+        assert_eq!(counter_name_for_depth(5).as_ref(), "n");
+        assert_eq!(counter_name_for_depth(6).as_ref(), "idx6");
+        assert_eq!(counter_name_for_depth(10).as_ref(), "idx10");
     }
 
     #[test]

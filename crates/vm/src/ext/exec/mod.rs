@@ -55,10 +55,19 @@ pub struct VMTrace {
 /// Collect detected loops from a child trace into the parent's loop list.
 /// Only adds loops that aren't already present (by header_pc and condition_pc).
 fn collect_child_loops(child: &VMTrace, parent_loops: &mut Vec<LoopInfo>) {
+    // Early exit if child has no loops
+    if child.detected_loops.is_empty() {
+        return;
+    }
+
+    // Pre-reserve capacity for potential additions
+    parent_loops.reserve(child.detected_loops.len());
+
+    // Use extend with filter for cleaner code and potential optimization
     for loop_info in &child.detected_loops {
-        let already_exists = parent_loops.iter().any(|l| {
-            l.header_pc == loop_info.header_pc && l.condition_pc == loop_info.condition_pc
-        });
+        // Check existence using tuple key for fast comparison
+        let key = (loop_info.header_pc, loop_info.condition_pc);
+        let already_exists = parent_loops.iter().any(|l| (l.header_pc, l.condition_pc) == key);
         if !already_exists {
             parent_loops.push(loop_info.clone());
         }
