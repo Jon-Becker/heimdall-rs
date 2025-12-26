@@ -39,9 +39,9 @@ pub(crate) fn extcall_heuristic<'a>(
                         instruction.instruction,
                         opcode_name(instruction.opcode)
                     );
-                    function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({address}).transfer({value_solidified});"
-                    ));
+                    function
+                        .logic
+                        .push(format!("address({address}).transfer({value_solidified});"));
                     return Ok(());
                 }
                 if extcalldata.is_empty() {
@@ -50,9 +50,9 @@ pub(crate) fn extcall_heuristic<'a>(
                         instruction.instruction,
                         opcode_name(instruction.opcode)
                     );
-                    function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({address}).transfer({value_solidified});"
-                    ));
+                    function
+                        .logic
+                        .push(format!("address({address}).transfer({value_solidified});"));
                     return Ok(());
                 }
 

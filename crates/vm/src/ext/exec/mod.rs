@@ -24,6 +24,17 @@ use heimdall_common::utils::strings::decode_hex;
 use std::time::Instant;
 use tracing::{trace, warn};
 
+/// Represents an internal function call detected during symbolic execution
+#[derive(Clone, Debug, Default)]
+pub struct InternalCall {
+    /// The selector of the called function
+    pub selector: String,
+    /// The entry point (JUMPDEST) of the called function
+    pub entry_point: u128,
+    /// The solidified stack arguments at the time of the call
+    pub arguments: Vec<String>,
+}
+
 /// Represents a trace of virtual machine execution including operations and child calls
 ///
 /// VMTrace is used to track the operations performed during VM execution, including
@@ -41,14 +52,25 @@ pub struct VMTrace {
 
     /// Child traces resulting from internal calls (CALL, DELEGATECALL, etc.)
     pub children: Vec<VMTrace>,
+
+    /// Internal function call detected (when JUMP targets another function's entry point)
+    pub internal_call: Option<InternalCall>,
 }
 
 impl VM {
     /// Run symbolic execution on a given function selector within a contract
+    ///
+    /// # Arguments
+    /// * `selector` - The 4-byte function selector
+    /// * `entry_point` - The entry point (JUMPDEST) for this function
+    /// * `known_entry_points` - Map of entry points/internal bodies to selectors for detecting
+    ///   internal calls
+    /// * `timeout` - Execution timeout
     pub fn symbolic_exec_selector(
         &mut self,
         selector: &str,
         entry_point: u128,
+        known_entry_points: &HashMap<u128, String>,
         timeout: Instant,
     ) -> Result<(VMTrace, u32)> {
         self.calldata = decode_hex(selector)?;
@@ -74,7 +96,13 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        let trace = match self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)? {
+        let trace = match self.recursive_map(
+            &mut branch_count,
+            &mut HashMap::new(),
+            known_entry_points,
+            selector,
+            &timeout,
+        )? {
             Some(trace) => trace,
             None => {
                 warn!("symbolic execution returned no valid traces for selector 0x{}", selector);
@@ -83,6 +111,7 @@ impl VM {
                     gas_used: self.gas_used,
                     operations: Vec::new(),
                     children: Vec::new(),
+                    internal_call: None,
                 }
             }
         };
@@ -107,7 +136,13 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        let trace = match self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)? {
+        let trace = match self.recursive_map(
+            &mut branch_count,
+            &mut HashMap::new(),
+            &HashMap::new(),
+            "",
+            &timeout,
+        )? {
             Some(trace) => trace,
             None => {
                 warn!("symbolic execution returned no valid traces");
@@ -116,6 +151,7 @@ impl VM {
                     gas_used: self.gas_used,
                     operations: Vec::new(),
                     children: Vec::new(),
+                    internal_call: None,
                 }
             }
         };
@@ -126,6 +162,8 @@ impl VM {
         &mut self,
         branch_count: &mut u32,
         handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
+        known_entry_points: &HashMap<u128, String>,
+        current_selector: &str,
         timeout_at: &Instant,
     ) -> Result<Option<VMTrace>> {
         let vm = self;
@@ -138,6 +176,7 @@ impl VM {
             gas_used: 0,
             operations: Vec::new(),
             children: Vec::new(),
+            internal_call: None,
         };
 
         // step through the bytecode until we find a JUMPI instruction
@@ -160,6 +199,46 @@ impl VM {
             // update vm_trace
             vm_trace.operations.push(state);
             vm_trace.gas_used = vm.gas_used;
+
+            // Check for internal function call: JUMP (0x56) to a known function entry
+            // point/internal body
+            if last_instruction.opcode == 0x56 {
+                let jump_dest: u128 = last_instruction.inputs[0].try_into().unwrap_or(0);
+
+                // Check if this JUMP targets another function's entry point or internal body
+                if let Some(called_selector) = known_entry_points.get(&jump_dest) {
+                    // Only detect as internal call if it's to a DIFFERENT function
+                    if called_selector != current_selector {
+                        trace!(
+                            "detected internal call from 0x{} to function 0x{} at {}",
+                            current_selector,
+                            called_selector,
+                            jump_dest
+                        );
+
+                        // Capture stack arguments for the call
+                        // Stack after JUMP (top to bottom): [return_addr, argN-1, argN-2, ...,
+                        // arg0, ...] We capture the top items as solidified
+                        // operations The analyzer will use the arg count to
+                        // extract the right number
+                        let stack_len = vm.stack.stack.len();
+                        let take_count = stack_len.min(16);
+                        let mut arguments = Vec::with_capacity(take_count);
+                        for frame in vm.stack.stack.iter().take(take_count) {
+                            arguments.push(frame.operation.solidify());
+                        }
+
+                        vm_trace.internal_call = Some(InternalCall {
+                            selector: called_selector.clone(),
+                            entry_point: jump_dest,
+                            arguments,
+                        });
+
+                        // Stop tracing this path - the called function is traced separately
+                        break;
+                    }
+                }
+            }
 
             // if we encounter a JUMP(I), create children taking both paths and break
             if last_instruction.opcode == 0x57 {
@@ -339,7 +418,13 @@ impl VM {
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction =
                         last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    match trace_vm.recursive_map(
+                        branch_count,
+                        handled_jumps,
+                        known_entry_points,
+                        current_selector,
+                        timeout_at,
+                    ) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -349,7 +434,13 @@ impl VM {
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    match vm.recursive_map(
+                        branch_count,
+                        handled_jumps,
+                        known_entry_points,
+                        current_selector,
+                        timeout_at,
+                    ) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -362,7 +453,13 @@ impl VM {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = last_instruction.instruction + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    match trace_vm.recursive_map(
+                        branch_count,
+                        handled_jumps,
+                        known_entry_points,
+                        current_selector,
+                        timeout_at,
+                    ) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -372,7 +469,13 @@ impl VM {
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    match vm.recursive_map(
+                        branch_count,
+                        handled_jumps,
+                        known_entry_points,
+                        current_selector,
+                        timeout_at,
+                    ) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
