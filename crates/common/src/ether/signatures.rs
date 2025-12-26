@@ -710,7 +710,7 @@ mod tests {
                                           // num_params = 1, num_dyn_params = 2 + 1 = 3
                                           // Without saturating_sub: 1 - 3 would underflow
                                           // With saturating_sub: 1.saturating_sub(3) = 0
-        let score = score_signature(&signature, Some(0));
+        let score = score_signature(signature, Some(0));
         // Should not panic, should return a valid score (greater than 0)
         assert!(score > 0);
     }
@@ -722,7 +722,7 @@ mod tests {
                                   // num_params = 1, num_dyn_params = 0, num_static_params = 1
                                   // If num_words = 10, then num_words - num_static_params = 9
                                   // This would reduce score by 90
-        let score = score_signature(&signature, Some(10));
+        let score = score_signature(signature, Some(10));
         // Should not panic and should be reduced appropriately
         // Initial score calculation:
         // - Start: 1000
@@ -742,7 +742,7 @@ mod tests {
         // num_dyn_params = bytes(3) + string(1) + [(1) = 5
         // Without saturating_sub: 3 - 5 would underflow
         // With saturating_sub: 3.saturating_sub(5) = 0
-        let score = score_signature(&signature, Some(2));
+        let score = score_signature(signature, Some(2));
         // Should not panic and should return a valid score
         // The score should be positive since we add 10 per param
         assert!(score > 0);
