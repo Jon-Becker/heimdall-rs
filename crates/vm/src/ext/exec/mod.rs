@@ -63,7 +63,8 @@ impl VM {
     /// # Arguments
     /// * `selector` - The 4-byte function selector
     /// * `entry_point` - The entry point (JUMPDEST) for this function
-    /// * `known_entry_points` - Map of entry points/internal bodies to selectors for detecting internal calls
+    /// * `known_entry_points` - Map of entry points/internal bodies to selectors for detecting
+    ///   internal calls
     /// * `timeout` - Execution timeout
     pub fn symbolic_exec_selector(
         &mut self,
@@ -199,7 +200,8 @@ impl VM {
             vm_trace.operations.push(state);
             vm_trace.gas_used = vm.gas_used;
 
-            // Check for internal function call: JUMP (0x56) to a known function entry point/internal body
+            // Check for internal function call: JUMP (0x56) to a known function entry
+            // point/internal body
             if last_instruction.opcode == 0x56 {
                 let jump_dest: u128 = last_instruction.inputs[0].try_into().unwrap_or(0);
 
@@ -215,9 +217,10 @@ impl VM {
                         );
 
                         // Capture stack arguments for the call
-                        // Stack after JUMP (top to bottom): [return_addr, argN-1, argN-2, ..., arg0, ...]
-                        // We capture the top items as solidified operations
-                        // The analyzer will use the arg count to extract the right number
+                        // Stack after JUMP (top to bottom): [return_addr, argN-1, argN-2, ...,
+                        // arg0, ...] We capture the top items as solidified
+                        // operations The analyzer will use the arg count to
+                        // extract the right number
                         let arguments: Vec<String> = vm
                             .stack
                             .stack

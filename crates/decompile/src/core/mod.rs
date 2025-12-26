@@ -245,9 +245,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // Build a map of selector -> function name from resolved signatures
     let selector_names: HashMap<String, String> = resolved_selectors
         .iter()
-        .filter_map(|(selector, funcs)| {
-            funcs.first().map(|f| (selector.clone(), f.name.clone()))
-        })
+        .filter_map(|(selector, funcs)| funcs.first().map(|f| (selector.clone(), f.name.clone())))
         .collect();
 
     let start_analysis_time = Instant::now();
