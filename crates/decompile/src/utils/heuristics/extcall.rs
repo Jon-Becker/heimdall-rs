@@ -40,7 +40,7 @@ pub(crate) fn extcall_heuristic<'a>(
                         opcode_name(instruction.opcode)
                     );
                     function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({address}).transfer({value_solidified});"
+                        "address({address}).transfer({value_solidified});"
                     ));
                     return Ok(());
                 }
@@ -51,7 +51,7 @@ pub(crate) fn extcall_heuristic<'a>(
                         opcode_name(instruction.opcode)
                     );
                     function.logic.push(format!(
-                        "(bool success, bytes memory ret0) = address({address}).transfer({value_solidified});"
+                        "address({address}).transfer({value_solidified});"
                     ));
                     return Ok(());
                 }
