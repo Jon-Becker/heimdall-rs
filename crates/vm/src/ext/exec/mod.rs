@@ -246,112 +246,114 @@ impl VM {
                         // loop patterns and capture the stack diff for induction variable detection
                         let mut detected_loop_info: Option<(Vec<_>, String)> = None;
 
-                        for hist_stack in historical_stacks.iter() {
-                            if let Some(ref cond) = jump_condition {
-                                // check if any historical stack is the same as the current stack
-                                if hist_stack == &vm.stack {
+                        // Early filter: skip loop detection for conditions that can't be loops
+                        // (tautological or constant-only comparisons like overflow checks)
+                        let condition_could_be_loop =
+                            jump_condition.as_ref().map_or(true, |cond| {
+                                !is_tautologically_false_condition(cond) &&
+                                    !is_tautologically_true_condition(cond)
+                            });
+
+                        if condition_could_be_loop {
+                            for hist_stack in historical_stacks.iter() {
+                                if let Some(ref cond) = jump_condition {
+                                    // check if any historical stack is the same as the current
+                                    // stack
+                                    if hist_stack == &vm.stack {
+                                        trace!(
+                                            "jump matches loop-detection heuristic: 'jump_path_already_handled'"
+                                        );
+                                        detected_loop_info = Some((Vec::new(), cond.clone()));
+                                        break;
+                                    }
+
+                                    // calculate the difference of the current stack and the
+                                    // historical stack
+                                    let diff = stack_diff(&vm.stack, hist_stack);
+                                    if diff.is_empty() {
+                                        trace!(
+                                            "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
+                                        );
+                                        detected_loop_info = Some((diff, cond.clone()));
+                                        break;
+                                    }
+
                                     trace!(
-                                        "jump matches loop-detection heuristic: 'jump_path_already_handled'"
+                                        "stack diff: [{}]",
+                                        diff.iter()
+                                            .map(|frame| format!("{}", frame.value))
+                                            .collect::<Vec<String>>()
+                                            .join(", ")
                                     );
-                                    detected_loop_info = Some((Vec::new(), cond.clone()));
-                                    break;
-                                }
 
-                                // calculate the difference of the current stack and the historical
-                                // stack
-                                let diff = stack_diff(&vm.stack, hist_stack);
-                                if diff.is_empty() {
-                                    trace!(
-                                        "jump matches loop-detection heuristic: 'stack_diff_is_empty'"
-                                    );
-                                    detected_loop_info = Some((diff, cond.clone()));
-                                    break;
-                                }
+                                    // check if the jump condition appears to be recursive
+                                    if jump_condition_appears_recursive(&diff, cond) {
+                                        // Additional check: ensure condition has iteration evidence
+                                        if stack_diff_shows_iteration(&diff, cond) {
+                                            detected_loop_info = Some((diff, cond.clone()));
+                                            break;
+                                        }
+                                    }
 
-                                trace!(
-                                    "stack diff: [{}]",
-                                    diff.iter()
-                                        .map(|frame| format!("{}", frame.value))
-                                        .collect::<Vec<String>>()
-                                        .join(", ")
-                                );
+                                    // check for mutated memory accesses in the jump condition
+                                    if jump_condition_contains_mutated_memory_access(&diff, cond) {
+                                        if stack_diff_shows_iteration(&diff, cond) {
+                                            detected_loop_info = Some((diff, cond.clone()));
+                                            break;
+                                        }
+                                    }
 
-                                // check if the jump condition appears to be recursive
-                                if jump_condition_appears_recursive(&diff, cond) {
-                                    detected_loop_info = Some((diff, cond.clone()));
-                                    break;
-                                }
-
-                                // check for mutated memory accesses in the jump condition
-                                if jump_condition_contains_mutated_memory_access(&diff, cond) {
-                                    detected_loop_info = Some((diff, cond.clone()));
-                                    break;
-                                }
-
-                                // check for mutated storage accesses in the jump condition
-                                if jump_condition_contains_mutated_storage_access(&diff, cond) {
-                                    detected_loop_info = Some((diff, cond.clone()));
-                                    break;
+                                    // check for mutated storage accesses in the jump condition
+                                    if jump_condition_contains_mutated_storage_access(&diff, cond) {
+                                        if stack_diff_shows_iteration(&diff, cond) {
+                                            detected_loop_info = Some((diff, cond.clone()));
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }
 
                         // If a loop was detected, capture the LoopInfo and return the trace
                         if let Some((diff, condition)) = detected_loop_info {
-                            // Skip loops with invalid conditions:
-                            // - Tautologically false (e.g., "0 > 1") - overflow checks, dead code
-                            // - Tautologically true (e.g., "arg0 == arg0") - identical operand comparisons
-                            // - No iteration evidence - not a real loop (e.g., balance checks)
-                            if is_tautologically_false_condition(&condition) ||
-                                is_tautologically_true_condition(&condition) ||
-                                !stack_diff_shows_iteration(&diff, &condition)
-                            {
-                                trace!(
-                                    "skipping false positive loop, continuing execution: {}",
-                                    condition
-                                );
-                                // This is a false positive (e.g., overflow check), not a real loop
-                                // Continue execution instead of terminating the branch
-                                historical_stacks.push(vm.stack.clone());
-                            } else {
-                                trace!("loop detected, capturing LoopInfo");
-                                trace!(
-                                    "adding historical stack {} to jump frame {:?}",
-                                    &format!("{:#016x?}", vm.stack.hash()),
-                                    jump_frame
-                                );
-                                historical_stacks.push(vm.stack.clone());
+                            // At this point, we've already filtered out tautological conditions
+                            // and verified iteration evidence, so this is a real loop
+                            trace!("loop detected, capturing LoopInfo");
+                            trace!(
+                                "adding historical stack {} to jump frame {:?}",
+                                &format!("{:#016x?}", vm.stack.hash()),
+                                jump_frame
+                            );
+                            historical_stacks.push(vm.stack.clone());
 
-                                // Create LoopInfo with header_pc (jump target) and condition_pc
-                                // (JUMPI)
-                                let header_pc: u128 =
-                                    last_instruction.inputs[0].try_into().unwrap_or(0);
-                                let condition_pc = last_instruction.instruction;
+                            // Create LoopInfo with header_pc (jump target) and condition_pc
+                            // (JUMPI)
+                            let header_pc: u128 =
+                                last_instruction.inputs[0].try_into().unwrap_or(0);
+                            let condition_pc = last_instruction.instruction;
 
-                                // Try to detect induction variable from the stack diff
-                                let induction_var =
-                                    detect_induction_variable(&diff, &Some(condition.clone()));
+                            // Try to detect induction variable from the stack diff
+                            let induction_var =
+                                detect_induction_variable(&diff, &Some(condition.clone()));
 
-                                let mut loop_info =
-                                    LoopInfo::new(header_pc, condition_pc, condition);
+                            let mut loop_info = LoopInfo::new(header_pc, condition_pc, condition);
 
-                                if let Some(iv) = induction_var {
-                                    loop_info.induction_var = Some(iv);
-                                    loop_info.is_bounded = true;
-                                }
-
-                                trace!(
-                                    "detected loop: header_pc={}, condition_pc={}, condition={}",
-                                    header_pc,
-                                    condition_pc,
-                                    loop_info.condition
-                                );
-
-                                vm_trace.detected_loops.push(loop_info);
-
-                                // Return the trace with the loop info (not None)
-                                return Ok(Some(vm_trace));
+                            if let Some(iv) = induction_var {
+                                loop_info.induction_var = Some(iv);
+                                loop_info.is_bounded = true;
                             }
+
+                            trace!(
+                                "detected loop: header_pc={}, condition_pc={}, condition={}",
+                                header_pc,
+                                condition_pc,
+                                loop_info.condition
+                            );
+
+                            vm_trace.detected_loops.push(loop_info);
+
+                            // Return the trace with the loop info (not None)
+                            return Ok(Some(vm_trace));
                         }
 
                         // check if any stack position shows a consistent pattern

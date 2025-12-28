@@ -25,14 +25,14 @@ pub(crate) fn stack_diff_shows_iteration(stack_diff: &[StackFrame], condition: &
         let solidified = frame.operation.solidify();
 
         // Check for common loop counter patterns in the operation expression
-        if solidified.contains(" + 0x01")
-            || solidified.contains(" + 1)")
-            || solidified.contains(" - 0x01")
-            || solidified.contains(" - 1)")
-            || solidified.contains(" + 0x20")
-            || solidified.contains(" + 32)")
-            || solidified.contains(" - 0x20")
-            || solidified.contains(" - 32)")
+        if solidified.contains(" + 0x01") ||
+            solidified.contains(" + 1)") ||
+            solidified.contains(" - 0x01") ||
+            solidified.contains(" - 1)") ||
+            solidified.contains(" + 0x20") ||
+            solidified.contains(" + 32)") ||
+            solidified.contains(" - 0x20") ||
+            solidified.contains(" - 32)")
         {
             return true;
         }
@@ -89,11 +89,7 @@ fn condition_has_simple_counter(condition: &str) -> bool {
 
             // For < and <=, the counter is on the left
             // For > and >=, the counter is on the right
-            let (counter_side, limit_side) = if op.contains('<') {
-                (lhs, rhs)
-            } else {
-                (rhs, lhs)
-            };
+            let (counter_side, limit_side) = if op.contains('<') { (lhs, rhs) } else { (rhs, lhs) };
 
             // CRITICAL: If BOTH sides are constants, this is NOT a loop
             // (it's likely an overflow check like "0 > 0x01")
@@ -127,8 +123,8 @@ fn strip_negations_and_parens(condition: &str) -> &str {
         if s.starts_with('(') && s.ends_with(')') {
             // Check if parens are balanced
             let inner = &s[1..s.len() - 1];
-            if inner.chars().filter(|&c| c == '(').count()
-                == inner.chars().filter(|&c| c == ')').count()
+            if inner.chars().filter(|&c| c == '(').count() ==
+                inner.chars().filter(|&c| c == ')').count()
             {
                 s = inner.trim();
             } else {
@@ -171,12 +167,12 @@ fn is_small_constant(s: &str) -> bool {
 fn is_simple_var(s: &str) -> bool {
     let trimmed = s.trim().trim_start_matches('(').trim_end_matches(')').trim();
     // Simple patterns: i, j, var_a, memory[0x40], etc. but not complex expressions
-    !trimmed.contains(" + ")
-        && !trimmed.contains(" - ")
-        && !trimmed.contains(" * ")
-        && !trimmed.contains(" / ")
-        && !trimmed.contains("storage[")
-        && !trimmed.contains("keccak")
+    !trimmed.contains(" + ") &&
+        !trimmed.contains(" - ") &&
+        !trimmed.contains(" * ") &&
+        !trimmed.contains(" / ") &&
+        !trimmed.contains("storage[") &&
+        !trimmed.contains("keccak")
 }
 
 /// Check if a condition is tautologically true (e.g., "arg0 == arg0", "X == (address(X))").
@@ -251,24 +247,9 @@ fn normalize_for_comparison(expr: &str) -> String {
 
     // Strip common Solidity type casts: address(...), uint256(...), etc.
     let type_casts = [
-        "address(",
-        "uint256(",
-        "uint128(",
-        "uint96(",
-        "uint64(",
-        "uint32(",
-        "uint16(",
-        "uint8(",
-        "int256(",
-        "int128(",
-        "int64(",
-        "int32(",
-        "int16(",
-        "int8(",
-        "bytes32(",
-        "bytes20(",
-        "bytes4(",
-        "bool(",
+        "address(", "uint256(", "uint128(", "uint96(", "uint64(", "uint32(", "uint16(", "uint8(",
+        "int256(", "int128(", "int64(", "int32(", "int16(", "int8(", "bytes32(", "bytes20(",
+        "bytes4(", "bool(",
     ];
 
     for cast in type_casts {
