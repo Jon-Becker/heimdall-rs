@@ -11,7 +11,7 @@ use crate::{
         jump_frame::JumpFrame,
         loop_analysis::{
             detect_induction_variable, is_tautologically_false_condition,
-            is_tautologically_true_condition,
+            is_tautologically_true_condition, stack_diff_shows_iteration,
         },
         util::{
             historical_diffs_approximately_equal, jump_condition_appears_recursive,
@@ -298,19 +298,21 @@ impl VM {
 
                         // If a loop was detected, capture the LoopInfo and return the trace
                         if let Some((diff, condition)) = detected_loop_info {
-                            // Skip loops with tautologically false conditions (e.g., "0 > 1")
-                            // or tautologically true conditions (e.g., "arg0 == arg0")
-                            // These are not real loops but rather overflow checks, dead code,
-                            // or false positives from identical operand comparisons
+                            // Skip loops with invalid conditions:
+                            // - Tautologically false (e.g., "0 > 1") - overflow checks, dead code
+                            // - Tautologically true (e.g., "arg0 == arg0") - identical operand comparisons
+                            // - No iteration evidence - not a real loop (e.g., balance checks)
                             if is_tautologically_false_condition(&condition) ||
-                                is_tautologically_true_condition(&condition)
+                                is_tautologically_true_condition(&condition) ||
+                                !stack_diff_shows_iteration(&diff, &condition)
                             {
                                 trace!(
-                                    "skipping loop with tautological condition: {}",
+                                    "terminating branch -- no iteration evidence or invalid condition: {}",
                                     condition
                                 );
-                                historical_stacks.push(vm.stack.clone());
-                                // Continue execution without creating a loop
+                                // Return the trace without recording a loop
+                                // This terminates the branch to avoid infinite recursion
+                                return Ok(Some(vm_trace));
                             } else {
                                 trace!("loop detected, capturing LoopInfo");
                                 trace!(
@@ -354,6 +356,7 @@ impl VM {
 
                         // check if any stack position shows a consistent pattern
                         // (increasing/decreasing/alternating)
+                        // The pattern itself is evidence of iteration, so we trust it
                         if stack_position_shows_pattern(&vm.stack, historical_stacks) {
                             let condition =
                                 jump_condition.clone().unwrap_or_else(|| "true".to_string());
@@ -388,6 +391,7 @@ impl VM {
                             }
                         }
 
+                        // Approximate diff equality suggests consistent iteration patterns
                         if historical_diffs_approximately_equal(&vm.stack, historical_stacks) {
                             let condition =
                                 jump_condition.clone().unwrap_or_else(|| "true".to_string());

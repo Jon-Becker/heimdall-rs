@@ -1,5 +1,177 @@
 use crate::core::stack::StackFrame;
 
+/// Check if the stack diff and condition show evidence of iteration.
+/// A real loop must have:
+/// 1. A non-empty stack diff (something is changing)
+/// 2. The diff shows meaningful iteration patterns OR
+/// 3. The condition is NOT a storage-to-argument comparison (balance check)
+///
+/// This function is conservative - it returns false for patterns that look like
+/// `require()` checks (storage compared to function arguments).
+pub(crate) fn stack_diff_shows_iteration(stack_diff: &[StackFrame], condition: &str) -> bool {
+    // Empty diff means no iteration - the stack is identical
+    if stack_diff.is_empty() {
+        return false;
+    }
+
+    // First, check if the condition looks like a balance/require check
+    // These are NOT loops regardless of stack diff
+    if looks_like_require_check(condition) {
+        return false;
+    }
+
+    // Look for increment/decrement patterns in the stack diff operations
+    for frame in stack_diff {
+        let solidified = frame.operation.solidify();
+
+        // Check for common loop counter patterns in the operation expression
+        if solidified.contains(" + 0x01")
+            || solidified.contains(" + 1)")
+            || solidified.contains(" - 0x01")
+            || solidified.contains(" - 1)")
+            || solidified.contains(" + 0x20")
+            || solidified.contains(" + 32)")
+            || solidified.contains(" - 0x20")
+            || solidified.contains(" - 32)")
+        {
+            return true;
+        }
+    }
+
+    // If we have a non-empty diff but no clear increment pattern,
+    // check if the condition uses a simple counter variable
+    if condition_has_simple_counter(condition) {
+        return true;
+    }
+
+    false
+}
+
+/// Check if a condition looks like a require/balance check.
+/// These patterns compare storage values to function arguments and are NOT loops.
+fn looks_like_require_check(condition: &str) -> bool {
+    // Strip outer parens and negations to get to the core comparison
+    let inner = strip_negations_and_parens(condition);
+
+    // Check if it's a storage-to-argument comparison
+    for op in [" < ", " > ", " <= ", " >= "] {
+        if let Some(pos) = inner.find(op) {
+            let lhs = inner[..pos].trim();
+            let rhs = inner[pos + op.len()..].trim();
+
+            // storage[...] compared to argN is a balance check
+            let lhs_storage = lhs.contains("storage[");
+            let rhs_storage = rhs.contains("storage[");
+            let lhs_arg = is_arg_ref(lhs);
+            let rhs_arg = is_arg_ref(rhs);
+
+            if (lhs_storage && rhs_arg) || (lhs_arg && rhs_storage) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Check if a condition uses a simple counter variable pattern.
+/// Loop conditions like "i < length" or "0x20 < memory[...].length" are valid.
+/// Also handles inverted patterns like "length > i" or "0 > 0x01".
+fn condition_has_simple_counter(condition: &str) -> bool {
+    let inner = strip_negations_and_parens(condition);
+
+    // Look for patterns where one side is a simple counter value
+    // Patterns: "counter < limit", "counter <= limit", "limit > counter", "limit >= counter"
+    for op in [" < ", " <= ", " > ", " >= "] {
+        if let Some(pos) = inner.find(op) {
+            let lhs = inner[..pos].trim();
+            let rhs = inner[pos + op.len()..].trim();
+
+            // For < and <=, the counter is on the left
+            // For > and >=, the counter is on the right
+            let (counter_side, _limit_side) = if op.contains('<') {
+                (lhs, rhs)
+            } else {
+                (rhs, lhs)
+            };
+
+            // Counter should be simple (hex constant, decimal, or simple variable)
+            // and NOT a storage access
+            if !counter_side.contains("storage[") && !counter_side.contains("keccak") {
+                // Check if it's a small constant (likely a counter) or simple var
+                if is_small_constant(counter_side) || is_simple_var(counter_side) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Strip leading negations and outer parentheses from a condition
+fn strip_negations_and_parens(condition: &str) -> &str {
+    let mut s = condition.trim();
+    loop {
+        let prev = s;
+        if s.starts_with('!') {
+            s = s[1..].trim();
+        }
+        if s.starts_with('(') && s.ends_with(')') {
+            // Check if parens are balanced
+            let inner = &s[1..s.len() - 1];
+            if inner.chars().filter(|&c| c == '(').count()
+                == inner.chars().filter(|&c| c == ')').count()
+            {
+                s = inner.trim();
+            } else {
+                break;
+            }
+        }
+        if s == prev {
+            break;
+        }
+    }
+    s
+}
+
+/// Check if expression is a function argument reference (argN)
+fn is_arg_ref(s: &str) -> bool {
+    let trimmed = s.trim().trim_start_matches('(').trim_end_matches(')').trim();
+    if let Some(rest) = trimmed.strip_prefix("arg") {
+        return rest.chars().all(|c| c.is_ascii_digit()) && !rest.is_empty();
+    }
+    false
+}
+
+/// Check if a string is a small constant (likely a loop counter value)
+fn is_small_constant(s: &str) -> bool {
+    let trimmed = s.trim().trim_start_matches('(').trim_end_matches(')').trim();
+    // Hex constants like 0x20, 0x40, 0x00
+    if let Some(hex) = trimmed.strip_prefix("0x") {
+        if let Ok(val) = u64::from_str_radix(hex, 16) {
+            return val <= 0x1000; // Reasonable loop counter range
+        }
+    }
+    // Decimal constants
+    if let Ok(val) = trimmed.parse::<u64>() {
+        return val <= 4096;
+    }
+    false
+}
+
+/// Check if expression looks like a simple variable (not complex expression)
+fn is_simple_var(s: &str) -> bool {
+    let trimmed = s.trim().trim_start_matches('(').trim_end_matches(')').trim();
+    // Simple patterns: i, j, var_a, memory[0x40], etc. but not complex expressions
+    !trimmed.contains(" + ")
+        && !trimmed.contains(" - ")
+        && !trimmed.contains(" * ")
+        && !trimmed.contains(" / ")
+        && !trimmed.contains("storage[")
+        && !trimmed.contains("keccak")
+}
+
 /// Check if a condition is tautologically true (e.g., "arg0 == arg0", "X == (address(X))").
 /// These create infinite loops and should be skipped as invalid loop conditions.
 /// Also handles bitmask patterns like "X == (X & 0xff...ff)" which are type-check equivalents.
@@ -170,19 +342,25 @@ fn is_balanced_parens(s: &str) -> bool {
 
 /// Check if a condition is tautologically false (e.g., "0 > 1", "(0 > 0x01)").
 /// These cannot be valid loop conditions and should be skipped.
+/// NOTE: We do NOT strip leading negation here because `!(0 > 1)` = TRUE, which is valid.
 pub(crate) fn is_tautologically_false_condition(condition: &str) -> bool {
     // Strip outer whitespace first
     let mut trimmed = condition.trim();
 
-    // Remove leading negation (!) - we're looking at the inner condition
+    // If condition starts with negation, it's NOT tautologically false
+    // because !(false) = true, which is a valid (though potentially infinite) loop
     if trimmed.starts_with('!') {
-        trimmed = trimmed[1..].trim();
+        return false;
     }
 
     // Strip all outer parentheses (could be nested like "((...))")
     while trimmed.starts_with('(') && trimmed.ends_with(')') {
-        trimmed = &trimmed[1..trimmed.len() - 1];
-        trimmed = trimmed.trim();
+        let inner = &trimmed[1..trimmed.len() - 1];
+        if is_balanced_parens(inner) {
+            trimmed = inner.trim();
+        } else {
+            break;
+        }
     }
 
     // Pattern: "0 > X" where X > 0 (always false for unsigned)

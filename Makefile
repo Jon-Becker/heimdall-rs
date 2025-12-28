@@ -1,4 +1,4 @@
-.PHONY: all build build-release check clean fmt format lint lint-fix test test-doc test-heavy test-cov test-cov-json bench install help
+.PHONY: all build build-release check clean fmt format lint lint-fix test test-doc test-heavy test-cov test-cov-json bench install help eval
 
 # Clippy flags used across the project
 CLIPPY_ALLOW := --allow clippy::new_without_default \
@@ -74,3 +74,8 @@ bench:
 
 install:
 	cargo install --path crates/cli --locked
+
+eval:
+	# note: needs heimdall-eval cloned locally next to heimdall-rs
+	@ cd ../heimdall-eval && make eval-all DEV=1 > /dev/null 2>&1
+	@ cat ../heimdall-eval/heimdall/evals.json
