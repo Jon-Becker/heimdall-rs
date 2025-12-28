@@ -307,12 +307,12 @@ impl VM {
                                 !stack_diff_shows_iteration(&diff, &condition)
                             {
                                 trace!(
-                                    "terminating branch -- no iteration evidence or invalid condition: {}",
+                                    "skipping false positive loop, continuing execution: {}",
                                     condition
                                 );
-                                // Return the trace without recording a loop
-                                // This terminates the branch to avoid infinite recursion
-                                return Ok(Some(vm_trace));
+                                // This is a false positive (e.g., overflow check), not a real loop
+                                // Continue execution instead of terminating the branch
+                                historical_stacks.push(vm.stack.clone());
                             } else {
                                 trace!("loop detected, capturing LoopInfo");
                                 trace!(

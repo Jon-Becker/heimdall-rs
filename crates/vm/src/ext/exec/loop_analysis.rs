@@ -76,7 +76,7 @@ fn looks_like_require_check(condition: &str) -> bool {
 
 /// Check if a condition uses a simple counter variable pattern.
 /// Loop conditions like "i < length" or "0x20 < memory[...].length" are valid.
-/// Also handles inverted patterns like "length > i" or "0 > 0x01".
+/// Rejects constant-only comparisons like "0 > 0x01" (overflow checks).
 fn condition_has_simple_counter(condition: &str) -> bool {
     let inner = strip_negations_and_parens(condition);
 
@@ -89,11 +89,18 @@ fn condition_has_simple_counter(condition: &str) -> bool {
 
             // For < and <=, the counter is on the left
             // For > and >=, the counter is on the right
-            let (counter_side, _limit_side) = if op.contains('<') {
+            let (counter_side, limit_side) = if op.contains('<') {
                 (lhs, rhs)
             } else {
                 (rhs, lhs)
             };
+
+            // CRITICAL: If BOTH sides are constants, this is NOT a loop
+            // (it's likely an overflow check like "0 > 0x01")
+            // A real loop condition needs at least one variable (counter or bound)
+            if is_small_constant(counter_side) && is_small_constant(limit_side) {
+                continue;
+            }
 
             // Counter should be simple (hex constant, decimal, or simple variable)
             // and NOT a storage access
