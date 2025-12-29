@@ -47,8 +47,12 @@ pub struct Configuration {
     /// The API key for Transpose services
     pub transpose_api_key: String,
 
-    /// The API key for OpenAI services
-    pub openai_api_key: String,
+    /// The API key for OpenRouter services
+    pub openrouter_api_key: String,
+
+    /// The default model to use for OpenRouter LLM calls (e.g., "openai/gpt-4o-mini")
+    #[serde(default)]
+    pub openrouter_model: String,
 }
 
 impl Default for Configuration {
@@ -58,7 +62,8 @@ impl Default for Configuration {
             local_rpc_url: "http://localhost:8545".to_string(),
             etherscan_api_key: "".to_string(),
             transpose_api_key: "".to_string(),
-            openai_api_key: "".to_string(),
+            openrouter_api_key: "".to_string(),
+            openrouter_model: "".to_string(),
         }
     }
 }
@@ -116,11 +121,11 @@ impl Configuration {
             debug!("overriding transpose_api_key with mesc key");
             config.transpose_api_key = key;
         }
-        if let Some(key) = mesc::metadata::get_api_key("openai", Some("heimdall"))
+        if let Some(key) = mesc::metadata::get_api_key("openrouter", Some("heimdall"))
             .map_err(|e| Error::Generic(format!("MESC error: {e}")))?
         {
-            debug!("overriding openai_api_key with mesc key");
-            config.openai_api_key = key;
+            debug!("overriding openrouter_api_key with mesc key");
+            config.openrouter_api_key = key;
         }
 
         Ok(config)
@@ -183,8 +188,11 @@ impl Configuration {
             "transpose_api_key" => {
                 self.transpose_api_key = value.to_string();
             }
-            "openai_api_key" => {
-                self.openai_api_key = value.to_string();
+            "openrouter_api_key" => {
+                self.openrouter_api_key = value.to_string();
+            }
+            "openrouter_model" => {
+                self.openrouter_model = value.to_string();
             }
             _ => {
                 return Err(Error::Generic(format!(
@@ -246,7 +254,8 @@ mod tests {
         assert_eq!(config.local_rpc_url, "http://localhost:8545");
         assert_eq!(config.etherscan_api_key, "");
         assert_eq!(config.transpose_api_key, "");
-        assert_eq!(config.openai_api_key, "");
+        assert_eq!(config.openrouter_api_key, "");
+        assert_eq!(config.openrouter_model, "");
     }
 
     // Test loading configuration from a file
@@ -261,7 +270,8 @@ mod tests {
         assert_eq!(config.local_rpc_url, "http://localhost:8545");
         assert_eq!(config.etherscan_api_key, "");
         assert_eq!(config.transpose_api_key, "");
-        assert_eq!(config.openai_api_key, "");
+        assert_eq!(config.openrouter_api_key, "");
+        assert_eq!(config.openrouter_model, "");
     }
 
     // Test saving configuration to a file
@@ -286,7 +296,8 @@ mod tests {
         assert_eq!(loaded_config.local_rpc_url, "http://localhost:8545");
         assert_eq!(loaded_config.etherscan_api_key, "");
         assert_eq!(loaded_config.transpose_api_key, "");
-        assert_eq!(loaded_config.openai_api_key, "");
+        assert_eq!(loaded_config.openrouter_api_key, "");
+        assert_eq!(loaded_config.openrouter_model, "");
     }
 
     // Test deleting configuration file
@@ -311,6 +322,7 @@ mod tests {
         assert_eq!(config.local_rpc_url, "http://localhost:8545");
         assert_eq!(config.etherscan_api_key, "");
         assert_eq!(config.transpose_api_key, "");
-        assert_eq!(config.openai_api_key, "");
+        assert_eq!(config.openrouter_api_key, "");
+        assert_eq!(config.openrouter_model, "");
     }
 }
