@@ -7,7 +7,7 @@ use alloy_json_abi::StateMutability;
 use eyre::{OptionExt, Result};
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    resources::openai::complete_chat,
+    resources::openrouter::complete_chat,
     utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
 
@@ -21,17 +21,20 @@ use crate::{
     },
 };
 
-async fn annotate_function(source: &str, openai_api_key: &str) -> Result<String> {
-    let annotated =
-        complete_chat(&LLM_POSTPROCESSING_PROMPT.replace("{source}", source), openai_api_key)
-            .await
-            .ok_or_eyre("failed to llm postprocess function")?;
+async fn annotate_function(source: &str, openrouter_api_key: &str, model: &str) -> Result<String> {
+    let annotated = complete_chat(
+        &LLM_POSTPROCESSING_PROMPT.replace("{source}", source),
+        openrouter_api_key,
+        model,
+    )
+    .await
+    .ok_or_eyre("failed to llm postprocess function")?;
 
     // get the code from the response (remove the code block)
     let annotated = annotated
         .split("```")
         .nth(1)
-        .expect("failed to get code from response")
+        .unwrap_or(&annotated)
         .trim()
         .to_string()
         .replace("solidity", "");
@@ -49,7 +52,8 @@ pub(crate) async fn build_source(
     all_resolved_logs: &HashMap<String, ResolvedLog>,
     storage_variables: &HashMap<String, String>,
     llm_postprocess: bool,
-    openai_api_key: String,
+    openrouter_api_key: String,
+    model: String,
 ) -> Result<Option<String>> {
     // we can get the AnalyzerType from the first function, since they are all the same
     let analyzer_type = functions.first().map(|f| f.analyzer_type).unwrap_or(AnalyzerType::Yul);
@@ -101,7 +105,8 @@ pub(crate) async fn build_source(
         })
         .map(|f| {
             let f = f.clone(); // Ensure `Function` is cloneable, or adjust as needed.
-            let openai_api_key = openai_api_key.clone();
+            let openrouter_api_key = openrouter_api_key.clone();
+            let model = model.clone();
 
             // Spawn each function processing on a separate task.
             tokio::task::spawn(async move {
@@ -122,7 +127,7 @@ pub(crate) async fn build_source(
                     debug!("llm postprocessing 0x{} source", f.selector);
 
                     let postprocessed_source =
-                        annotate_function(&function_source.join("\n"), &openai_api_key)
+                        annotate_function(&function_source.join("\n"), &openrouter_api_key, &model)
                             .await
                             .map_err(|e| {
                                 debug!(

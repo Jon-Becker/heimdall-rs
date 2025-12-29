@@ -77,9 +77,9 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
         )));
     }
-    if args.llm_postprocess && args.openai_api_key.is_empty() {
+    if args.llm_postprocess && args.openrouter_api_key.is_empty() {
         return Err(Error::Eyre(eyre!(
-                "llm postprocessing requires an openai API key. please provide one using the '--openai-api-key' flag."
+                "llm postprocessing requires an OpenRouter API key. please provide one using the '--openrouter-api-key' flag."
             )));
     }
     if !args.include_solidity && args.llm_postprocess {
@@ -360,7 +360,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         &all_resolved_events,
         &storage_variables,
         args.llm_postprocess,
-        args.openai_api_key,
+        args.openrouter_api_key,
+        args.model,
     )
     .await?;
 
