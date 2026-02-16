@@ -62,9 +62,14 @@ pub struct DecompilerArgs {
     #[clap(long, short)]
     pub llm_postprocess: bool,
 
-    /// Your OpenAI API key, used for explaining calldata.
+    /// Your OpenRouter API key, used for LLM post-processing.
     #[clap(long, default_value = "", hide_default_value = true)]
-    pub openai_api_key: String,
+    pub openrouter_api_key: String,
+
+    /// The model to use for LLM post-processing (e.g., "openai/gpt-4o-mini",
+    /// "anthropic/claude-3-haiku").
+    #[clap(long, short = 'm', default_value = "", hide_default_value = true)]
+    pub model: String,
 
     /// Your Etherscan API key, used for fetching creation bytecode of self-destructed contracts.
     #[clap(long, default_value = "", hide_default_value = true)]
@@ -155,7 +160,8 @@ impl DecompilerArgsBuilder {
             timeout: Some(10000),
             abi: Some(None),
             llm_postprocess: Some(false),
-            openai_api_key: Some(String::new()),
+            openrouter_api_key: Some(String::new()),
+            model: Some(String::new()),
             etherscan_api_key: Some(String::new()),
             hardfork: Some(HardFork::Latest),
         }

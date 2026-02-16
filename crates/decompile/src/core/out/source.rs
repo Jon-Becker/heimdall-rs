@@ -1,4 +1,3 @@
-use futures::future::join_all;
 use hashbrown::{HashMap, HashSet};
 use std::time::Instant;
 
@@ -7,7 +6,7 @@ use alloy_json_abi::StateMutability;
 use eyre::{OptionExt, Result};
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    resources::openai::complete_chat,
+    resources::openrouter::{complete_chat_structured, AnnotatedContractResponse},
     utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
 
@@ -21,26 +20,18 @@ use crate::{
     },
 };
 
-async fn annotate_function(source: &str, openai_api_key: &str) -> Result<String> {
-    let annotated =
-        complete_chat(&LLM_POSTPROCESSING_PROMPT.replace("{source}", source), openai_api_key)
-            .await
-            .ok_or_eyre("failed to llm postprocess function")?;
+/// Annotates the entire contract source code using an LLM with structured output.
+async fn annotate_contract(source: &str, openrouter_api_key: &str, model: &str) -> Result<String> {
+    let response: AnnotatedContractResponse = complete_chat_structured(
+        &LLM_POSTPROCESSING_PROMPT.replace("{source}", source),
+        openrouter_api_key,
+        model,
+        "annotated_contract",
+    )
+    .await
+    .ok_or_eyre("failed to llm postprocess contract")?;
 
-    // get the code from the response (remove the code block)
-    let annotated = annotated
-        .split("```")
-        .nth(1)
-        .expect("failed to get code from response")
-        .trim()
-        .to_string()
-        .replace("solidity", "");
-
-    if annotated.contains("{{code}}") {
-        return Err(eyre::eyre!("failed to postprocess function"));
-    }
-
-    Ok(annotated)
+    Ok(response.source)
 }
 
 pub(crate) async fn build_source(
@@ -49,7 +40,8 @@ pub(crate) async fn build_source(
     all_resolved_logs: &HashMap<String, ResolvedLog>,
     storage_variables: &HashMap<String, String>,
     llm_postprocess: bool,
-    openai_api_key: String,
+    openrouter_api_key: String,
+    model: String,
 ) -> Result<Option<String>> {
     // we can get the AnalyzerType from the first function, since they are all the same
     let analyzer_type = functions.first().map(|f| f.analyzer_type).unwrap_or(AnalyzerType::Yul);
@@ -92,71 +84,21 @@ pub(crate) async fn build_source(
     }
 
     // add functions
-    let futures: Vec<_> = functions
-        .iter()
-        .filter(|f| {
-            !f.fallback &&
-                (analyzer_type == AnalyzerType::Yul ||
-                    (f.maybe_getter_for.is_none() && !f.is_constant()))
-        })
-        .map(|f| {
-            let f = f.clone(); // Ensure `Function` is cloneable, or adjust as needed.
-            let openai_api_key = openai_api_key.clone();
+    for f in functions.iter().filter(|f| {
+        !f.fallback &&
+            (analyzer_type == AnalyzerType::Yul ||
+                (f.maybe_getter_for.is_none() && !f.is_constant()))
+    }) {
+        let mut function_source = Vec::new();
 
-            // Spawn each function processing on a separate task.
-            tokio::task::spawn(async move {
-                let mut function_source = Vec::new();
+        // get the function header
+        function_source.extend(get_function_header(f));
+        function_source.extend(f.logic.clone());
+        function_source.push("}".to_string());
 
-                // get the function header
-                function_source.extend(get_function_header(&f));
-                function_source.extend(f.logic.clone());
-                function_source.push("}".to_string());
+        let imbalance = get_indentation_imbalance(&function_source);
+        function_source.extend(vec!["}".to_string(); imbalance as usize]);
 
-                let imbalance = get_indentation_imbalance(&function_source);
-                function_source.extend(vec!["}".to_string(); imbalance as usize]);
-
-                if llm_postprocess {
-                    // postprocess the source code
-                    let postprocess_start = Instant::now();
-
-                    debug!("llm postprocessing 0x{} source", f.selector);
-
-                    let postprocessed_source =
-                        annotate_function(&function_source.join("\n"), &openai_api_key)
-                            .await
-                            .map_err(|e| {
-                                debug!(
-                                    "llm postprocessing 0x{} source failed: {:?}",
-                                    f.selector, e
-                                );
-                                e
-                            })
-                            .ok();
-
-                    debug!(
-                        "llm postprocessing 0x{} source took {:?}",
-                        f.selector,
-                        postprocess_start.elapsed()
-                    );
-
-                    // replace the function source with the postprocessed source
-                    if let Some(postprocessed_source) = postprocessed_source {
-                        function_source =
-                            postprocessed_source.split('\n').map(|x| x.to_string()).collect();
-                    }
-                }
-
-                Ok::<Vec<String>, eyre::Report>(function_source)
-            })
-        })
-        .collect();
-
-    // Await all tasks to complete
-    let results = join_all(futures).await;
-
-    // Combine all the results into one single vector
-    for res in results {
-        let function_source = res??;
         source.extend(function_source);
     }
 
@@ -197,6 +139,22 @@ pub(crate) async fn build_source(
             .unwrap_or_else(|| format!("unresolved_{}", f.selector));
         source = source.replace(getter_for_storage_variable, &resolved_name);
     });
+
+    // apply LLM postprocessing to the entire contract source
+    if llm_postprocess {
+        let postprocess_start = Instant::now();
+        debug!("llm postprocessing entire contract source");
+
+        match annotate_contract(&source, &openrouter_api_key, &model).await {
+            Ok(annotated_source) => {
+                debug!("llm postprocessing contract took {:?}", postprocess_start.elapsed());
+                source = annotated_source;
+            }
+            Err(e) => {
+                debug!("llm postprocessing contract failed: {:?}", e);
+            }
+        }
+    }
 
     debug!("constructing {} source took {:?}", analyzer_type, start_time.elapsed());
 

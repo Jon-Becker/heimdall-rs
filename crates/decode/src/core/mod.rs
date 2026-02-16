@@ -42,10 +42,10 @@ use crate::{
 pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     let start_time = Instant::now();
 
-    // check if we require an OpenAI API key
-    if args.explain && args.openai_api_key.is_empty() {
+    // check if we require an OpenRouter API key
+    if args.explain && args.openrouter_api_key.is_empty() {
         return Err(Error::Eyre(
-            eyre!("OpenAI API key is required for explaining calldata. Use `heimdall decode --help` for more information.".to_string()),
+            eyre!("OpenRouter API key is required for explaining calldata. Use `heimdall decode --help` for more information.".to_string()),
         ));
     }
 

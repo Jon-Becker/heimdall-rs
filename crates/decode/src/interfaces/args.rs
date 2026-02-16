@@ -24,11 +24,16 @@ pub struct DecodeArgs {
     #[clap(long, short, value_parser = parse_url_arg, default_value = "", hide_default_value = true)]
     pub rpc_url: String,
 
-    /// Your OpenAI API key, used for explaining calldata.
+    /// Your OpenRouter API key, used for explaining calldata.
     #[clap(long, default_value = "", hide_default_value = true)]
-    pub openai_api_key: String,
+    pub openrouter_api_key: String,
 
-    /// Whether to explain the decoded calldata using OpenAI.
+    /// The model to use for explaining calldata (e.g., "openai/gpt-4o-mini",
+    /// "anthropic/claude-3-haiku").
+    #[clap(long, short = 'm', default_value = "", hide_default_value = true)]
+    pub model: String,
+
+    /// Whether to explain the decoded calldata using the LLM.
     #[clap(long)]
     pub explain: bool,
 
@@ -81,7 +86,8 @@ impl DecodeArgsBuilder {
         Self {
             target: Some(String::new()),
             rpc_url: Some(String::new()),
-            openai_api_key: Some(String::new()),
+            openrouter_api_key: Some(String::new()),
+            model: Some(String::new()),
             explain: Some(false),
             default: Some(true),
             constructor: Some(false),
