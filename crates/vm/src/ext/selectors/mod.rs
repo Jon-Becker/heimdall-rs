@@ -1,3 +1,6 @@
+/// Vyper-specific selector detection using symbolic execution-based calldata flow tracking
+pub mod vyper;
+
 use hashbrown::{HashMap, HashSet};
 use std::{
     sync::{Arc, Mutex},
@@ -52,13 +55,47 @@ pub async fn get_resolved_selectors(
     Ok((selectors, resolved_selectors))
 }
 
-/// find all function selectors in the given EVM assembly.
-// TODO: update get_resolved_selectors logic to support vyper, huff
+/// Find all function selectors in the given EVM assembly.
+///
+/// Uses a two-phase approach:
+/// 1. Solidity-style detection: scans for PUSH4 instructions in the assembly
+/// 2. Vyper-style detection: uses symbolic execution to trace calldata flow through the dispatcher
+///
+/// If the Solidity approach finds few or no selectors, Vyper detection is attempted as a fallback.
+/// Results from both approaches are merged, with Vyper results preferred when they provide
+/// more complete coverage.
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
+    // Phase 1: Solidity-style PUSH4 detection
+    let solidity_selectors = find_solidity_selectors(evm, assembly);
+
+    // Phase 2: If Solidity detection found few selectors, try Vyper detection
+    // Vyper contracts typically don't use PUSH4 for selectors in the same pattern,
+    // or may use different dispatch structures (bucket dispatch, binary search)
+    if solidity_selectors.len() < 3 {
+        let vyper_selectors = vyper::find_vyper_selectors(evm, assembly);
+
+        if vyper_selectors.len() > solidity_selectors.len() {
+            info!(
+                "vyper detection found {} selectors vs {} from solidity detection, using vyper results",
+                vyper_selectors.len(),
+                solidity_selectors.len()
+            );
+            return vyper_selectors;
+        }
+    }
+
+    solidity_selectors
+}
+
+/// Find function selectors using the Solidity PUSH4 pattern.
+///
+/// Scans the disassembled bytecode for PUSH4 instructions and attempts to resolve
+/// their entry points by executing the dispatcher with each candidate selector.
+fn find_solidity_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
     let mut function_selectors = HashMap::new();
     let mut handled_selectors = HashSet::new();
 
-    // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
+    // search through assembly for PUSH4 instructions, optimistically assuming that
     // they are function selectors
     let assembly: Vec<String> = assembly.split('\n').map(|line| line.trim().to_string()).collect();
     for line in assembly.iter() {
@@ -103,12 +140,15 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
         }
     }
 
-    info!("discovered {} function selectors in assembly", function_selectors.len());
+    info!("discovered {} function selectors in assembly (solidity pattern)", function_selectors.len());
     function_selectors
 }
 
-/// resolve a selector's function entry point from the EVM bytecode
-// TODO: update resolve_entry_point logic to support vyper
+/// Resolve a selector's function entry point from the EVM bytecode.
+///
+/// Supports both Solidity and Vyper dispatch patterns:
+/// - Solidity: PUSH4 selector, EQ with msg.data, JUMPI
+/// - Vyper: CALLDATALOAD(0), SHR(224), EQ with selector, JUMPI
 pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
     let mut handled_jumps = HashSet::new();
 
@@ -120,16 +160,20 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
             Err(_) => break, // the call failed, so we can't resolve the selector
         };
 
-        // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
+        // if the opcode is a JUMPI and it matched the selector, the next jumpi is the entry point
         if call.last_instruction.opcode == 0x57 {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
             let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
 
-            if jump_condition.contains(selector) &&
-                jump_condition.contains("msg.data[0]") &&
-                jump_condition.contains(" == ") &&
-                jump_taken == 1
-            {
+            // Check for Solidity pattern: direct selector comparison with msg.data
+            // Also check for Vyper pattern: msg.data[0x00] (note the 0x prefix in the hex offset)
+            let has_selector = jump_condition.contains(selector);
+            let has_calldata = jump_condition.contains("msg.data[0]")
+                || jump_condition.contains("msg.data[0x");
+            let has_equality = jump_condition.contains(" == ")
+                || (jump_condition.contains("!(") && jump_condition.contains(" ^ "));
+
+            if has_selector && has_calldata && has_equality && jump_taken == 1 {
                 return call.last_instruction.inputs[0].try_into().unwrap_or(0);
             } else if jump_taken == 1 {
                 // if handled_jumps contains the jumpi, we have already handled this jump.
