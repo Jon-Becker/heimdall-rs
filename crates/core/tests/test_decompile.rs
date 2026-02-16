@@ -568,4 +568,98 @@ mod integration_tests {
             assert!(error_obj.contains_key("signature"), "Error should have a signature field");
         }
     }
+
+    /// Test decompiling a Vyper-compiled contract using raw bytecode.
+    ///
+    /// This bytecode contains a Vyper-style dispatcher with 3 function selectors:
+    /// - transfer(address,uint256) = 0xa9059cbb
+    /// - balanceOf(address) = 0x70a08231
+    /// - approve(address,uint256) = 0x095ea7b3
+    #[tokio::test]
+    async fn test_decompile_vyper_contract_from_bytecode() {
+        // Vyper-style dispatcher bytecode with 3 selectors and CBOR metadata
+        let vyper_bytecode = "0x600436101561000e5760006000fd5b60003560e01c8063a9059cbb1461003b57806370a082311461003d578063095ea7b31461003f5760006000fd5b005b005b0076797065728300030a";
+
+        let result = decompile(DecompilerArgs {
+            target: String::from(vyper_bytecode),
+            rpc_url: String::new(),
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+            abi: None,
+            openai_api_key: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .expect("failed to decompile vyper contract");
+
+        // the ABI should contain function entries for the detected selectors
+        let abi = &result.abi;
+        let function_count = abi.functions().count();
+        assert!(
+            function_count >= 3,
+            "ABI should contain at least 3 function entries, found {}",
+            function_count
+        );
+
+        // check that the extended ABI contains selectors we expect
+        let abi_str = serde_json::to_string(&result.abi_with_details)
+            .expect("failed to serialize abi_with_details");
+
+        // at least some of these selectors should be present in the ABI output
+        let expected_selectors = ["a9059cbb", "70a08231", "095ea7b3"];
+        let found_count =
+            expected_selectors.iter().filter(|s| abi_str.contains(*s)).count();
+        assert!(
+            found_count >= 2,
+            "expected at least 2 of the 3 selectors in ABI output, found {}. ABI: {}",
+            found_count,
+            abi_str
+        );
+    }
+
+    /// Test decompiling a Vyper contract fetched from an RPC provider.
+    /// Uses a known Vyper contract (Curve TriCrypto pool).
+    /// This test is skipped if RPC_URL is not set.
+    #[tokio::test]
+    async fn test_decompile_vyper_contract_rpc() {
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        // Curve TriCrypto2 pool - a well-known Vyper contract
+        let result = decompile(DecompilerArgs {
+            target: String::from("0xD51a44d3FaE010294C616388b506AcdA1bfAAE46"),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 30000,
+            abi: None,
+            openai_api_key: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .expect("failed to decompile vyper contract from RPC");
+
+        // the ABI should contain function entries
+        let function_count = result.abi.functions().count();
+        assert!(
+            function_count > 0,
+            "ABI should contain function entries for Vyper contract, found {}",
+            function_count
+        );
+    }
 }

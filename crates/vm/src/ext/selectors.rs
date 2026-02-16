@@ -495,6 +495,52 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy::primitives::Address;
+
+    /// Construct a Vyper-style dispatcher bytecode with known selectors.
+    /// Contains 3 selectors: transfer (0xa9059cbb), balanceOf (0x70a08231), approve (0x095ea7b3)
+    /// with entry points at 0x3b, 0x3d, and 0x3f respectively.
+    /// Includes Vyper CBOR metadata suffix so compiler detection identifies it as Vyper.
+    fn vyper_test_bytecode() -> Vec<u8> {
+        vec![
+            // Vyper prefix: PUSH1 4, CALLDATASIZE, LT, ISZERO, PUSH2 0x000e, JUMPI
+            0x60, 0x04, 0x36, 0x10, 0x15, 0x61, 0x00, 0x0e, 0x57,
+            // revert path for short calldata
+            0x60, 0x00, 0x60, 0x00, 0xfd,
+            // JUMPDEST: dispatcher start
+            0x5b,
+            // extract selector: PUSH1 0, CALLDATALOAD, PUSH1 0xe0, SHR
+            0x60, 0x00, 0x35, 0x60, 0xe0, 0x1c,
+            // compare with transfer (0xa9059cbb)
+            0x80, 0x63, 0xa9, 0x05, 0x9c, 0xbb, 0x14, 0x61, 0x00, 0x3b, 0x57,
+            // compare with balanceOf (0x70a08231)
+            0x80, 0x63, 0x70, 0xa0, 0x82, 0x31, 0x14, 0x61, 0x00, 0x3d, 0x57,
+            // compare with approve (0x095ea7b3)
+            0x80, 0x63, 0x09, 0x5e, 0xa7, 0xb3, 0x14, 0x61, 0x00, 0x3f, 0x57,
+            // fallthrough: revert
+            0x60, 0x00, 0x60, 0x00, 0xfd,
+            // entry points
+            0x5b, 0x00, // transfer @ 0x3b
+            0x5b, 0x00, // balanceOf @ 0x3d
+            0x5b, 0x00, // approve @ 0x3f
+            // Vyper CBOR metadata: "vyper" + 0x83 + version (0.3.10)
+            0x76, 0x79, 0x70, 0x65, 0x72, 0x83, 0x00, 0x03, 0x0a,
+        ]
+    }
+
+    fn create_vm(bytecode: &[u8]) -> VM {
+        VM::new(
+            bytecode,
+            &[],
+            Address::default(),
+            Address::default(),
+            Address::default(),
+            0,
+            u128::MAX,
+        )
+    }
+
+    // --- extract_selector_from_condition tests ---
 
     #[test]
     fn test_extract_selector_simple_rhs() {
@@ -538,5 +584,127 @@ mod tests {
         let condition = "msg.data[0x00] == 0x01 == 0x02";
         let result = extract_selector_from_condition(condition);
         assert_eq!(result, None);
+    }
+
+    // --- Vyper selector detection tests ---
+
+    #[test]
+    fn test_find_vyper_selectors_discovers_all_selectors() {
+        let bytecode = vyper_test_bytecode();
+        let evm = create_vm(&bytecode);
+
+        let selectors = find_vyper_selectors(&evm);
+
+        assert!(
+            selectors.contains_key("0xa9059cbb"),
+            "should detect transfer selector 0xa9059cbb, found: {:?}",
+            selectors.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            selectors.contains_key("0x70a08231"),
+            "should detect balanceOf selector 0x70a08231, found: {:?}",
+            selectors.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            selectors.contains_key("0x095ea7b3"),
+            "should detect approve selector 0x095ea7b3, found: {:?}",
+            selectors.keys().collect::<Vec<_>>()
+        );
+        assert_eq!(selectors.len(), 3, "should find exactly 3 selectors");
+    }
+
+    #[test]
+    fn test_find_vyper_selectors_correct_entry_points() {
+        let bytecode = vyper_test_bytecode();
+        let evm = create_vm(&bytecode);
+
+        let selectors = find_vyper_selectors(&evm);
+
+        // entry points at 0x3b, 0x3d, 0x3f
+        assert_eq!(selectors.get("0xa9059cbb"), Some(&0x3b_u128), "transfer entry point");
+        assert_eq!(selectors.get("0x70a08231"), Some(&0x3d_u128), "balanceOf entry point");
+        assert_eq!(selectors.get("0x095ea7b3"), Some(&0x3f_u128), "approve entry point");
+    }
+
+    #[test]
+    fn test_resolve_vyper_entry_point_transfer() {
+        let bytecode = vyper_test_bytecode();
+        let mut vm = create_vm(&bytecode);
+
+        let entry = resolve_vyper_entry_point(&mut vm, "0xa9059cbb");
+        assert_eq!(entry, 0x3b, "transfer entry point should be 0x3b");
+    }
+
+    #[test]
+    fn test_resolve_vyper_entry_point_balance_of() {
+        let bytecode = vyper_test_bytecode();
+        let mut vm = create_vm(&bytecode);
+
+        let entry = resolve_vyper_entry_point(&mut vm, "0x70a08231");
+        assert_eq!(entry, 0x3d, "balanceOf entry point should be 0x3d");
+    }
+
+    #[test]
+    fn test_resolve_vyper_entry_point_approve() {
+        let bytecode = vyper_test_bytecode();
+        let mut vm = create_vm(&bytecode);
+
+        let entry = resolve_vyper_entry_point(&mut vm, "0x095ea7b3");
+        assert_eq!(entry, 0x3f, "approve entry point should be 0x3f");
+    }
+
+    #[test]
+    fn test_resolve_vyper_entry_point_unknown_selector() {
+        let bytecode = vyper_test_bytecode();
+        let mut vm = create_vm(&bytecode);
+
+        let entry = resolve_vyper_entry_point(&mut vm, "0xdeadbeef");
+        assert_eq!(entry, 0, "unknown selector should return entry point 0");
+    }
+
+    #[test]
+    fn test_find_function_selectors_vyper_compiler_detection() {
+        // the bytecode includes vyper CBOR metadata, so compiler detection
+        // should route to the vyper strategy
+        let bytecode = vyper_test_bytecode();
+        let evm = create_vm(&bytecode);
+
+        let (compiler, _) = heimdall_common::ether::compiler::detect_compiler(&bytecode);
+        assert_eq!(compiler, Compiler::Vyper, "should detect Vyper compiler");
+
+        // find_function_selectors should use vyper path and find all selectors
+        let selectors = find_function_selectors(&evm, "");
+
+        assert_eq!(selectors.len(), 3, "should find 3 selectors via vyper path");
+        assert!(selectors.contains_key("0xa9059cbb"), "should find transfer");
+        assert!(selectors.contains_key("0x70a08231"), "should find balanceOf");
+        assert!(selectors.contains_key("0x095ea7b3"), "should find approve");
+    }
+
+    #[test]
+    fn test_resolve_entry_point_with_vyper_compiler() {
+        let bytecode = vyper_test_bytecode();
+        let mut vm = create_vm(&bytecode);
+
+        // resolve_entry_point should detect Vyper and use vyper resolution
+        let entry = resolve_entry_point(&mut vm, "0xa9059cbb");
+        assert_eq!(entry, 0x3b, "should resolve transfer entry point via vyper path");
+    }
+
+    #[test]
+    fn test_find_vyper_selectors_empty_bytecode() {
+        // empty bytecode should return no selectors
+        let evm = create_vm(&[0x00]);
+        let selectors = find_vyper_selectors(&evm);
+        assert!(selectors.is_empty(), "empty bytecode should yield no selectors");
+    }
+
+    #[test]
+    fn test_find_vyper_selectors_no_dispatcher() {
+        // bytecode with no dispatcher (just STOP) should return no selectors
+        let bytecode = vec![0x00]; // STOP
+        let evm = create_vm(&bytecode);
+        let selectors = find_vyper_selectors(&evm);
+        assert!(selectors.is_empty(), "STOP-only bytecode should yield no selectors");
     }
 }
