@@ -288,10 +288,12 @@ fn extract_selector_from_condition(condition: &str) -> Option<String> {
     let selector_str = selector_side.trim();
 
     // handle case where selector is a simple hex value
-    if selector_str.starts_with("0x") && selector_str.len() <= 10 {
+    if let Some(hex_part) = selector_str.strip_prefix("0x") {
         // validate it looks like a 4-byte selector (up to 8 hex chars after 0x)
-        let hex_part = &selector_str[2..];
-        if hex_part.chars().all(|c| c.is_ascii_hexdigit()) && !hex_part.is_empty() {
+        if selector_str.len() <= 10
+            && hex_part.chars().all(|c| c.is_ascii_hexdigit())
+            && !hex_part.is_empty()
+        {
             // normalize to 8 hex chars with leading zeros
             let normalized = format!("0x{:0>8}", hex_part);
             return Some(normalized);
@@ -301,8 +303,7 @@ fn extract_selector_from_condition(condition: &str) -> Option<String> {
     // handle case where the selector is embedded in a more complex expression
     // look for a hex pattern in the string
     for word in selector_str.split_whitespace() {
-        if word.starts_with("0x") {
-            let hex_part = &word[2..];
+        if let Some(hex_part) = word.strip_prefix("0x") {
             if hex_part.len() <= 8 && hex_part.chars().all(|c| c.is_ascii_hexdigit()) {
                 let normalized = format!("0x{:0>8}", hex_part);
                 return Some(normalized);
