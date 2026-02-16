@@ -4,10 +4,7 @@ use tracing::{info, trace};
 use alloy::primitives::U256;
 
 use crate::core::{
-    opcodes::{
-        WrappedInput, AND, CALLDATACOPY, CALLDATALOAD, DIV, EQ, GT, ISZERO, JUMPDEST, JUMPI, LT,
-        MOD, SHR, XOR,
-    },
+    opcodes::{WrappedInput, AND, CALLDATACOPY, CALLDATALOAD, EQ, ISZERO, JUMPDEST, JUMPI, MOD, XOR},
     vm::VM,
 };
 
