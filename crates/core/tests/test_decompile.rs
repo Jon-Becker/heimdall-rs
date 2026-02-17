@@ -580,4 +580,371 @@ mod integration_tests {
             assert!(error_obj.contains_key("signature"), "Error should have a signature field");
         }
     }
+
+    // ========================================================================================
+    // Vyper contract integration tests
+    //
+    // These tests validate that heimdall correctly detects function selectors from Vyper-compiled
+    // contracts. Vyper uses different selector dispatch patterns than Solidity (XOR/SUB instead
+    // of EQ, skip-if-not-equal instead of jump-if-equal).
+    // ========================================================================================
+
+    /// A Vyper contract with known function selectors for integration testing.
+    struct VyperTestContract {
+        /// Contract address on Ethereum mainnet
+        address: &'static str,
+        /// Human-readable contract name
+        name: &'static str,
+        /// A subset of expected function selectors (0x-prefixed, lowercase hex)
+        /// that should be detected by the decompiler
+        expected_selectors: Vec<&'static str>,
+        /// Minimum number of selectors expected in the ABI
+        min_selector_count: usize,
+    }
+
+    /// Returns a list of verified Vyper contracts with their expected function selectors.
+    ///
+    /// Each contract has been verified on Etherscan and the selectors have been confirmed
+    /// against the deployed bytecode and verified source code.
+    fn get_vyper_test_contracts() -> Vec<VyperTestContract> {
+        vec![
+            // Curve 3pool (DAI/USDC/USDT StableSwap), Vyper 0.2.x
+            VyperTestContract {
+                address: "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7",
+                name: "curve_3pool",
+                expected_selectors: vec![
+                    "0x3df02124", // exchange(int128,int128,uint256,uint256)
+                    "0x5e0d443f", // get_dy(int128,int128,uint256)
+                    "0xbb7b8b80", // get_virtual_price()
+                    "0xddca3f43", // fee()
+                    "0xc6610657", // coins(uint256)
+                ],
+                min_selector_count: 10,
+            },
+            // Curve stETH/ETH StableSwap pool, Vyper 0.2.8
+            VyperTestContract {
+                address: "0xDC24316b9AE028F1497c275EB9192a3Ea0f67022",
+                name: "curve_steth",
+                expected_selectors: vec![
+                    "0x3df02124", // exchange(int128,int128,uint256,uint256)
+                    "0x5e0d443f", // get_dy(int128,int128,uint256)
+                    "0xbb7b8b80", // get_virtual_price()
+                    "0xddca3f43", // fee()
+                    "0x4903b0d1", // balances(uint256)
+                ],
+                min_selector_count: 8,
+            },
+            // Curve sUSD StableSwap pool (DAI/USDC/USDT/sUSD), early Vyper
+            VyperTestContract {
+                address: "0xA5407eAE9Ba41422680e2e00537571bcC53efBfD",
+                name: "curve_susd",
+                expected_selectors: vec![
+                    "0x3df02124", // exchange(int128,int128,uint256,uint256)
+                    "0xa6417ed6", // exchange_underlying(int128,int128,uint256,uint256)
+                    "0x5e0d443f", // get_dy(int128,int128,uint256)
+                    "0xbb7b8b80", // get_virtual_price()
+                    "0xddca3f43", // fee()
+                ],
+                min_selector_count: 10,
+            },
+            // Yearn Finance V2 vault for DAI, Vyper 0.2.x
+            VyperTestContract {
+                address: "0x19D3364A399d251E894aC732651be8B0E4e85001",
+                name: "yearn_yvdai_v2",
+                expected_selectors: vec![
+                    "0x99530b06", // pricePerShare()
+                    "0x01e1d114", // totalAssets()
+                    "0x18160ddd", // totalSupply()
+                    "0x70a08231", // balanceOf(address)
+                    "0x06fdde03", // name()
+                ],
+                min_selector_count: 15,
+            },
+            // Curve CryptoSwap tricrypto2 (USDT/WBTC/WETH), Vyper 0.2.12
+            VyperTestContract {
+                address: "0xD51a44d3FaE010294C616388b506AcdA1bfAAE46",
+                name: "curve_tricrypto2",
+                expected_selectors: vec![
+                    "0x5b41b908", // exchange(uint256,uint256,uint256,uint256)
+                    "0x556d6e9f", // get_dy(uint256,uint256,uint256)
+                    "0xbb7b8b80", // get_virtual_price()
+                    "0xddca3f43", // fee()
+                    "0xc6610657", // coins(uint256)
+                ],
+                min_selector_count: 10,
+            },
+        ]
+    }
+
+    /// Helper function to get the RPC URL for Vyper tests, with fallback
+    fn get_rpc_url_or_skip() -> String {
+        std::env::var("RPC_URL").unwrap_or_else(|_| {
+            "https://rpc.ankr.com/eth/cb39792f2f35bd7da677b3a24783fd59c6daffdfc3cba1cca7a4ea93dc2f1c16"
+                .to_string()
+        })
+    }
+
+    /// Helper to check that a decompile result contains expected selectors
+    fn assert_contains_selectors(
+        abi_with_details: &Value,
+        expected_selectors: &[&str],
+        contract_name: &str,
+    ) {
+        let items = abi_with_details
+            .as_array()
+            .unwrap_or_else(|| panic!("{contract_name}: extended ABI should be an array"));
+
+        let found_selectors: Vec<String> = items
+            .iter()
+            .filter_map(|item| item.get("selector").and_then(|s| s.as_str()).map(String::from))
+            .collect();
+
+        for expected in expected_selectors {
+            assert!(
+                found_selectors.iter().any(|s| s == expected),
+                "{contract_name}: expected selector {expected} not found in ABI. Found selectors: {found_selectors:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    #[ignore] // requires RPC access, slow
+    async fn test_decompile_vyper_contract_curve_3pool() {
+        let contracts = get_vyper_test_contracts();
+        let contract = &contracts[0]; // curve_3pool
+        let rpc_url = get_rpc_url_or_skip();
+
+        let result = decompile(DecompilerArgs {
+            target: String::from(contract.address),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 30000,
+            abi: None,
+            openrouter_api_key: String::from(""),
+            model: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("failed to decompile {}: {e}", contract.name));
+
+        // Verify we found selectors
+        let abi_items = result.abi_with_details.as_array().expect("ABI should be array");
+        let selector_count = abi_items
+            .iter()
+            .filter(|item| item.get("type").and_then(|t| t.as_str()) == Some("function"))
+            .count();
+
+        assert!(
+            selector_count >= contract.min_selector_count,
+            "{}: expected at least {} selectors, found {}",
+            contract.name,
+            contract.min_selector_count,
+            selector_count
+        );
+
+        assert_contains_selectors(
+            &result.abi_with_details,
+            &contract.expected_selectors,
+            contract.name,
+        );
+    }
+
+    #[tokio::test]
+    #[ignore] // requires RPC access, slow
+    async fn test_decompile_vyper_contract_curve_steth() {
+        let contracts = get_vyper_test_contracts();
+        let contract = &contracts[1]; // curve_steth
+        let rpc_url = get_rpc_url_or_skip();
+
+        let result = decompile(DecompilerArgs {
+            target: String::from(contract.address),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 30000,
+            abi: None,
+            openrouter_api_key: String::from(""),
+            model: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("failed to decompile {}: {e}", contract.name));
+
+        let abi_items = result.abi_with_details.as_array().expect("ABI should be array");
+        let selector_count = abi_items
+            .iter()
+            .filter(|item| item.get("type").and_then(|t| t.as_str()) == Some("function"))
+            .count();
+
+        assert!(
+            selector_count >= contract.min_selector_count,
+            "{}: expected at least {} selectors, found {}",
+            contract.name,
+            contract.min_selector_count,
+            selector_count
+        );
+
+        assert_contains_selectors(
+            &result.abi_with_details,
+            &contract.expected_selectors,
+            contract.name,
+        );
+    }
+
+    #[tokio::test]
+    #[ignore] // requires RPC access, slow
+    async fn test_decompile_vyper_contract_curve_susd() {
+        let contracts = get_vyper_test_contracts();
+        let contract = &contracts[2]; // curve_susd
+        let rpc_url = get_rpc_url_or_skip();
+
+        let result = decompile(DecompilerArgs {
+            target: String::from(contract.address),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 30000,
+            abi: None,
+            openrouter_api_key: String::from(""),
+            model: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("failed to decompile {}: {e}", contract.name));
+
+        let abi_items = result.abi_with_details.as_array().expect("ABI should be array");
+        let selector_count = abi_items
+            .iter()
+            .filter(|item| item.get("type").and_then(|t| t.as_str()) == Some("function"))
+            .count();
+
+        assert!(
+            selector_count >= contract.min_selector_count,
+            "{}: expected at least {} selectors, found {}",
+            contract.name,
+            contract.min_selector_count,
+            selector_count
+        );
+
+        assert_contains_selectors(
+            &result.abi_with_details,
+            &contract.expected_selectors,
+            contract.name,
+        );
+    }
+
+    #[tokio::test]
+    #[ignore] // requires RPC access, slow
+    async fn test_decompile_vyper_contract_yearn_yvdai_v2() {
+        let contracts = get_vyper_test_contracts();
+        let contract = &contracts[3]; // yearn_yvdai_v2
+        let rpc_url = get_rpc_url_or_skip();
+
+        let result = decompile(DecompilerArgs {
+            target: String::from(contract.address),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 30000,
+            abi: None,
+            openrouter_api_key: String::from(""),
+            model: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("failed to decompile {}: {e}", contract.name));
+
+        let abi_items = result.abi_with_details.as_array().expect("ABI should be array");
+        let selector_count = abi_items
+            .iter()
+            .filter(|item| item.get("type").and_then(|t| t.as_str()) == Some("function"))
+            .count();
+
+        assert!(
+            selector_count >= contract.min_selector_count,
+            "{}: expected at least {} selectors, found {}",
+            contract.name,
+            contract.min_selector_count,
+            selector_count
+        );
+
+        assert_contains_selectors(
+            &result.abi_with_details,
+            &contract.expected_selectors,
+            contract.name,
+        );
+    }
+
+    #[tokio::test]
+    #[ignore] // requires RPC access, slow
+    async fn test_decompile_vyper_contract_curve_tricrypto2() {
+        let contracts = get_vyper_test_contracts();
+        let contract = &contracts[4]; // curve_tricrypto2
+        let rpc_url = get_rpc_url_or_skip();
+
+        let result = decompile(DecompilerArgs {
+            target: String::from(contract.address),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 30000,
+            abi: None,
+            openrouter_api_key: String::from(""),
+            model: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("failed to decompile {}: {e}", contract.name));
+
+        let abi_items = result.abi_with_details.as_array().expect("ABI should be array");
+        let selector_count = abi_items
+            .iter()
+            .filter(|item| item.get("type").and_then(|t| t.as_str()) == Some("function"))
+            .count();
+
+        assert!(
+            selector_count >= contract.min_selector_count,
+            "{}: expected at least {} selectors, found {}",
+            contract.name,
+            contract.min_selector_count,
+            selector_count
+        );
+
+        assert_contains_selectors(
+            &result.abi_with_details,
+            &contract.expected_selectors,
+            contract.name,
+        );
+    }
 }
