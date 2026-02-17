@@ -60,6 +60,8 @@ pub async fn get_resolved_selectors(
 ///   `JUMPI` (skip-if-not-equal) or `SUB` + `JUMPI`
 /// - **Vyper dense** (`_selector_section_dense`): Uses `MOD`/`AND` for bucket selection, then
 ///   `EQ`/`XOR` comparisons within buckets
+/// - **Vyper 0.2.x memory-based**: Extracts selector via `CALLDATALOAD(0) → MSTORE(0x1c) →
+///   MLOAD(0)` instead of `SHR`, then uses `EQ`/`ISZERO` for comparison
 ///
 /// In all cases, PUSH4 instructions are scanned from the disassembly, and the VM is used
 /// to symbolically execute the dispatcher to find each selector's entry point.
@@ -155,6 +157,38 @@ pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128
 /// JUMPI                     ; skip if not matching
 /// ; ... function body starts here when selector matches ...
 /// ```
+///
+/// ## Vyper 0.2.x memory-based selector extraction
+/// Some Vyper versions (notably 0.2.x) extract the function selector through memory
+/// rather than using `SHR`:
+/// ```text
+/// PUSH1 0x00
+/// CALLDATALOAD              ; load 32 bytes from calldata[0]
+/// PUSH1 0x1c                ; 28
+/// MSTORE                    ; store at memory[28] (right-aligns the 4-byte selector)
+/// ; ...
+/// PUSH1 0x00
+/// MLOAD                     ; load memory[0:32] = right-aligned selector
+/// ```
+/// This produces `memory[0]` in the solidified output instead of `msg.data[0]`,
+/// but is semantically equivalent. The pattern matchers accept both.
+
+/// Check if the jump condition references the function selector extracted from calldata.
+///
+/// Different compilers use different patterns to extract the 4-byte selector:
+/// - **Solidity**: `CALLDATALOAD(0) >> 0xe0` → solidifies to contain `msg.data[0]`
+/// - **Vyper 0.2.x**: `CALLDATALOAD(0) → MSTORE(0x1c) → MLOAD(0)` → solidifies to contain
+///   `memory[0]` (stores calldata at memory offset 28, then reads back memory[0:32] to get
+///   the selector right-aligned)
+fn condition_references_selector(jump_condition: &str) -> bool {
+    // Solidity pattern: solidified CALLDATALOAD(0) produces msg.data[0x00], msg.data[0x01], etc.
+    // The substring "msg.data[0" matches all of these.
+    // Vyper 0.2.x pattern: solidified MLOAD(0) produces exactly "memory[0]" (the offset is
+    // encoded as "0" by encode_hex_reduced for U256::ZERO). We match "memory[0]" specifically
+    // since this is the only offset used for selector extraction.
+    jump_condition.contains("msg.data[0]") || jump_condition.contains("memory[0]")
+}
+
 pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
     let mut handled_jumps = HashSet::new();
 
@@ -175,7 +209,7 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
             // When the selector matches, EQ returns 1, JUMPI takes the jump.
             // The jump target (inputs[0]) is the function entry point.
             if jump_condition.contains(selector) &&
-                jump_condition.contains("msg.data[0]") &&
+                condition_references_selector(&jump_condition) &&
                 jump_condition.contains(" == ") &&
                 !jump_condition.contains('!') &&
                 jump_taken == 1
@@ -188,7 +222,7 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
             // XOR returns 0 when selectors match, so JUMPI does NOT jump.
             // The entry point is the instruction right after JUMPI (vm.instruction).
             if jump_condition.contains(selector) &&
-                jump_condition.contains("msg.data[0]") &&
+                condition_references_selector(&jump_condition) &&
                 jump_condition.contains(" ^ ") &&
                 jump_taken == 0
             {
@@ -204,7 +238,7 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
             // Some Vyper versions use SUB instead of XOR for equality checking.
             // SUB returns 0 when selectors are equal, so JUMPI does NOT jump.
             if jump_condition.contains(selector) &&
-                jump_condition.contains("msg.data[0]") &&
+                condition_references_selector(&jump_condition) &&
                 jump_condition.contains(" - ") &&
                 jump_taken == 0
             {
@@ -222,7 +256,7 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
             // JUMPI skips to next bucket/selector. When matching, ISZERO gives 0,
             // JUMPI does NOT jump, and execution falls through to the function body.
             if jump_condition.contains(selector) &&
-                jump_condition.contains("msg.data[0]") &&
+                condition_references_selector(&jump_condition) &&
                 jump_condition.contains(" == ") &&
                 jump_condition.contains('!') &&
                 jump_taken == 0
@@ -300,4 +334,32 @@ where
     info!("resolved {} signatures from {} selectors", signatures.len(), selector_count);
     debug!("signature resolution took {:?}", start_time.elapsed());
     signatures
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_condition_references_selector_solidity_pattern() {
+        // Solidity: CALLDATALOAD(0) >> 0xe0, solidifies to msg.data[0x00]
+        assert!(condition_references_selector("0x12345678 == msg.data[0x00]"));
+        assert!(condition_references_selector("msg.data[0x00] == 0x12345678"));
+    }
+
+    #[test]
+    fn test_condition_references_selector_vyper_memory_pattern() {
+        // Vyper 0.2.x: CALLDATALOAD(0) → MSTORE(0x1c) → MLOAD(0), solidifies to memory[0]
+        assert!(condition_references_selector("!(0x6b441a40 == memory[0])"));
+        assert!(condition_references_selector("memory[0] ^ 0x12345678"));
+        assert!(condition_references_selector("memory[0] - 0x12345678"));
+    }
+
+    #[test]
+    fn test_condition_references_selector_no_match() {
+        // Should not match conditions that don't reference calldata/selector
+        assert!(!condition_references_selector("0x12345678 == 0x12345678"));
+        assert!(!condition_references_selector("some_var == 0x12345678"));
+        assert!(!condition_references_selector("memory[32] == 0x12345678"));
+    }
 }

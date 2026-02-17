@@ -947,4 +947,71 @@ mod integration_tests {
             contract.name,
         );
     }
+
+    #[tokio::test]
+    #[ignore] // requires RPC access, slow
+    async fn test_decompile_vyper_contract_vkp3r() {
+        // vKP3R voting escrow contract (Vyper 0.2.15)
+        // Uses the CALLDATALOAD(0) → MSTORE(0x1c) → MLOAD(0) pattern for selector extraction
+        // which produces memory[0] in solidified output instead of msg.data[0].
+        // Verifies the fix for memory-based Vyper selector dispatch.
+        let rpc_url = get_rpc_url_or_skip();
+
+        let result = decompile(DecompilerArgs {
+            target: String::from("0x2FC52C61fB0C03489649311989CE2689D93dC1a2"),
+            rpc_url,
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 30000,
+            abi: None,
+            openrouter_api_key: String::from(""),
+            model: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .expect("failed to decompile vKP3R");
+
+        let abi_items = result.abi_with_details.as_array().expect("ABI should be array");
+        let selector_count = abi_items
+            .iter()
+            .filter(|item| item.get("type").and_then(|t| t.as_str()) == Some("function"))
+            .count();
+
+        // vKP3R has 20+ external functions
+        assert!(
+            selector_count >= 15,
+            "vKP3R: expected at least 15 selectors, found {}",
+            selector_count
+        );
+
+        let found_selectors: Vec<String> = abi_items
+            .iter()
+            .filter_map(|item| item.get("selector").and_then(|s| s.as_str()).map(String::from))
+            .collect();
+
+        // Check some known selectors from the vKP3R contract
+        let expected = vec![
+            "0x6b441a40", // commit_transfer_ownership(address)
+            "0x6a1c05ae", // apply_transfer_ownership()
+            "0x57f901e2", // commit_smart_wallet_checker(address)
+            "0x7c74a174", // get_last_user_slope(address)
+            "0x70a08231", // balanceOf(address)
+            "0x18160ddd", // totalSupply()
+        ];
+
+        for sel in &expected {
+            assert!(
+                found_selectors.iter().any(|s| s == sel),
+                "vKP3R: expected selector {} not found. Found: {:?}",
+                sel,
+                found_selectors
+            );
+        }
+    }
 }
