@@ -116,14 +116,16 @@ main() {
         echo "bifrost: fetching binary."
 
         # download the binary
+        ARCH=$(uname -m)
         if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-            ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall-linux-amd64" -o heimdall
+            [[ "$ARCH" == "aarch64" ]] && ASSET="heimdall-linux-arm64" || ASSET="heimdall-linux-amd64"
         elif [[ "$OSTYPE" == "darwin"* ]]; then
-            ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/heimdall-macos-amd64" -o heimdall
+            [[ "$ARCH" == "arm64" ]] && ASSET="heimdall-macos-arm64" || ASSET="heimdall-macos-amd64"
         else
             echo "bifrost: unsupported operating system: $OSTYPE"
             exit 1
         fi
+        ensure curl -k -L -s --compressed "https://github.com/Jon-Becker/heimdall-rs/releases/download/$TARGET_VERSION/$ASSET" -o heimdall
         echo "bifrost: installing binary."
 
         # make the binary executable

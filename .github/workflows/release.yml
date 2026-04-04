@@ -21,6 +21,12 @@ jobs:
           - os: macos-latest
             artifact_name: heimdall
             asset_name: heimdall-macos-amd64
+          - os: macos-14
+            artifact_name: heimdall
+            asset_name: heimdall-macos-arm64
+          - os: ubuntu-24.04-arm
+            artifact_name: heimdall
+            asset_name: heimdall-linux-arm64
 
     steps:
     - uses: actions/checkout@v2
