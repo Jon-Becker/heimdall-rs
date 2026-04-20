@@ -7,6 +7,7 @@ use crate::{core::analyze::AnalyzerState, interfaces::AnalyzedFunction, Error};
 mod arguments;
 mod events;
 mod extcall;
+mod loops;
 mod modifiers;
 mod solidity;
 mod yul;
@@ -15,8 +16,9 @@ mod yul;
 pub(crate) use arguments::argument_heuristic;
 pub(crate) use events::event_heuristic;
 pub(crate) use extcall::extcall_heuristic;
+pub(crate) use loops::{is_loop_overhead, is_overflow_panic, loop_heuristic, LoopAnalyzerState};
 pub(crate) use modifiers::modifier_heuristic;
-pub(crate) use solidity::solidity_heuristic;
+pub(crate) use solidity::{is_overflow_check_condition, solidity_heuristic};
 pub(crate) use yul::yul_heuristic;
 
 /// A heuristic is a function that takes a function and a state and modifies the function based on

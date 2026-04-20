@@ -11,6 +11,73 @@ use crate::{
     Error,
 };
 
+/// Check if a condition looks like compiler-generated code that should not
+/// become a require statement.
+///
+/// This includes:
+/// - Solidity 0.8+ overflow checks like `!number > (number + 0x01)`
+/// - Inverted loop conditions like `!0 < arg0` (initial loop entry check)
+/// - Underflow check patterns like `number - MAX_UINT256`
+pub(crate) fn is_overflow_check_condition(condition: &str) -> bool {
+    let trimmed = condition.trim();
+
+    // Pattern 1: !(x > (x + 1)) style overflow check
+    if trimmed.starts_with('!') || trimmed.starts_with("!(") {
+        let inner = trimmed.trim_start_matches('!').trim_start_matches('(').trim_end_matches(')');
+
+        // Check for "var > (var + 1)" pattern
+        if inner.contains(" > ") {
+            if let Some(pos) = inner.find(" > ") {
+                let lhs = inner[..pos].trim();
+                let rhs = inner[pos + 3..].trim();
+
+                // If RHS contains LHS plus an increment, it's an overflow check
+                if rhs.contains(lhs) && (rhs.contains("+ 0x01") || rhs.contains("+ 1")) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Pattern 2: Inverted loop initial condition like "!0 < arg0" or "!0x00 < arg0"
+    // These come from while/for loop entry checks and should not be require statements
+    if trimmed.starts_with('!') && !trimmed.starts_with("!=") {
+        let rest = &trimmed[1..];
+
+        // Check for "0 < arg" or "0x00 < arg" patterns (initial loop iteration check)
+        for op in [" < ", " > ", " <= ", " >= "] {
+            if let Some(pos) = rest.find(op) {
+                let lhs = rest[..pos].trim();
+
+                // If LHS is a zero-ish value, this is likely a loop entry check
+                if lhs == "0" ||
+                    lhs == "0x0" ||
+                    lhs == "0x00" ||
+                    lhs == "0x01" ||
+                    lhs == "1" ||
+                    lhs == "(0)" ||
+                    lhs == "(0x00)"
+                {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Pattern 3: Subtraction of a very large value (MAX_UINT256)
+    if trimmed.contains(" - 0x") {
+        if let Some(pos) = trimmed.find(" - 0x") {
+            let hex_part = &trimmed[pos + 5..];
+            // MAX_UINT256 is 64 'f' characters
+            if hex_part.len() >= 60 && hex_part.chars().take(60).all(|c| c == 'f') {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 pub(crate) fn solidity_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
@@ -167,6 +234,10 @@ pub(crate) fn solidity_heuristic<'a>(
                     revert_logic = match analyzer_state.jumped_conditional.clone() {
                         Some(condition) => {
                             analyzer_state.jumped_conditional = None;
+                            // Skip overflow check patterns
+                            if is_overflow_check_condition(&condition) {
+                                return Ok(());
+                            }
                             format!("require({condition}, \"{revert_string}\");")
                         }
                         None => {
@@ -177,6 +248,12 @@ pub(crate) fn solidity_heuristic<'a>(
                                         Some(condition) => condition,
                                         None => break,
                                     };
+
+                                    // Skip overflow check patterns
+                                    if is_overflow_check_condition(&conditional) {
+                                        function.logic.remove(i);
+                                        return Ok(());
+                                    }
 
                                     function.logic[i] =
                                         format!("require({conditional}, \"{revert_string}\");");
@@ -203,6 +280,10 @@ pub(crate) fn solidity_heuristic<'a>(
                     revert_logic = match analyzer_state.jumped_conditional.clone() {
                         Some(condition) => {
                             analyzer_state.jumped_conditional = None;
+                            // Skip overflow check patterns
+                            if is_overflow_check_condition(&condition) {
+                                return Ok(());
+                            }
                             if custom_error_placeholder == *"()" {
                                 format!("require({condition});",)
                             } else {
@@ -217,6 +298,12 @@ pub(crate) fn solidity_heuristic<'a>(
                                         Some(condition) => condition,
                                         None => break,
                                     };
+
+                                    // Skip overflow check patterns
+                                    if is_overflow_check_condition(&conditional) {
+                                        function.logic.remove(i);
+                                        return Ok(());
+                                    }
 
                                     if custom_error_placeholder == *"()" {
                                         function.logic[i] = format!("require({conditional});",);
