@@ -5,7 +5,7 @@ on:
     tags:
       - '*'
     branches:
-      - main
+      - '**'
   workflow_dispatch:
 
 env:
@@ -42,11 +42,11 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.ref_type == 'tag' }}
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
             type=raw,value=nightly,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha
+            type=sha,prefix=sha-
 
       - name: Build and push
         uses: docker/build-push-action@v6
