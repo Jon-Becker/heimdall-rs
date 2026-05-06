@@ -13,6 +13,18 @@ use util::*;
 pub mod error;
 pub(crate) mod util;
 
+fn validate_cache_key(key: &str) -> Result<(), Error> {
+    if key.is_empty() {
+        return Err(Error::Generic("cache key cannot be empty".into()));
+    }
+    if key.contains('/') || key.contains('\\') || key.contains("..") {
+        return Err(Error::Generic(
+            "cache key cannot contain path separators or '..'".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Clap argument parser for the cache subcommand
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -121,6 +133,7 @@ pub fn clear_cache() -> Result<(), Error> {
 /// ```
 #[allow(deprecated)]
 pub fn exists(key: &str) -> Result<bool, Error> {
+    validate_cache_key(key)?;
     let home = home_dir().ok_or_else(|| {
         Error::Generic(
             "failed to get home directory. does your os support `std::env::home_dir()`?"
@@ -206,6 +219,7 @@ pub fn keys(pattern: &str) -> Result<Vec<String>, Error> {
 /// ```
 #[allow(deprecated)]
 pub fn delete_cache(key: &str) -> Result<(), Error> {
+    validate_cache_key(key)?;
     let home = home_dir().ok_or_else(|| {
         Error::Generic(
             "failed to get home directory. does your os support `std::env::home_dir()`?"
@@ -238,6 +252,7 @@ pub fn delete_cache(key: &str) -> Result<(), Error> {
 pub fn read_cache<T>(key: &str) -> Result<Option<T>, Error>
 where
     T: 'static + DeserializeOwned, {
+    validate_cache_key(key)?;
     let home = home_dir().ok_or_else(|| {
         Error::Generic(
             "failed to get home directory. does your os support `std::env::home_dir()`?"
@@ -256,8 +271,7 @@ where
         Err(_) => return Ok(None),
     };
 
-    let binary_vec = decode_hex(&binary_string)
-        .map_err(|e| Error::Generic(format!("failed to decode hex: {e:?}")))?;
+    let binary_vec = decode_hex(&binary_string)?;
 
     let cache: Cache<T> = bincode::deserialize::<Cache<T>>(&binary_vec)
         .map_err(|e| Error::Generic(format!("failed to deserialize cache object: {e:?}")))?;
@@ -276,22 +290,23 @@ where
     Ok(Some(*Box::new(cache.value)))
 }
 
-/// Store a value in the cache, with an optional expiry time \
-/// If no expiry time is specified, the object will expire in 90 days
+/// Store a value in the cache. `expiry` is an **optional absolute UNIX timestamp in seconds** after
+/// which the entry expires. If `expiry` is `None`, default lifetime is 90 days from _now_ (not 90
+/// days from the epoch).
 ///
 /// ```
-/// use heimdall_cache::{store_cache, read_cache};
+/// use heimdall_cache::store_cache;
 ///
-/// /// add a value to the cache with no expiry time (90 days)
-/// store_cache("store_cache_key", "value", None);
-///
-/// /// add a value to the cache with an expiry time of 1 day
-/// store_cache("store_cache_key2", "value", Some(60 * 60 * 24));
+/// store_cache("store_cache_key", "value", None).expect("store");
 /// ```
+///
+/// When `expiry` is `Some(ts)`, `ts` must be a **wall‑clock UNIX timestamp in seconds** (for
+/// example `current_secs + 86_400` for one day from now), not a duration alone.
 #[allow(deprecated)]
 pub fn store_cache<T>(key: &str, value: T, expiry: Option<u64>) -> Result<(), Error>
 where
     T: Serialize, {
+    validate_cache_key(key)?;
     let home = home_dir().ok_or_else(|| {
         Error::Generic(
             "failed to get home directory. does your os support `std::env::home_dir()`?"
@@ -333,6 +348,7 @@ where
     T: 'static + Serialize + DeserializeOwned + Send + Sync,
     F: FnOnce() -> Fut + Send,
     Fut: std::future::Future<Output = Result<T, eyre::Report>> + Send, {
+    validate_cache_key(key).map_err(|e| eyre::eyre!(e))?;
     // Try to read from cache
     match read_cache::<T>(key) {
         Ok(Some(cached_value)) => {

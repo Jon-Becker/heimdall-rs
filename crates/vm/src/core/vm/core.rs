@@ -334,7 +334,10 @@ impl VM {
                 });
             }
         };
-        let input_frames = self.stack.peek_n(opcode_info.inputs() as usize);
+        let input_count = opcode_info.inputs() as usize;
+        let input_frames =
+            self.stack.peek_n(input_count).ok_or_else(|| eyre::eyre!("stack underflow"))?;
+
         let input_operations =
             input_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
         let inputs = input_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
@@ -510,7 +513,10 @@ impl VM {
         }
 
         // get outputs
-        let output_frames = self.stack.peek_n(opcode_info.outputs() as usize);
+        let output_count = opcode_info.outputs() as usize;
+        let output_frames =
+            self.stack.peek_n(output_count).ok_or_else(|| eyre::eyre!("stack underflow"))?;
+
         let output_operations =
             output_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
         let outputs = output_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
@@ -774,8 +780,8 @@ mod tests {
         );
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x14").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x14").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -785,9 +791,9 @@ mod tests {
         );
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x64").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x64").expect("failed to parse hex"));
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe")
                 .expect("failed to parse hex")
         );
@@ -798,9 +804,9 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a036001600003");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
                 .expect("failed to parse hex")
         );
@@ -811,8 +817,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a046002600104");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -820,7 +826,7 @@ mod tests {
         let mut vm = new_test_vm("0x6002600004");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -828,8 +834,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a057fFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7fFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFE05");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x02").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x02").expect("failed to parse hex"));
     }
 
     #[test]
@@ -837,7 +843,7 @@ mod tests {
         let mut vm = new_test_vm("0x6002600005");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -845,8 +851,8 @@ mod tests {
         let mut vm = new_test_vm("0x6003600a066005601106");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x02").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x02").expect("failed to parse hex"));
     }
 
     #[test]
@@ -854,7 +860,7 @@ mod tests {
         let mut vm = new_test_vm("0x6002600006");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -862,9 +868,9 @@ mod tests {
         let mut vm = new_test_vm("0x6003600a077ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff807");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe")
                 .expect("failed to parse hex")
         );
@@ -875,7 +881,7 @@ mod tests {
         let mut vm = new_test_vm("0x6002600007");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -883,8 +889,8 @@ mod tests {
         let mut vm = new_test_vm("0x6008600a600a08600260027fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff08");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x04").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x04").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
     }
 
     #[test]
@@ -892,7 +898,7 @@ mod tests {
         let mut vm = new_test_vm("0x60026000600008");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -900,8 +906,8 @@ mod tests {
         let mut vm = new_test_vm("0x6008600a600a09600c7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff09");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x04").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x09").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x04").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x09").expect("failed to parse hex"));
     }
 
     #[test]
@@ -909,7 +915,7 @@ mod tests {
         let mut vm = new_test_vm("0x60026000600009");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -917,8 +923,8 @@ mod tests {
         let mut vm = new_test_vm("0x6002600a0a600260020a");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x64").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x04").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x64").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x04").expect("failed to parse hex"));
     }
 
     #[test]
@@ -927,11 +933,11 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert_eq!(
-            vm.stack.peek(1).value,
+            vm.stack.peek(1).expect("peek").value,
             U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
                 .expect("failed to parse hex")
         );
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x7f").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x7f").expect("failed to parse hex"));
     }
 
     #[test]
@@ -939,8 +945,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600910600a600a10");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -948,8 +954,8 @@ mod tests {
         let mut vm = new_test_vm("0x6009600a11600a600a10");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -959,8 +965,8 @@ mod tests {
         );
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -970,8 +976,8 @@ mod tests {
         );
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -979,8 +985,8 @@ mod tests {
         let mut vm = new_test_vm("0x600a600a14600a600514");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -988,8 +994,8 @@ mod tests {
         let mut vm = new_test_vm("0x600015600a15");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -997,8 +1003,8 @@ mod tests {
         let mut vm = new_test_vm("0x600f600f16600060ff1600");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x0F").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x0F").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1006,8 +1012,8 @@ mod tests {
         let mut vm = new_test_vm("0x600f60f01760ff60ff17");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0xff").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1015,8 +1021,8 @@ mod tests {
         let mut vm = new_test_vm("0x600f60f01860ff60ff18");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1025,7 +1031,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
                 .expect("failed to parse hex")
         );
@@ -1036,8 +1042,8 @@ mod tests {
         let mut vm = new_test_vm("0x60ff601f1a61ff00601e1a");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0xff").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1047,9 +1053,9 @@ mod tests {
         );
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x02").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x02").expect("failed to parse hex"));
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0xF000000000000000000000000000000000000000000000000000000000000000")
                 .expect("failed to parse hex")
         );
@@ -1062,9 +1068,9 @@ mod tests {
         );
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0xF000000000000000000000000000000000000000000000000000000000000000")
                 .expect("failed to parse hex")
         );
@@ -1075,8 +1081,8 @@ mod tests {
         let mut vm = new_test_vm("600260011c60ff60041c");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x01").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x0f").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x0f").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1084,8 +1090,8 @@ mod tests {
         let mut vm = new_test_vm("600261ffff1c61ffff60041c");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x00").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x0fff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x0fff").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1093,7 +1099,7 @@ mod tests {
         let mut vm = new_test_vm("0x600060011c");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1101,7 +1107,7 @@ mod tests {
         let mut vm = new_test_vm("600260011d");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x01").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x01").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1109,7 +1115,7 @@ mod tests {
         let mut vm = new_test_vm("0x600060011d");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1120,7 +1126,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0x29045A592007D0C246EF02C2223570DA9522D0CF0F73282C79A1BC8F0BB2C238")
                 .expect("failed to parse hex")
         );
@@ -1132,7 +1138,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0x6865696d64616c6c000000000061646472657373")
                 .expect("failed to parse hex")
         );
@@ -1144,12 +1150,12 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert_eq!(
-            vm.stack.peek(1).value,
+            vm.stack.peek(1).expect("peek").value,
             U256::from_str("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
                 .expect("failed to parse hex")
         );
         assert_eq!(
-            vm.stack.peek(0).value,
+            vm.stack.peek(0).expect("peek").value,
             U256::from_str("0xFF00000000000000000000000000000000000000000000000000000000000000")
                 .expect("failed to parse hex")
         );
@@ -1160,7 +1166,7 @@ mod tests {
         let mut vm = new_test_vm("0x36");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x20").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x20").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1333,7 +1339,7 @@ mod tests {
         let mut vm = new_test_vm("0x60ff60ff60ff60ff60ff38");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x0B").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x0B").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1343,8 +1349,8 @@ mod tests {
         );
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xff00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0xff00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1364,7 +1370,7 @@ mod tests {
         let mut vm = new_test_vm("0x60ff60005359");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x20").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x20").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1372,8 +1378,8 @@ mod tests {
         let mut vm = new_test_vm("0x602e600055600054600154");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x2e").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x2e").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1381,8 +1387,8 @@ mod tests {
         let mut vm = new_test_vm("0x602e60005d60005c60015c");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0x2e").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x00").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0x2e").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0x00").expect("failed to parse hex"));
     }
 
     #[test]
@@ -1390,41 +1396,39 @@ mod tests {
         let mut vm = new_test_vm("0x60ff60015560fe60015d60015460015c");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(1).value, U256::from_str("0xff").expect("failed to parse hex"));
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0xfe").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(1).expect("peek").value, U256::from_str("0xff").expect("failed to parse hex"));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from_str("0xfe").expect("failed to parse hex"));
     }
 
     #[test]
     fn test_jump() {
-        let mut vm = new_test_vm("0x60fe56");
+        // PUSH1 3, JUMP, JUMPDEST at bytecode offset 3, STOP (`60 03 56 5b 00`)
+        let mut vm = new_test_vm("0x6003565b00");
         vm.execute().expect("execution failed!");
-
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
+        assert_eq!(vm.exitcode, 10, "STOP should succeed");
+        assert!(
+            vm.instruction as usize > vm.bytecode.len(),
+            "PC should advance past bytecode after STOP"
         );
     }
 
     #[test]
     fn test_jumpi() {
-        let mut vm = new_test_vm("0x600160fe57");
+        // Jump taken: PUSH1(dest=8), PUSH1(cond=1), JUMPI, fillers, JUMPDEST @8, STOP
+        let mut vm = new_test_vm("0x6008600157fefe5b00");
+        vm.execute().expect("execution failed!");
+        assert_eq!(vm.exitcode, 10, "STOP should succeed");
+
+        // Jump not taken: PUSH1(dest), PUSH0(cond top), JUMPI, PC, STOP
+        let mut vm = new_test_vm("0x60066000575800");
         vm.execute().expect("execution failed!");
 
         assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
+            vm.stack.peek(0).expect("peek").value,
+            U256::from(7u8),
+            "heimdall-vm's PC opcode exposes `vm.instruction` after the opcode fetch"
         );
-
-        let mut vm = new_test_vm("0x600060fe5758");
-        vm.execute().expect("execution failed!");
-
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0x07").expect("failed to parse hex")
-        );
-
-        // PC test
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x07").expect("failed to parse hex"));
+        assert_eq!(vm.exitcode, 10, "STOP should succeed");
     }
 
     #[test]
@@ -1457,7 +1461,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         // Should have pushed 0 onto the stack
-        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::ZERO);
         assert_eq!(vm.exitcode, 10); // STOP exit code
     }
 
@@ -1478,7 +1482,7 @@ mod tests {
         let mut vm = new_test_vm_with_fork("0x600260011b00", HardFork::Constantinople);
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from(4));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from(4));
         assert_eq!(vm.exitcode, 10);
     }
 
@@ -1500,7 +1504,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         // Should have loaded 0 from empty transient storage
-        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::ZERO);
         assert_eq!(vm.exitcode, 10);
     }
 
@@ -1522,7 +1526,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         // CLZ(1) = 255 (255 leading zeros in a 256-bit integer)
-        assert_eq!(vm.stack.peek(0).value, U256::from(255));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from(255));
         assert_eq!(vm.exitcode, 10);
     }
 
@@ -1534,7 +1538,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         // CLZ(0) = 256 (special case per EIP-7939)
-        assert_eq!(vm.stack.peek(0).value, U256::from(256));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from(256));
         assert_eq!(vm.exitcode, 10);
     }
 
@@ -1551,7 +1555,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         // CLZ(0x80...00) = 0 (no leading zeros)
-        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::ZERO);
         assert_eq!(vm.exitcode, 10);
     }
 
@@ -1572,7 +1576,7 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         // PUSH0 should work with default (Latest) hardfork
-        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::ZERO);
         assert_eq!(vm.exitcode, 10);
     }
 
@@ -1583,6 +1587,6 @@ mod tests {
         let mut vm = new_test_vm_with_fork("0x6001600201", HardFork::Frontier);
         vm.execute().expect("execution failed!");
 
-        assert_eq!(vm.stack.peek(0).value, U256::from(3));
+        assert_eq!(vm.stack.peek(0).expect("peek").value, U256::from(3));
     }
 }

@@ -76,22 +76,23 @@ pub fn msize(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     Ok(())
 }
 
-/// MCOPY - Copy memory areas
+/// MCOPY - Copy memory areas (EIP-5656; stack top: length, source offset, dest offset)
 pub fn mcopy(vm: &mut VM, #[cfg(feature = "experimental")] operation: WrappedOpcode) -> Result<()> {
+    let size_word = vm.stack.pop()?.value;
+    let src_offset = vm.stack.pop()?.value;
     let dest_offset = vm.stack.pop()?.value;
-    let offset = vm.stack.pop()?.value;
-    let size = vm.stack.pop()?.value;
 
-    let dest_offset: usize = dest_offset.try_into().unwrap_or(u128::MAX as usize);
-    let offset: usize = offset.try_into().unwrap_or(u128::MAX as usize);
-    let memory_size: usize = vm.memory.size().try_into().expect("failed to convert u128 to usize");
-    let size: usize = size.try_into().unwrap_or(memory_size).min(memory_size);
+    let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
+    let offset: usize = src_offset.try_into().unwrap_or(usize::MAX);
+    let size: usize = size_word.try_into().unwrap_or(usize::MAX);
 
     let value = VM::safe_copy_data(&vm.memory.memory, offset, size);
 
-    // consume dynamic gas
+    // consume dynamic gas — memory expansion covers source and destination ranges (EIP-5656)
     let minimum_word_size = size.div_ceil(32) as u128;
-    let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(offset, size);
+    let expand_src = vm.memory.expansion_cost(offset, size);
+    let expand_dest = vm.memory.expansion_cost(dest_offset, size);
+    let gas_cost = 3 * minimum_word_size + expand_src.max(expand_dest);
     vm.consume_gas(gas_cost);
 
     vm.memory.store_with_opcode(
