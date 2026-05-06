@@ -17,8 +17,14 @@ pub fn create(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// CALL - Message-call into an account
 pub fn call(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+    // Stack (top first): retSize, retOffset, argsSize, argsOffset, value, address, gas
+    let _ret_size = vm.stack.pop()?.value;
+    let _ret_offset = vm.stack.pop()?.value;
+    let _args_size = vm.stack.pop()?.value;
+    let _args_offset = vm.stack.pop()?.value;
+    let _value = vm.stack.pop()?.value;
     let address = vm.stack.pop()?.value;
-    vm.stack.pop_n(6)?;
+    let _gas = vm.stack.pop()?.value;
 
     // consume dynamic gas
     if !vm.address_access_set.contains(&address) {
@@ -34,8 +40,13 @@ pub fn call(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// CALLCODE - Message-call into this account with alternative account's code
 pub fn callcode(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+    let _ret_size = vm.stack.pop()?.value;
+    let _ret_offset = vm.stack.pop()?.value;
+    let _args_size = vm.stack.pop()?.value;
+    let _args_offset = vm.stack.pop()?.value;
+    let _value = vm.stack.pop()?.value;
     let address = vm.stack.pop()?.value;
-    vm.stack.pop_n(6)?;
+    let _gas = vm.stack.pop()?.value;
 
     // consume dynamic gas
     if !vm.address_access_set.contains(&address) {
@@ -51,8 +62,9 @@ pub fn callcode(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// RETURN - Halt execution returning output data
 pub fn op_return(vm: &mut VM) -> Result<()> {
-    let offset = vm.stack.pop()?.value;
+    // EVM: top of stack is `size`, then `offset`
     let size = vm.stack.pop()?.value;
+    let offset = vm.stack.pop()?.value;
 
     // Safely convert U256 to usize
     let offset: usize = offset.try_into().unwrap_or(usize::MAX);
@@ -68,8 +80,13 @@ pub fn op_return(vm: &mut VM) -> Result<()> {
 
 /// DELEGATECALL - Message-call into this account with an alternative account's code
 pub fn delegatecall(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+    // Stack (top first): retSize, retOffset, argsSize, argsOffset, address, gas
+    let _ret_size = vm.stack.pop()?.value;
+    let _ret_offset = vm.stack.pop()?.value;
+    let _args_size = vm.stack.pop()?.value;
+    let _args_offset = vm.stack.pop()?.value;
     let address = vm.stack.pop()?.value;
-    vm.stack.pop_n(5)?;
+    let _gas = vm.stack.pop()?.value;
 
     // consume dynamic gas
     if !vm.address_access_set.contains(&address) {
@@ -85,8 +102,12 @@ pub fn delegatecall(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// STATICCALL - Static message-call into an account
 pub fn staticcall(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+    let _ret_size = vm.stack.pop()?.value;
+    let _ret_offset = vm.stack.pop()?.value;
+    let _args_size = vm.stack.pop()?.value;
+    let _args_offset = vm.stack.pop()?.value;
     let address = vm.stack.pop()?.value;
-    vm.stack.pop_n(5)?;
+    let _gas = vm.stack.pop()?.value;
 
     // consume dynamic gas
     if !vm.address_access_set.contains(&address) {
@@ -109,8 +130,8 @@ pub fn create2(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// REVERT - Halt execution reverting state changes
 pub fn revert(vm: &mut VM) -> Result<()> {
-    let offset = vm.stack.pop()?.value;
     let size = vm.stack.pop()?.value;
+    let offset = vm.stack.pop()?.value;
 
     // Safely convert U256 to usize
     let offset: usize = offset.try_into().unwrap_or(usize::MAX);

@@ -2,16 +2,24 @@ use std::{
     fmt::Write as FmtWrite,
     fs::File,
     io::{Read, Write},
-    num::ParseIntError,
     path::Path,
-    process::Command,
 };
 
 use crate::error::Error;
 
 /// Decode a hex string into a bytearray
-pub(crate) fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16)).collect()
+pub(crate) fn decode_hex(s: &str) -> Result<Vec<u8>, Error> {
+    if s.len() % 2 != 0 {
+        return Err(Error::Generic("hex string must have an even length".into()));
+    }
+    let mut out = Vec::with_capacity(s.len() / 2);
+    for i in (0..s.len()).step_by(2) {
+        let byte = u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| {
+            Error::Generic(format!("invalid hex at byte offset {i}"))
+        })?;
+        out.push(byte);
+    }
+    Ok(out)
 }
 
 /// Encode a bytearray into a hex string
@@ -66,14 +74,17 @@ pub(crate) fn read_file(path: &str) -> Result<String, Error> {
 }
 
 /// Delete a file or directory on the disc
-/// Returns true if the operation was successful
-pub(crate) fn delete_path(_path: &str) -> bool {
-    let path = match std::path::Path::new(_path).to_str() {
-        Some(path) => path,
-        None => return false,
-    };
-
-    Command::new("rm").args(["-rf", path]).output().is_ok()
+/// Returns true if the path no longer exists after the operation
+pub(crate) fn delete_path(path_str: &str) -> bool {
+    let path = Path::new(path_str);
+    if !path.exists() {
+        return true;
+    }
+    if path.is_dir() {
+        std::fs::remove_dir_all(path).is_ok()
+    } else {
+        std::fs::remove_file(path).is_ok()
+    }
 }
 
 #[cfg(test)]
@@ -173,9 +184,14 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_path_failure() {
+    fn test_decode_hex_odd_length() {
+        let result = decode_hex("abc");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_path_missing_is_ok() {
         let path = "/nonexistent/test_dir";
-        let result = delete_path(path);
-        assert!(result);
+        assert!(delete_path(path));
     }
 }

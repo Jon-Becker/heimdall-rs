@@ -35,14 +35,11 @@ pub fn jump(
     // Safely convert U256 to u128
     let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
-    // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-    if (pc <=
-        vm.bytecode
-            .len()
-            .try_into()
-            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-        (vm.bytecode[pc as usize] != opcodes::JUMPDEST)
-    {
+    let bytecode_len: u128 =
+        vm.bytecode.len().try_into().expect("impossible case: bytecode is larger than u128::MAX");
+
+    // Out-of-range or non-JUMPDEST is an invalid jump (790); avoid indexing past bytecode.
+    if pc >= bytecode_len || vm.bytecode[pc as usize] != opcodes::JUMPDEST {
         vm.exit(790, Vec::new());
         return Some(Instruction {
             instruction: last_instruction,
@@ -52,9 +49,8 @@ pub fn jump(
             input_operations: input_operations.to_vec(),
             output_operations: Vec::new(),
         });
-    } else {
-        vm.instruction = pc + 1;
     }
+    vm.instruction = pc + 1;
     None
 }
 
@@ -65,22 +61,18 @@ pub fn jumpi(
     inputs: &[U256],
     input_operations: &[WrappedOpcode],
 ) -> Option<Instruction> {
-    let pc = vm.stack.pop().ok()?.value;
+    // EVM JUMPI: stack top is condition `b`, below is jump counter `cnt` (see yellow paper / evm.codes).
     let condition = vm.stack.pop().ok()?.value;
+    let pc = vm.stack.pop().ok()?.value;
 
     // Safely convert U256 to u128
     let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
     if !condition.is_zero() {
-        // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
-        // destination)
-        if (pc <
-            vm.bytecode
-                .len()
-                .try_into()
-                .expect("impossible case: bytecode is larger than u128::MAX")) &&
-            (vm.bytecode[pc as usize] != opcodes::JUMPDEST)
-        {
+        let bytecode_len: u128 =
+            vm.bytecode.len().try_into().expect("impossible case: bytecode is larger than u128::MAX");
+        // Invalid jump if out of range or not a JUMPDEST (mirror `jump`).
+        if pc >= bytecode_len || vm.bytecode[pc as usize] != opcodes::JUMPDEST {
             vm.exit(790, Vec::new());
             return Some(Instruction {
                 instruction: last_instruction,
@@ -90,9 +82,8 @@ pub fn jumpi(
                 input_operations: input_operations.to_vec(),
                 output_operations: Vec::new(),
             });
-        } else {
-            vm.instruction = pc + 1;
         }
+        vm.instruction = pc + 1;
     }
     None
 }

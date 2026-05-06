@@ -19,6 +19,7 @@ use crate::{
     },
 };
 use eyre::Result;
+use alloy::primitives::U256;
 use hashbrown::HashMap;
 use heimdall_common::utils::strings::decode_hex;
 use std::time::Instant;
@@ -170,14 +171,14 @@ impl VM {
                 );
 
                 let jump_condition: Option<String> =
-                    last_instruction.input_operations.get(1).map(|op| op.solidify());
+                    last_instruction.input_operations.get(0).map(|op| op.solidify());
                 let jump_taken =
-                    last_instruction.inputs.get(1).map(|op| !op.is_zero()).unwrap_or(true);
+                    last_instruction.inputs.get(0).is_some_and(|word| !word.is_zero());
 
-                // build hashable jump frame
+                // build hashable jump frame (`inputs`: [condition, jump counter] === stack top-first)
                 let jump_frame = JumpFrame::new(
                     last_instruction.instruction,
-                    last_instruction.inputs[0],
+                    *last_instruction.inputs.get(1).unwrap_or(&U256::ZERO),
                     vm.stack.size(),
                     jump_taken,
                 );
@@ -321,24 +322,21 @@ impl VM {
                     }
                 }
 
-                if last_instruction.opcode == 0x56 {
-                    continue;
-                }
-
                 // we didnt break out, so now we crate branching paths to cover all possibilities
                 *branch_count += 1;
+                let jump_counter = last_instruction.inputs.get(1).copied().unwrap_or(U256::ZERO);
                 trace!(
-                    "creating branching paths at instructions {} (JUMPDEST) and {} (CONTINUE)",
-                    last_instruction.inputs[0],
+                    "creating branching paths at jump target +1 from {} and fall-through from {}",
+                    jump_counter,
                     last_instruction.instruction + 1
                 );
 
                 // we need to create a trace for the path that wasn't taken.
                 if !jump_taken {
-                    // push a new vm trace to the children
+                    // Current VM continued past JUMPI (not taken). Spawn an alternate at the jump destination.
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction =
-                        last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
+                    let jump_dest: u128 = jump_counter.try_into().unwrap_or(u128::MAX);
+                    trace_vm.instruction = jump_dest.saturating_add(1);
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
@@ -359,9 +357,9 @@ impl VM {
                     }
                     break;
                 } else {
-                    // push a new vm trace to the children
+                    // Jump was taken: explore fall-through sibling.
                     let mut trace_vm = vm.clone();
-                    trace_vm.instruction = last_instruction.instruction + 1;
+                    trace_vm.instruction = last_instruction.instruction.saturating_add(1);
                     match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}

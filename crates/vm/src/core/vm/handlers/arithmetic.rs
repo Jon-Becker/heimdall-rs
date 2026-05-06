@@ -111,9 +111,9 @@ pub fn exp(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let exponent = vm.stack.pop()?;
     let result = a.value.overflowing_pow(exponent.value).0;
 
-    // consume dynamic gas
-    let exponent_byte_size = exponent.value.bit_len() / 8;
-    let gas_cost = 50 * exponent_byte_size;
+    // Dynamic gas: 50 * ⌈exponent bit width in bytes⌉ (matches `ceil(log256(exp))` when exp > 0)
+    let exponent_byte_len = (exponent.value.bit_len() + 7) / 8;
+    let gas_cost = 50 * exponent_byte_len as u128;
     vm.consume_gas(gas_cost as u128);
 
     vm.push_with_optimization(result, &a, &exponent, operation);
@@ -122,15 +122,17 @@ pub fn exp(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// SIGNEXTEND - Extend length of two's complement signed integer
 pub fn signextend(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
-    let x = vm.stack.pop()?.value;
-    let b = vm.stack.pop()?.value;
+    let byte_idx = vm.stack.pop()?.value;
+    let word = vm.stack.pop()?.value;
 
-    let t = x * U256::from(8u32) + U256::from(7u32);
-    let sign_bit = U256::from(1u32) << t;
-
-    // (b & sign_bit - 1) - (b & sign_bit)
-    let result =
-        (b & (sign_bit.overflowing_sub(U256::from(1u32)).0)).overflowing_sub(b & sign_bit).0;
+    let result = if byte_idx > U256::from(31u8) {
+        // Yellow Paper / evm.codes: if k > 31, 𝑏 is unchanged
+        word
+    } else {
+        let t = byte_idx * U256::from(8u32) + U256::from(7u32);
+        let sign_bit = U256::from(1u32) << t;
+        (word & (sign_bit.overflowing_sub(U256::from(1u32)).0)).overflowing_sub(word & sign_bit).0
+    };
 
     vm.stack.push(result, operation);
     Ok(())
