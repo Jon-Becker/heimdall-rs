@@ -3,7 +3,6 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::Path,
-    process::Command,
 };
 
 use eyre::Result;
@@ -71,13 +70,16 @@ pub fn read_file(path: &str) -> Result<String> {
 /// let path = "/tmp/test.txt";
 /// let result = delete_path(path);
 /// ```
-pub fn delete_path(_path: &str) -> bool {
-    let path = match std::path::Path::new(_path).to_str() {
-        Some(path) => path,
-        None => return false,
-    };
-
-    Command::new("rm").args(["-rf", path]).output().is_ok()
+pub fn delete_path(path_str: &str) -> bool {
+    let path = Path::new(path_str);
+    if !path.exists() {
+        return true;
+    }
+    if path.is_dir() {
+        std::fs::remove_dir_all(path).is_ok()
+    } else {
+        std::fs::remove_file(path).is_ok()
+    }
 }
 
 #[cfg(test)]
@@ -128,9 +130,8 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_path_failure() {
+    fn test_delete_path_missing_returns_true() {
         let path = "/nonexistent/test_dir2";
-        let result = delete_path(path);
-        assert!(result);
+        assert!(delete_path(path));
     }
 }

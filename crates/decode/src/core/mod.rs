@@ -67,6 +67,12 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         return Err(Error::Eyre(eyre!("calldata is empty. is this a value transfer?")));
     }
 
+    if calldata.len() < 4 {
+        return Err(Error::Eyre(eyre!(
+            "calldata is shorter than 4 bytes; expected at least a 4-byte function selector"
+        )));
+    }
+
     // if args.constructor is true, we need to extract the constructor arguments and use that
     // as the calldata
     if args.constructor {
@@ -188,6 +194,12 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             let mut i = 0;
             let mut covered_words = HashSet::new();
             while covered_words.len() != calldata_words.len() {
+                if i >= calldata_words.len() {
+                    return Err(Error::Eyre(eyre!(
+                        "cannot infer raw ABI parameter layout for calldata '{}' (incomplete heuristic coverage)",
+                        function_selector
+                    )));
+                }
                 let word = calldata_words[i].to_owned();
 
                 // check if the first word is abiencoded
@@ -209,8 +221,11 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
                             .retain(|t| t.starts_with("bytes") || t.starts_with("string")),
                     }
 
-                    let potential_type =
-                        to_type(potential_types.first().expect("potential types is empty"));
+                    let potential_type = if let Some(t) = potential_types.first() {
+                        to_type(t)
+                    } else {
+                        to_type("bytes32")
+                    };
 
                     potential_inputs.push(potential_type);
                     covered_words.insert(i);
@@ -242,7 +257,8 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         } // End of raw decoding
     }
 
-    let selected_match = matches.first().expect("matches is empty").clone();
+    let selected_match =
+        matches.first().ok_or_else(|| Error::Eyre(eyre!("no decode match could be derived from calldata")))?.clone();
     debug!("decoding calldata took {:?}", decode_start_time.elapsed());
     info!("decoded {} bytes successfully", calldata.len());
 

@@ -81,19 +81,20 @@ pub fn calldatacopy(
     vm: &mut VM,
     #[cfg(feature = "experimental")] operation: WrappedOpcode,
 ) -> Result<()> {
-    let dest_offset = vm.stack.pop()?.value;
-    let offset = vm.stack.pop()?.value;
+    // Stack (top first): size, calldata offset, memory offset
     let size = vm.stack.pop()?.value;
+    let offset = vm.stack.pop()?.value;
+    let dest_offset = vm.stack.pop()?.value;
 
     let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
     let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-    let size: usize = size.try_into().unwrap_or(vm.calldata.len()).min(vm.calldata.len());
+    let size: usize = size.try_into().unwrap_or(usize::MAX);
 
     let value = VM::safe_copy_data(&vm.calldata, offset, size);
 
-    // consume dynamic gas
+    // consume dynamic gas (memory expansion uses the destination range)
     let minimum_word_size = size.div_ceil(32) as u128;
-    let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(offset, size);
+    let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(dest_offset, size);
     vm.consume_gas(gas_cost);
 
     vm.memory.store_with_opcode(
@@ -118,19 +119,18 @@ pub fn codecopy(
     vm: &mut VM,
     #[cfg(feature = "experimental")] operation: WrappedOpcode,
 ) -> Result<()> {
-    let dest_offset = vm.stack.pop()?.value;
-    let offset = vm.stack.pop()?.value;
     let size = vm.stack.pop()?.value;
+    let offset = vm.stack.pop()?.value;
+    let dest_offset = vm.stack.pop()?.value;
 
     let dest_offset: usize = dest_offset.try_into().unwrap_or(usize::MAX);
     let offset: usize = offset.try_into().unwrap_or(usize::MAX);
-    let size: usize = size.try_into().unwrap_or(vm.bytecode.len()).min(vm.bytecode.len());
+    let size: usize = size.try_into().unwrap_or(usize::MAX);
 
     let value = VM::safe_copy_data(&vm.bytecode, offset, size);
 
-    // consume dynamic gas
     let minimum_word_size = size.div_ceil(32) as u128;
-    let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(offset, size);
+    let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(dest_offset, size);
     vm.consume_gas(gas_cost);
 
     vm.memory.store_with_opcode(
@@ -170,12 +170,12 @@ pub fn extcodecopy(
     vm: &mut VM,
     #[cfg(feature = "experimental")] operation: WrappedOpcode,
 ) -> Result<()> {
-    let address = vm.stack.pop()?.value;
-    let dest_offset = vm.stack.pop()?.value;
-    vm.stack.pop()?;
+    // Stack (top first): size, code offset, memory offset, address
     let size = vm.stack.pop()?.value;
+    let _code_offset = vm.stack.pop()?.value;
+    let dest_offset = vm.stack.pop()?.value;
+    let address = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let dest_offset: usize = dest_offset.try_into().unwrap_or(0);
     let mut size: usize = size.try_into().unwrap_or(256);
     size = size.max(256);
@@ -215,13 +215,13 @@ pub fn returndatacopy(
     vm: &mut VM,
     #[cfg(feature = "experimental")] operation: WrappedOpcode,
 ) -> Result<()> {
-    let dest_offset = vm.stack.pop()?.value;
-    vm.stack.pop()?;
     let size = vm.stack.pop()?.value;
+    let ret_data_offset = vm.stack.pop()?.value;
+    let dest_offset = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let dest_offset: usize = dest_offset.try_into().unwrap_or(0);
     let size: usize = size.try_into().unwrap_or(256);
+    let _ret_data_offset = ret_data_offset;
 
     let mut value = Vec::with_capacity(size);
     value.fill(0xff);

@@ -183,13 +183,10 @@ impl Stack {
     /// stack.push(U256::from(0x00), WrappedOpcode::default());
     ///
     /// // stack is now [0x00]
-    /// assert_eq!(stack.peek(0).value, U256::from(0x00));
+    /// assert_eq!(stack.peek(0).expect("peek").value, U256::from(0x00));
     /// ```
-    pub fn peek(&self, index: usize) -> StackFrame {
-        match self.stack.get(index) {
-            Some(value) => value.to_owned(),
-            None => StackFrame { value: U256::from(0u8), operation: WrappedOpcode::default() },
-        }
+    pub fn peek(&self, index: usize) -> Option<StackFrame> {
+        self.stack.get(index).cloned()
     }
 
     /// gets the top n values of the stack
@@ -204,7 +201,7 @@ impl Stack {
     /// stack.push(U256::from(0x02), WrappedOpcode::default());
     ///
     /// // stack is now [0x02, 0x01, 0x00]
-    /// let frames = stack.peek_n(2);
+    /// let frames = stack.peek_n(2).expect("peek_n");
     /// assert_eq!(frames[0].value, U256::from(0x02));
     /// assert_eq!(frames[1].value, U256::from(0x01));
     ///
@@ -215,12 +212,11 @@ impl Stack {
     ///
     /// // stack is now []
     /// ```
-    pub fn peek_n(&self, n: usize) -> Vec<StackFrame> {
-        let mut values = Vec::new();
-        for i in 0..n {
-            values.push(self.peek(i));
+    pub fn peek_n(&self, n: usize) -> Option<Vec<StackFrame>> {
+        if n > self.stack.len() {
+            return None;
         }
-        values
+        Some((0..n).map(|i| self.stack[i].clone()).collect())
     }
 
     /// Get the size of the stack
@@ -352,9 +348,9 @@ mod tests {
         stack.push(U256::from(1), WrappedOpcode::default());
         stack.push(U256::from(2), WrappedOpcode::default());
         stack.push(U256::from(3), WrappedOpcode::default());
-        assert_eq!(stack.peek(0).value, U256::from(3));
-        assert_eq!(stack.peek(1).value, U256::from(2));
-        assert_eq!(stack.peek(2).value, U256::from(1));
-        assert_eq!(stack.peek(3).value, U256::from(0));
+        assert_eq!(stack.peek(0).expect("peek").value, U256::from(3));
+        assert_eq!(stack.peek(1).expect("peek").value, U256::from(2));
+        assert_eq!(stack.peek(2).expect("peek").value, U256::from(1));
+        assert!(stack.peek(3).is_none());
     }
 }
