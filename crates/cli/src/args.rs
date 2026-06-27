@@ -63,7 +63,6 @@ pub(crate) enum Subcommands {
     Inspect(InspectArgs),
 }
 
-/// The log configuration.
 #[derive(Debug, Args)]
 #[clap(next_help_heading = "LOGGING")]
 pub(crate) struct LogArgs {
@@ -164,7 +163,6 @@ impl FromStr for ColorMode {
     }
 }
 
-/// The verbosity settings for the cli.
 #[derive(Debug, Copy, Clone, Args)]
 #[clap(next_help_heading = "DISPLAY")]
 pub(crate) struct Verbosity {
