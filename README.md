@@ -79,7 +79,11 @@ Heimdall has been cited in the following academic papers & theses:
 - Lagouvardos, S., Bollanos, Y., Debono, M., Grech, N. & Smaragdakis, Y. (2025). *Precise static identification of Ethereum storage variables*. arXiv. https://doi.org/10.48550/arXiv.2503.20690
 - Lagouvardos, S., Bollanos, Y., Grech, N., & Smaragdakis, Y. (2025). *The incredible shrinking context…in a decompiler near you*. arXiv. https://doi.org/10.48550/arXiv.2409.11157
 - Liu, Y., Li, X., & Li, Y. (2025). *DeepTx: Real-time transaction risk analysis via multi-modal features and LLM reasoning*. arXiv. https://doi.org/10.48550/arXiv.2510.18438
+- Qasse, I. A. (2025). *Immutable yet mutable: Empirical studies in smart contract upgradeability* [Doctoral dissertation, Reykjavík University]. Iris. https://iris.ru.is/ws/files/235971434/Thesis_Smart_contract_upgradeability_Final_.pdf
+- Qasse, I., Hamdaqa, M., & Jónsson, B. Þ. (2025). PROXiFY: A bytecode analysis tool for detecting and classifying proxy contracts in Ethereum smart contracts. In *ASE 2025: Proceedings of the 40th IEEE/ACM International Conference on Automated Software Engineering* (pp. 4114–4117). IEEE. https://doi.org/10.1109/ASE63991.2025.00388
+- Qin, K., Song, D., & Gervais, A. (2026). *SCDBench: A benchmark for LLM-based smart contract decompilers*. arXiv. https://doi.org/10.48550/arXiv.2605.29059
 - Solmaz, O., Heimbach, L., Vonlanthen, Y., & Wattenhofer, R. (2025). *Optimistic MEV in Ethereum layer 2s: Why blockspace is always in demand*. arXiv. https://doi.org/10.48550/arXiv.2506.14768
+- Sun, Y., Bao, L., & Yang, X. (2025). FIRE: Smart contract bytecode function identification via graph-refined hybrid feature encoding. ACM. https://doi.org/10.1145/3755881.3755883
 - Ye, M., Lin, X., Nan, Y., Wu, J., & Zheng, Z. (2024). Midas: Mining profitable exploits in on-chain smart contracts via feedback-driven fuzzing and differential analysis. In M. Christakis & M. Pradel (Eds.), *ISSTA 2024: Proceedings of the 33rd ACM SIGSOFT International Symposium on Software Testing and Analysis* (pp. 794–805). Association for Computing Machinery. https://doi.org/10.1145/3650212.3680321
 
 If you have used or plan to use Heimdall in your research, please reach out to me via [email](mailto:jonathan@jbecker.dev) or [Twitter](https://x.com/BeckerrJon)! I'd love to hear about what you're using heimdall for :)
