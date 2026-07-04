@@ -78,6 +78,7 @@ Heimdall has been cited in the following academic papers & theses:
 - Gkioka, M. (2025). *Domain transfer via decompilation: Enhancing code LLMs’ performance for blockchain applications* [Master’s thesis, National and Kapodistrian University of Athens]. Pergamos. https://pergamos.lib.uoa.gr/uoa/dl/object/5296079
 - Lagouvardos, S., Bollanos, Y., Debono, M., Grech, N. & Smaragdakis, Y. (2025). *Precise static identification of Ethereum storage variables*. arXiv. https://doi.org/10.48550/arXiv.2503.20690
 - Lagouvardos, S., Bollanos, Y., Grech, N., & Smaragdakis, Y. (2025). *The incredible shrinking context…in a decompiler near you*. arXiv. https://doi.org/10.48550/arXiv.2409.11157
+- Liao, Z., Nan, Y., Gao, Z., Liang, H., Hao, S., Ren, P., & Zheng, Z. (2025). *Augmenting smart contract decompiler output through fine-grained dependency analysis and LLM-facilitated semantic recovery*. arXiv. https://doi.org/10.48550/arXiv.2501.08670
 - Liu, Y., Li, X., & Li, Y. (2025). *DeepTx: Real-time transaction risk analysis via multi-modal features and LLM reasoning*. arXiv. https://doi.org/10.48550/arXiv.2510.18438
 - Peng, C., Jiang, M., Zhou, Y., & Wu, L. (2026). Thought is all you need: Smart contract vulnerability detection with thought-augmented large language model. *Proceedings of the ACM on Software Engineering*, *3*(FSE). https://doi.org/10.1145/3808141
 - Qasse, I. A. (2025). *Immutable yet mutable: Empirical studies in smart contract upgradeability* [Doctoral dissertation, Reykjavík University]. Iris. https://iris.ru.is/ws/files/235971434/Thesis_Smart_contract_upgradeability_Final_.pdf
@@ -86,6 +87,7 @@ Heimdall has been cited in the following academic papers & theses:
 - Solmaz, O., Heimbach, L., Vonlanthen, Y., & Wattenhofer, R. (2025). *Optimistic MEV in Ethereum layer 2s: Why blockspace is always in demand*. arXiv. https://doi.org/10.48550/arXiv.2506.14768
 - Su, X., Wu, H., Liang, H., Jiang, Y., Cheng, Y., Liu, Y., & Xu, F. (2026). *From transactions to exploits: Automated PoC synthesis for real-world DeFi attacks*. arXiv. https://doi.org/10.48550/arXiv.2601.16681
 - Sun, Y., Bao, L., & Yang, X. (2025). FIRE: Smart contract bytecode function identification via graph-refined hybrid feature encoding. ACM. https://doi.org/10.1145/3755881.3755883
+- Wang, Z., Yu, J., Qin, K., Song, D., Gervais, A., & Zhou, L. (2026). *TxRay: Agentic postmortem of live blockchain attacks*. arXiv. https://doi.org/10.48550/arXiv.2602.01317
 - Ye, M., Lin, X., Nan, Y., Wu, J., & Zheng, Z. (2024). Midas: Mining profitable exploits in on-chain smart contracts via feedback-driven fuzzing and differential analysis. In M. Christakis & M. Pradel (Eds.), *ISSTA 2024: Proceedings of the 33rd ACM SIGSOFT International Symposium on Software Testing and Analysis* (pp. 794–805). Association for Computing Machinery. https://doi.org/10.1145/3650212.3680321
 
 If you have used or plan to use Heimdall in your research, please reach out to me via [email](mailto:jonathan@jbecker.dev) or [Twitter](https://x.com/BeckerrJon)! I'd love to hear about what you're using heimdall for :)
