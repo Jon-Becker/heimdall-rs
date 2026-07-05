@@ -4,7 +4,7 @@ use alloy::primitives::Address;
 use eyre::eyre;
 use heimdall_common::{ether::compiler::detect_compiler, utils::strings::StringExt};
 use heimdall_vm::core::vm::VM;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use petgraph::{dot::Dot, Graph};
 use std::time::{Duration, Instant};
@@ -104,7 +104,7 @@ pub async fn cfg(args: CfgArgs) -> Result<CfgResult, Error> {
     let start_cfg_time = Instant::now();
     info!("building cfg for '{}' from symbolic execution trace", args.target.truncate(64));
     let mut contract_cfg = Graph::new();
-    let mut seen_nodes: HashSet<String> = HashSet::new();
+    let mut seen_nodes = HashMap::new();
     build_cfg(&map, &mut contract_cfg, None, false, &mut seen_nodes)?;
     debug!("building cfg took {:?}", start_cfg_time.elapsed());
 
