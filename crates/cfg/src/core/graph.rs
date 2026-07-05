@@ -6,7 +6,7 @@ use heimdall_vm::{
     ext::exec::VMTrace,
 };
 use petgraph::{matrix_graph::NodeIndex, Graph};
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 /// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
 /// control-flow graph found by the symbolic execution engine.
@@ -15,7 +15,7 @@ pub(crate) fn build_cfg(
     contract_cfg: &mut Graph<String, String>,
     parent_node: Option<NodeIndex<u32>>,
     jump_taken: bool,
-    seen_nodes: &mut HashSet<String>,
+    seen_nodes: &mut HashMap<String, NodeIndex<u32>>,
 ) -> Result<()> {
     let mut cfg_node: String = String::new();
     let mut parent_node = parent_node;
@@ -46,14 +46,19 @@ pub(crate) fn build_cfg(
         cfg_node.push_str(&format!("{}\n", &assembly));
     }
 
-    // check if this node has been seen before
-    if seen_nodes.contains(&cfg_node) {
+    // if this node has been seen before, we still need to link the current parent to it,
+    // otherwise edges into already-visited blocks (e.g. a shared fallback handler) are lost.
+    // we don't recurse again, since the block's children have already been mapped.
+    if let Some(&node_index) = seen_nodes.get(&cfg_node) {
+        if let Some(parent_node) = parent_node {
+            contract_cfg.update_edge(parent_node, node_index, jump_taken.to_string());
+        }
         return Ok(());
     }
-    seen_nodes.insert(cfg_node.clone());
 
     // add the node to the graph
-    let node_index = contract_cfg.add_node(cfg_node);
+    let node_index = contract_cfg.add_node(cfg_node.clone());
+    seen_nodes.insert(cfg_node, node_index);
     if let Some(parent_node) = parent_node {
         contract_cfg.update_edge(parent_node, node_index, jump_taken.to_string());
     }

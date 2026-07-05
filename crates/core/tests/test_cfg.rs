@@ -6,7 +6,7 @@ mod integration_tests {
     use std::path::PathBuf;
 
     use heimdall_cfg::{cfg, CfgArgs, CfgArgsBuilder, HardFork};
-    use petgraph::dot::Dot;
+    use petgraph::{dot::Dot, graph::NodeIndex, visit::EdgeRef};
     use serde_json::Value;
 
     #[tokio::test]
@@ -66,6 +66,50 @@ mod integration_tests {
         for line in &[String::from("\"0x039f JUMPDEST \\l0x03a0 STOP \\l\"")] {
             assert!(output.contains(line))
         }
+    }
+
+    #[tokio::test]
+    async fn test_cfg_links_fallback_block() {
+        // regression test for https://github.com/Jon-Becker/heimdall-rs/issues/627
+        // the entry node dispatches to the fallback handler when `CALLDATASIZE < 4`, but the
+        // edge into that block was previously dropped when the block had already been visited
+        // through another path (e.g. the dispatcher's fall-through).
+        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
+            println!("RPC_URL not set, skipping test");
+            std::process::exit(0);
+        });
+
+        // WETH (0xc02a...cc2) exhibits the missing fallback edge from the entry node.
+        let result = heimdall_cfg::cfg(CfgArgs {
+            target: String::from("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"),
+            rpc_url,
+            default: true,
+            color_edges: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+            hardfork: HardFork::Latest,
+            etherscan_api_key: String::from(""),
+        })
+        .await
+        .expect("failed to generate cfg");
+
+        // the entry node is always the first node added to the graph.
+        let entry = NodeIndex::new(0);
+        assert!(
+            result.graph[entry].contains("CALLDATASIZE"),
+            "entry node should contain the calldatasize dispatch check"
+        );
+
+        // the entry node must link to the fallback handler at 0xaf.
+        let links_to_fallback = result
+            .graph
+            .edges(entry)
+            .any(|edge| result.graph[edge.target()].starts_with("0xaf JUMPDEST"));
+        assert!(
+            links_to_fallback,
+            "entry node should link to the fallback block (0xaf) when calldatasize < 4"
+        );
     }
 
     #[tokio::test]
