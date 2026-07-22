@@ -4,3 +4,10 @@ output
 .git
 *.md
 !README.md
+
+# Non-build assets kept out of the build context so doc/example changes don't
+# invalidate the cached compile layer.
+examples
+scripts
+.config
+preview.png
