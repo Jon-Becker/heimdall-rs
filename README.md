@@ -71,6 +71,7 @@ Heimdall has been cited in the following academic papers & theses:
 
 
 - Aimar, D. (2023). *Extraction, indexing, and analysis of Ethereum smart contracts data* [Master’s thesis, Politecnico di Torino]. Webthesis. http://webthesis.biblio.polito.it/id/eprint/28450
+- Cao, D. (2026). *Retail-Adjusted Expected Value in Prediction Markets: Calibration, Longshot Bias, and Consumer Welfare*. SSRN. https://papers.ssrn.com/sol3/Delivery.cfm/7049119.pdf?abstractid=7049119&mirid=1
 - Chen, Z., Beillahi, S. M., Barahimi, P., Minwalla, C., Du, H., Veneris, A., & Long, F. (2025). *Secure smart contract with control flow integrity*. arXiv. https://doi.org/10.48550/arXiv.2504.05509
 - Darwish, M. (2024). *From bytecode to safety: Decompiling smart contracts for vulnerability analysis* [Bachelor’s thesis, Linnaeus University]. DiVA Portal. https://urn.kb.se/resolve?urn=urn:nbn:se:lnu:diva-129903
 - De Rosa, P., Felber, P., & Schiavoni, V. (2026). Seeing through EVM bytecode obfuscation. *IEEE Access*, *14*, 25515–25536. https://ieeexplore.ieee.org/document/11373339
