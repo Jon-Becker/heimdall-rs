@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+#
+# Regression test for issue #707.
+#
+# The bifrost installer must NOT create ~/.bash_profile when it is absent
+# (doing so shadows ~/.profile for bash login shells), but it MUST still add
+# bifrost to the PATH in any bash profile that already exists.
+#
+# The test drives the real `bifrost/install` script against an isolated $HOME
+# with the network/binary steps stubbed out, so only the shell-profile logic
+# runs. Run with: bash bifrost/tests/profile-test
+set -euo pipefail
+
+INSTALL_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/install"
+EXPORT_LINE='export PATH="$PATH:'
+
+pass=0
+fail=0
+ok()   { printf 'ok   - %s\n' "$1"; pass=$((pass + 1)); }
+bad()  { printf 'FAIL - %s\n' "$1"; fail=$((fail + 1)); }
+
+# Runs the installer with an isolated HOME and no real network/binary work.
+run_installer() {
+    local home="$1"
+    local stub
+    stub="$(mktemp -d)"
+    # Stub `curl` so it just materializes the file passed after `-o`, letting the
+    # subsequent `chmod +x` succeed without any network access.
+    cat > "$stub/curl" <<'EOF'
+#!/bin/sh
+out=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        *)  shift ;;
+    esac
+done
+[ -n "$out" ] && : > "$out"
+exit 0
+EOF
+    chmod +x "$stub/curl"
+
+    HOME="$home" \
+    BIFROST_PATH="$home/.bifrost" \
+    SHELL="/bin/bash" \
+    PATH="$stub:$PATH" \
+        bash "$INSTALL_SCRIPT" >/dev/null 2>&1
+    rm -rf "$stub"
+}
+
+# --- Case 1: no bash profiles exist -> ~/.bash_profile must NOT be created ---
+home="$(mktemp -d)"
+run_installer "$home"
+if [ ! -e "$home/.bash_profile" ]; then
+    ok "absent ~/.bash_profile is not created"
+else
+    bad "installer created ~/.bash_profile when it did not exist"
+fi
+rm -rf "$home"
+
+# --- Case 2: only ~/.bashrc exists -> it gets the PATH export, no bash_profile ---
+home="$(mktemp -d)"
+: > "$home/.bashrc"
+run_installer "$home"
+if grep -qF "$EXPORT_LINE" "$home/.bashrc"; then
+    ok "existing ~/.bashrc receives the PATH export"
+else
+    bad "existing ~/.bashrc was not updated"
+fi
+if [ ! -e "$home/.bash_profile" ]; then
+    ok "~/.bash_profile still not created when only ~/.bashrc exists"
+else
+    bad "installer created ~/.bash_profile when only ~/.bashrc existed"
+fi
+rm -rf "$home"
+
+# --- Case 3: ~/.bash_profile exists -> it gets the PATH export ---
+home="$(mktemp -d)"
+: > "$home/.bashrc"
+: > "$home/.bash_profile"
+run_installer "$home"
+if grep -qF "$EXPORT_LINE" "$home/.bash_profile"; then
+    ok "existing ~/.bash_profile receives the PATH export"
+else
+    bad "existing ~/.bash_profile was not updated"
+fi
+rm -rf "$home"
+
+echo "----"
+echo "passed: $pass, failed: $fail"
+[ "$fail" -eq 0 ]
