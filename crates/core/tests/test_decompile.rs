@@ -385,6 +385,51 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn test_decompile_leading_zero_byte_selector() {
+        // Regression test for function selectors with a leading zero byte (e.g. `0x00aabbcc`).
+        //
+        // Observed while decompiling an unverified Polygon (Polymarket-adjacent) contract: any
+        // externally-dispatched function whose 4-byte selector begins with `0x00` was silently
+        // dropped from the decompilation, because the dispatcher's `PUSH4` constant is solidified
+        // without its leading zero byte (`0xaabbcc`) while the selector matcher compared against
+        // the un-reduced `00aabbcc`, so the entry point never resolved.
+        //
+        // This minimal dispatcher routes two selectors: `0x00aabbcc` (leading zero byte, previously
+        // dropped) and `0x11223344` (control). Both must be recovered.
+        let bytecode = "60003560e01c806300aabbcc14610020578063112233441461002b57600080fd5b604260005260206000f35b604360005260206000f3";
+
+        let result = decompile(DecompilerArgs {
+            target: bytecode.to_string(),
+            rpc_url: String::from(""),
+            default: true,
+            skip_resolving: true,
+            include_solidity: true,
+            include_yul: false,
+            output: String::from(""),
+            name: String::from(""),
+            timeout: 10000,
+            abi: None,
+            openrouter_api_key: String::from(""),
+            model: String::from(""),
+            llm_postprocess: false,
+            etherscan_api_key: String::from(""),
+            hardfork: HardFork::Latest,
+        })
+        .await
+        .expect("failed to decompile");
+
+        let source = result.source.as_ref().expect("decompile source is empty");
+        assert!(
+            source.contains("unresolved_00aabbcc"),
+            "leading zero-byte selector `0x00aabbcc` was dropped from the decompilation"
+        );
+        assert!(
+            source.contains("unresolved_11223344"),
+            "control selector `0x11223344` should still be recovered"
+        );
+    }
+
+    #[tokio::test]
     #[ignore]
     async fn heavy_integration_test() {
         let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
