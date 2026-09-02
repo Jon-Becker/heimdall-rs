@@ -7,11 +7,11 @@ use tracing::debug;
 use crate::{
     interfaces::AnalyzedFunction,
     utils::postprocessors::{
-        arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
-        inline_single_use_variables, memory_postprocessor, normalize_typed_returns,
-        storage_inference_postprocessor, storage_postprocessor, structure_control_flow,
-        transient_postprocessor, type_cleanup_postprocessor, variable_postprocessor,
-        IrFunctionPostprocessor, IrPostprocessor,
+        arithmetic_postprocessor, bitwise_mask_postprocessor, detect_string_storage_getter,
+        eliminate_dead_variables, inline_single_use_variables, memory_postprocessor,
+        normalize_typed_returns, storage_inference_postprocessor, storage_postprocessor,
+        structure_control_flow, transient_postprocessor, type_cleanup_postprocessor,
+        variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
     },
     Error,
 };
@@ -232,6 +232,8 @@ impl PostprocessOrchestrator {
             }
         }
 
+        detect_string_storage_getter(function, &mut state)?;
+
         // Detect simple getters and Solidity's RLP-backed string pattern directly on the IR.
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
             let returned_storage = function.statements.iter().find_map(|statement| {
@@ -240,7 +242,9 @@ impl PostprocessOrchestrator {
             });
 
             if let Some(storage) = returned_storage {
-                state.maybe_getter_for = Some(storage.clone());
+                if let Expr::StorageAccess(path) = &storage {
+                    state.maybe_getter_for = Some(path.root().clone());
+                }
 
                 if has_binary_literal(&function.statements, BinaryOp::Mul, U256::from(0x100)) &&
                     (has_binary_literal(&function.statements, BinaryOp::BitAnd, U256::from(1)) ||
@@ -314,7 +318,7 @@ impl PostprocessOrchestrator {
 
         // if this is a getter, replace function.maybe_getter_for with the actual getter
         if let Some(getter_for) = self.state.maybe_getter_for.as_ref() {
-            function.maybe_getter_for = self.state.storage_map.get(getter_for).map(Expr::render);
+            function.maybe_getter_for = self.state.storage_roots.get(getter_for).cloned();
         }
 
         debug!(
@@ -331,6 +335,30 @@ impl PostprocessOrchestrator {
 mod tests {
     use super::*;
     use crate::core::ir::StoragePath;
+
+    #[test]
+    fn links_string_getter_to_canonical_storage_root() {
+        let root = Expr::Literal(U256::from(2));
+        let mut function = AnalyzedFunction::new("06fdde03", false);
+        function.analyzer_type = AnalyzerType::Solidity;
+        function.view = true;
+        function.payable = false;
+        function.returns = Some("string memory".to_string());
+        function.statements = vec![
+            Statement::Expression(Expr::StorageAccess(Box::new(StoragePath::PackedField {
+                parent: Box::new(StoragePath::Slot { slot: Box::new(root.clone()) }),
+                bit_offset: 0,
+                bit_width: 8,
+            }))),
+            Statement::Return(Expr::StorageAccess(Box::new(StoragePath::DynamicArray {
+                parent: Box::new(StoragePath::Slot { slot: Box::new(root) }),
+                index: Box::new(Expr::identifier("index")),
+            }))),
+        ];
+        let mut orchestrator = PostprocessOrchestrator::new(AnalyzerType::Solidity).unwrap();
+        orchestrator.postprocess(&mut function).unwrap();
+        assert_eq!(function.maybe_getter_for.as_deref(), Some("store_a"));
+    }
 
     #[test]
     fn recovers_mapping_through_full_pipeline() {

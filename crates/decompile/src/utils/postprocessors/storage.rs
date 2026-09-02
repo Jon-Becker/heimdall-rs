@@ -147,7 +147,11 @@ pub(crate) fn storage_postprocessor(
     statement.visit_exprs_mut(&mut |expr| {
         let original = expr.clone();
         let Expr::StorageAccess(path) = expr else { return };
-        let key = naming_key(path);
+        let key = if state.storage_type_hints.contains_key(path.root()) {
+            path.root().clone()
+        } else {
+            naming_key(path)
+        };
         let root = state.storage_roots.get(&key).cloned().unwrap_or_else(|| {
             let suffix = base26_encode(state.storage_roots.len() + 1);
             let root = if is_collection(path) {
