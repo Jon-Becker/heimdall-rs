@@ -12,7 +12,10 @@ use heimdall_vm::core::{
 use tracing::{debug, trace};
 
 use crate::{
-    core::analyze::{AnalyzerState, AnalyzerType},
+    core::{
+        analyze::{AnalyzerState, AnalyzerType},
+        ir::{Expr, Statement},
+    },
     interfaces::{AnalyzedFunction, CalldataFrame, TypeHeuristic},
     utils::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, STORAGE_ACCESS_REGEX},
     Error,
@@ -105,15 +108,21 @@ pub(crate) fn argument_heuristic<'a>(
 
                 // add the return statement to the function logic
                 if analyzer_state.analyzer_type == AnalyzerType::Solidity {
-                    if return_memory_operations.len() <= 1 {
-                        function
-                            .logic
-                            .push(format!("return {return_memory_operations_solidified};"));
+                    let value = if return_memory_operations.len() <= 1 {
+                        return_memory_operations
+                            .first()
+                            .map(|frame| Expr::from_opcode(&frame.operation))
+                            .unwrap_or_else(|| Expr::raw(""))
                     } else {
-                        function.logic.push(format!(
-                            "return abi.encodePacked({return_memory_operations_solidified});"
-                        ));
-                    }
+                        Expr::Call {
+                            callee: "abi.encodePacked".to_string(),
+                            args: return_memory_operations
+                                .iter()
+                                .map(|frame| Expr::from_opcode(&frame.operation))
+                                .collect(),
+                        }
+                    };
+                    function.push_statement(Statement::Return(value));
                 } else if analyzer_state.analyzer_type == AnalyzerType::Yul {
                     function.logic.push(format!(
                         "return({}, {})",

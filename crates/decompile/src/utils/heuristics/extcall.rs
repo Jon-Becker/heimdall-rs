@@ -39,7 +39,7 @@ pub(crate) fn extcall_heuristic<'a>(
                         instruction.instruction,
                         opcode_name(instruction.opcode)
                     );
-                    function.logic.push(format!(
+                    function.push_raw_statement(format!(
                         "(bool success, bytes memory ret0) = address({address}).transfer({value_solidified});"
                     ));
                     return Ok(());
@@ -50,7 +50,7 @@ pub(crate) fn extcall_heuristic<'a>(
                         instruction.instruction,
                         opcode_name(instruction.opcode)
                     );
-                    function.logic.push(format!(
+                    function.push_raw_statement(format!(
                         "(bool success, bytes memory ret0) = address({address}).transfer({value_solidified});"
                     ));
                     return Ok(());
@@ -98,11 +98,11 @@ pub(crate) fn extcall_heuristic<'a>(
                     &memory,
                     &instruction.input_operations[5],
                 ) {
-                    function.logic.push(precompile_logic);
+                    function.push_raw_statement(precompile_logic);
                 } else if let Some(decoded) = decoded {
                     let start_slot = instruction.inputs[3] + U256::from(4);
 
-                    function.logic.push(format!(
+                    function.push_raw_statement(format!(
                         "(bool success, bytes memory ret0) = address({}).{}{}({}); // {}",
                         address,
                         modifier,
@@ -123,7 +123,7 @@ pub(crate) fn extcall_heuristic<'a>(
                         opcode_name(instruction.opcode).to_lowercase(),
                     ));
                 } else {
-                    function.logic.push(format!(
+                    function.push_raw_statement(format!(
                     "(bool success, bytes memory ret0) = address({}).Unresolved_{}{}(msg.data[{}:{}]); // {}",
                     address,
                     extcalldata.get(2..10).unwrap_or(""),
@@ -173,11 +173,11 @@ pub(crate) fn extcall_heuristic<'a>(
                     &memory,
                     &instruction.input_operations[4],
                 ) {
-                    function.logic.push(precompile_logic);
+                    function.push_raw_statement(precompile_logic);
                 } else if let Some(decoded) = decoded {
                     let start_slot = instruction.inputs[2] + U256::from(4);
 
-                    function.logic.push(format!(
+                    function.push_raw_statement(format!(
                         "(bool success, bytes memory ret0) = address({}).{}{}({}); // {}",
                         address,
                         modifier,
@@ -198,7 +198,7 @@ pub(crate) fn extcall_heuristic<'a>(
                         opcode_name(instruction.opcode).to_lowercase(),
                     ));
                 } else {
-                    function.logic.push(format!(
+                    function.push_raw_statement(format!(
                     "(bool success, bytes memory ret0) = address({}).Unresolved_{}{}(memory[{}:{}]); // {}",
                     address,
                     extcalldata.get(2..10).unwrap_or(""),

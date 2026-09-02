@@ -4,7 +4,7 @@ use alloy::primitives::U256;
 use heimdall_common::ether::signatures::ResolvedFunction;
 use heimdall_vm::core::{opcodes::WrappedOpcode, types::byte_size_to_type};
 
-use crate::core::analyze::AnalyzerType;
+use crate::core::{analyze::AnalyzerType, ir::Statement};
 
 /// The [`AnalyzedFunction`] struct represents a function that has been analyzed by the decompiler.
 #[derive(Clone, Debug)]
@@ -25,7 +25,10 @@ pub(crate) struct AnalyzedFunction {
     /// returns the return type for the function.
     pub returns: Option<String>,
 
-    /// holds function logic to be written to the output solidity file.
+    /// Structured statements produced by analysis before source rendering.
+    pub statements: Vec<Statement>,
+
+    /// Rendered function logic. This is populated at the postprocessing boundary.
     pub logic: Vec<String>,
 
     /// holds all found event selectors found
@@ -93,6 +96,7 @@ impl AnalyzedFunction {
             arguments: HashMap::new(),
             memory: HashMap::new(),
             returns: None,
+            statements: Vec::new(),
             logic: Vec::new(),
             events: HashSet::new(),
             errors: HashSet::new(),
@@ -105,6 +109,24 @@ impl AnalyzedFunction {
             fallback,
             maybe_getter_for: None,
             constant_value: None,
+        }
+    }
+
+    /// Add a structured statement to this function's intermediate representation.
+    pub(crate) fn push_statement(&mut self, statement: Statement) {
+        self.statements.push(statement);
+    }
+
+    /// Add source text which has not yet been promoted to a structured IR node.
+    pub(crate) fn push_raw_statement(&mut self, statement: impl Into<String>) {
+        self.push_statement(Statement::raw(statement));
+    }
+
+    /// Render the intermediate representation for legacy textual postprocessors and output.
+    pub(crate) fn render_statements(&mut self) {
+        if !self.statements.is_empty() {
+            self.statements = self.statements.drain(..).map(Statement::simplify).collect();
+            self.logic = self.statements.iter().map(Statement::render).collect();
         }
     }
 

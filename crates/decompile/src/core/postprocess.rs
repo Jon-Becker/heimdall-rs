@@ -102,6 +102,10 @@ impl PostprocessOrchestrator {
         );
         let start_postprocess_time = Instant::now();
 
+        // Lower the structured analysis IR only at the textual postprocessing boundary. The
+        // existing postprocessors can then be migrated to IR transforms independently.
+        function.render_statements();
+
         // get postprocessor state
         let mut state = PostprocessorState {
             storage_map: self.state.storage_map.clone(),

@@ -5,6 +5,7 @@ use heimdall_vm::ext::exec::VMTrace;
 use tracing::debug;
 
 use crate::{
+    core::ir::Statement,
     interfaces::AnalyzedFunction,
     utils::heuristics::{
         argument_heuristic, event_heuristic, extcall_heuristic, modifier_heuristic,
@@ -183,7 +184,11 @@ impl Analyzer {
                     }
                 }
 
-                self.function.logic.push("}".to_string());
+                if self.typ == AnalyzerType::Solidity {
+                    self.function.push_statement(Statement::CloseBlock);
+                } else {
+                    self.function.logic.push("}".to_string());
+                }
             }
 
             Ok(())
