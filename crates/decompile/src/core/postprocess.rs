@@ -11,9 +11,8 @@ use crate::{
         constants::STORAGE_ACCESS_REGEX,
         postprocessors::{
             arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
-            memory_postprocessor, remove_empty_lines, storage_postprocessor,
-            transient_postprocessor, variable_postprocessor, IrFunctionPostprocessor,
-            IrPostprocessor, Pass,
+            memory_postprocessor, storage_postprocessor, transient_postprocessor,
+            variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
         },
     },
     Error,
@@ -54,8 +53,6 @@ pub(crate) struct PostprocessOrchestrator {
     ir_passes: Vec<IrPostprocessor>,
     /// Function-wide structured passes run after statement-local passes.
     ir_function_passes: Vec<IrFunctionPostprocessor>,
-    /// Legacy passes run after source rendering.
-    passes: Vec<Pass>,
     /// The state shared between postprocessors
     state: PostprocessorState,
 }
@@ -67,7 +64,6 @@ impl PostprocessOrchestrator {
             typ,
             ir_passes: Vec::new(),
             ir_function_passes: Vec::new(),
-            passes: Vec::new(),
             state: PostprocessorState::default(),
         };
         orchestrator.register_passes()?;
@@ -90,9 +86,6 @@ impl PostprocessOrchestrator {
             AnalyzerType::Yul => {}
             _ => {}
         };
-
-        // Always run empty line removal last
-        self.passes.push(Pass::function_level(remove_empty_lines));
 
         Ok(())
     }
@@ -194,11 +187,6 @@ impl PostprocessOrchestrator {
         }
 
         function.render_statements();
-
-        // Run remaining rendered-source passes.
-        for pass in &self.passes {
-            pass.run(function, &mut state)?;
-        }
 
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
