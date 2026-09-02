@@ -2,8 +2,6 @@ use futures::future::BoxFuture;
 use hashbrown::HashSet;
 
 use alloy::primitives::U256;
-use eyre::eyre;
-use heimdall_common::utils::strings::find_balanced_encapsulator;
 use heimdall_vm::core::{
     opcodes::{opcode_name, CALLDATALOAD, ISZERO},
     types::{byte_size_to_type, convert_bitmask},
@@ -17,7 +15,7 @@ use crate::{
         ir::{Expr, Statement},
     },
     interfaces::{AnalyzedFunction, CalldataFrame, TypeHeuristic},
-    utils::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, STORAGE_ACCESS_REGEX},
+    utils::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2},
     Error,
 };
 
@@ -199,22 +197,6 @@ pub(crate) fn argument_heuristic<'a>(
                     // convert the cast size to a string
                     let (_, cast_types) = byte_size_to_type(byte_size);
                     function.returns = Some(cast_types[0].to_string());
-                }
-
-                // check if this is a state getter
-                if function.arguments.is_empty() {
-                    if let Some(storage_access) = STORAGE_ACCESS_REGEX
-                        .find(&return_memory_operations_solidified)
-                        .unwrap_or(None)
-                    {
-                        let storage_access = storage_access.as_str();
-                        let access_range =
-                            find_balanced_encapsulator(storage_access, ('[', ']'))
-                                .map_err(|e| eyre!("failed to find access range: {e}"))?;
-
-                        function.maybe_getter_for =
-                            Some(format!("storage[{}]", &storage_access[access_range]));
-                    }
                 }
 
                 debug!(

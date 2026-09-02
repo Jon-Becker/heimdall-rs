@@ -42,6 +42,18 @@ fn is_storage_access(expr: &Expr) -> bool {
     matches!(expr, Expr::StorageAccess(_))
 }
 
+fn path_has_packed_width(path: &super::ir::StoragePath, width: u16) -> bool {
+    match path {
+        super::ir::StoragePath::PackedField { parent, bit_width, .. } => {
+            *bit_width == width || path_has_packed_width(parent, width)
+        }
+        super::ir::StoragePath::Mapping { parent, .. } |
+        super::ir::StoragePath::DynamicArray { parent, .. } |
+        super::ir::StoragePath::Field { parent, .. } => path_has_packed_width(parent, width),
+        super::ir::StoragePath::Slot { .. } => false,
+    }
+}
+
 fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> bool {
     find_expression(statements, |expr| {
         matches!(
@@ -113,7 +125,6 @@ impl PostprocessOrchestrator {
     pub(crate) fn register_passes(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
-                self.ir_passes.push(storage_inference_postprocessor);
                 self.ir_passes.push(bitwise_mask_postprocessor);
                 self.ir_passes.push(arithmetic_postprocessor);
                 self.ir_passes.push(memory_postprocessor);
@@ -175,6 +186,14 @@ impl PostprocessOrchestrator {
             (String::from(".chainid"), String::from("uint256")),
         ]);
 
+        // Storage inference must run before getter detection and before memory accesses are
+        // renamed.
+        if self.typ == AnalyzerType::Solidity {
+            for statement in &mut function.statements {
+                storage_inference_postprocessor(statement, &mut state)?;
+            }
+        }
+
         // Detect simple getters and Solidity's RLP-backed string pattern directly on the IR.
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
             let returned_storage = function.statements.iter().find_map(|statement| {
@@ -186,7 +205,11 @@ impl PostprocessOrchestrator {
                 state.maybe_getter_for = Some(storage.clone());
 
                 if has_binary_literal(&function.statements, BinaryOp::Mul, U256::from(0x100)) &&
-                    has_binary_literal(&function.statements, BinaryOp::BitAnd, U256::from(1))
+                    (has_binary_literal(&function.statements, BinaryOp::BitAnd, U256::from(1)) ||
+                        find_expression(&function.statements, |expr| {
+                            matches!(expr, Expr::StorageAccess(path) if path_has_packed_width(path, 8))
+                        })
+                        .is_some())
                 {
                     function.returns = Some(String::from("string memory"));
                     function.statements = vec![Statement::Return(Expr::Call {
@@ -263,5 +286,42 @@ impl PostprocessOrchestrator {
         );
 
         Ok(self.state.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::ir::StoragePath;
+
+    #[test]
+    fn recovers_mapping_through_full_pipeline() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.analyzer_type = AnalyzerType::Solidity;
+        function.statements = vec![
+            Statement::Assign {
+                target: Expr::index("memory", Expr::Literal(U256::ZERO)),
+                value: Expr::identifier("msg.sender"),
+            },
+            Statement::Assign {
+                target: Expr::index("memory", Expr::Literal(U256::from(32))),
+                value: Expr::Literal(U256::from(5)),
+            },
+            Statement::Return(Expr::StorageAccess(Box::new(StoragePath::Slot {
+                slot: Box::new(Expr::Keccak {
+                    offset: Box::new(Expr::Literal(U256::ZERO)),
+                    size: Box::new(Expr::Literal(U256::from(64))),
+                    preimage: None,
+                }),
+            }))),
+        ];
+
+        let mut orchestrator = PostprocessOrchestrator::new(AnalyzerType::Solidity).unwrap();
+        let state = orchestrator.postprocess(&mut function).unwrap();
+        assert_eq!(function.logic, vec!["return storage_map_a[msg.sender];"]);
+        assert_eq!(
+            state.storage_type_map.get("storage_map_a"),
+            Some(&"mapping(address => bytes32)".to_string())
+        );
     }
 }
