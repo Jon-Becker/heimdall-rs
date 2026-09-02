@@ -45,6 +45,46 @@ fn path_from_keccak(expr: &Expr) -> Option<StoragePath> {
     }
 }
 
+fn cast_width(ty: &str) -> Option<u16> {
+    match ty {
+        "address" => Some(160),
+        "bool" => Some(8),
+        _ => ty
+            .strip_prefix("uint")
+            .or_else(|| ty.strip_prefix("int"))
+            .and_then(|width| width.parse().ok())
+            .or_else(|| {
+                ty.strip_prefix("bytes")
+                    .and_then(|width| width.parse::<u16>().ok())
+                    .map(|width| width * 8)
+            }),
+    }
+}
+
+fn packed_path(expr: &Expr) -> Option<StoragePath> {
+    let Expr::Cast { ty, value } = expr else { return None };
+    let width = cast_width(ty)?;
+    if width >= 256 {
+        return None;
+    }
+
+    match &**value {
+        Expr::StorageAccess(path) => {
+            Some(StoragePath::PackedField { parent: path.clone(), bit_offset: 0, bit_width: width })
+        }
+        Expr::Binary { op: BinaryOp::Shr, lhs, rhs } => {
+            let Expr::StorageAccess(path) = &**lhs else { return None };
+            let Expr::Literal(offset) = &**rhs else { return None };
+            Some(StoragePath::PackedField {
+                parent: path.clone(),
+                bit_offset: (*offset).try_into().ok()?,
+                bit_width: width,
+            })
+        }
+        _ => None,
+    }
+}
+
 fn path_from_slot(slot: Expr) -> StoragePath {
     if let Some(path) = path_from_keccak(&slot) {
         return path;
@@ -88,8 +128,12 @@ pub(crate) fn storage_inference_postprocessor(
     statement.visit_exprs_mut(&mut |expr| {
         resolve_keccak(expr, &state.symbolic_memory);
         if let Expr::StorageAccess(path) = expr {
-            let StoragePath::Slot { slot } = &**path else { return };
-            *path = Box::new(path_from_slot(*slot.clone()));
+            if let StoragePath::Slot { slot } = &**path {
+                *path = Box::new(path_from_slot(*slot.clone()));
+            }
+        }
+        if let Some(path) = packed_path(expr) {
+            *expr = Expr::StorageAccess(Box::new(path));
         }
     });
 
@@ -146,6 +190,31 @@ mod tests {
             load,
             Statement::Return(Expr::StorageAccess(path))
                 if matches!(*path, StoragePath::Mapping { .. })
+        ));
+    }
+
+    #[test]
+    fn recognizes_packed_field() {
+        let mut statement = Statement::Return(Expr::Cast {
+            ty: "address".to_string(),
+            value: Box::new(Expr::Binary {
+                op: BinaryOp::Shr,
+                lhs: Box::new(Expr::StorageAccess(Box::new(StoragePath::Slot {
+                    slot: Box::new(Expr::Literal(U256::from(3))),
+                }))),
+                rhs: Box::new(Expr::Literal(U256::from(32))),
+            }),
+        });
+        storage_inference_postprocessor(&mut statement, &mut PostprocessorState::default())
+            .unwrap();
+        assert!(matches!(
+            statement,
+            Statement::Return(Expr::StorageAccess(path))
+                if matches!(*path, StoragePath::PackedField {
+                    bit_offset: 32,
+                    bit_width: 160,
+                    ..
+                })
         ));
     }
 

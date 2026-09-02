@@ -77,6 +77,7 @@ pub(crate) enum StoragePath {
     Mapping { parent: Box<StoragePath>, key: Box<Expr> },
     DynamicArray { parent: Box<StoragePath>, index: Box<Expr> },
     Field { parent: Box<StoragePath>, offset: U256 },
+    PackedField { parent: Box<StoragePath>, bit_offset: u16, bit_width: u16 },
 }
 
 impl StoragePath {
@@ -91,7 +92,9 @@ impl StoragePath {
                 parent.collect_identifiers(identifiers);
                 index.collect_identifiers(identifiers);
             }
-            Self::Field { parent, .. } => parent.collect_identifiers(identifiers),
+            Self::Field { parent, .. } | Self::PackedField { parent, .. } => {
+                parent.collect_identifiers(identifiers)
+            }
         }
     }
 
@@ -106,7 +109,9 @@ impl StoragePath {
                 parent.visit_mut(visitor);
                 index.visit_mut(visitor);
             }
-            Self::Field { parent, .. } => parent.visit_mut(visitor),
+            Self::Field { parent, .. } | Self::PackedField { parent, .. } => {
+                parent.visit_mut(visitor)
+            }
         }
     }
 
@@ -123,6 +128,9 @@ impl StoragePath {
             Self::Field { parent, offset } => {
                 Self::Field { parent: Box::new(parent.simplify()), offset }
             }
+            Self::PackedField { parent, bit_offset, bit_width } => {
+                Self::PackedField { parent: Box::new(parent.simplify()), bit_offset, bit_width }
+            }
         }
     }
 
@@ -137,6 +145,9 @@ impl StoragePath {
             }
             Self::Field { parent, offset } => {
                 format!("{} + {}", parent.render_slot(), encode_hex_reduced(*offset))
+            }
+            Self::PackedField { parent, bit_offset, bit_width } => {
+                format!("packed({}, {}, {})", parent.render_slot(), bit_offset, bit_width)
             }
         }
     }

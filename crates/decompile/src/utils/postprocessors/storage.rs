@@ -36,6 +36,10 @@ fn same_layout(a: &StoragePath, b: &StoragePath) -> bool {
             StoragePath::Field { parent: a, offset: a_offset },
             StoragePath::Field { parent: b, offset: b_offset },
         ) => a_offset == b_offset && same_layout(a, b),
+        (
+            StoragePath::PackedField { parent: a, bit_offset: a_offset, bit_width: a_width },
+            StoragePath::PackedField { parent: b, bit_offset: b_offset, bit_width: b_width },
+        ) => a_offset == b_offset && a_width == b_width && same_layout(a, b),
         _ => false,
     }
 }
@@ -44,7 +48,9 @@ fn is_collection(path: &StoragePath) -> bool {
     match path {
         StoragePath::Slot { .. } => false,
         StoragePath::Mapping { .. } | StoragePath::DynamicArray { .. } => true,
-        StoragePath::Field { parent, .. } => is_collection(parent),
+        StoragePath::Field { parent, .. } | StoragePath::PackedField { parent, .. } => {
+            is_collection(parent)
+        }
     }
 }
 
@@ -69,6 +75,16 @@ fn render_path(path: &StoragePath, root: &str) -> Expr {
             base: Box::new(render_path(parent, root)),
             member: format!("field_{offset}"),
         },
+        StoragePath::PackedField { parent, bit_offset, .. } => {
+            if is_collection(parent) {
+                Expr::Member {
+                    base: Box::new(render_path(parent, root)),
+                    member: format!("field_{bit_offset}"),
+                }
+            } else {
+                Expr::identifier(root)
+            }
+        }
     }
 }
 
@@ -85,6 +101,11 @@ fn storage_type(path: &StoragePath, leaf: String, state: &PostprocessorState) ->
         }
         // Struct synthesis will replace this placeholder in a subsequent layout pass.
         StoragePath::Field { parent, .. } => storage_type(parent, "bytes32".to_string(), state),
+        StoragePath::PackedField { parent, bit_width, .. } => {
+            let packed_type =
+                if *bit_width == 160 { "address".to_string() } else { format!("uint{bit_width}") };
+            storage_type(parent, packed_type, state)
+        }
     }
 }
 
@@ -98,6 +119,7 @@ pub(crate) fn storage_postprocessor(
         _ => None,
     };
 
+    let mut observed_paths = Vec::new();
     statement.visit_exprs_mut(&mut |expr| {
         let original = expr.clone();
         let Expr::StorageAccess(path) = expr else { return };
@@ -119,9 +141,15 @@ pub(crate) fn storage_postprocessor(
                 }
             });
         let replacement = render_path(path, &root);
+        observed_paths.push((root, (**path).clone()));
         state.storage_map.insert(original, replacement.clone());
         *expr = replacement;
     });
+
+    for (root, path) in observed_paths {
+        let inferred = storage_type(&path, "bytes32".to_string(), state);
+        state.storage_type_map.entry(root).or_insert(inferred);
+    }
 
     let (target, value) = match statement {
         Statement::Assign { target, value } | Statement::DeclareAssign { target, value, .. } => {
