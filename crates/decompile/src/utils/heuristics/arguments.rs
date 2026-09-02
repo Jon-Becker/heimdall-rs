@@ -112,7 +112,7 @@ pub(crate) fn argument_heuristic<'a>(
                         return_memory_operations
                             .first()
                             .map(|frame| Expr::from_opcode(&frame.operation))
-                            .unwrap_or_else(|| Expr::raw(""))
+                            .unwrap_or(Expr::Empty)
                     } else {
                         Expr::Call {
                             callee: "abi.encodePacked".to_string(),
@@ -124,11 +124,13 @@ pub(crate) fn argument_heuristic<'a>(
                     };
                     function.push_statement(Statement::Return(value));
                 } else if analyzer_state.analyzer_type == AnalyzerType::Yul {
-                    function.push_raw_statement(format!(
-                        "return({}, {})",
-                        state.last_instruction.input_operations[0].yulify(),
-                        state.last_instruction.input_operations[1].yulify()
-                    ));
+                    function.push_statement(Statement::Expression(Expr::Call {
+                        callee: "return".to_string(),
+                        args: vec![
+                            Expr::from_yul_opcode(&state.last_instruction.input_operations[0]),
+                            Expr::from_yul_opcode(&state.last_instruction.input_operations[1]),
+                        ],
+                    }));
                 }
 
                 // if we've already determined a return type, we don't want to do it again.

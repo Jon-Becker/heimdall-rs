@@ -5,7 +5,7 @@ use heimdall_vm::ext::exec::VMTrace;
 use tracing::debug;
 
 use crate::{
-    core::ir::Statement,
+    core::ir::{Expr, Statement},
     interfaces::AnalyzedFunction,
     utils::heuristics::{
         argument_heuristic, event_heuristic, extcall_heuristic, modifier_heuristic,
@@ -53,9 +53,9 @@ impl Display for AnalyzerType {
 #[derive(Debug, Clone)]
 pub(crate) struct AnalyzerState {
     /// If we reach a JUMPI, this will hold the conditional for scope tracking
-    pub jumped_conditional: Option<String>,
+    pub jumped_conditional: Option<Expr>,
     /// Tracks a stack of conditionals, used for scope tracking
-    pub conditional_stack: Vec<String>,
+    pub conditional_stack: Vec<Expr>,
     /// Tracks which analyzer type we are using
     pub analyzer_type: AnalyzerType,
     /// Whether to skip resolving internal calls

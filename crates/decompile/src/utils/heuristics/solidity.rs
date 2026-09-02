@@ -118,11 +118,11 @@ pub(crate) fn solidity_heuristic<'a>(
                     return Ok(());
                 }
 
-                function.push_statement(Statement::If { condition: conditional_expr });
+                function.push_statement(Statement::If { condition: conditional_expr.clone() });
 
                 // save a copy of the conditional and add it to the conditional map
-                analyzer_state.jumped_conditional = Some(conditional.clone());
-                analyzer_state.conditional_stack.push(conditional);
+                analyzer_state.jumped_conditional = Some(conditional_expr.clone());
+                analyzer_state.conditional_stack.push(conditional_expr);
             }
 
             // TSTORE
@@ -138,15 +138,15 @@ pub(crate) fn solidity_heuristic<'a>(
 
             // CREATE / CREATE2
             0xf0 | 0xf5 => {
-                function.push_statement(Statement::Assembly(format!(
-                    "addr := create({})",
-                    instruction
-                        .input_operations
-                        .iter()
-                        .map(|opcode| Expr::from_opcode(opcode).render())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                )));
+                function.push_statement(Statement::AssemblyAssign {
+                    target: "addr".to_string(),
+                    function: if instruction.opcode == 0xf5 {
+                        "create2".to_string()
+                    } else {
+                        "create".to_string()
+                    },
+                    args: instruction.input_operations.iter().map(Expr::from_opcode).collect(),
+                });
             }
 
             // REVERT
@@ -177,11 +177,14 @@ pub(crate) fn solidity_heuristic<'a>(
                     match revert_data.get(0..4) {
                         Some(selector) => {
                             function.errors.insert(U256::from_be_slice(selector));
-                            Some(Expr::raw(format!(
-                                "CustomError_{}()",
-                                encode_hex_reduced(U256::from_be_slice(selector))
-                                    .replacen("0x", "", 1)
-                            )))
+                            Some(Expr::Call {
+                                callee: format!(
+                                    "CustomError_{}",
+                                    encode_hex_reduced(U256::from_be_slice(selector))
+                                        .replacen("0x", "", 1)
+                                ),
+                                args: vec![],
+                            })
                         }
                         None => None,
                     }
@@ -211,10 +214,7 @@ pub(crate) fn solidity_heuristic<'a>(
                     };
                     *statement = Statement::Require { condition, reason };
                 } else {
-                    function.push_statement(Statement::Require {
-                        condition: Expr::raw(conditional),
-                        reason,
-                    });
+                    function.push_statement(Statement::Require { condition: conditional, reason });
                 }
             }
 

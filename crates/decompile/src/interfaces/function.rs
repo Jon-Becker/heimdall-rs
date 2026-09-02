@@ -120,11 +120,6 @@ impl AnalyzedFunction {
         self.statements.push(statement);
     }
 
-    /// Add source text which has not yet been promoted to a structured IR node.
-    pub(crate) fn push_raw_statement(&mut self, statement: impl Into<String>) {
-        self.push_statement(Statement::raw(statement));
-    }
-
     /// Render the intermediate representation for legacy textual postprocessors and output.
     pub(crate) fn render_statements(&mut self) {
         if !self.statements.is_empty() {

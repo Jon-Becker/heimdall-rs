@@ -76,6 +76,7 @@ impl BinaryOp {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Expr {
     Raw(String),
+    Empty,
     Identifier(String),
     Literal(U256),
     Bool(bool),
@@ -108,6 +109,32 @@ impl Expr {
 
     pub(crate) fn slice(base: impl Into<String>, start: Expr, end: Expr) -> Self {
         Self::Slice { base: Box::new(Self::raw(base)), start: Box::new(start), end: Box::new(end) }
+    }
+
+    /// Convert an opcode dependency tree to Yul's functional expression form.
+    pub(crate) fn from_yul_opcode(opcode: &WrappedOpcode) -> Self {
+        if opcode.opcode == opcodes::PUSH0 {
+            return Self::Literal(U256::ZERO);
+        }
+        if (opcodes::PUSH1..=opcodes::PUSH32).contains(&opcode.opcode) {
+            return opcode
+                .inputs
+                .first()
+                .map(Self::from_yul_input)
+                .unwrap_or(Self::Literal(U256::ZERO));
+        }
+
+        Self::Call {
+            callee: opcodes::opcode_name(opcode.opcode).to_lowercase(),
+            args: opcode.inputs.iter().map(Self::from_yul_input).collect(),
+        }
+    }
+
+    fn from_yul_input(input: &WrappedInput) -> Self {
+        match input {
+            WrappedInput::Raw(value) => Self::Literal(*value),
+            WrappedInput::Opcode(opcode) => Self::from_yul_opcode(opcode),
+        }
     }
 
     pub(crate) fn from_opcode(opcode: &WrappedOpcode) -> Self {
@@ -343,6 +370,7 @@ impl Expr {
     fn render_with_precedence(&self, parent_precedence: u8, right_child: bool) -> String {
         let rendered = match self {
             Self::Raw(value) | Self::Identifier(value) => value.clone(),
+            Self::Empty => String::new(),
             Self::Literal(value) => encode_hex_reduced(*value),
             Self::Bool(value) => value.to_string(),
             Self::StringLiteral(value) => format!("{value:?}"),
@@ -400,28 +428,65 @@ pub(crate) enum RenderTarget {
 /// heuristics have run, so control-flow and assignments can be transformed without parsing text.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Statement {
-    Assign { target: Expr, value: Expr },
-    If { condition: Expr },
-    Require { condition: Expr, reason: Option<Expr> },
+    Assign {
+        target: Expr,
+        value: Expr,
+    },
+    DeclareAssign {
+        ty: String,
+        target: Expr,
+        value: Expr,
+    },
+    If {
+        condition: Expr,
+    },
+    IfRevertElse {
+        condition: Expr,
+        offset: Expr,
+        size: Expr,
+    },
+    Require {
+        condition: Expr,
+        reason: Option<Expr>,
+    },
     Return(Expr),
-    Emit { event: String, args: Vec<Expr>, comment: Option<String> },
+    Emit {
+        event: String,
+        args: Vec<Expr>,
+        comment: Option<String>,
+    },
+    ExternalCall {
+        address: Expr,
+        function: String,
+        args: Vec<Expr>,
+        gas: Option<Expr>,
+        value: Option<Expr>,
+        comment: Option<String>,
+    },
     Expression(Expr),
-    Assembly(String),
-    Raw(String),
+    AssemblyAssign {
+        target: String,
+        function: String,
+        args: Vec<Expr>,
+    },
     CloseBlock,
 }
 
 impl Statement {
-    pub(crate) fn raw(value: impl Into<String>) -> Self {
-        Self::Raw(value.into())
-    }
-
     pub(crate) fn simplify(self) -> Self {
         match self {
             Self::Assign { target, value } => {
                 Self::Assign { target: target.simplify(), value: value.simplify() }
             }
+            Self::DeclareAssign { ty, target, value } => {
+                Self::DeclareAssign { ty, target: target.simplify(), value: value.simplify() }
+            }
             Self::If { condition } => Self::If { condition: condition.simplify() },
+            Self::IfRevertElse { condition, offset, size } => Self::IfRevertElse {
+                condition: condition.simplify(),
+                offset: offset.simplify(),
+                size: size.simplify(),
+            },
             Self::Require { condition, reason } => Self::Require {
                 condition: condition.simplify(),
                 reason: reason.map(Expr::simplify),
@@ -430,7 +495,22 @@ impl Statement {
             Self::Emit { event, args, comment } => {
                 Self::Emit { event, args: args.into_iter().map(Expr::simplify).collect(), comment }
             }
+            Self::ExternalCall { address, function, args, gas, value, comment } => {
+                Self::ExternalCall {
+                    address: address.simplify(),
+                    function,
+                    args: args.into_iter().map(Expr::simplify).collect(),
+                    gas: gas.map(Expr::simplify),
+                    value: value.map(Expr::simplify),
+                    comment,
+                }
+            }
             Self::Expression(value) => Self::Expression(value.simplify()),
+            Self::AssemblyAssign { target, function, args } => Self::AssemblyAssign {
+                target,
+                function,
+                args: args.into_iter().map(Expr::simplify).collect(),
+            },
             statement => statement,
         }
     }
@@ -440,6 +520,12 @@ impl Statement {
             (RenderTarget::Yul, Self::If { condition }) => {
                 format!("if {} {{", condition.render())
             }
+            (RenderTarget::Yul, Self::IfRevertElse { condition, offset, size }) => format!(
+                "if {} {{ revert({}, {}); }} else {{",
+                condition.render(),
+                offset.render(),
+                size.render()
+            ),
             (RenderTarget::Yul, Self::Expression(expr)) => expr.render(),
             (_, statement) => statement.render_solidity(),
         }
@@ -448,7 +534,16 @@ impl Statement {
     fn render_solidity(&self) -> String {
         match self {
             Self::Assign { target, value } => format!("{} = {};", target.render(), value.render()),
+            Self::DeclareAssign { ty, target, value } => {
+                format!("{ty} {} = {};", target.render(), value.render())
+            }
             Self::If { condition } => format!("if ({}) {{", condition.render()),
+            Self::IfRevertElse { condition, offset, size } => format!(
+                "if ({}) {{ revert({}, {}); }} else {{",
+                condition.render(),
+                offset.render(),
+                size.render()
+            ),
             Self::Require { condition, reason } => match reason {
                 Some(reason) => format!("require({}, {});", condition.render(), reason.render()),
                 None => format!("require({});", condition.render()),
@@ -465,9 +560,37 @@ impl Statement {
                 }
                 output
             }
+            Self::ExternalCall { address, function, args, gas, value, comment } => {
+                if function == "transfer" {
+                    let amount = args.first().map(Expr::render).unwrap_or_else(|| "0".to_string());
+                    return format!("payable(address({})).transfer({amount});", address.render());
+                }
+
+                let mut options = Vec::new();
+                if let Some(gas) = gas {
+                    options.push(format!("gas: {}", gas.render()));
+                }
+                if let Some(value) = value {
+                    options.push(format!("value: {}", value.render()));
+                }
+                let options = if options.is_empty() {
+                    String::new()
+                } else {
+                    format!("{{ {} }}", options.join(", "))
+                };
+                let comment =
+                    comment.as_ref().map(|comment| format!(" // {comment}")).unwrap_or_default();
+                format!(
+                    "(bool success, bytes memory ret0) = address({}).{function}{options}({});{comment}",
+                    address.render(),
+                    args.iter().map(Expr::render).collect::<Vec<_>>().join(", ")
+                )
+            }
             Self::Expression(expr) => format!("{};", expr.render()),
-            Self::Assembly(body) => format!("assembly {{ {body} }}"),
-            Self::Raw(value) => value.clone(),
+            Self::AssemblyAssign { target, function, args } => format!(
+                "assembly {{ {target} := {function}({}) }}",
+                args.iter().map(Expr::render).collect::<Vec<_>>().join(", ")
+            ),
             Self::CloseBlock => "}".to_string(),
         }
     }
@@ -486,21 +609,27 @@ mod tests {
     fn renders_structured_assignment() {
         let statement = Statement::Assign {
             target: Expr::index("storage", Expr::Literal(U256::from(2))),
-            value: Expr::raw("arg0"),
+            value: Expr::identifier("arg0"),
         };
         assert_eq!(statement.render(RenderTarget::Solidity), "storage[0x02] = arg0;");
     }
 
     #[test]
     fn renders_yul_condition_without_solidity_parentheses() {
-        let statement = Statement::If { condition: Expr::raw("eq(arg0, 0x01)") };
-        assert_eq!(statement.render(RenderTarget::Yul), "if eq(arg0, 0x01) {");
+        let condition =
+            WrappedOpcode::new(opcodes::EQ, vec![U256::from(7).into(), U256::from(1).into()]);
+        let statement = Statement::If { condition: Expr::from_yul_opcode(&condition) };
+        assert_eq!(statement.render(RenderTarget::Yul), "if eq(0x07, 0x01) {");
     }
 
     #[test]
     fn renders_escaped_require_reason() {
         let statement = Statement::Require {
-            condition: Expr::raw("msg.sender == owner"),
+            condition: Expr::binary(
+                BinaryOp::Eq,
+                Expr::identifier("msg.sender"),
+                Expr::identifier("owner"),
+            ),
             reason: Some(Expr::StringLiteral("not \"owner\"".to_string())),
         };
         assert_eq!(
@@ -535,12 +664,44 @@ mod tests {
     }
 
     #[test]
+    fn renders_structured_external_call() {
+        let statement = Statement::ExternalCall {
+            address: Expr::identifier("target"),
+            function: "foo".to_string(),
+            args: vec![Expr::identifier("arg0")],
+            gas: Some(Expr::Call { callee: "gasleft".to_string(), args: vec![] }),
+            value: Some(Expr::Literal(U256::from(1))),
+            comment: Some("call".to_string()),
+        };
+        assert_eq!(
+            statement.render(RenderTarget::Solidity),
+            "(bool success, bytes memory ret0) = address(target).foo{ gas: gasleft(), value: 0x01 }(arg0); // call"
+        );
+    }
+
+    #[test]
     fn renders_addmod_with_correct_grouping() {
         let addmod = WrappedOpcode::new(
             opcodes::ADDMOD,
             vec![U256::from(1).into(), U256::from(2).into(), U256::from(3).into()],
         );
         assert_eq!(Expr::from_opcode(&addmod).render(), "(0x01 + 0x02) % 0x03");
+    }
+
+    #[test]
+    fn renders_value_transfer() {
+        let statement = Statement::ExternalCall {
+            address: Expr::identifier("recipient"),
+            function: "transfer".to_string(),
+            args: vec![Expr::identifier("amount")],
+            gas: None,
+            value: None,
+            comment: None,
+        };
+        assert_eq!(
+            statement.render(RenderTarget::Solidity),
+            "payable(address(recipient)).transfer(amount);"
+        );
     }
 
     #[test]

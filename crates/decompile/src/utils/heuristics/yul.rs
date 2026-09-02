@@ -1,5 +1,4 @@
 use futures::future::BoxFuture;
-use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::core::{opcodes::opcode_name, vm::State};
 
 use crate::{
@@ -28,22 +27,22 @@ pub(crate) fn yul_heuristic<'a>(
 
                 // add the mstore to the function's memory map
                 function.memory.insert(key, StorageFrame { operation, value });
-                function.push_raw_statement(format!(
-                    "{}({}, {})",
-                    opcode_name(instruction.opcode).to_lowercase(),
-                    encode_hex_reduced(key),
-                    instruction.input_operations[1].yulify()
-                ));
+                function.push_statement(Statement::Expression(Expr::Call {
+                    callee: opcode_name(instruction.opcode).to_lowercase(),
+                    args: vec![
+                        Expr::Literal(key),
+                        Expr::from_yul_opcode(&instruction.input_operations[1]),
+                    ],
+                }));
             }
 
             // JUMPI
             0x57 => {
-                let conditional = instruction.input_operations[1].yulify();
+                let condition = Expr::from_yul_opcode(&instruction.input_operations[1]);
 
-                function
-                    .push_statement(Statement::If { condition: Expr::raw(conditional.clone()) });
-                analyzer_state.jumped_conditional = Some(conditional.clone());
-                analyzer_state.conditional_stack.push(conditional);
+                function.push_statement(Statement::If { condition: condition.clone() });
+                analyzer_state.jumped_conditional = Some(condition.clone());
+                analyzer_state.conditional_stack.push(condition);
             }
 
             // REVERT
@@ -66,15 +65,15 @@ pub(crate) fn yul_heuristic<'a>(
                     .rev()
                     .find(|statement| matches!(statement, Statement::If { .. }))
                 {
-                    let conditional = match statement {
-                        Statement::If { condition } => condition.render(),
+                    let condition = match statement {
+                        Statement::If { condition } => condition.clone(),
                         _ => unreachable!("matched an if statement"),
                     };
-                    *statement = Statement::raw(format!(
-                        "if {conditional} {{ revert({}, {}); }} else {{",
-                        instruction.input_operations[0].yulify(),
-                        instruction.input_operations[1].yulify()
-                    ));
+                    *statement = Statement::IfRevertElse {
+                        condition,
+                        offset: Expr::from_yul_opcode(&instruction.input_operations[0]),
+                        size: Expr::from_yul_opcode(&instruction.input_operations[1]),
+                    };
                 }
             }
 
@@ -84,16 +83,10 @@ pub(crate) fn yul_heuristic<'a>(
             // we simply want to add the operation to the function's logic
             0x37 | 0x39 | 0x3c | 0x3e | 0x55 | 0x5d | 0xf0 | 0xf1 | 0xf2 | 0xf4 | 0xf5 | 0xfa |
             0xff | 0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA4 => {
-                function.push_raw_statement(format!(
-                    "{}({})",
-                    opcode_name(instruction.opcode).to_lowercase(),
-                    instruction
-                        .input_operations
-                        .iter()
-                        .map(|x| x.yulify())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                ));
+                function.push_statement(Statement::Expression(Expr::Call {
+                    callee: opcode_name(instruction.opcode).to_lowercase(),
+                    args: instruction.input_operations.iter().map(Expr::from_yul_opcode).collect(),
+                }));
             }
 
             _ => {}
