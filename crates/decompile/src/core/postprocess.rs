@@ -8,8 +8,8 @@ use crate::{
     interfaces::AnalyzedFunction,
     utils::postprocessors::{
         arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
-        memory_postprocessor, storage_postprocessor, transient_postprocessor,
-        variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
+        memory_postprocessor, storage_inference_postprocessor, storage_postprocessor,
+        transient_postprocessor, variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
     },
     Error,
 };
@@ -39,7 +39,7 @@ fn find_expression(
 }
 
 fn is_storage_access(expr: &Expr) -> bool {
-    matches!(expr, Expr::Index { base, .. } if base.render() == "storage")
+    matches!(expr, Expr::StorageAccess(_))
 }
 
 fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> bool {
@@ -58,6 +58,8 @@ fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> 
 /// State shared between postprocessors
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PostprocessorState {
+    /// Symbolic values written to constant memory offsets, used for Keccak preimages.
+    pub symbolic_memory: HashMap<U256, Expr>,
     /// A mapping from memory locations to their corresponding variable names
     pub memory_map: HashMap<Expr, Expr>,
     /// A mapping which holds the last assigned value for a given variable
@@ -109,6 +111,7 @@ impl PostprocessOrchestrator {
     pub(crate) fn register_passes(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
+                self.ir_passes.push(storage_inference_postprocessor);
                 self.ir_passes.push(bitwise_mask_postprocessor);
                 self.ir_passes.push(arithmetic_postprocessor);
                 self.ir_passes.push(memory_postprocessor);

@@ -70,6 +70,78 @@ impl BinaryOp {
     }
 }
 
+/// A semantic path from a root storage slot to a value.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum StoragePath {
+    Slot { slot: Box<Expr> },
+    Mapping { parent: Box<StoragePath>, key: Box<Expr> },
+    DynamicArray { parent: Box<StoragePath>, index: Box<Expr> },
+    Field { parent: Box<StoragePath>, offset: U256 },
+}
+
+impl StoragePath {
+    fn collect_identifiers(&self, identifiers: &mut HashSet<String>) {
+        match self {
+            Self::Slot { slot } => slot.collect_identifiers(identifiers),
+            Self::Mapping { parent, key } => {
+                parent.collect_identifiers(identifiers);
+                key.collect_identifiers(identifiers);
+            }
+            Self::DynamicArray { parent, index } => {
+                parent.collect_identifiers(identifiers);
+                index.collect_identifiers(identifiers);
+            }
+            Self::Field { parent, .. } => parent.collect_identifiers(identifiers),
+        }
+    }
+
+    fn visit_mut(&mut self, visitor: &mut impl FnMut(&mut Expr)) {
+        match self {
+            Self::Slot { slot } => slot.visit_mut(visitor),
+            Self::Mapping { parent, key } => {
+                parent.visit_mut(visitor);
+                key.visit_mut(visitor);
+            }
+            Self::DynamicArray { parent, index } => {
+                parent.visit_mut(visitor);
+                index.visit_mut(visitor);
+            }
+            Self::Field { parent, .. } => parent.visit_mut(visitor),
+        }
+    }
+
+    fn simplify(self) -> Self {
+        match self {
+            Self::Slot { slot } => Self::Slot { slot: Box::new(slot.simplify()) },
+            Self::Mapping { parent, key } => {
+                Self::Mapping { parent: Box::new(parent.simplify()), key: Box::new(key.simplify()) }
+            }
+            Self::DynamicArray { parent, index } => Self::DynamicArray {
+                parent: Box::new(parent.simplify()),
+                index: Box::new(index.simplify()),
+            },
+            Self::Field { parent, offset } => {
+                Self::Field { parent: Box::new(parent.simplify()), offset }
+            }
+        }
+    }
+
+    fn render_slot(&self) -> String {
+        match self {
+            Self::Slot { slot } => slot.render(),
+            Self::Mapping { parent, key } => {
+                format!("keccak256({}, {})", key.render(), parent.render_slot())
+            }
+            Self::DynamicArray { parent, index } => {
+                format!("keccak256({}) + {}", parent.render_slot(), index.render())
+            }
+            Self::Field { parent, offset } => {
+                format!("{} + {}", parent.render_slot(), encode_hex_reduced(*offset))
+            }
+        }
+    }
+}
+
 /// A small, lossless expression tree used between analysis and source rendering.
 ///
 /// `Raw` is an intentional escape hatch for expressions that do not have a source-level mapping
@@ -88,6 +160,8 @@ pub(crate) enum Expr {
     Index { base: Box<Expr>, index: Box<Expr> },
     Slice { base: Box<Expr>, start: Box<Expr>, end: Box<Expr> },
     Member { base: Box<Expr>, member: String },
+    Keccak { offset: Box<Expr>, size: Box<Expr>, preimage: Option<Vec<Expr>> },
+    StorageAccess(Box<StoragePath>),
     Cast { ty: String, value: Box<Expr> },
     Call { callee: String, args: Vec<Expr> },
 }
@@ -195,14 +269,17 @@ impl Expr {
             opcodes::SELFBALANCE => Self::identifier("address(this).balance"),
             opcodes::GASPRICE => Self::identifier("tx.gasprice"),
             opcodes::GAS => Self::Call { callee: "gasleft".to_string(), args: vec![] },
-            opcodes::SLOAD => Self::index("storage", input(0)),
+            opcodes::SLOAD => {
+                Self::StorageAccess(Box::new(StoragePath::Slot { slot: Box::new(input(0)) }))
+            }
             opcodes::TLOAD => Self::index("transient", input(0)),
             opcodes::MLOAD => Self::index("memory", input(0)),
             opcodes::MSIZE => Self::identifier("memory.length"),
             opcodes::RETURNDATASIZE => Self::identifier("ret0.length"),
-            opcodes::SHA3 => Self::Call {
-                callee: "keccak256".to_string(),
-                args: vec![Self::index("memory", input(0))],
+            opcodes::SHA3 => Self::Keccak {
+                offset: Box::new(input(0)),
+                size: Box::new(input(1)),
+                preimage: None,
             },
             opcodes::BLOCKHASH => {
                 Self::Call { callee: "blockhash".to_string(), args: vec![input(0)] }
@@ -280,6 +357,16 @@ impl Expr {
                 end.collect_identifiers(identifiers);
             }
             Self::Member { base, .. } => base.collect_identifiers(identifiers),
+            Self::Keccak { offset, size, preimage } => {
+                offset.collect_identifiers(identifiers);
+                size.collect_identifiers(identifiers);
+                if let Some(preimage) = preimage {
+                    for value in preimage {
+                        value.collect_identifiers(identifiers);
+                    }
+                }
+            }
+            Self::StorageAccess(path) => path.collect_identifiers(identifiers),
             Self::Call { args, .. } => {
                 for arg in args {
                     arg.collect_identifiers(identifiers);
@@ -307,6 +394,16 @@ impl Expr {
                 end.visit_mut(visitor);
             }
             Self::Member { base, .. } => base.visit_mut(visitor),
+            Self::Keccak { offset, size, preimage } => {
+                offset.visit_mut(visitor);
+                size.visit_mut(visitor);
+                if let Some(preimage) = preimage {
+                    for value in preimage {
+                        value.visit_mut(visitor);
+                    }
+                }
+            }
+            Self::StorageAccess(path) => path.visit_mut(visitor),
             Self::Call { args, .. } => {
                 for arg in args {
                     arg.visit_mut(visitor);
@@ -409,6 +506,12 @@ impl Expr {
             Self::Member { base, member } => {
                 Self::Member { base: Box::new(base.simplify()), member }
             }
+            Self::Keccak { offset, size, preimage } => Self::Keccak {
+                offset: Box::new(offset.simplify()),
+                size: Box::new(size.simplify()),
+                preimage: preimage.map(|values| values.into_iter().map(Self::simplify).collect()),
+            },
+            Self::StorageAccess(path) => Self::StorageAccess(Box::new(path.simplify())),
             Self::Cast { ty, value } => Self::Cast { ty, value: Box::new(value.simplify()) },
             Self::Call { callee, args } => {
                 Self::Call { callee, args: args.into_iter().map(Self::simplify).collect() }
@@ -454,6 +557,18 @@ impl Expr {
                 format!("{}[{}:{}]", base.render(), start.render(), end.render())
             }
             Self::Member { base, member } => format!("{}.{}", base.render(), member),
+            Self::Keccak { offset, size, preimage } => match preimage {
+                Some(values) => format!(
+                    "keccak256({})",
+                    values.iter().map(Self::render).collect::<Vec<_>>().join(", ")
+                ),
+                None => format!(
+                    "keccak256(memory[{}:{}])",
+                    offset.render(),
+                    Self::binary(BinaryOp::Add, *offset.clone(), *size.clone()).render()
+                ),
+            },
+            Self::StorageAccess(path) => format!("storage[{}]", path.render_slot()),
             Self::Cast { ty, value } => format!("{ty}({})", value.render()),
             Self::Call { callee, args } => format!(
                 "{callee}({})",

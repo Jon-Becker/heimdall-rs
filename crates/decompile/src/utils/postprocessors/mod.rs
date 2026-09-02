@@ -10,6 +10,7 @@ mod bitwise;
 mod deadcode;
 mod memory;
 mod storage;
+mod storage_inference;
 mod transient;
 mod variable;
 
@@ -19,6 +20,7 @@ pub(crate) use bitwise::bitwise_mask_postprocessor;
 pub(crate) use deadcode::eliminate_dead_variables;
 pub(crate) use memory::memory_postprocessor;
 pub(crate) use storage::storage_postprocessor;
+pub(crate) use storage_inference::storage_inference_postprocessor;
 pub(crate) use transient::transient_postprocessor;
 pub(crate) use variable::variable_postprocessor;
 
