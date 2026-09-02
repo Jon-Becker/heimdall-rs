@@ -652,11 +652,14 @@ pub(crate) enum Statement {
         comment: Option<String>,
     },
     Expression(Expr),
+    /// Captures a SHA3 operation while its memory preimage is still available.
+    KeccakSnapshot(Expr),
     AssemblyAssign {
         target: String,
         function: String,
         args: Vec<Expr>,
     },
+    Noop,
     CloseBlock,
 }
 
@@ -679,7 +682,9 @@ impl Statement {
                     reason.visit_mut(visitor);
                 }
             }
-            Self::Return(value) | Self::Expression(value) => value.visit_mut(visitor),
+            Self::Return(value) | Self::Expression(value) | Self::KeccakSnapshot(value) => {
+                value.visit_mut(visitor)
+            }
             Self::Emit { args, .. } | Self::AssemblyAssign { args, .. } => {
                 for arg in args {
                     arg.visit_mut(visitor);
@@ -697,7 +702,7 @@ impl Statement {
                     value.visit_mut(visitor);
                 }
             }
-            Self::CloseBlock => {}
+            Self::Noop | Self::CloseBlock => {}
         }
     }
 
@@ -734,6 +739,7 @@ impl Statement {
                 }
             }
             Self::Expression(value) => Self::Expression(value.simplify()),
+            Self::KeccakSnapshot(value) => Self::KeccakSnapshot(value.simplify()),
             Self::AssemblyAssign { target, function, args } => Self::AssemblyAssign {
                 target,
                 function,
@@ -819,6 +825,7 @@ impl Statement {
                 "assembly {{ {target} := {function}({}) }}",
                 args.iter().map(Expr::render).collect::<Vec<_>>().join(", ")
             ),
+            Self::KeccakSnapshot(_) | Self::Noop => String::new(),
             Self::CloseBlock => "}".to_string(),
         }
     }

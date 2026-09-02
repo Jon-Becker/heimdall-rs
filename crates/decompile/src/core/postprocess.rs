@@ -70,6 +70,10 @@ fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> 
 /// State shared between postprocessors
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PostprocessorState {
+    /// Preimages captured when SHA3 executes, keyed by the unresolved hash expression.
+    pub keccak_preimages: HashMap<Expr, Vec<Vec<Expr>>>,
+    /// Parent Keccak histories used to isolate conditional branches.
+    pub keccak_preimage_scopes: Vec<HashMap<Expr, Vec<Vec<Expr>>>>,
     /// Symbolic values written to constant memory offsets, used for Keccak preimages.
     pub symbolic_memory: HashMap<U256, Expr>,
     /// Parent memory states used to prevent writes from leaking out of conditional branches.

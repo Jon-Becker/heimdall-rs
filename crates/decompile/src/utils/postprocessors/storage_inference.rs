@@ -15,7 +15,7 @@ fn literal_usize(expr: &Expr) -> Option<usize> {
     }
 }
 
-fn resolve_keccak(expr: &mut Expr, memory: &hashbrown::HashMap<U256, Expr>) {
+fn capture_keccak(expr: &mut Expr, state: &PostprocessorState) {
     let Expr::Keccak { offset, size, preimage } = expr else { return };
     let (Some(offset), Some(size)) = (literal_usize(offset), literal_usize(size)) else { return };
     if size == 0 || size > 512 || !size.is_multiple_of(32) {
@@ -23,10 +23,20 @@ fn resolve_keccak(expr: &mut Expr, memory: &hashbrown::HashMap<U256, Expr>) {
     }
 
     let words = (0..size / 32)
-        .map(|word| memory.get(&U256::from(offset + word * 32)).cloned())
+        .map(|word| state.symbolic_memory.get(&U256::from(offset + word * 32)).cloned())
         .collect::<Option<Vec<_>>>();
     if let Some(words) = words {
         *preimage = Some(words);
+    }
+}
+
+fn resolve_keccak(expr: &mut Expr, state: &PostprocessorState) {
+    let original = expr.clone();
+    let Expr::Keccak { preimage, .. } = expr else { return };
+    if let Some(known) = state.keccak_preimages.get(&original).and_then(|values| values.last()) {
+        *preimage = Some(known.clone());
+    } else {
+        capture_keccak(expr, state);
     }
 }
 
@@ -125,15 +135,28 @@ pub(crate) fn storage_inference_postprocessor(
     statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
+    if let Statement::KeccakSnapshot(hash) = statement {
+        let original = hash.clone();
+        capture_keccak(hash, state);
+        if let Expr::Keccak { preimage: Some(preimage), .. } = hash {
+            state.keccak_preimages.entry(original).or_default().push(preimage.clone());
+        }
+        *statement = Statement::Noop;
+        return Ok(())
+    }
+
     if matches!(statement, Statement::CloseBlock) {
         if let Some(parent) = state.symbolic_memory_scopes.pop() {
             state.symbolic_memory = parent;
+        }
+        if let Some(parent) = state.keccak_preimage_scopes.pop() {
+            state.keccak_preimages = parent;
         }
         return Ok(())
     }
 
     statement.visit_exprs_mut(&mut |expr| {
-        resolve_keccak(expr, &state.symbolic_memory);
+        resolve_keccak(expr, state);
         if let Expr::StorageAccess(path) = expr {
             if let StoragePath::Slot { slot } = &**path {
                 *path = Box::new(path_from_slot(*slot.clone()));
@@ -146,6 +169,7 @@ pub(crate) fn storage_inference_postprocessor(
 
     if matches!(statement, Statement::If { .. } | Statement::IfRevertElse { .. }) {
         state.symbolic_memory_scopes.push(state.symbolic_memory.clone());
+        state.keccak_preimage_scopes.push(state.keccak_preimages.clone());
     }
 
     if let Statement::Assign { target: Expr::Index { base, index }, value } = statement {
@@ -169,6 +193,38 @@ mod tests {
             target: Expr::index("memory", Expr::Literal(U256::from(offset))),
             value,
         }
+    }
+
+    fn two_word_hash() -> Expr {
+        Expr::Keccak {
+            offset: Box::new(Expr::Literal(U256::ZERO)),
+            size: Box::new(Expr::Literal(U256::from(64))),
+            preimage: None,
+        }
+    }
+
+    #[test]
+    fn snapshots_reused_memory_for_nested_mapping() {
+        let mut state = PostprocessorState::default();
+        for mut statement in [
+            memory_write(0, Expr::identifier("owner")),
+            memory_write(32, Expr::Literal(U256::from(5))),
+            Statement::KeccakSnapshot(two_word_hash()),
+            memory_write(0, Expr::identifier("spender")),
+            memory_write(32, two_word_hash()),
+            Statement::KeccakSnapshot(two_word_hash()),
+        ] {
+            storage_inference_postprocessor(&mut statement, &mut state).unwrap();
+        }
+
+        let mut access = Statement::Return(Expr::StorageAccess(Box::new(StoragePath::Slot {
+            slot: Box::new(two_word_hash()),
+        })));
+        storage_inference_postprocessor(&mut access, &mut state).unwrap();
+        assert_eq!(
+            access.render(RenderTarget::Solidity),
+            "return storage[keccak256(spender, keccak256(owner, 0x05))];"
+        );
     }
 
     #[test]
