@@ -7,6 +7,7 @@ use crate::{
 // import postprocessors
 mod arithmetic;
 mod bitwise;
+mod control_flow;
 mod deadcode;
 mod inline;
 mod memory;
@@ -19,6 +20,7 @@ mod variable;
 // re-export postprocessors
 pub(crate) use arithmetic::arithmetic_postprocessor;
 pub(crate) use bitwise::bitwise_mask_postprocessor;
+pub(crate) use control_flow::structure_control_flow;
 pub(crate) use deadcode::eliminate_dead_variables;
 pub(crate) use inline::inline_single_use_variables;
 pub(crate) use memory::memory_postprocessor;

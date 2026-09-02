@@ -64,6 +64,7 @@ fn infer_type(expr: &Expr, state: &PostprocessorState) -> InferredType {
         Expr::Unary { op: UnaryOp::LogicalNot, .. } => InferredType::Bool,
         Expr::Unary { .. } => InferredType::Uint(256),
         Expr::Binary { op, .. } => match op {
+            BinaryOp::LogicalAnd |
             BinaryOp::Lt |
             BinaryOp::Le |
             BinaryOp::Gt |
@@ -97,6 +98,9 @@ pub(crate) fn type_cleanup_postprocessor(
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
     statement.visit_exprs_mut(&mut |expr| match expr {
+        Expr::Literal(value) if *value == alloy::primitives::U256::MAX => {
+            *expr = Expr::identifier("type(uint256).max");
+        }
         Expr::Cast { ty, value } => {
             let target = InferredType::parse(ty);
             if target != InferredType::Unknown && infer_type(value, state) == target {
@@ -137,6 +141,13 @@ pub(crate) fn normalize_typed_returns(
 mod tests {
     use super::*;
     use crate::core::ir::RenderTarget;
+
+    #[test]
+    fn renders_uint256_max_symbolically() {
+        let mut statement = Statement::Return(Expr::Literal(alloy::primitives::U256::MAX));
+        type_cleanup_postprocessor(&mut statement, &mut PostprocessorState::default()).unwrap();
+        assert_eq!(statement.render(RenderTarget::Solidity), "return type(uint256).max;");
+    }
 
     #[test]
     fn renders_boolean_return() {

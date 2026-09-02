@@ -128,7 +128,12 @@ impl AnalyzedFunction {
                 AnalyzerType::Yul => RenderTarget::Yul,
                 AnalyzerType::Solidity | AnalyzerType::Abi => RenderTarget::Solidity,
             };
-            self.logic = self.statements.iter().map(|statement| statement.render(target)).collect();
+            self.logic = self
+                .statements
+                .iter()
+                .flat_map(|statement| statement.render_lines(target))
+                .filter(|line| !line.is_empty())
+                .collect();
         }
     }
 

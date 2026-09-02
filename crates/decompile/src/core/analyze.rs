@@ -174,7 +174,53 @@ impl Analyzer {
                 }
             }
 
-            // recurse into the children of the current trace branch
+            // Preserve the taken and fallthrough children as explicit alternatives for Solidity.
+            if self.typ == AnalyzerType::Solidity {
+                if let Some(state) = branch.operations.last() {
+                    let instruction = &state.last_instruction;
+                    if instruction.opcode == 0x57 && !branch.children.is_empty() {
+                        if branch.children.len() == 1 {
+                            self.analyze_inner(&branch.children[0], analyzer_state).await?;
+                            return Ok(())
+                        }
+
+                        let destination = instruction
+                            .inputs
+                            .first()
+                            .and_then(|value| u128::try_from(*value).ok())
+                            .map(|value| value.saturating_add(1));
+                        let fallthrough = instruction.instruction.saturating_add(1);
+                        let taken = destination.and_then(|pc| {
+                            branch.children.iter().find(|child| child.instruction == pc)
+                        });
+                        let not_taken =
+                            branch.children.iter().find(|child| child.instruction == fallthrough);
+
+                        if let (Some(taken), Some(not_taken)) = (taken, not_taken) {
+                            let condition = instruction
+                                .input_operations
+                                .get(1)
+                                .map(Expr::from_opcode)
+                                .unwrap_or_else(|| Expr::identifier("unknown_condition"));
+                            self.function.push_statement(Statement::If { condition });
+                            let mut taken_state = analyzer_state.clone();
+                            self.analyze_inner(taken, &mut taken_state).await?;
+                            self.function.push_statement(Statement::Else);
+                            let mut fallthrough_state = analyzer_state.clone();
+                            self.analyze_inner(not_taken, &mut fallthrough_state).await?;
+                            self.function.push_statement(Statement::CloseBlock);
+                            return Ok(())
+                        }
+                    }
+                }
+
+                for child in &branch.children {
+                    self.analyze_inner(child, analyzer_state).await?;
+                }
+                return Ok(())
+            }
+
+            // Yul continues to use its flat control-flow markers.
             for child in &branch.children {
                 self.analyze_inner(child, analyzer_state).await?;
             }

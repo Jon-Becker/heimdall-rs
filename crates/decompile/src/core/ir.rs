@@ -14,6 +14,7 @@ pub(crate) enum UnaryOp {
 /// Binary source operators, ordered independently from their EVM opcode representation.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum BinaryOp {
+    LogicalAnd,
     Add,
     Sub,
     Mul,
@@ -36,6 +37,7 @@ pub(crate) enum BinaryOp {
 impl BinaryOp {
     fn symbol(self) -> &'static str {
         match self {
+            Self::LogicalAnd => "&&",
             Self::Add => "+",
             Self::Sub => "-",
             Self::Mul => "*",
@@ -58,6 +60,7 @@ impl BinaryOp {
 
     fn precedence(self) -> u8 {
         match self {
+            Self::LogicalAnd => 1,
             Self::BitOr => 2,
             Self::BitXor => 3,
             Self::BitAnd => 4,
@@ -638,6 +641,13 @@ pub(crate) enum Statement {
     If {
         condition: Expr,
     },
+    /// Marker separating flattened branch children before control-flow structuring.
+    Else,
+    IfElse {
+        condition: Expr,
+        then_body: Vec<Statement>,
+        else_body: Vec<Statement>,
+    },
     IfRevertElse {
         condition: Expr,
         offset: Expr,
@@ -648,6 +658,7 @@ pub(crate) enum Statement {
         reason: Option<Expr>,
     },
     Return(Expr),
+    Revert(Option<Expr>),
     Emit {
         event: String,
         args: Vec<Expr>,
@@ -681,6 +692,12 @@ impl Statement {
                 value.visit_mut(visitor);
             }
             Self::If { condition } => condition.visit_mut(visitor),
+            Self::IfElse { condition, then_body, else_body } => {
+                condition.visit_mut(visitor);
+                for statement in then_body.iter_mut().chain(else_body.iter_mut()) {
+                    statement.visit_exprs_mut(visitor);
+                }
+            }
             Self::IfRevertElse { condition, offset, size } => {
                 condition.visit_mut(visitor);
                 offset.visit_mut(visitor);
@@ -694,6 +711,11 @@ impl Statement {
             }
             Self::Return(value) | Self::Expression(value) | Self::KeccakSnapshot(value) => {
                 value.visit_mut(visitor)
+            }
+            Self::Revert(reason) => {
+                if let Some(reason) = reason {
+                    reason.visit_mut(visitor);
+                }
             }
             Self::Emit { args, .. } | Self::AssemblyAssign { args, .. } => {
                 for arg in args {
@@ -712,7 +734,7 @@ impl Statement {
                     value.visit_mut(visitor);
                 }
             }
-            Self::Noop | Self::CloseBlock => {}
+            Self::Else | Self::Noop | Self::CloseBlock => {}
         }
     }
 
@@ -725,6 +747,11 @@ impl Statement {
                 Self::DeclareAssign { ty, target: target.simplify(), value: value.simplify() }
             }
             Self::If { condition } => Self::If { condition: condition.simplify() },
+            Self::IfElse { condition, then_body, else_body } => Self::IfElse {
+                condition: condition.simplify(),
+                then_body: then_body.into_iter().map(Self::simplify).collect(),
+                else_body: else_body.into_iter().map(Self::simplify).collect(),
+            },
             Self::IfRevertElse { condition, offset, size } => Self::IfRevertElse {
                 condition: condition.simplify(),
                 offset: offset.simplify(),
@@ -735,6 +762,7 @@ impl Statement {
                 reason: reason.map(Expr::simplify),
             },
             Self::Return(value) => Self::Return(value.simplify()),
+            Self::Revert(reason) => Self::Revert(reason.map(Expr::simplify)),
             Self::Emit { event, args, comment } => {
                 Self::Emit { event, args: args.into_iter().map(Expr::simplify).collect(), comment }
             }
@@ -756,6 +784,25 @@ impl Statement {
                 args: args.into_iter().map(Expr::simplify).collect(),
             },
             statement => statement,
+        }
+    }
+
+    pub(crate) fn render_lines(&self, target: RenderTarget) -> Vec<String> {
+        if let Self::IfElse { condition, then_body, else_body } = self {
+            let condition = match target {
+                RenderTarget::Solidity => format!("if ({}) {{", condition.render()),
+                RenderTarget::Yul => format!("if {} {{", condition.render()),
+            };
+            let mut lines = vec![condition];
+            lines.extend(then_body.iter().flat_map(|statement| statement.render_lines(target)));
+            if !else_body.is_empty() {
+                lines.push("} else {".to_string());
+                lines.extend(else_body.iter().flat_map(|statement| statement.render_lines(target)));
+            }
+            lines.push("}".to_string());
+            lines
+        } else {
+            vec![self.render(target)]
         }
     }
 
@@ -802,6 +849,8 @@ impl Statement {
                 format!("{ty} {} = {};", target.render(), value.render())
             }
             Self::If { condition } => format!("if ({}) {{", condition.render()),
+            Self::Else => "} else {".to_string(),
+            Self::IfElse { .. } => self.render_lines(RenderTarget::Solidity).join("\n"),
             Self::IfRevertElse { condition, offset, size } => format!(
                 "if ({}) {{ revert({}, {}); }} else {{",
                 condition.render(),
@@ -813,6 +862,11 @@ impl Statement {
                 None => format!("require({});", condition.render()),
             },
             Self::Return(value) => format!("return {};", value.render()),
+            Self::Revert(reason) => match reason {
+                Some(reason @ Expr::Call { .. }) => format!("revert {};", reason.render()),
+                Some(reason) => format!("revert({});", reason.render()),
+                None => "revert();".to_string(),
+            },
             Self::Emit { event, args, comment } => {
                 let mut output = format!(
                     "emit {event}({});",
