@@ -114,6 +114,9 @@ pub(crate) fn solidity_heuristic<'a>(
             0x57 => {
                 // this is an if conditional for the children branches
                 let conditional_expr = Expr::from_opcode(&instruction.input_operations[1]);
+                if matches!(conditional_expr, Expr::Bool(_) | Expr::Literal(_)) {
+                    return Ok(())
+                }
                 let conditional = conditional_expr.render();
 
                 // perform a series of checks to determine if the condition

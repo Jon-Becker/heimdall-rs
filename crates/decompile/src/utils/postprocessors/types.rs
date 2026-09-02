@@ -3,6 +3,7 @@ use crate::{
         ir::{BinaryOp, Expr, Statement, UnaryOp},
         postprocess::PostprocessorState,
     },
+    interfaces::AnalyzedFunction,
     Error,
 };
 
@@ -114,10 +115,38 @@ pub(crate) fn type_cleanup_postprocessor(
     Ok(())
 }
 
+/// Rewrites literal return values using the function's inferred return type.
+pub(crate) fn normalize_typed_returns(
+    function: &mut AnalyzedFunction,
+    _: &mut PostprocessorState,
+) -> Result<(), Error> {
+    if function.returns.as_deref() != Some("bool") {
+        return Ok(())
+    }
+    for statement in &mut function.statements {
+        if let Statement::Return(Expr::Literal(value)) = statement {
+            if value.is_zero() || *value == alloy::primitives::U256::from(1) {
+                *statement = Statement::Return(Expr::Bool(!value.is_zero()));
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::core::ir::RenderTarget;
+
+    #[test]
+    fn renders_boolean_return() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.returns = Some("bool".to_string());
+        function.statements =
+            vec![Statement::Return(Expr::Literal(alloy::primitives::U256::from(1)))];
+        normalize_typed_returns(&mut function, &mut PostprocessorState::default()).unwrap();
+        assert_eq!(function.statements[0].render(RenderTarget::Solidity), "return true;");
+    }
 
     #[test]
     fn removes_redundant_address_casts() {
