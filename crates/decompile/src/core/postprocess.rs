@@ -75,10 +75,10 @@ impl PostprocessOrchestrator {
         match self.typ {
             AnalyzerType::Solidity => {
                 self.ir_passes.push(bitwise_mask_postprocessor);
+                self.ir_passes.push(arithmetic_postprocessor);
 
                 // Legacy line-level postprocessors that run on rendered source.
                 self.passes.push(Pass::line_level(vec![
-                    arithmetic_postprocessor,
                     memory_postprocessor,
                     storage_postprocessor,
                     transient_postprocessor,
