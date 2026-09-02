@@ -1,24 +1,59 @@
 use hashbrown::HashMap;
 use std::time::Instant;
 
-use eyre::eyre;
-use heimdall_common::utils::strings::find_balanced_encapsulator;
+use alloy::primitives::U256;
 use tracing::debug;
 
 use crate::{
     interfaces::AnalyzedFunction,
-    utils::{
-        constants::STORAGE_ACCESS_REGEX,
-        postprocessors::{
-            arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
-            memory_postprocessor, storage_postprocessor, transient_postprocessor,
-            variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
-        },
+    utils::postprocessors::{
+        arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
+        memory_postprocessor, storage_postprocessor, transient_postprocessor,
+        variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
     },
     Error,
 };
 
-use super::analyze::AnalyzerType;
+use super::{
+    analyze::AnalyzerType,
+    ir::{BinaryOp, Expr, Statement},
+};
+
+fn find_expression(
+    statements: &[Statement],
+    mut predicate: impl FnMut(&Expr) -> bool,
+) -> Option<Expr> {
+    let mut found = None;
+    for statement in statements {
+        let mut statement = statement.clone();
+        statement.visit_exprs_mut(&mut |expr| {
+            if found.is_none() && predicate(expr) {
+                found = Some(expr.clone());
+            }
+        });
+        if found.is_some() {
+            break;
+        }
+    }
+    found
+}
+
+fn is_storage_access(expr: &Expr) -> bool {
+    matches!(expr, Expr::Index { base, .. } if base.render() == "storage")
+}
+
+fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> bool {
+    find_expression(statements, |expr| {
+        matches!(
+            expr,
+            Expr::Binary { op: candidate, lhs, rhs }
+                if *candidate == op &&
+                    (matches!(&**lhs, Expr::Literal(value) if *value == literal) ||
+                     matches!(&**rhs, Expr::Literal(value) if *value == literal))
+        )
+    })
+    .is_some()
+}
 
 /// State shared between postprocessors
 #[derive(Debug, Clone, Default)]
@@ -135,42 +170,27 @@ impl PostprocessOrchestrator {
             (String::from(".chainid"), String::from("uint256")),
         ]);
 
-        // If this is a constant / getter, we can simplify it
-        // Note: this can't be done with a postprocessor because it needs all lines
+        // Detect simple getters and Solidity's RLP-backed string pattern directly on the IR.
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
-            // check for RLP encoding. very naive check, but it works for now
-            if function.logic.iter().any(|line| line.contains("0x0100 *")) &&
-                function.logic.iter().any(|line| line.contains("0x01) &"))
-            {
-                // find any storage accesses
-                let joined = function.logic.join(" ");
-                if let Some(storage_access) = STORAGE_ACCESS_REGEX.find(&joined).unwrap_or(None) {
-                    let storage_access = storage_access.as_str();
-                    let access_range = find_balanced_encapsulator(storage_access, ('[', ']'))
-                        .map_err(|e| eyre!("failed to find access range: {e}"))?;
+            let returned_storage = function.statements.iter().find_map(|statement| {
+                let Statement::Return(value) = statement else { return None };
+                find_expression(&[Statement::Return(value.clone())], is_storage_access)
+            });
 
-                    // update returns
+            if let Some(storage) = returned_storage {
+                state.maybe_getter_for = Some(storage.render());
+
+                if has_binary_literal(&function.statements, BinaryOp::Mul, U256::from(0x100)) &&
+                    has_binary_literal(&function.statements, BinaryOp::BitAnd, U256::from(1))
+                {
                     function.returns = Some(String::from("string memory"));
-                    function.logic = vec![format!(
-                        "return string(rlp.encodePacked(storage[{}]));",
-                        storage_access[access_range].to_string()
-                    )]
-                }
-            }
-
-            // iterate over logic, if we find a return w/ a storage variable:
-            if let Some(line) = function
-                .logic
-                .iter()
-                .find(|line| line.contains("return") && line.contains("storage"))
-            {
-                if let Some(storage_access) = STORAGE_ACCESS_REGEX.find(line).unwrap_or(None) {
-                    let storage_access = storage_access.as_str();
-                    let access_range = find_balanced_encapsulator(storage_access, ('[', ']'))
-                        .map_err(|e| eyre!("failed to find access range: {e}"))?;
-
-                    state.maybe_getter_for =
-                        Some(format!("storage[{}]", &storage_access[access_range]));
+                    function.statements = vec![Statement::Return(Expr::Call {
+                        callee: "string".to_string(),
+                        args: vec![Expr::Call {
+                            callee: "rlp.encodePacked".to_string(),
+                            args: vec![storage],
+                        }],
+                    })];
                 }
             }
         }
