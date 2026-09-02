@@ -12,7 +12,8 @@ use crate::{
         postprocessors::{
             arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
             memory_postprocessor, remove_empty_lines, storage_postprocessor,
-            transient_postprocessor, variable_postprocessor, IrPostprocessor, Pass,
+            transient_postprocessor, variable_postprocessor, IrFunctionPostprocessor,
+            IrPostprocessor, Pass,
         },
     },
     Error,
@@ -51,6 +52,8 @@ pub(crate) struct PostprocessOrchestrator {
     typ: AnalyzerType,
     /// Structured passes run before lowering to source text.
     ir_passes: Vec<IrPostprocessor>,
+    /// Function-wide structured passes run after statement-local passes.
+    ir_function_passes: Vec<IrFunctionPostprocessor>,
     /// Legacy passes run after source rendering.
     passes: Vec<Pass>,
     /// The state shared between postprocessors
@@ -63,6 +66,7 @@ impl PostprocessOrchestrator {
         let mut orchestrator = Self {
             typ,
             ir_passes: Vec::new(),
+            ir_function_passes: Vec::new(),
             passes: Vec::new(),
             state: PostprocessorState::default(),
         };
@@ -81,8 +85,7 @@ impl PostprocessOrchestrator {
                 self.ir_passes.push(transient_postprocessor);
                 self.ir_passes.push(variable_postprocessor);
 
-                // Function-level passes that run on the entire function
-                self.passes.push(Pass::function_level(eliminate_dead_variables));
+                self.ir_function_passes.push(eliminate_dead_variables);
             }
             AnalyzerType::Yul => {}
             _ => {}
@@ -184,6 +187,10 @@ impl PostprocessOrchestrator {
             for statement in &mut function.statements {
                 pass(statement, &mut state)?;
             }
+        }
+
+        for pass in &self.ir_function_passes {
+            pass(function, &mut state)?;
         }
 
         function.render_statements();

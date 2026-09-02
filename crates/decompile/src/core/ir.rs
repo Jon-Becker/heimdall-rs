@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use alloy::primitives::U256;
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::core::opcodes::{self, WrappedInput, WrappedOpcode};
@@ -252,6 +254,38 @@ impl Expr {
                 Err(_) => Self::index("msg.data", Self::Literal(value)),
             },
             offset => Self::index("msg.data", offset),
+        }
+    }
+
+    /// Collect identifiers referenced by this expression.
+    pub(crate) fn collect_identifiers(&self, identifiers: &mut HashSet<String>) {
+        match self {
+            Self::Identifier(name) => {
+                identifiers.insert(name.clone());
+            }
+            Self::Unary { value, .. } | Self::Cast { value, .. } => {
+                value.collect_identifiers(identifiers);
+            }
+            Self::Binary { lhs, rhs, .. } => {
+                lhs.collect_identifiers(identifiers);
+                rhs.collect_identifiers(identifiers);
+            }
+            Self::Index { base, index } => {
+                base.collect_identifiers(identifiers);
+                index.collect_identifiers(identifiers);
+            }
+            Self::Slice { base, start, end } => {
+                base.collect_identifiers(identifiers);
+                start.collect_identifiers(identifiers);
+                end.collect_identifiers(identifiers);
+            }
+            Self::Member { base, .. } => base.collect_identifiers(identifiers),
+            Self::Call { args, .. } => {
+                for arg in args {
+                    arg.collect_identifiers(identifiers);
+                }
+            }
+            _ => {}
         }
     }
 

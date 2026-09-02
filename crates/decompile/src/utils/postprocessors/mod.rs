@@ -27,6 +27,10 @@ pub(crate) use variable::variable_postprocessor;
 /// A structured IR postprocessor function signature.
 pub(crate) type IrPostprocessor = fn(&mut Statement, &mut PostprocessorState) -> Result<(), Error>;
 
+/// A function-wide structured IR postprocessor function signature.
+pub(crate) type IrFunctionPostprocessor =
+    fn(&mut AnalyzedFunction, &mut PostprocessorState) -> Result<(), Error>;
+
 /// A function-level postprocessor function signature
 type FunctionPostprocessor =
     fn(&mut AnalyzedFunction, &mut PostprocessorState) -> Result<(), Error>;
