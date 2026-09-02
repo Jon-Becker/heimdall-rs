@@ -5,14 +5,14 @@ use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::core::opcodes::{self, WrappedInput, WrappedOpcode};
 
 /// Unary source operators.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum UnaryOp {
     LogicalNot,
     BitwiseNot,
 }
 
 /// Binary source operators, ordered independently from their EVM opcode representation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum BinaryOp {
     Add,
     Sub,
@@ -75,7 +75,7 @@ impl BinaryOp {
 /// `Raw` is an intentional escape hatch for expressions that do not have a source-level mapping
 /// yet. Common EVM expression trees are converted directly from [`WrappedOpcode`] so subsequent
 /// passes can simplify them without parsing rendered Solidity.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum Expr {
     Raw(String),
     Empty,

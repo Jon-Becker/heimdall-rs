@@ -59,21 +59,21 @@ fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PostprocessorState {
     /// A mapping from memory locations to their corresponding variable names
-    pub memory_map: HashMap<String, String>,
+    pub memory_map: HashMap<Expr, Expr>,
     /// A mapping which holds the last assigned value for a given variable
-    pub variable_map: HashMap<String, String>,
+    pub variable_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for memory variables
     pub memory_type_map: HashMap<String, String>,
     /// A mapping from storage locations to their corresponding variable names
-    pub storage_map: HashMap<String, String>,
+    pub storage_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for storage variables
     pub storage_type_map: HashMap<String, String>,
     /// A mapping from transient storage locations to their corresponding variable names
-    pub transient_map: HashMap<String, String>,
+    pub transient_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for transient storage variables
     pub transient_type_map: HashMap<String, String>,
     /// An optional field which holds the storage location if the function is a public getter
-    pub maybe_getter_for: Option<String>,
+    pub maybe_getter_for: Option<Expr>,
 }
 
 /// The [`PostprocessOrchestrator`] is responsible for managing the cleanup of
@@ -178,7 +178,7 @@ impl PostprocessOrchestrator {
             });
 
             if let Some(storage) = returned_storage {
-                state.maybe_getter_for = Some(storage.render());
+                state.maybe_getter_for = Some(storage.clone());
 
                 if has_binary_literal(&function.statements, BinaryOp::Mul, U256::from(0x100)) &&
                     has_binary_literal(&function.statements, BinaryOp::BitAnd, U256::from(1))
@@ -210,8 +210,9 @@ impl PostprocessOrchestrator {
 
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
-        state.storage_map.iter().for_each(|(_, v)| {
-            let storage_var_name = v.split('[').collect::<Vec<&str>>()[0];
+        state.storage_map.iter().for_each(|(_, value)| {
+            let rendered = value.render();
+            let storage_var_name = rendered.split('[').next().unwrap_or(&rendered);
             if !state.storage_type_map.contains_key(storage_var_name) {
                 if storage_var_name.contains("map") {
                     state.storage_type_map.insert(
@@ -225,8 +226,9 @@ impl PostprocessOrchestrator {
                 }
             }
         });
-        state.transient_map.iter().for_each(|(_, v)| {
-            let storage_var_name = v.split('[').collect::<Vec<&str>>()[0];
+        state.transient_map.iter().for_each(|(_, value)| {
+            let rendered = value.render();
+            let storage_var_name = rendered.split('[').next().unwrap_or(&rendered);
             if !state.transient_type_map.contains_key(storage_var_name) {
                 if storage_var_name.contains("map") {
                     state.transient_type_map.insert(
@@ -245,10 +247,8 @@ impl PostprocessOrchestrator {
         self.state = state;
 
         // if this is a getter, replace function.maybe_getter_for with the actual getter
-        if let Some(getter_for) =
-            self.state.maybe_getter_for.as_ref().or(function.maybe_getter_for.as_ref())
-        {
-            function.maybe_getter_for = self.state.storage_map.get(getter_for).cloned();
+        if let Some(getter_for) = self.state.maybe_getter_for.as_ref() {
+            function.maybe_getter_for = self.state.storage_map.get(getter_for).map(Expr::render);
         }
 
         debug!(

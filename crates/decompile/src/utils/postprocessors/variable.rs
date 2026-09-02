@@ -1,8 +1,5 @@
 use crate::{
-    core::{
-        ir::{Expr, Statement},
-        postprocess::PostprocessorState,
-    },
+    core::{ir::Statement, postprocess::PostprocessorState},
     Error,
 };
 
@@ -13,18 +10,17 @@ pub(crate) fn variable_postprocessor(
 ) -> Result<(), Error> {
     let assignment_target = match statement {
         Statement::Assign { target, .. } | Statement::DeclareAssign { target, .. } => {
-            Some(target.render())
+            Some(target.clone())
         }
         _ => None,
     };
 
     statement.visit_exprs_mut(&mut |expr| {
-        let rendered = expr.render();
         let replacement = state.variable_map.iter().find_map(|(variable, value)| {
-            (value == &rendered && assignment_target.as_ref() != Some(variable)).then_some(variable)
+            (value == expr && assignment_target.as_ref() != Some(variable)).then_some(variable)
         });
         if let Some(variable) = replacement {
-            *expr = Expr::identifier(variable.clone());
+            *expr = variable.clone();
         }
     });
 
@@ -36,7 +32,7 @@ mod tests {
     use alloy::primitives::U256;
 
     use super::*;
-    use crate::core::ir::{BinaryOp, RenderTarget};
+    use crate::core::ir::{BinaryOp, Expr, RenderTarget};
 
     #[test]
     fn replaces_matching_expression_subtree() {
@@ -50,7 +46,14 @@ mod tests {
             rhs: Box::new(Expr::Literal(U256::from(2))),
         });
         let mut state = PostprocessorState::default();
-        state.variable_map.insert("var_a".to_string(), "arg0 + 0x01".to_string());
+        state.variable_map.insert(
+            Expr::identifier("var_a"),
+            Expr::Binary {
+                op: BinaryOp::Add,
+                lhs: Box::new(Expr::identifier("arg0")),
+                rhs: Box::new(Expr::Literal(U256::from(1))),
+            },
+        );
         variable_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return var_a * 0x02;");
     }

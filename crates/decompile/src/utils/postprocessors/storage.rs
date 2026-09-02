@@ -46,7 +46,7 @@ pub(crate) fn storage_postprocessor(
             return;
         }
 
-        let storage_loc = format!("{}[{}]", base.render(), index.render());
+        let storage_loc = Expr::Index { base: base.clone(), index: index.clone() };
         let replacement = state.storage_map.get(&storage_loc).cloned().unwrap_or_else(|| {
             let suffix = base26_encode(state.storage_map.len() + 1);
             let replacement = if let Some(key) = mapping_key(index) {
@@ -57,18 +57,10 @@ pub(crate) fn storage_postprocessor(
             } else {
                 Expr::identifier(format!("store_{suffix}"))
             };
-            state.storage_map.insert(storage_loc, replacement.render());
-            replacement.render()
+            state.storage_map.insert(storage_loc, replacement.clone());
+            replacement
         });
-
-        // The replacement was produced by this pass, so its small grammar is safe to reconstruct
-        // structurally from the current slot rather than parsing arbitrary source text.
-        *expr = if let Some(key) = mapping_key(index) {
-            let root = replacement.split('[').next().unwrap_or(&replacement);
-            Expr::Index { base: Box::new(Expr::identifier(root)), index: Box::new(key) }
-        } else {
-            Expr::identifier(replacement)
-        };
+        *expr = replacement;
     });
 
     let (target, value) = match statement {
@@ -77,13 +69,19 @@ pub(crate) fn storage_postprocessor(
         }
         _ => return Ok(()),
     };
-    let rendered_target = target.render();
-    let root = rendered_target.split('[').next().unwrap_or(&rendered_target).to_string();
+    let root = match target {
+        Expr::Identifier(name) => name.clone(),
+        Expr::Index { base, .. } => match &**base {
+            Expr::Identifier(name) => name.clone(),
+            _ => return Ok(()),
+        },
+        _ => return Ok(()),
+    };
     if !root.starts_with("store_") && !root.starts_with("storage_map_") {
         return Ok(())
     }
 
-    state.variable_map.insert(rendered_target, value.render());
+    state.variable_map.insert(target.clone(), value.clone());
     if root.starts_with("storage_map_") {
         let key_type = match target {
             Expr::Index { index, .. } => expression_type(index, state),

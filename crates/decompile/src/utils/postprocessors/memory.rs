@@ -54,13 +54,14 @@ pub(crate) fn memory_postprocessor(
             return;
         }
 
-        let memory_loc = expr.render();
-        let variable_name = state.memory_map.get(&memory_loc).cloned().unwrap_or_else(|| {
-            let name = format!("var_{}", base26_encode(state.memory_map.len() + 1));
-            state.memory_map.insert(memory_loc, name.clone());
-            name
+        let memory_loc = expr.clone();
+        let variable = state.memory_map.get(&memory_loc).cloned().unwrap_or_else(|| {
+            let variable =
+                Expr::identifier(format!("var_{}", base26_encode(state.memory_map.len() + 1)));
+            state.memory_map.insert(memory_loc, variable.clone());
+            variable
         });
-        *expr = Expr::identifier(variable_name);
+        *expr = variable;
     });
 
     let Statement::Assign { target, value } = statement else { return Ok(()) };
@@ -68,13 +69,14 @@ pub(crate) fn memory_postprocessor(
     if !var_name.starts_with("var_") {
         return Ok(())
     }
+    let var_name = var_name.clone();
 
-    state.variable_map.insert(var_name.clone(), value.render());
+    state.variable_map.insert(Expr::identifier(&var_name), value.clone());
     if let Some(ty) = infer_type(value, state) {
         state.memory_type_map.entry(var_name.clone()).or_insert_with(|| ty.clone());
         *statement = Statement::DeclareAssign {
             ty,
-            target: Expr::identifier(var_name.clone()),
+            target: Expr::identifier(var_name),
             value: value.clone(),
         };
     }
@@ -102,6 +104,9 @@ mod tests {
         let mut state = PostprocessorState::default();
         memory_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "uint256 var_a = arg0 + 0x01;");
-        assert_eq!(state.memory_map.get("memory[0x20]"), Some(&"var_a".to_string()));
+        assert_eq!(
+            state.memory_map.get(&Expr::index("memory", Expr::Literal(U256::from(32)))),
+            Some(&Expr::identifier("var_a"))
+        );
     }
 }
