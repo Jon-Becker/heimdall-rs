@@ -184,11 +184,7 @@ impl Analyzer {
                     }
                 }
 
-                if self.typ == AnalyzerType::Solidity {
-                    self.function.push_statement(Statement::CloseBlock);
-                } else {
-                    self.function.logic.push("}".to_string());
-                }
+                self.function.push_statement(Statement::CloseBlock);
             }
 
             Ok(())

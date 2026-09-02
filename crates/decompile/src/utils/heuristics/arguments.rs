@@ -124,7 +124,7 @@ pub(crate) fn argument_heuristic<'a>(
                     };
                     function.push_statement(Statement::Return(value));
                 } else if analyzer_state.analyzer_type == AnalyzerType::Yul {
-                    function.logic.push(format!(
+                    function.push_raw_statement(format!(
                         "return({}, {})",
                         state.last_instruction.input_operations[0].yulify(),
                         state.last_instruction.input_operations[1].yulify()

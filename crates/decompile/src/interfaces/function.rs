@@ -4,7 +4,10 @@ use alloy::primitives::U256;
 use heimdall_common::ether::signatures::ResolvedFunction;
 use heimdall_vm::core::{opcodes::WrappedOpcode, types::byte_size_to_type};
 
-use crate::core::{analyze::AnalyzerType, ir::Statement};
+use crate::core::{
+    analyze::AnalyzerType,
+    ir::{RenderTarget, Statement},
+};
 
 /// The [`AnalyzedFunction`] struct represents a function that has been analyzed by the decompiler.
 #[derive(Clone, Debug)]
@@ -126,7 +129,11 @@ impl AnalyzedFunction {
     pub(crate) fn render_statements(&mut self) {
         if !self.statements.is_empty() {
             self.statements = self.statements.drain(..).map(Statement::simplify).collect();
-            self.logic = self.statements.iter().map(Statement::render).collect();
+            let target = match self.analyzer_type {
+                AnalyzerType::Yul => RenderTarget::Yul,
+                AnalyzerType::Solidity | AnalyzerType::Abi => RenderTarget::Solidity,
+            };
+            self.logic = self.statements.iter().map(|statement| statement.render(target)).collect();
         }
     }
 

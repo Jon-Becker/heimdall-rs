@@ -389,6 +389,13 @@ impl From<&WrappedOpcode> for Expr {
     }
 }
 
+/// Source syntax selected when lowering the shared IR.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum RenderTarget {
+    Solidity,
+    Yul,
+}
+
 /// A structured source-level statement. Rendering is deliberately delayed until all analysis
 /// heuristics have run, so control-flow and assignments can be transformed without parsing text.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -428,7 +435,17 @@ impl Statement {
         }
     }
 
-    pub(crate) fn render(&self) -> String {
+    pub(crate) fn render(&self, target: RenderTarget) -> String {
+        match (target, self) {
+            (RenderTarget::Yul, Self::If { condition }) => {
+                format!("if {} {{", condition.render())
+            }
+            (RenderTarget::Yul, Self::Expression(expr)) => expr.render(),
+            (_, statement) => statement.render_solidity(),
+        }
+    }
+
+    fn render_solidity(&self) -> String {
         match self {
             Self::Assign { target, value } => format!("{} = {};", target.render(), value.render()),
             Self::If { condition } => format!("if ({}) {{", condition.render()),
@@ -463,7 +480,7 @@ mod tests {
     use alloy::primitives::U256;
     use heimdall_vm::core::opcodes::{self, WrappedInput, WrappedOpcode};
 
-    use super::{BinaryOp, Expr, Statement};
+    use super::{BinaryOp, Expr, RenderTarget, Statement};
 
     #[test]
     fn renders_structured_assignment() {
@@ -471,7 +488,13 @@ mod tests {
             target: Expr::index("storage", Expr::Literal(U256::from(2))),
             value: Expr::raw("arg0"),
         };
-        assert_eq!(statement.render(), "storage[0x02] = arg0;");
+        assert_eq!(statement.render(RenderTarget::Solidity), "storage[0x02] = arg0;");
+    }
+
+    #[test]
+    fn renders_yul_condition_without_solidity_parentheses() {
+        let statement = Statement::If { condition: Expr::raw("eq(arg0, 0x01)") };
+        assert_eq!(statement.render(RenderTarget::Yul), "if eq(arg0, 0x01) {");
     }
 
     #[test]
@@ -480,7 +503,10 @@ mod tests {
             condition: Expr::raw("msg.sender == owner"),
             reason: Some(Expr::StringLiteral("not \"owner\"".to_string())),
         };
-        assert_eq!(statement.render(), "require(msg.sender == owner, \"not \\\"owner\\\"\");");
+        assert_eq!(
+            statement.render(RenderTarget::Solidity),
+            "require(msg.sender == owner, \"not \\\"owner\\\"\");"
+        );
     }
 
     #[test]

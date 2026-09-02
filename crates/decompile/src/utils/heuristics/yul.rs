@@ -3,7 +3,10 @@ use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::core::{opcodes::opcode_name, vm::State};
 
 use crate::{
-    core::analyze::AnalyzerState,
+    core::{
+        analyze::AnalyzerState,
+        ir::{Expr, Statement},
+    },
     interfaces::{AnalyzedFunction, StorageFrame},
     Error,
 };
@@ -25,7 +28,7 @@ pub(crate) fn yul_heuristic<'a>(
 
                 // add the mstore to the function's memory map
                 function.memory.insert(key, StorageFrame { operation, value });
-                function.logic.push(format!(
+                function.push_raw_statement(format!(
                     "{}({}, {})",
                     opcode_name(instruction.opcode).to_lowercase(),
                     encode_hex_reduced(key),
@@ -37,7 +40,8 @@ pub(crate) fn yul_heuristic<'a>(
             0x57 => {
                 let conditional = instruction.input_operations[1].yulify();
 
-                function.logic.push(format!("if {conditional} {{"));
+                function
+                    .push_statement(Statement::If { condition: Expr::raw(conditional.clone()) });
                 analyzer_state.jumped_conditional = Some(conditional.clone());
                 analyzer_state.conditional_stack.push(conditional);
             }
@@ -54,25 +58,23 @@ pub(crate) fn yul_heuristic<'a>(
                     return Ok(());
                 }
 
-                // find the if statement that caused this revert, and update it to include the
-                // revert
-                for i in (0..function.logic.len()).rev() {
-                    if function.logic[i].starts_with("if") {
-                        // get matching conditional
-                        let conditional = function.logic[i].split("if ").collect::<Vec<&str>>()[1]
-                            .split(" {")
-                            .collect::<Vec<&str>>()[0]
-                            .to_string();
-
-                        // we can negate the conditional to get the revert logic
-                        function.logic[i] = format!(
-                            "if {conditional} {{ revert({}, {}); }} else {{",
-                            instruction.input_operations[0].yulify(),
-                            instruction.input_operations[1].yulify()
-                        );
-
-                        break;
-                    }
+                // Find the condition that caused this revert and promote it without parsing a
+                // rendered Yul line.
+                if let Some(statement) = function
+                    .statements
+                    .iter_mut()
+                    .rev()
+                    .find(|statement| matches!(statement, Statement::If { .. }))
+                {
+                    let conditional = match statement {
+                        Statement::If { condition } => condition.render(),
+                        _ => unreachable!("matched an if statement"),
+                    };
+                    *statement = Statement::raw(format!(
+                        "if {conditional} {{ revert({}, {}); }} else {{",
+                        instruction.input_operations[0].yulify(),
+                        instruction.input_operations[1].yulify()
+                    ));
                 }
             }
 
@@ -82,7 +84,7 @@ pub(crate) fn yul_heuristic<'a>(
             // we simply want to add the operation to the function's logic
             0x37 | 0x39 | 0x3c | 0x3e | 0x55 | 0x5d | 0xf0 | 0xf1 | 0xf2 | 0xf4 | 0xf5 | 0xfa |
             0xff | 0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA4 => {
-                function.logic.push(format!(
+                function.push_raw_statement(format!(
                     "{}({})",
                     opcode_name(instruction.opcode).to_lowercase(),
                     instruction
