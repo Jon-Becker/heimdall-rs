@@ -60,6 +60,8 @@ fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> 
 pub(crate) struct PostprocessorState {
     /// Symbolic values written to constant memory offsets, used for Keccak preimages.
     pub symbolic_memory: HashMap<U256, Expr>,
+    /// Parent memory states used to prevent writes from leaking out of conditional branches.
+    pub symbolic_memory_scopes: Vec<HashMap<U256, Expr>>,
     /// A mapping from memory locations to their corresponding variable names
     pub memory_map: HashMap<Expr, Expr>,
     /// A mapping which holds the last assigned value for a given variable

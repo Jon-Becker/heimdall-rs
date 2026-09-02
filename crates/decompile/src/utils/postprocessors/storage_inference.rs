@@ -125,6 +125,13 @@ pub(crate) fn storage_inference_postprocessor(
     statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
+    if matches!(statement, Statement::CloseBlock) {
+        if let Some(parent) = state.symbolic_memory_scopes.pop() {
+            state.symbolic_memory = parent;
+        }
+        return Ok(())
+    }
+
     statement.visit_exprs_mut(&mut |expr| {
         resolve_keccak(expr, &state.symbolic_memory);
         if let Expr::StorageAccess(path) = expr {
@@ -136,6 +143,10 @@ pub(crate) fn storage_inference_postprocessor(
             *expr = Expr::StorageAccess(Box::new(path));
         }
     });
+
+    if matches!(statement, Statement::If { .. } | Statement::IfRevertElse { .. }) {
+        state.symbolic_memory_scopes.push(state.symbolic_memory.clone());
+    }
 
     if let Statement::Assign { target: Expr::Index { base, index }, value } = statement {
         if base.render() == "memory" {
@@ -191,6 +202,20 @@ mod tests {
             Statement::Return(Expr::StorageAccess(path))
                 if matches!(*path, StoragePath::Mapping { .. })
         ));
+    }
+
+    #[test]
+    fn does_not_leak_memory_writes_out_of_branch() {
+        let mut state = PostprocessorState::default();
+        let mut branch = Statement::If { condition: Expr::Bool(true) };
+        storage_inference_postprocessor(&mut branch, &mut state).unwrap();
+        storage_inference_postprocessor(
+            &mut memory_write(0, Expr::identifier("branch_value")),
+            &mut state,
+        )
+        .unwrap();
+        storage_inference_postprocessor(&mut Statement::CloseBlock, &mut state).unwrap();
+        assert!(!state.symbolic_memory.contains_key(&U256::ZERO));
     }
 
     #[test]

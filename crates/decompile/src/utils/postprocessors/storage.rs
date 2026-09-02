@@ -12,14 +12,21 @@ fn expression_type(expr: &Expr, state: &PostprocessorState) -> String {
     match expr {
         Expr::Cast { ty, .. } => ty.clone(),
         Expr::Identifier(name) => {
-            state.memory_type_map.get(name).cloned().unwrap_or_else(|| "bytes32".to_string())
+            if matches!(name.as_str(), "msg.sender" | "tx.origin" | "address(this)") {
+                "address".to_string()
+            } else {
+                state.memory_type_map.get(name).cloned().unwrap_or_else(|| "bytes32".to_string())
+            }
         }
         Expr::Binary { op, .. }
             if !matches!(op, BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor) =>
         {
             "uint256".to_string()
         }
+        Expr::Bool(_) => "bool".to_string(),
         Expr::Literal(_) => "uint256".to_string(),
+        Expr::Keccak { .. } => "bytes32".to_string(),
+        Expr::Call { callee, .. } if callee == "address" => "address".to_string(),
         _ => "bytes32".to_string(),
     }
 }
@@ -32,10 +39,9 @@ fn same_layout(a: &StoragePath, b: &StoragePath) -> bool {
             StoragePath::DynamicArray { parent: a, .. },
             StoragePath::DynamicArray { parent: b, .. },
         ) => same_layout(a, b),
-        (
-            StoragePath::Field { parent: a, offset: a_offset },
-            StoragePath::Field { parent: b, offset: b_offset },
-        ) => a_offset == b_offset && same_layout(a, b),
+        (StoragePath::Field { parent: a, .. }, StoragePath::Field { parent: b, .. }) => {
+            same_layout(a, b)
+        }
         (
             StoragePath::PackedField { parent: a, bit_offset: a_offset, bit_width: a_width },
             StoragePath::PackedField { parent: b, bit_offset: b_offset, bit_width: b_width },
@@ -191,6 +197,31 @@ mod tests {
         storage_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "store_a = arg0;");
         assert_eq!(state.storage_type_map.get("store_a"), Some(&"address".to_string()));
+    }
+
+    #[test]
+    fn infers_nested_mapping_type() {
+        let path = StoragePath::Mapping {
+            parent: Box::new(StoragePath::Mapping {
+                parent: Box::new(StoragePath::Slot {
+                    slot: Box::new(Expr::Literal(U256::from(5))),
+                }),
+                key: Box::new(Expr::identifier("arg0")),
+            }),
+            key: Box::new(Expr::identifier("arg1")),
+        };
+        let mut statement = Statement::Assign {
+            target: Expr::StorageAccess(Box::new(path)),
+            value: Expr::Literal(U256::from(1)),
+        };
+        let mut state = PostprocessorState::default();
+        state.memory_type_map.insert("arg0".to_string(), "address".to_string());
+        state.memory_type_map.insert("arg1".to_string(), "address".to_string());
+        storage_postprocessor(&mut statement, &mut state).unwrap();
+        assert_eq!(
+            state.storage_type_map.get("storage_map_a"),
+            Some(&"mapping(address => mapping(address => uint256))".to_string())
+        );
     }
 
     #[test]
