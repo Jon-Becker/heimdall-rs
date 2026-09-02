@@ -21,6 +21,10 @@ fn assignment(statement: &Statement) -> Option<(&str, &Expr)> {
     }
 }
 
+fn is_trivial_alias(expr: &Expr) -> bool {
+    matches!(expr, Expr::Identifier(_) | Expr::Literal(_) | Expr::Bool(_) | Expr::StringLiteral(_))
+}
+
 fn is_pure_inline_candidate(expr: &Expr) -> bool {
     match expr {
         Expr::Empty |
@@ -91,7 +95,7 @@ pub(crate) fn inline_single_use_variables(
             .iter()
             .map(|statement| usage_count(statement, &variable))
             .sum::<usize>();
-        if uses != 1 {
+        if uses == 0 || (uses != 1 && !is_trivial_alias(&value)) {
             continue
         }
 
@@ -142,7 +146,11 @@ mod tests {
         function.statements = vec![
             Statement::Assign {
                 target: Expr::identifier("var_a"),
-                value: Expr::Literal(U256::from(1)),
+                value: Expr::binary(
+                    crate::core::ir::BinaryOp::Add,
+                    Expr::identifier("arg0"),
+                    Expr::Literal(U256::from(1)),
+                ),
             },
             Statement::Return(Expr::binary(
                 crate::core::ir::BinaryOp::Add,

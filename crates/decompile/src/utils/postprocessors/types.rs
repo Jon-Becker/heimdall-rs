@@ -95,12 +95,21 @@ pub(crate) fn type_cleanup_postprocessor(
     statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
-    statement.visit_exprs_mut(&mut |expr| {
-        let Expr::Cast { ty, value } = expr else { return };
-        let target = InferredType::parse(ty);
-        if target != InferredType::Unknown && infer_type(value, state) == target {
-            *expr = *value.clone();
+    statement.visit_exprs_mut(&mut |expr| match expr {
+        Expr::Cast { ty, value } => {
+            let target = InferredType::parse(ty);
+            if target != InferredType::Unknown && infer_type(value, state) == target {
+                *expr = *value.clone();
+            }
         }
+        Expr::Call { callee, args }
+            if callee == "address" &&
+                args.len() == 1 &&
+                infer_type(&args[0], state) == InferredType::Address =>
+        {
+            *expr = args.remove(0);
+        }
+        _ => {}
     });
     Ok(())
 }
@@ -123,6 +132,16 @@ mod tests {
         state.memory_type_map.insert("arg0".to_string(), "address".to_string());
         type_cleanup_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return arg0;");
+    }
+
+    #[test]
+    fn removes_redundant_address_conversion() {
+        let mut statement = Statement::Return(Expr::Call {
+            callee: "address".to_string(),
+            args: vec![Expr::identifier("msg.sender")],
+        });
+        type_cleanup_postprocessor(&mut statement, &mut PostprocessorState::default()).unwrap();
+        assert_eq!(statement.render(RenderTarget::Solidity), "return msg.sender;");
     }
 
     #[test]
