@@ -255,6 +255,34 @@ impl Expr {
         }
     }
 
+    /// Visit this expression and all descendants depth-first.
+    pub(crate) fn visit_mut(&mut self, visitor: &mut impl FnMut(&mut Expr)) {
+        match self {
+            Self::Unary { value, .. } | Self::Cast { value, .. } => value.visit_mut(visitor),
+            Self::Binary { lhs, rhs, .. } => {
+                lhs.visit_mut(visitor);
+                rhs.visit_mut(visitor);
+            }
+            Self::Index { base, index } => {
+                base.visit_mut(visitor);
+                index.visit_mut(visitor);
+            }
+            Self::Slice { base, start, end } => {
+                base.visit_mut(visitor);
+                start.visit_mut(visitor);
+                end.visit_mut(visitor);
+            }
+            Self::Member { base, .. } => base.visit_mut(visitor),
+            Self::Call { args, .. } => {
+                for arg in args {
+                    arg.visit_mut(visitor);
+                }
+            }
+            _ => {}
+        }
+        visitor(self);
+    }
+
     /// Apply local, semantics-preserving simplifications before source rendering.
     pub(crate) fn simplify(self) -> Self {
         match self {
@@ -473,6 +501,46 @@ pub(crate) enum Statement {
 }
 
 impl Statement {
+    pub(crate) fn visit_exprs_mut(&mut self, visitor: &mut impl FnMut(&mut Expr)) {
+        match self {
+            Self::Assign { target, value } | Self::DeclareAssign { target, value, .. } => {
+                target.visit_mut(visitor);
+                value.visit_mut(visitor);
+            }
+            Self::If { condition } => condition.visit_mut(visitor),
+            Self::IfRevertElse { condition, offset, size } => {
+                condition.visit_mut(visitor);
+                offset.visit_mut(visitor);
+                size.visit_mut(visitor);
+            }
+            Self::Require { condition, reason } => {
+                condition.visit_mut(visitor);
+                if let Some(reason) = reason {
+                    reason.visit_mut(visitor);
+                }
+            }
+            Self::Return(value) | Self::Expression(value) => value.visit_mut(visitor),
+            Self::Emit { args, .. } | Self::AssemblyAssign { args, .. } => {
+                for arg in args {
+                    arg.visit_mut(visitor);
+                }
+            }
+            Self::ExternalCall { address, args, gas, value, .. } => {
+                address.visit_mut(visitor);
+                for arg in args {
+                    arg.visit_mut(visitor);
+                }
+                if let Some(gas) = gas {
+                    gas.visit_mut(visitor);
+                }
+                if let Some(value) = value {
+                    value.visit_mut(visitor);
+                }
+            }
+            Self::CloseBlock => {}
+        }
+    }
+
     pub(crate) fn simplify(self) -> Self {
         match self {
             Self::Assign { target, value } => {

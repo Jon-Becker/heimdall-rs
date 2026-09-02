@@ -1,4 +1,8 @@
-use crate::{core::postprocess::PostprocessorState, interfaces::AnalyzedFunction, Error};
+use crate::{
+    core::{ir::Statement, postprocess::PostprocessorState},
+    interfaces::AnalyzedFunction,
+    Error,
+};
 
 // import postprocessors
 mod arithmetic;
@@ -20,7 +24,10 @@ pub(crate) use storage::storage_postprocessor;
 pub(crate) use transient::transient_postprocessor;
 pub(crate) use variable::variable_postprocessor;
 
-/// A line-level postprocessor function signature
+/// A structured IR postprocessor function signature.
+pub(crate) type IrPostprocessor = fn(&mut Statement, &mut PostprocessorState) -> Result<(), Error>;
+
+/// A legacy rendered-line postprocessor function signature.
 type LinePostprocessor = fn(&mut String, &mut PostprocessorState) -> Result<(), Error>;
 
 /// A function-level postprocessor function signature

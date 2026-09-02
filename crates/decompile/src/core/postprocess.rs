@@ -12,7 +12,7 @@ use crate::{
         postprocessors::{
             arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
             memory_postprocessor, remove_empty_lines, storage_postprocessor,
-            transient_postprocessor, variable_postprocessor, Pass,
+            transient_postprocessor, variable_postprocessor, IrPostprocessor, Pass,
         },
     },
     Error,
@@ -49,7 +49,9 @@ pub(crate) struct PostprocessorState {
 pub(crate) struct PostprocessOrchestrator {
     /// The type of postprocessor to use. this is taken from the analyzer
     typ: AnalyzerType,
-    /// A list of registered passes
+    /// Structured passes run before lowering to source text.
+    ir_passes: Vec<IrPostprocessor>,
+    /// Legacy passes run after source rendering.
     passes: Vec<Pass>,
     /// The state shared between postprocessors
     state: PostprocessorState,
@@ -58,8 +60,12 @@ pub(crate) struct PostprocessOrchestrator {
 impl PostprocessOrchestrator {
     /// Build a new postprocessor with the given analyzer type
     pub(crate) fn new(typ: AnalyzerType) -> Result<Self, Error> {
-        let mut orchestrator =
-            Self { typ, passes: Vec::new(), state: PostprocessorState::default() };
+        let mut orchestrator = Self {
+            typ,
+            ir_passes: Vec::new(),
+            passes: Vec::new(),
+            state: PostprocessorState::default(),
+        };
         orchestrator.register_passes()?;
         Ok(orchestrator)
     }
@@ -68,9 +74,10 @@ impl PostprocessOrchestrator {
     pub(crate) fn register_passes(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
-                // Line-level postprocessors that run on each line
+                self.ir_passes.push(bitwise_mask_postprocessor);
+
+                // Legacy line-level postprocessors that run on rendered source.
                 self.passes.push(Pass::line_level(vec![
-                    bitwise_mask_postprocessor,
                     arithmetic_postprocessor,
                     memory_postprocessor,
                     storage_postprocessor,
@@ -101,10 +108,6 @@ impl PostprocessOrchestrator {
             function.selector, self.typ
         );
         let start_postprocess_time = Instant::now();
-
-        // Lower the structured analysis IR only at the textual postprocessing boundary. The
-        // existing postprocessors can then be migrated to IR transforms independently.
-        function.render_statements();
 
         // get postprocessor state
         let mut state = PostprocessorState {
@@ -180,7 +183,16 @@ impl PostprocessOrchestrator {
             }
         }
 
-        // Run all registered passes
+        // Transform structured statements before lowering to source text.
+        for pass in &self.ir_passes {
+            for statement in &mut function.statements {
+                pass(statement, &mut state)?;
+            }
+        }
+
+        function.render_statements();
+
+        // Run remaining rendered-source passes.
         for pass in &self.passes {
             pass.run(function, &mut state)?;
         }
