@@ -27,31 +27,19 @@ pub(crate) use variable::variable_postprocessor;
 /// A structured IR postprocessor function signature.
 pub(crate) type IrPostprocessor = fn(&mut Statement, &mut PostprocessorState) -> Result<(), Error>;
 
-/// A legacy rendered-line postprocessor function signature.
-type LinePostprocessor = fn(&mut String, &mut PostprocessorState) -> Result<(), Error>;
-
 /// A function-level postprocessor function signature
 type FunctionPostprocessor =
     fn(&mut AnalyzedFunction, &mut PostprocessorState) -> Result<(), Error>;
 
 /// A pass operates on the entire function's logic.
 ///
-/// Passes are registered in order and executed sequentially. There are two types:
-/// - `LineLevel`: Runs a set of postprocessors on each line
-/// - `FunctionLevel`: Runs a transformation on the entire function
+/// Function-level passes are registered in order and executed after structured IR passes.
 pub(crate) enum Pass {
-    /// Runs a set of line-level postprocessors on each line sequentially
-    LineLevel { postprocessors: Vec<LinePostprocessor> },
-    /// Runs a single function-level transformation
+    /// Runs a single function-level transformation.
     FunctionLevel { transform: FunctionPostprocessor },
 }
 
 impl Pass {
-    /// Create a new line-level pass with the given postprocessors
-    pub(crate) fn line_level(postprocessors: Vec<LinePostprocessor>) -> Self {
-        Self::LineLevel { postprocessors }
-    }
-
     /// Create a new function-level pass with the given transformation
     pub(crate) fn function_level(transform: FunctionPostprocessor) -> Self {
         Self::FunctionLevel { transform }
@@ -64,14 +52,6 @@ impl Pass {
         state: &mut PostprocessorState,
     ) -> Result<(), Error> {
         match self {
-            Pass::LineLevel { postprocessors } => {
-                for line in function.logic.iter_mut() {
-                    for postprocessor in postprocessors {
-                        postprocessor(line, state)?;
-                    }
-                }
-                Ok(())
-            }
             Pass::FunctionLevel { transform } => transform(function, state),
         }
     }
