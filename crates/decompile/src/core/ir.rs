@@ -81,6 +81,16 @@ pub(crate) enum StoragePath {
 }
 
 impl StoragePath {
+    pub(crate) fn root(&self) -> &Expr {
+        match self {
+            Self::Slot { slot } => slot,
+            Self::Mapping { parent, .. } |
+            Self::DynamicArray { parent, .. } |
+            Self::Field { parent, .. } |
+            Self::PackedField { parent, .. } => parent.root(),
+        }
+    }
+
     fn collect_identifiers(&self, identifiers: &mut HashSet<String>) {
         match self {
             Self::Slot { slot } => slot.collect_identifiers(identifiers),

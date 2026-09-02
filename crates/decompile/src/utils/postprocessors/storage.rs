@@ -1,3 +1,4 @@
+use alloy::primitives::U256;
 use heimdall_common::utils::strings::base26_encode;
 
 use crate::{
@@ -31,25 +32,6 @@ fn expression_type(expr: &Expr, state: &PostprocessorState) -> String {
     }
 }
 
-fn same_layout(a: &StoragePath, b: &StoragePath) -> bool {
-    match (a, b) {
-        (StoragePath::Slot { slot: a }, StoragePath::Slot { slot: b }) => a == b,
-        (StoragePath::Mapping { parent: a, .. }, StoragePath::Mapping { parent: b, .. }) |
-        (
-            StoragePath::DynamicArray { parent: a, .. },
-            StoragePath::DynamicArray { parent: b, .. },
-        ) => same_layout(a, b),
-        (StoragePath::Field { parent: a, .. }, StoragePath::Field { parent: b, .. }) => {
-            same_layout(a, b)
-        }
-        (
-            StoragePath::PackedField { parent: a, bit_offset: a_offset, bit_width: a_width },
-            StoragePath::PackedField { parent: b, bit_offset: b_offset, bit_width: b_width },
-        ) => a_offset == b_offset && a_width == b_width && same_layout(a, b),
-        _ => false,
-    }
-}
-
 fn is_collection(path: &StoragePath) -> bool {
     match path {
         StoragePath::Slot { .. } => false,
@@ -57,6 +39,22 @@ fn is_collection(path: &StoragePath) -> bool {
         StoragePath::Field { parent, .. } | StoragePath::PackedField { parent, .. } => {
             is_collection(parent)
         }
+    }
+}
+
+fn naming_key(path: &StoragePath) -> Expr {
+    match path {
+        StoragePath::PackedField { parent, bit_offset, bit_width } if !is_collection(parent) => {
+            Expr::Call {
+                callee: "packed_slot".to_string(),
+                args: vec![
+                    parent.root().clone(),
+                    Expr::Literal(U256::from(*bit_offset as u64)),
+                    Expr::Literal(U256::from(*bit_width as u64)),
+                ],
+            }
+        }
+        _ => path.root().clone(),
     }
 }
 
@@ -94,23 +92,34 @@ fn render_path(path: &StoragePath, root: &str) -> Expr {
     }
 }
 
-fn storage_type(path: &StoragePath, leaf: String, state: &PostprocessorState) -> String {
+fn storage_type(
+    path: &StoragePath,
+    leaf: String,
+    state: &PostprocessorState,
+    collapse_dynamic: bool,
+) -> String {
     match path {
         StoragePath::Slot { .. } => leaf,
         StoragePath::Mapping { parent, key } => storage_type(
             parent,
             format!("mapping({} => {leaf})", expression_type(key, state)),
             state,
+            collapse_dynamic,
         ),
-        StoragePath::DynamicArray { parent, .. } => {
-            storage_type(parent, format!("{leaf}[]"), state)
-        }
+        StoragePath::DynamicArray { parent, .. } => storage_type(
+            parent,
+            if collapse_dynamic { leaf } else { format!("{leaf}[]") },
+            state,
+            collapse_dynamic,
+        ),
         // Struct synthesis will replace this placeholder in a subsequent layout pass.
-        StoragePath::Field { parent, .. } => storage_type(parent, "bytes32".to_string(), state),
+        StoragePath::Field { parent, .. } => {
+            storage_type(parent, "bytes32".to_string(), state, collapse_dynamic)
+        }
         StoragePath::PackedField { parent, bit_width, .. } => {
             let packed_type =
                 if *bit_width == 160 { "address".to_string() } else { format!("uint{bit_width}") };
-            storage_type(parent, packed_type, state)
+            storage_type(parent, packed_type, state, collapse_dynamic)
         }
     }
 }
@@ -129,23 +138,17 @@ pub(crate) fn storage_postprocessor(
     statement.visit_exprs_mut(&mut |expr| {
         let original = expr.clone();
         let Expr::StorageAccess(path) = expr else { return };
-        let root = state
-            .storage_map
-            .iter()
-            .find_map(|(known, replacement)| match known {
-                Expr::StorageAccess(known_path) if same_layout(path, known_path) => {
-                    replacement_root(replacement)
-                }
-                _ => None,
-            })
-            .unwrap_or_else(|| {
-                let suffix = base26_encode(state.storage_map.len() + 1);
-                if is_collection(path) {
-                    format!("storage_map_{suffix}")
-                } else {
-                    format!("store_{suffix}")
-                }
-            });
+        let key = naming_key(path);
+        let root = state.storage_roots.get(&key).cloned().unwrap_or_else(|| {
+            let suffix = base26_encode(state.storage_roots.len() + 1);
+            let root = if is_collection(path) {
+                format!("storage_map_{suffix}")
+            } else {
+                format!("store_{suffix}")
+            };
+            state.storage_roots.insert(key, root.clone());
+            root
+        });
         let replacement = render_path(path, &root);
         observed_paths.push((root, (**path).clone()));
         state.storage_map.insert(original, replacement.clone());
@@ -153,8 +156,17 @@ pub(crate) fn storage_postprocessor(
     });
 
     for (root, path) in observed_paths {
-        let inferred = storage_type(&path, "bytes32".to_string(), state);
-        state.storage_type_map.entry(root).or_insert(inferred);
+        let hint = state.storage_type_hints.get(path.root()).cloned();
+        let inferred = storage_type(
+            &path,
+            hint.clone().unwrap_or_else(|| "bytes32".to_string()),
+            state,
+            hint.is_some(),
+        );
+        let existing = state.storage_type_map.get(&root);
+        if hint.is_some() || existing.is_none() || existing.is_some_and(|ty| ty == "bytes32") {
+            state.storage_type_map.insert(root, inferred);
+        }
     }
 
     let (target, value) = match statement {
@@ -170,7 +182,13 @@ pub(crate) fn storage_postprocessor(
 
     state.variable_map.insert(target.clone(), value.clone());
     if let Some(path) = written_path {
-        let ty = storage_type(&path, expression_type(value, state), state);
+        let hint = state.storage_type_hints.get(path.root()).cloned();
+        let ty = storage_type(
+            &path,
+            hint.clone().unwrap_or_else(|| expression_type(value, state)),
+            state,
+            hint.is_some(),
+        );
         state.storage_type_map.insert(root, ty);
     }
 
@@ -179,8 +197,6 @@ pub(crate) fn storage_postprocessor(
 
 #[cfg(test)]
 mod tests {
-    use alloy::primitives::U256;
-
     use super::*;
     use crate::core::ir::RenderTarget;
 
@@ -222,6 +238,27 @@ mod tests {
             state.storage_type_map.get("storage_map_a"),
             Some(&"mapping(address => mapping(address => uint256))".to_string())
         );
+    }
+
+    #[test]
+    fn unifies_direct_and_dynamic_views_of_string_root() {
+        let root = Expr::Literal(U256::from(2));
+        let mut direct = Statement::Return(Expr::StorageAccess(Box::new(StoragePath::Slot {
+            slot: Box::new(root.clone()),
+        })));
+        let mut dynamic =
+            Statement::Return(Expr::StorageAccess(Box::new(StoragePath::DynamicArray {
+                parent: Box::new(StoragePath::Slot { slot: Box::new(root.clone()) }),
+                index: Box::new(Expr::identifier("arg0")),
+            })));
+        let mut state = PostprocessorState::default();
+        state.storage_type_hints.insert(root, "string".to_string());
+        storage_postprocessor(&mut direct, &mut state).unwrap();
+        storage_postprocessor(&mut dynamic, &mut state).unwrap();
+        assert_eq!(state.storage_roots.len(), 1);
+        assert_eq!(direct.render(RenderTarget::Solidity), "return store_a;");
+        assert_eq!(dynamic.render(RenderTarget::Solidity), "return store_a[arg0];");
+        assert_eq!(state.storage_type_map.get("store_a"), Some(&"string".to_string()));
     }
 
     #[test]
