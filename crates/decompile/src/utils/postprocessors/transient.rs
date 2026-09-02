@@ -1,147 +1,118 @@
-use eyre::eyre;
-use heimdall_common::utils::strings::{base26_encode, find_balanced_encapsulator};
+use heimdall_common::utils::strings::base26_encode;
 
 use crate::{
-    core::postprocess::PostprocessorState,
-    utils::constants::{MEMORY_VAR_REGEX, STORAGE_ACCESS_REGEX},
+    core::{
+        ir::{BinaryOp, Expr, Statement},
+        postprocess::PostprocessorState,
+    },
     Error,
 };
 
-/// Handles converting storage operations to variables. For example:
-/// - `transient[0x20]` would become `tstore_a`, and so on.
+fn is_transient_base(expr: &Expr) -> bool {
+    matches!(expr, Expr::Raw(name) | Expr::Identifier(name) if name == "transient")
+}
+
+fn expression_type(expr: &Expr, state: &PostprocessorState) -> String {
+    match expr {
+        Expr::Cast { ty, .. } => ty.clone(),
+        Expr::Identifier(name) => {
+            state.memory_type_map.get(name).cloned().unwrap_or_else(|| "bytes32".to_string())
+        }
+        Expr::Binary { op, .. }
+            if !matches!(op, BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor) =>
+        {
+            "uint256".to_string()
+        }
+        Expr::Literal(_) => "uint256".to_string(),
+        _ => "bytes32".to_string(),
+    }
+}
+
+fn mapping_key(slot: &Expr) -> Option<Expr> {
+    match slot {
+        Expr::Call { callee, args } if callee == "keccak256" => args.first().cloned(),
+        _ => None,
+    }
+}
+
+/// Replaces transient-storage accesses with stable variable references and infers their types.
 pub(crate) fn transient_postprocessor(
-    line: &mut String,
+    statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
-    // find a storage access
-    let storage_access = match STORAGE_ACCESS_REGEX.find(line).unwrap_or(None) {
-        Some(x) => x.as_str(),
-        None => "",
-    };
+    statement.visit_exprs_mut(&mut |expr| {
+        let Expr::Index { base, index } = expr else { return };
+        if !is_transient_base(base) {
+            return;
+        }
 
-    // handle a single storage access
-    if let Ok(storage_range) = find_balanced_encapsulator(storage_access, ('[', ']')) {
-        let storage_loc = format!(
-            "transient[{}]",
-            storage_access
-                .get(storage_range)
-                .ok_or_else(|| eyre!("failed to extract transient location"))?
-        );
-
-        let variable_name = match state.storage_map.get(&storage_loc) {
-            Some(loc) => loc.to_owned(),
-            None => {
-                let i = state.storage_map.len() + 1;
-
-                // get the variable name
-                if storage_loc.contains("keccak256") {
-                    let keccak_range = find_balanced_encapsulator(&storage_loc, ('(', ')'))
-                        .map_err(|_| eyre!("failed to extract keccak256 range"))?;
-
-                    let variable_name = format!(
-                        "transient_map_{}[{}]",
-                        base26_encode(i),
-                        storage_loc.get(keccak_range).unwrap_or("?")
-                    );
-
-                    // add the variable to the map
-                    state.transient_map.insert(storage_loc.clone(), variable_name.clone());
-                    variable_name
-                } else {
-                    let variable_name = format!("tstore_{}", base26_encode(i));
-
-                    // add the variable to the map
-                    state.transient_map.insert(storage_loc.clone(), variable_name.clone());
-                    variable_name
+        let storage_loc = format!("{}[{}]", base.render(), index.render());
+        let replacement = state.transient_map.get(&storage_loc).cloned().unwrap_or_else(|| {
+            let suffix = base26_encode(state.transient_map.len() + 1);
+            let replacement = if let Some(key) = mapping_key(index) {
+                Expr::Index {
+                    base: Box::new(Expr::identifier(format!("transient_map_{suffix}"))),
+                    index: Box::new(key),
                 }
-            }
-        };
+            } else {
+                Expr::identifier(format!("tstore_{suffix}"))
+            };
+            state.transient_map.insert(storage_loc, replacement.render());
+            replacement.render()
+        });
 
-        // replace the memory location with the new variable name,
-        // then recurse until no more memory locations are found
-        *line = line.replace(storage_loc.as_str(), &variable_name);
-        transient_postprocessor(line, state)?;
+        *expr = if let Some(key) = mapping_key(index) {
+            let root = replacement.split('[').next().unwrap_or(&replacement);
+            Expr::Index { base: Box::new(Expr::identifier(root)), index: Box::new(key) }
+        } else {
+            Expr::identifier(replacement)
+        };
+    });
+
+    let (target, value) = match statement {
+        Statement::Assign { target, value } | Statement::DeclareAssign { target, value, .. } => {
+            (target, value)
+        }
+        _ => return Ok(()),
+    };
+    let rendered_target = target.render();
+    let root = rendered_target.split('[').next().unwrap_or(&rendered_target).to_string();
+    if !root.starts_with("tstore_") && !root.starts_with("transient_map_") {
+        return Ok(())
     }
 
-    // if there is an assignment to a memory variable, save it to variable_map
-    if (line.trim().starts_with("tstore_") || line.trim().starts_with("transient_map_")) &&
-        line.contains(" = ")
-    {
-        let assignment: Vec<String> =
-            line.split(" = ").collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();
-        state.variable_map.insert(assignment[0].clone(), assignment[1].replace(';', ""));
-
-        // storage loc can be found by searching for the key where value = assignment[0]
-        let mut storage_loc = state
-            .transient_map
-            .iter()
-            .find(|(_, value)| value == &&assignment[0])
-            .map(|(key, _)| key.clone())
-            .unwrap_or(String::new());
-        let mut var_name = assignment[0].clone();
-
-        // if the storage_slot is a variable, replace it with the value
-        // ex: storage[var_b] => storage[keccak256(var_a)]
-        // helps with type inference
-        if MEMORY_VAR_REGEX.is_match(&storage_loc).unwrap_or(false) {
-            for (var, value) in state.variable_map.iter() {
-                if storage_loc.contains(var) {
-                    *line = line.replace(var, value);
-                    storage_loc = storage_loc.replace(var, value);
-                }
-            }
-        }
-
-        // default type is bytes32, since it technically can hold any type
-        let mut lhs_type = "bytes32".to_string();
-        let mut rhs_type = "bytes32".to_string();
-
-        // if the storage slot contains a keccak256 call, this is a mapping and we will need to pull
-        // types from both the lhs and rhs
-        if storage_loc.contains("keccak256") {
-            var_name = var_name.split('[').collect::<Vec<&str>>()[0].to_string();
-
-            // replace the storage slot in rhs with a placeholder
-            // this will prevent us from pulling bad types from the rhs
-            if assignment.len() > 2 {
-                let rhs: String = assignment[1].replace(&storage_loc, "_");
-
-                // find vars in lhs or rhs
-                for (var, var_type) in state.memory_type_map.iter() {
-                    // check for vars in lhs
-                    if storage_loc.contains(var) && !var_type.is_empty() {
-                        lhs_type = var_type.to_string();
-
-                        // continue, so we cannot use this var in rhs
-                        continue;
-                    }
-
-                    // check for vars in rhs
-                    if rhs.contains(var) && !var_type.is_empty() {
-                        rhs_type = var_type.to_string();
-                    }
-                }
-            }
-
-            // add to type map
-            let mapping_type = format!("mapping({lhs_type} => {rhs_type})");
-            state.transient_type_map.insert(var_name, mapping_type);
-        } else {
-            // this is just a normal storage variable, so we can get the type of the rhs from
-            // variable type map inheritance
-            for (var, var_type) in state.memory_type_map.iter() {
-                if line.contains(var) && !var_type.is_empty() {
-                    rhs_type = var_type.to_string();
-                }
-            }
-
-            // add to type map
-            state.transient_type_map.insert(var_name, rhs_type);
-        }
+    state.variable_map.insert(rendered_target, value.render());
+    if root.starts_with("transient_map_") {
+        let key_type = match target {
+            Expr::Index { index, .. } => expression_type(index, state),
+            _ => "bytes32".to_string(),
+        };
+        state
+            .transient_type_map
+            .insert(root, format!("mapping({key_type} => {})", expression_type(value, state)));
+    } else {
+        state.transient_type_map.insert(root, expression_type(value, state));
     }
 
     Ok(())
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use alloy::primitives::U256;
+
+    use super::*;
+    use crate::core::ir::RenderTarget;
+
+    #[test]
+    fn names_transient_slot() {
+        let mut statement = Statement::Assign {
+            target: Expr::index("transient", Expr::Literal(U256::ZERO)),
+            value: Expr::identifier("arg0"),
+        };
+        let mut state = PostprocessorState::default();
+        transient_postprocessor(&mut statement, &mut state).unwrap();
+        assert_eq!(statement.render(RenderTarget::Solidity), "tstore_a = arg0;");
+        assert_eq!(state.transient_type_map.get("tstore_a"), Some(&"bytes32".to_string()));
+    }
+}

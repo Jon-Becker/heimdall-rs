@@ -78,10 +78,10 @@ impl PostprocessOrchestrator {
                 self.ir_passes.push(arithmetic_postprocessor);
                 self.ir_passes.push(memory_postprocessor);
                 self.ir_passes.push(storage_postprocessor);
+                self.ir_passes.push(transient_postprocessor);
 
                 // Legacy line-level postprocessors that run on rendered source.
-                self.passes
-                    .push(Pass::line_level(vec![transient_postprocessor, variable_postprocessor]));
+                self.passes.push(Pass::line_level(vec![variable_postprocessor]));
 
                 // Function-level passes that run on the entire function
                 self.passes.push(Pass::function_level(eliminate_dead_variables));
