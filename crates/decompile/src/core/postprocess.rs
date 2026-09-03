@@ -56,6 +56,75 @@ fn path_has_packed_width(path: &super::ir::StoragePath, width: u16) -> bool {
     }
 }
 
+fn normalize_type(ty: &str) -> String {
+    match ty.replace(" memory", "").trim() {
+        "uint" => "uint256".to_string(),
+        "int" => "int256".to_string(),
+        ty => ty.to_string(),
+    }
+}
+
+fn mapping_parts(ty: &str) -> Option<(&str, &str)> {
+    let inner = ty.strip_prefix("mapping(")?.strip_suffix(')')?;
+    let mut depth = 0usize;
+    for (index, byte) in inner.as_bytes().iter().enumerate() {
+        match byte {
+            b'(' => depth += 1,
+            b')' => depth = depth.saturating_sub(1),
+            b'=' if depth == 0 && inner.as_bytes().get(index + 1) == Some(&b'>') => {
+                return Some((inner[..index].trim(), inner[index + 2..].trim()))
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn storage_getter_signature(ty: &str) -> (Vec<String>, String) {
+    let mut inputs = Vec::new();
+    let mut value = ty.trim();
+    while let Some((key, nested)) = mapping_parts(value) {
+        inputs.push(normalize_type(key));
+        value = nested;
+    }
+    while let Some(element) = value.strip_suffix("[]") {
+        inputs.push("uint256".to_string());
+        value = element;
+    }
+    (inputs, normalize_type(value))
+}
+
+pub(crate) fn getter_type_matches(function: &AnalyzedFunction, storage_type: &str) -> bool {
+    let (expected_inputs, expected_output) = storage_getter_signature(storage_type);
+    let actual_inputs: Vec<String> = function
+        .resolved_function
+        .as_ref()
+        .map(|function| {
+            function.inputs().iter().map(|ty| normalize_type(&ty.to_string())).collect()
+        })
+        .unwrap_or_else(|| {
+            function
+                .sorted_arguments()
+                .iter()
+                .map(|(_, argument)| {
+                    normalize_type(
+                        &argument
+                            .potential_types()
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| "bytes32".to_string()),
+                    )
+                })
+                .collect()
+        });
+    let output_matches =
+        function.returns.as_deref().is_some_and(|output| normalize_type(output) == expected_output);
+    let decimals = expected_inputs.is_empty() &&
+        expected_output == "uint8" &&
+        function.resolved_function.as_ref().is_some_and(|function| function.name == "decimals");
+    actual_inputs == expected_inputs && (output_matches || decimals)
+}
+
 fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> bool {
     find_expression(statements, |expr| {
         matches!(
@@ -331,11 +400,11 @@ impl PostprocessOrchestrator {
 
         // if this is a getter, replace function.maybe_getter_for with the actual getter
         if let Some(getter_for) = self.state.maybe_getter_for.as_ref() {
-            function.maybe_getter_for = self
-                .state
-                .storage_root_slots
-                .iter()
-                .find_map(|(name, slot)| (slot == getter_for).then(|| name.clone()));
+            if let Some((name, _)) =
+                self.state.storage_root_slots.iter().find(|(_, slot)| *slot == getter_for)
+            {
+                function.maybe_getter_for = Some(name.clone());
+            }
         }
 
         debug!(

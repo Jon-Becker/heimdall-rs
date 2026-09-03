@@ -162,7 +162,7 @@ mod integration_tests {
             "function Unresolved_2e1a7d4d(uint256 arg0) public {",
             "string public unresolved_06fdde03; // storage slot: 0x00",
             "string public unresolved_95d89b41; // storage slot: 0x01",
-            "uint8 public unresolved_313ce567; // storage slot: 0x02",
+            "uint8 store_e; // storage slot: 0x02",
             "mapping(address => uint256) public unresolved_70a08231; // storage slot: 0x03",
             "mapping(address => mapping(address => uint256)) public unresolved_dd62ed3e; // storage slot: 0x04",
             "function Unresolved_a9059cbb(address arg0, uint256 arg1) public returns (bool) {",

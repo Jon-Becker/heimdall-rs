@@ -14,7 +14,7 @@ use heimdall_common::{
 use tracing::debug;
 
 use crate::{
-    core::analyze::AnalyzerType,
+    core::{analyze::AnalyzerType, postprocess::getter_type_matches},
     interfaces::AnalyzedFunction,
     utils::constants::{
         DECOMPILED_SOURCE_HEADER_SOL, DECOMPILED_SOURCE_HEADER_YUL, LLM_POSTPROCESSING_PROMPT,
@@ -92,9 +92,10 @@ pub(crate) async fn build_source(
 
     // add functions
     for f in functions.iter().filter(|f| {
+        let collapsible_getter = is_collapsible_getter(f, functions, storage_variables);
+        let standalone_constant = f.is_constant() && f.maybe_getter_for.is_none();
         !f.fallback &&
-            (analyzer_type == AnalyzerType::Yul ||
-                (f.maybe_getter_for.is_none() && !f.is_constant()))
+            (analyzer_type == AnalyzerType::Yul || (!collapsible_getter && !standalone_constant))
     }) {
         let mut function_source = Vec::new();
 
@@ -137,15 +138,18 @@ pub(crate) async fn build_source(
     });
 
     // replace all storage variables w/ getters w/ their resolved names
-    functions.iter().filter(|f| f.maybe_getter_for.is_some()).for_each(|f| {
-        let getter_for_storage_variable = f.maybe_getter_for.as_ref().expect("impossible");
-        let resolved_name = f
-            .resolved_function
-            .as_ref()
-            .map(|x| x.name.clone())
-            .unwrap_or_else(|| format!("unresolved_{}", f.selector));
-        source = source.replace(getter_for_storage_variable, &resolved_name);
-    });
+    functions
+        .iter()
+        .filter(|function| is_collapsible_getter(function, functions, storage_variables))
+        .for_each(|f| {
+            let getter_for_storage_variable = f.maybe_getter_for.as_ref().expect("impossible");
+            let resolved_name = f
+                .resolved_function
+                .as_ref()
+                .map(|x| x.name.clone())
+                .unwrap_or_else(|| format!("unresolved_{}", f.selector));
+            source = source.replace(getter_for_storage_variable, &resolved_name);
+        });
 
     // apply LLM postprocessing to the entire contract source
     if llm_postprocess {
@@ -282,12 +286,37 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
     }
 }
 
+fn unique_getter<'a>(
+    functions: &'a [AnalyzedFunction],
+    storage_variables: &HashMap<String, StorageVariable>,
+    storage_name: &str,
+) -> Option<&'a AnalyzedFunction> {
+    let storage_type = &storage_variables.get(storage_name)?.typ;
+    let mut matches = functions.iter().filter(|function| {
+        function.maybe_getter_for.as_deref() == Some(storage_name) &&
+            getter_type_matches(function, storage_type)
+    });
+    let getter = matches.next()?;
+    matches.next().is_none().then_some(getter)
+}
+
+fn is_collapsible_getter(
+    function: &AnalyzedFunction,
+    functions: &[AnalyzedFunction],
+    storage_variables: &HashMap<String, StorageVariable>,
+) -> bool {
+    function.maybe_getter_for.as_ref().is_some_and(|name| {
+        unique_getter(functions, storage_variables, name)
+            .is_some_and(|getter| getter.selector == function.selector)
+    })
+}
+
 /// Helper function which will write constant variables to the source code.
 fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
     let mut output: Vec<String> = functions
         .iter()
         .filter_map(|f| {
-            if f.is_constant() {
+            if f.is_constant() && f.maybe_getter_for.is_none() {
                 Some(format!(
                     "{} public constant {} = {};",
                     f.returns.as_deref().unwrap_or("bytes").replacen("memory", "", 1).trim(),
@@ -319,7 +348,7 @@ fn get_storage_variables(
         .map(|(name, variable)| {
             let typ = &variable.typ;
             let slot = variable.slot.as_deref().unwrap_or("unknown");
-            if let Some(f) = functions.iter().find(|f| f.maybe_getter_for.as_ref() == Some(name)) {
+            if let Some(f) = unique_getter(functions, storage_variables, name) {
                 let name = f
                     .resolved_function
                     .as_ref()
@@ -480,6 +509,38 @@ fn get_indentation_imbalance(source: &[String]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn duplicate_getters_are_not_collapsed() {
+        let mut first = AnalyzedFunction::new("00000001", false);
+        first.maybe_getter_for = Some("store_a".to_string());
+        first.returns = Some("uint256".to_string());
+        let mut second = AnalyzedFunction::new("00000002", false);
+        second.maybe_getter_for = Some("store_a".to_string());
+        second.returns = Some("uint256".to_string());
+        let variables = HashMap::from([(
+            "store_a".to_string(),
+            StorageVariable { typ: "uint256".to_string(), slot: Some("0x00".to_string()) },
+        )]);
+        assert!(unique_getter(&[first, second], &variables, "store_a").is_none());
+    }
+
+    #[test]
+    fn incompatible_alias_is_not_collapsed_with_canonical_getter() {
+        let mut canonical = AnalyzedFunction::new("00000001", false);
+        canonical.maybe_getter_for = Some("store_a".to_string());
+        canonical.returns = Some("uint256".to_string());
+        let mut alias = AnalyzedFunction::new("00000002", false);
+        alias.maybe_getter_for = Some("store_a".to_string());
+        alias.returns = Some("address".to_string());
+        let functions = vec![canonical, alias];
+        let variables = HashMap::from([(
+            "store_a".to_string(),
+            StorageVariable { typ: "uint256".to_string(), slot: Some("0x00".to_string()) },
+        )]);
+        assert!(is_collapsible_getter(&functions[0], &functions, &variables));
+        assert!(!is_collapsible_getter(&functions[1], &functions, &variables));
+    }
 
     #[test]
     fn storage_declarations_include_base_slots() {
