@@ -1,6 +1,7 @@
 use hashbrown::{HashMap, HashSet};
-use std::time::Instant;
+use std::{str::FromStr, time::Instant};
 
+use alloy::primitives::U256;
 use alloy_json_abi::StateMutability;
 
 use eyre::{OptionExt, Result};
@@ -313,7 +314,7 @@ fn get_storage_variables(
     storage_variables: &HashMap<String, StorageVariable>,
     functions: &[AnalyzedFunction],
 ) -> Vec<String> {
-    let mut output: Vec<String> = storage_variables
+    let mut declarations = storage_variables
         .iter()
         .map(|(name, variable)| {
             let typ = &variable.typ;
@@ -326,15 +327,36 @@ fn get_storage_variables(
                     .unwrap_or_else(|| format!("unresolved_{}", f.selector));
 
                 // TODO: for public getters, we can use `eth_getStorageAt` to get the value
-                return format!("{typ} public {name}; // storage slot: {slot}");
+                return (
+                    typ.starts_with("mapping("),
+                    U256::from_str(slot).ok(),
+                    format!("{typ} public {name}; // storage slot: {slot}"),
+                );
             }
 
-            format!("{typ} {name}; // storage slot: {slot}")
+            (
+                typ.starts_with("mapping("),
+                U256::from_str(slot).ok(),
+                format!("{typ} {name}; // storage slot: {slot}"),
+            )
         })
-        .collect();
-    output.sort();
+        .collect::<Vec<_>>();
+    declarations.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| a.1.unwrap_or(U256::MAX).cmp(&b.1.unwrap_or(U256::MAX)))
+            .then_with(|| a.2.cmp(&b.2))
+    });
+
+    let first_mapping = declarations.iter().position(|(mapping, ..)| *mapping);
+    let mut output = Vec::new();
+    for (index, (_, _, declaration)) in declarations.into_iter().enumerate() {
+        if first_mapping == Some(index) && index > 0 {
+            output.push(String::new());
+        }
+        output.push(declaration);
+    }
     if !output.is_empty() {
-        output.push("".to_string());
+        output.push(String::new());
     }
     output
 }
@@ -475,9 +497,14 @@ mod tests {
             ),
         ]);
         let output = get_storage_variables(&variables, &[]);
-        assert!(output.contains(
-            &"mapping(address => uint256) storage_map_a; // storage slot: 0x03".to_string()
-        ));
-        assert!(output.contains(&"string store_b; // storage slot: 0x00".to_string()));
+        assert_eq!(
+            output,
+            vec![
+                "string store_b; // storage slot: 0x00",
+                "",
+                "mapping(address => uint256) storage_map_a; // storage slot: 0x03",
+                "",
+            ]
+        );
     }
 }
