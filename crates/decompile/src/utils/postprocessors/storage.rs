@@ -162,6 +162,7 @@ pub(crate) fn storage_postprocessor(
             state.storage_roots.insert(key, root.clone());
             root
         });
+        state.storage_root_slots.entry(root.clone()).or_insert_with(|| path.root().clone());
         let replacement = render_path(path, &root);
         observed_paths.push((root, (**path).clone()));
         state.storage_map.insert(original, replacement.clone());

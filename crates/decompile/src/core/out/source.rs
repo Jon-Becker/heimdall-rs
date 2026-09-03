@@ -34,11 +34,17 @@ async fn annotate_contract(source: &str, openrouter_api_key: &str, model: &str) 
     Ok(response.source)
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct StorageVariable {
+    pub typ: String,
+    pub slot: Option<String>,
+}
+
 pub(crate) async fn build_source(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
-    storage_variables: &HashMap<String, String>,
+    storage_variables: &HashMap<String, StorageVariable>,
     llm_postprocess: bool,
     openrouter_api_key: String,
     model: String,
@@ -304,12 +310,14 @@ fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
 /// Helper function which will write the storage variable declarations for the decompiled source
 /// code.
 fn get_storage_variables(
-    storage_variables: &HashMap<String, String>,
+    storage_variables: &HashMap<String, StorageVariable>,
     functions: &[AnalyzedFunction],
 ) -> Vec<String> {
     let mut output: Vec<String> = storage_variables
         .iter()
-        .map(|(name, typ)| {
+        .map(|(name, variable)| {
+            let typ = &variable.typ;
+            let slot = variable.slot.as_deref().unwrap_or("unknown");
             if let Some(f) = functions.iter().find(|f| f.maybe_getter_for.as_ref() == Some(name)) {
                 let name = f
                     .resolved_function
@@ -318,16 +326,13 @@ fn get_storage_variables(
                     .unwrap_or_else(|| format!("unresolved_{}", f.selector));
 
                 // TODO: for public getters, we can use `eth_getStorageAt` to get the value
-                return format!(
-                    "{} public {};",
-                    f.returns.as_ref().unwrap_or(typ).replacen("memory", "", 1).trim(),
-                    name,
-                );
+                return format!("{typ} public {name}; // storage slot: {slot}");
             }
 
-            format!("{typ} {name};")
+            format!("{typ} {name}; // storage slot: {slot}")
         })
         .collect();
+    output.sort();
     if !output.is_empty() {
         output.push("".to_string());
     }
@@ -448,4 +453,31 @@ fn get_indentation_imbalance(source: &[String]) -> i32 {
     }
 
     indentation_level
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn storage_declarations_include_base_slots() {
+        let variables = HashMap::from([
+            (
+                "storage_map_a".to_string(),
+                StorageVariable {
+                    typ: "mapping(address => uint256)".to_string(),
+                    slot: Some("0x03".to_string()),
+                },
+            ),
+            (
+                "store_b".to_string(),
+                StorageVariable { typ: "string".to_string(), slot: Some("0x00".to_string()) },
+            ),
+        ]);
+        let output = get_storage_variables(&variables, &[]);
+        assert!(output.contains(
+            &"mapping(address => uint256) storage_map_a; // storage slot: 0x03".to_string()
+        ));
+        assert!(output.contains(&"string store_b; // storage slot: 0x00".to_string()));
+    }
 }

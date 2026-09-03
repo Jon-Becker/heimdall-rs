@@ -90,6 +90,8 @@ pub(crate) struct PostprocessorState {
     pub storage_roots: HashMap<Expr, String>,
     /// Type hints associated with canonical root slots.
     pub storage_type_hints: HashMap<Expr, String>,
+    /// Generated variable names mapped back to their physical base slots.
+    pub storage_root_slots: HashMap<String, Expr>,
     /// A mapping from storage locations to their corresponding variable names
     pub storage_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for storage variables
@@ -172,6 +174,7 @@ impl PostprocessOrchestrator {
         let mut state = PostprocessorState {
             storage_roots: self.state.storage_roots.clone(),
             storage_type_hints: self.state.storage_type_hints.clone(),
+            storage_root_slots: self.state.storage_root_slots.clone(),
             storage_map: self.state.storage_map.clone(),
             transient_map: self.state.transient_map.clone(),
             storage_type_map: self.state.storage_type_map.clone(),
@@ -209,6 +212,16 @@ impl PostprocessOrchestrator {
         if self.typ == AnalyzerType::Solidity {
             for statement in &mut function.statements {
                 storage_inference_postprocessor(statement, &mut state)?;
+            }
+        }
+
+        // A direct storage return is a getter even when mapping/array keys are function arguments.
+        if function.view {
+            if let Some(root) = function.statements.iter().find_map(|statement| match statement {
+                Statement::Return(Expr::StorageAccess(path)) => Some(path.root().clone()),
+                _ => None,
+            }) {
+                state.maybe_getter_for = Some(root);
             }
         }
 
@@ -318,7 +331,11 @@ impl PostprocessOrchestrator {
 
         // if this is a getter, replace function.maybe_getter_for with the actual getter
         if let Some(getter_for) = self.state.maybe_getter_for.as_ref() {
-            function.maybe_getter_for = self.state.storage_roots.get(getter_for).cloned();
+            function.maybe_getter_for = self
+                .state
+                .storage_root_slots
+                .iter()
+                .find_map(|(name, slot)| (slot == getter_for).then(|| name.clone()));
         }
 
         debug!(
