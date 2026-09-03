@@ -73,8 +73,12 @@ fn abi_encoded_return(block: &[Statement]) -> Option<Statement> {
     }
 }
 
+fn is_compiler_guard(condition: &Expr) -> bool {
+    matches!(condition, Expr::Bool(true)) || condition.render().contains("msg.data.length")
+}
+
 fn push_require(output: &mut Vec<Statement>, condition: Expr, reason: Option<Expr>) {
-    if condition.render() == "!msg.value" {
+    if condition.render() == "!msg.value" || is_compiler_guard(&condition) {
         return;
     }
     if condition.render() == "success" &&
@@ -122,9 +126,10 @@ fn simplify_block(block: Vec<Statement>) -> Vec<Statement> {
     let mut output = Vec::new();
     for statement in block {
         let Statement::IfElse { mut condition, then_body, else_body } = statement else {
-            let redundant_nonpayable_guard = matches!(
+            let redundant_guard = matches!(
                 &statement,
-                Statement::Require { condition, .. } if condition.render() == "!msg.value"
+                Statement::Require { condition, .. }
+                    if condition.render() == "!msg.value" || is_compiler_guard(condition)
             );
             let redundant_transfer_check = matches!(
                 &statement,
@@ -135,7 +140,7 @@ fn simplify_block(block: Vec<Statement>) -> Vec<Statement> {
             );
             let is_terminating = terminating(&statement);
             if !matches!(statement, Statement::Noop) &&
-                !redundant_nonpayable_guard &&
+                !redundant_guard &&
                 !redundant_transfer_check
             {
                 output.push(statement);
@@ -309,6 +314,21 @@ mod tests {
             &function.statements[0],
             Statement::IfElse { condition, .. } if condition.render() == "a && b"
         ));
+    }
+
+    #[test]
+    fn removes_compiler_calldata_guard() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.statements = vec![Statement::Require {
+            condition: Expr::binary(
+                crate::core::ir::BinaryOp::Ge,
+                Expr::identifier("msg.data.length"),
+                Expr::Literal(U256::from(36)),
+            ),
+            reason: None,
+        }];
+        structure_control_flow(&mut function, &mut PostprocessorState::default()).unwrap();
+        assert!(function.statements.is_empty());
     }
 
     #[test]
