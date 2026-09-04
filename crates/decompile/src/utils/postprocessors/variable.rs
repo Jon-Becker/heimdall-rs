@@ -18,19 +18,28 @@ pub(crate) fn variable_postprocessor(
         _ => None,
     };
 
-    statement.visit_exprs_mut(&mut |expr| {
-        let replacement = state.variable_map.iter().find_map(|(variable, value)| {
-            let is_trivial = matches!(
-                value,
-                Expr::Identifier(_) | Expr::Literal(_) | Expr::Bool(_) | Expr::StringLiteral(_)
-            );
-            (!is_trivial && value == expr && assignment_target.as_ref() != Some(variable))
-                .then_some(variable)
+    // Keep branch and require conditions expressed in terms of their original operands. Replacing
+    // a comparison subtree with a VM temporary can later alias that temporary to one operand,
+    // turning checks such as `amount + total >= total` into `total >= total`.
+    let preserves_operands = matches!(
+        statement,
+        Statement::If { .. } | Statement::IfRevertElse { .. } | Statement::Require { .. }
+    );
+    if !preserves_operands {
+        statement.visit_exprs_mut(&mut |expr| {
+            let replacement = state.variable_map.iter().find_map(|(variable, value)| {
+                let is_trivial = matches!(
+                    value,
+                    Expr::Identifier(_) | Expr::Literal(_) | Expr::Bool(_) | Expr::StringLiteral(_)
+                );
+                (!is_trivial && value == expr && assignment_target.as_ref() != Some(variable))
+                    .then_some(variable)
+            });
+            if let Some(variable) = replacement {
+                *expr = variable.clone();
+            }
         });
-        if let Some(variable) = replacement {
-            *expr = variable.clone();
-        }
-    });
+    }
 
     Ok(())
 }
@@ -41,6 +50,26 @@ mod tests {
 
     use super::*;
     use crate::core::ir::{BinaryOp, RenderTarget};
+
+    #[test]
+    fn preserves_original_condition_operands() {
+        let sum = Expr::Binary {
+            op: BinaryOp::Add,
+            lhs: Box::new(Expr::identifier("amount")),
+            rhs: Box::new(Expr::identifier("total")),
+        };
+        let mut statement = Statement::If {
+            condition: Expr::Binary {
+                op: BinaryOp::Ge,
+                lhs: Box::new(sum.clone()),
+                rhs: Box::new(Expr::identifier("total")),
+            },
+        };
+        let mut state = PostprocessorState::default();
+        state.variable_map.insert(Expr::identifier("var_a"), sum);
+        variable_postprocessor(&mut statement, &mut state).unwrap();
+        assert_eq!(statement.render(RenderTarget::Solidity), "if (amount + total >= total) {");
+    }
 
     #[test]
     fn replaces_matching_expression_subtree() {
