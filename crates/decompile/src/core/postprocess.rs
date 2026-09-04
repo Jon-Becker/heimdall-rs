@@ -44,6 +44,26 @@ fn is_storage_access(expr: &Expr) -> bool {
     matches!(expr, Expr::StorageAccess(_))
 }
 
+fn returned_storage(statements: &[Statement]) -> Option<Expr> {
+    statements.iter().find_map(|statement| match statement {
+        Statement::Return(value) => {
+            find_expression(&[Statement::Return(value.clone())], is_storage_access)
+        }
+        Statement::IfElse { then_body, else_body, .. } => {
+            returned_storage(then_body).or_else(|| returned_storage(else_body))
+        }
+        _ => None,
+    })
+}
+
+fn likely_string_getter_name(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.contains("name") ||
+        name.contains("symbol") ||
+        name.contains("uri") ||
+        name.contains("provenance")
+}
+
 fn path_has_packed_width(path: &super::ir::StoragePath, width: u16) -> bool {
     match path {
         super::ir::StoragePath::PackedField { parent, bit_width, .. } => {
@@ -316,14 +336,23 @@ impl PostprocessOrchestrator {
 
         detect_string_storage_getter(function, &mut state)?;
 
+        // `bytes` and `string` use the same storage and ABI encoding. When selector resolution
+        // supplies a string-semantic getter name, prefer `string` over the analyzer's generic
+        // `bytes` fallback and carry that evidence into the canonical storage declaration.
+        let named_string_getter = function
+            .resolved_function
+            .as_ref()
+            .is_some_and(|resolved| likely_string_getter_name(&resolved.name));
+        if named_string_getter && function.returns.as_deref() == Some("bytes memory") {
+            function.returns = Some("string memory".to_string());
+            if let Some(root) = state.maybe_getter_for.clone() {
+                state.storage_type_hints.insert(root, "string".to_string());
+            }
+        }
+
         // Detect simple getters and Solidity's RLP-backed string pattern directly on the IR.
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
-            let returned_storage = function.statements.iter().find_map(|statement| {
-                let Statement::Return(value) = statement else { return None };
-                find_expression(&[Statement::Return(value.clone())], is_storage_access)
-            });
-
-            if let Some(storage) = returned_storage {
+            if let Some(storage) = returned_storage(&function.statements) {
                 if let Expr::StorageAccess(path) = &storage {
                     state.maybe_getter_for = Some(path.root().clone());
                 }
@@ -421,6 +450,33 @@ impl PostprocessOrchestrator {
 mod tests {
     use super::*;
     use crate::core::ir::StoragePath;
+
+    #[test]
+    fn recognizes_string_semantic_getter_names() {
+        assert!(likely_string_getter_name("BAYC_PROVENANCE"));
+        assert!(likely_string_getter_name("baseURI"));
+        assert!(likely_string_getter_name("name"));
+        assert!(likely_string_getter_name("symbol"));
+        assert!(!likely_string_getter_name("payload"));
+    }
+
+    #[test]
+    fn recognizes_nested_string_getter_return() {
+        let root = Expr::Literal(U256::from(9));
+        let storage = Expr::StorageAccess(Box::new(StoragePath::DynamicArray {
+            parent: Box::new(StoragePath::Slot { slot: Box::new(root) }),
+            index: Box::new(Expr::identifier("index")),
+        }));
+        let statements = vec![Statement::IfElse {
+            condition: Expr::identifier("long_string"),
+            then_body: vec![Statement::Return(Expr::Call {
+                callee: "abi.encodePacked".to_string(),
+                args: vec![storage.clone()],
+            })],
+            else_body: Vec::new(),
+        }];
+        assert_eq!(returned_storage(&statements), Some(storage));
+    }
 
     #[test]
     fn links_string_getter_to_canonical_storage_root() {
