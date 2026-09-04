@@ -25,7 +25,7 @@ pub(crate) use memory::memory_postprocessor;
 pub(crate) use storage::storage_postprocessor;
 pub(crate) use storage_inference::storage_inference_postprocessor;
 pub(crate) use transient::transient_postprocessor;
-pub(crate) use types::type_cleanup_postprocessor;
+pub(crate) use types::{normalize_typed_returns, type_cleanup_postprocessor};
 pub(crate) use variable::variable_postprocessor;
 
 /// A structured IR postprocessor function signature.

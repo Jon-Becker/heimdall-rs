@@ -777,7 +777,27 @@ impl Statement {
 
     fn render_solidity(&self) -> String {
         match self {
-            Self::Assign { target, value } => format!("{} = {};", target.render(), value.render()),
+            Self::Assign { target, value } => {
+                if let Expr::Binary { op, lhs, rhs } = value {
+                    let compound = match op {
+                        BinaryOp::Add => Some("+="),
+                        BinaryOp::Sub => Some("-="),
+                        BinaryOp::Mul => Some("*="),
+                        BinaryOp::Div => Some("/="),
+                        BinaryOp::Mod => Some("%="),
+                        _ => None,
+                    };
+                    if let Some(compound) = compound {
+                        if &**lhs == target {
+                            return format!("{} {compound} {};", target.render(), rhs.render());
+                        }
+                        if matches!(op, BinaryOp::Add | BinaryOp::Mul) && &**rhs == target {
+                            return format!("{} {compound} {};", target.render(), lhs.render());
+                        }
+                    }
+                }
+                format!("{} = {};", target.render(), value.render())
+            }
             Self::DeclareAssign { ty, target, value } => {
                 format!("{ty} {} = {};", target.render(), value.render())
             }
@@ -857,6 +877,20 @@ mod tests {
             value: Expr::identifier("arg0"),
         };
         assert_eq!(statement.render(RenderTarget::Solidity), "storage[0x02] = arg0;");
+    }
+
+    #[test]
+    fn renders_compound_assignment() {
+        let target = Expr::index("balances", Expr::identifier("msg.sender"));
+        let statement = Statement::Assign {
+            target: target.clone(),
+            value: Expr::Binary {
+                op: BinaryOp::Sub,
+                lhs: Box::new(target),
+                rhs: Box::new(Expr::identifier("amount")),
+            },
+        };
+        assert_eq!(statement.render(RenderTarget::Solidity), "balances[msg.sender] -= amount;");
     }
 
     #[test]

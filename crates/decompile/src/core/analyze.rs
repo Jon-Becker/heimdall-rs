@@ -5,7 +5,10 @@ use heimdall_vm::ext::exec::VMTrace;
 use tracing::debug;
 
 use crate::{
-    core::ir::{Expr, Statement},
+    core::{
+        control_flow::prune_constant_branches,
+        ir::{Expr, Statement},
+    },
     interfaces::AnalyzedFunction,
     utils::heuristics::{
         argument_heuristic, event_heuristic, extcall_heuristic, modifier_heuristic,
@@ -110,13 +113,25 @@ impl Analyzer {
     }
 
     /// Performs analysis
-    pub(crate) async fn analyze(&mut self, trace_root: VMTrace) -> Result<AnalyzedFunction, Error> {
+    pub(crate) async fn analyze(
+        &mut self,
+        mut trace_root: VMTrace,
+    ) -> Result<AnalyzedFunction, Error> {
         debug!(
             "analzying symbolic execution trace for '{}' with the {} analyzer",
             self.function.selector, self.typ
         );
         self.function.analyzer_type = self.typ;
         let start_analysis_time = Instant::now();
+
+        // Remove paths made infeasible by identities such as `x == x` before flattening the trace.
+        let pruned = prune_constant_branches(&mut trace_root);
+        if pruned.paths > 0 {
+            debug!(
+                "pruned {} infeasible paths across {} constant branches for '{}'",
+                pruned.paths, pruned.branches, self.function.selector
+            );
+        }
 
         // Register heuristics
         self.register_heuristics()?;
