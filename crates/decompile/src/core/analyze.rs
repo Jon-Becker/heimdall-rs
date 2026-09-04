@@ -6,7 +6,7 @@ use tracing::debug;
 
 use crate::{
     core::{
-        control_flow::prune_constant_branches,
+        control_flow::{constant_truthiness, is_bare_reverting, prune_constant_branches},
         ir::{Expr, Statement},
     },
     interfaces::AnalyzedFunction,
@@ -174,7 +174,86 @@ impl Analyzer {
                 }
             }
 
-            // recurse into the children of the current trace branch
+            // Preserve the taken and fallthrough children as explicit alternatives for Solidity.
+            if self.typ == AnalyzerType::Solidity {
+                if let Some(state) = branch.operations.last() {
+                    let instruction = &state.last_instruction;
+                    if instruction.opcode == 0x57 && !branch.children.is_empty() {
+                        if branch.children.len() == 1 {
+                            let condition = instruction
+                                .input_operations
+                                .get(1)
+                                .map(Expr::from_opcode)
+                                .unwrap_or_else(|| Expr::identifier("unknown_condition"));
+                            if constant_truthiness(condition.clone()).is_none() &&
+                                is_bare_reverting(&branch.children[0])
+                            {
+                                // The executor can deduplicate the successful sibling while
+                                // retaining only its revert path. Preserve the branch as a guard
+                                // instead of silently dropping its condition.
+                                self.function.push_statement(Statement::If { condition });
+                                self.function.push_statement(Statement::Else);
+                                let mut revert_state = analyzer_state.clone();
+                                self.analyze_inner(&branch.children[0], &mut revert_state).await?;
+                                self.function.push_statement(Statement::CloseBlock);
+                            } else {
+                                self.analyze_inner(&branch.children[0], analyzer_state).await?;
+                            }
+                            return Ok(())
+                        }
+
+                        let destination = instruction
+                            .inputs
+                            .first()
+                            .and_then(|value| u128::try_from(*value).ok())
+                            .map(|value| value.saturating_add(1));
+                        let fallthrough = instruction.instruction.saturating_add(1);
+                        let taken = destination.and_then(|pc| {
+                            branch.children.iter().find(|child| child.instruction == pc)
+                        });
+                        let not_taken =
+                            branch.children.iter().find(|child| child.instruction == fallthrough);
+
+                        if let (Some(taken), Some(not_taken)) = (taken, not_taken) {
+                            let condition = instruction
+                                .input_operations
+                                .get(1)
+                                .map(Expr::from_opcode)
+                                .unwrap_or_else(|| Expr::identifier("unknown_condition"));
+
+                            // A constant condition that survived pruning means the feasible
+                            // child was cut short by jump deduplication and its sibling holds
+                            // the rest of the body, so render both sequentially.
+                            if let Some(truthiness) = constant_truthiness(condition.clone()) {
+                                let (feasible, sibling) = if truthiness {
+                                    (taken, not_taken)
+                                } else {
+                                    (not_taken, taken)
+                                };
+                                self.analyze_inner(feasible, analyzer_state).await?;
+                                self.analyze_inner(sibling, analyzer_state).await?;
+                                return Ok(())
+                            }
+
+                            self.function.push_statement(Statement::If { condition });
+                            let mut taken_state = analyzer_state.clone();
+                            self.analyze_inner(taken, &mut taken_state).await?;
+                            self.function.push_statement(Statement::Else);
+                            let mut fallthrough_state = analyzer_state.clone();
+                            self.analyze_inner(not_taken, &mut fallthrough_state).await?;
+                            self.function.push_statement(Statement::CloseBlock);
+                            return Ok(())
+                        }
+                    }
+                }
+
+                for child in &branch.children {
+                    self.analyze_inner(child, analyzer_state).await?;
+                }
+                return Ok(())
+            }
+
+            // Yul continues to use its flat control-flow markers.
             for child in &branch.children {
                 self.analyze_inner(child, analyzer_state).await?;
             }

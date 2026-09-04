@@ -441,7 +441,8 @@ fn get_indentation_imbalance(source: &[String]) -> i32 {
     for line in source.iter() {
         if line.trim().starts_with('}') {
             indentation_level -= 1;
-        } else if line.trim().ends_with('{') {
+        }
+        if line.trim().ends_with('{') {
             indentation_level += 1;
         }
     }

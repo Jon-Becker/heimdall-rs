@@ -9,9 +9,9 @@ use crate::{
     utils::postprocessors::{
         arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
         inline_single_use_variables, memory_postprocessor, normalize_typed_returns,
-        storage_inference_postprocessor, storage_postprocessor, transient_postprocessor,
-        type_cleanup_postprocessor, variable_postprocessor, IrFunctionPostprocessor,
-        IrPostprocessor,
+        storage_inference_postprocessor, storage_postprocessor, structure_control_flow,
+        transient_postprocessor, type_cleanup_postprocessor, variable_postprocessor,
+        IrFunctionPostprocessor, IrPostprocessor,
     },
     Error,
 };
@@ -100,6 +100,8 @@ pub(crate) struct PostprocessorState {
     pub transient_type_map: HashMap<String, String>,
     /// An optional field which holds the storage location if the function is a public getter
     pub maybe_getter_for: Option<Expr>,
+    /// Current conditional nesting depth during flat-statement iteration.
+    pub conditional_depth: usize,
 }
 
 /// The [`PostprocessOrchestrator`] is responsible for managing the cleanup of
@@ -146,6 +148,7 @@ impl PostprocessOrchestrator {
                 self.ir_function_passes.push(normalize_typed_returns);
                 self.ir_function_passes.push(inline_single_use_variables);
                 self.ir_function_passes.push(eliminate_dead_variables);
+                self.ir_function_passes.push(structure_control_flow);
             }
             AnalyzerType::Yul => {}
             _ => {}

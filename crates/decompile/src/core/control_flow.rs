@@ -33,6 +33,16 @@ fn is_complete(trace: &VMTrace) -> bool {
     }
 }
 
+pub(crate) fn is_bare_reverting(trace: &VMTrace) -> bool {
+    if trace.children.is_empty() {
+        return trace.operations.last().is_some_and(|state| {
+            state.last_instruction.opcode == heimdall_vm::core::opcodes::REVERT &&
+                state.last_instruction.inputs.get(1).is_some_and(|size| size.is_zero())
+        })
+    }
+    trace.children.iter().all(is_bare_reverting)
+}
+
 fn contains_opcode(trace: &VMTrace, opcode: u8) -> bool {
     trace.operations.iter().any(|state| state.last_instruction.opcode == opcode) ||
         trace.children.iter().any(|child| contains_opcode(child, opcode))
@@ -171,6 +181,25 @@ mod tests {
             )],
             children: vec![leaf(11, opcodes::STOP), taken],
         }
+    }
+
+    #[test]
+    fn identifies_only_all_bare_revert_subtrees() {
+        let mut bare_revert = leaf(2, opcodes::REVERT);
+        bare_revert.operations[0].last_instruction.inputs[1] = U256::ZERO;
+        let nested_reverts = VMTrace {
+            instruction: 1,
+            gas_used: 0,
+            operations: vec![state(1, opcodes::JUMPI, vec![])],
+            children: vec![bare_revert.clone(), bare_revert],
+        };
+        assert!(is_bare_reverting(&nested_reverts));
+
+        let mixed = VMTrace {
+            children: vec![leaf(2, opcodes::REVERT), leaf(3, opcodes::RETURN)],
+            ..nested_reverts
+        };
+        assert!(!is_bare_reverting(&mixed));
     }
 
     #[test]

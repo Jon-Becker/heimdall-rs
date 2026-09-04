@@ -10,14 +10,13 @@ use crate::{
         ir::{BinaryOp, Expr, Statement, StoragePath},
     },
     interfaces::{AnalyzedFunction, StorageFrame},
-    utils::constants::VARIABLE_SIZE_CHECK_REGEX,
     Error,
 };
 
 pub(crate) fn solidity_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
-    analyzer_state: &'a mut AnalyzerState,
+    _analyzer_state: &'a mut AnalyzerState,
 ) -> BoxFuture<'a, Result<(), Error>> {
     Box::pin(async move {
         let instruction = &state.last_instruction;
@@ -110,31 +109,8 @@ pub(crate) fn solidity_heuristic<'a>(
                 });
             }
 
-            // JUMPI
-            0x57 => {
-                // this is an if conditional for the children branches
-                let conditional_expr = Expr::from_opcode(&instruction.input_operations[1]);
-                if matches!(conditional_expr, Expr::Bool(_) | Expr::Literal(_)) {
-                    return Ok(())
-                }
-                let conditional = conditional_expr.render();
-
-                // perform a series of checks to determine if the condition
-                // is added by the compiler and can be ignored
-                if (conditional.contains("msg.data.length") && conditional.contains("0x04")) ||
-                    VARIABLE_SIZE_CHECK_REGEX.is_match(&conditional).unwrap_or(false) ||
-                    (conditional.replace('!', "") == "success") ||
-                    (conditional == "!msg.value")
-                {
-                    return Ok(());
-                }
-
-                function.push_statement(Statement::If { condition: conditional_expr.clone() });
-
-                // save a copy of the conditional and add it to the conditional map
-                analyzer_state.jumped_conditional = Some(conditional_expr.clone());
-                analyzer_state.conditional_stack.push(conditional_expr);
-            }
+            // JUMPI control flow is reconstructed by the analyzer from VMTrace children.
+            0x57 => {}
 
             // TSTORE
             0x5d => {
@@ -203,30 +179,7 @@ pub(crate) fn solidity_heuristic<'a>(
                     return Ok(());
                 };
 
-                let conditional = match analyzer_state.jumped_conditional.take() {
-                    Some(condition) => condition,
-                    None => match analyzer_state.conditional_stack.pop() {
-                        Some(condition) => condition,
-                        None => return Ok(()),
-                    },
-                };
-                // A revert may be observed in the child trace after its opening conditional was
-                // emitted. Preserve that condition's expression tree when promoting it to a
-                // require, rather than falling back to its rendered representation.
-                if let Some(statement) = function
-                    .statements
-                    .iter_mut()
-                    .rev()
-                    .find(|statement| matches!(statement, Statement::If { .. }))
-                {
-                    let condition = match statement {
-                        Statement::If { condition } => condition.clone(),
-                        _ => unreachable!("matched an if statement"),
-                    };
-                    *statement = Statement::Require { condition, reason };
-                } else {
-                    function.push_statement(Statement::Require { condition: conditional, reason });
-                }
+                function.push_statement(Statement::Revert(reason));
             }
 
             // SELFDESTRUCT

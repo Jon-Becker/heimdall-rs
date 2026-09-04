@@ -129,6 +129,15 @@ pub(crate) fn storage_postprocessor(
     statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
+    // Track conditional nesting depth so we don't record block-local variables.
+    match statement {
+        Statement::If { .. } => state.conditional_depth += 1,
+        Statement::Else | Statement::CloseBlock => {
+            state.conditional_depth = state.conditional_depth.saturating_sub(1);
+        }
+        _ => {}
+    }
+
     let written_path = match statement {
         Statement::Assign { target: Expr::StorageAccess(path), .. } => Some((**path).clone()),
         _ => None,
@@ -180,7 +189,10 @@ pub(crate) fn storage_postprocessor(
         return Ok(())
     }
 
-    state.variable_map.insert(target.clone(), value.clone());
+    // Only record the assignment for future substitution if it is at the top level.
+    if state.conditional_depth == 0 {
+        state.variable_map.insert(target.clone(), value.clone());
+    }
     if let Some(path) = written_path {
         let hint = state.storage_type_hints.get(path.root()).cloned();
         let ty = storage_type(

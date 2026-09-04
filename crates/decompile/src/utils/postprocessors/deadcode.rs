@@ -39,6 +39,12 @@ fn statement_usages(statement: &Statement) -> HashSet<String> {
             }
         }
         Statement::If { condition } => collect(condition),
+        Statement::IfElse { condition, then_body, else_body } => {
+            collect(condition);
+            for nested in then_body.iter().chain(else_body) {
+                usages.extend(statement_usages(nested));
+            }
+        }
         Statement::IfRevertElse { condition, offset, size } => {
             collect(condition);
             collect(offset);
@@ -53,6 +59,11 @@ fn statement_usages(statement: &Statement) -> HashSet<String> {
         Statement::Return(value) |
         Statement::Expression(value) |
         Statement::KeccakSnapshot(value) => collect(value),
+        Statement::Revert(reason) => {
+            if let Some(reason) = reason {
+                collect(reason);
+            }
+        }
         Statement::Emit { args, .. } | Statement::AssemblyAssign { args, .. } => {
             for arg in args {
                 collect(arg);
@@ -70,7 +81,7 @@ fn statement_usages(statement: &Statement) -> HashSet<String> {
                 collect(value);
             }
         }
-        Statement::Noop | Statement::CloseBlock => {}
+        Statement::Else | Statement::Noop | Statement::CloseBlock => {}
     }
 
     usages

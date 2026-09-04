@@ -145,6 +145,18 @@ pub(crate) fn storage_inference_postprocessor(
         return Ok(())
     }
 
+    if matches!(statement, Statement::Else) {
+        if let Some(parent) = state.symbolic_memory_scopes.pop() {
+            state.symbolic_memory = parent;
+        }
+        if let Some(parent) = state.keccak_preimage_scopes.pop() {
+            state.keccak_preimages = parent;
+        }
+        state.symbolic_memory_scopes.push(state.symbolic_memory.clone());
+        state.keccak_preimage_scopes.push(state.keccak_preimages.clone());
+        return Ok(())
+    }
+
     if matches!(statement, Statement::CloseBlock) {
         if let Some(parent) = state.symbolic_memory_scopes.pop() {
             state.symbolic_memory = parent;
@@ -167,7 +179,10 @@ pub(crate) fn storage_inference_postprocessor(
         }
     });
 
-    if matches!(statement, Statement::If { .. } | Statement::IfRevertElse { .. }) {
+    if matches!(
+        statement,
+        Statement::If { .. } | Statement::IfElse { .. } | Statement::IfRevertElse { .. }
+    ) {
         state.symbolic_memory_scopes.push(state.symbolic_memory.clone());
         state.keccak_preimage_scopes.push(state.keccak_preimages.clone());
     }
