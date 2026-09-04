@@ -58,22 +58,26 @@ pub(crate) fn yul_heuristic<'a>(
                 }
 
                 // Find the condition that caused this revert and promote it without parsing a
-                // rendered Yul line.
+                // rendered Yul line. Stop at the nearest control-flow marker, whether If or
+                // already-promoted IfRevertElse, so a second revert on a path does not walk back
+                // to an outer guard.
                 if let Some(statement) = function
                     .statements
                     .iter_mut()
                     .rev()
-                    .find(|statement| matches!(statement, Statement::If { .. }))
+                    .find(|statement| {
+                        matches!(statement, Statement::If { .. }) ||
+                            matches!(statement, Statement::IfRevertElse { .. })
+                    })
                 {
-                    let condition = match statement {
-                        Statement::If { condition } => condition.clone(),
-                        _ => unreachable!("matched an if statement"),
-                    };
-                    *statement = Statement::IfRevertElse {
-                        condition,
-                        offset: Expr::from_yul_opcode(&instruction.input_operations[0]),
-                        size: Expr::from_yul_opcode(&instruction.input_operations[1]),
-                    };
+                    if let Statement::If { condition } = statement {
+                        let condition = condition.clone();
+                        *statement = Statement::IfRevertElse {
+                            condition,
+                            offset: Expr::from_yul_opcode(&instruction.input_operations[0]),
+                            size: Expr::from_yul_opcode(&instruction.input_operations[1]),
+                        };
+                    }
                 }
             }
 
