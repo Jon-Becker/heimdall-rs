@@ -1,4 +1,7 @@
-use heimdall_vm::ext::exec::VMTrace;
+use heimdall_vm::{
+    core::opcodes::{OpCodeInfo, JUMPI},
+    ext::exec::VMTrace,
+};
 
 use super::ir::Expr;
 
@@ -9,7 +12,8 @@ pub(crate) struct PruneStats {
     pub paths: usize,
 }
 
-fn constant_truthiness(expr: Expr) -> Option<bool> {
+/// Folds a branch condition to a constant when its truthiness is statically decidable.
+pub(crate) fn constant_truthiness(expr: Expr) -> Option<bool> {
     match expr.simplify() {
         Expr::Bool(value) => Some(value),
         Expr::Literal(value) => Some(!value.is_zero()),
@@ -17,17 +21,30 @@ fn constant_truthiness(expr: Expr) -> Option<bool> {
     }
 }
 
+/// Whether every path below this trace ends in a terminating instruction.
+///
+/// Symbolic execution deduplicates revisited jumps across sibling paths, so a subtree cut short at
+/// a JUMPI may rely on a sibling for the rest of its body. Such a subtree is not self-contained.
+fn is_complete(trace: &VMTrace) -> bool {
+    match trace.operations.last().map(|state| state.last_instruction.opcode) {
+        Some(JUMPI) => trace.children.len() == 2 && trace.children.iter().all(is_complete),
+        Some(opcode) => trace.children.is_empty() && OpCodeInfo::from(opcode).terminating(),
+        None => false,
+    }
+}
+
 /// Remove the infeasible child of each JUMPI whose condition is provably constant.
 ///
 /// Symbolic execution intentionally explores both children. This pass uses expression identity and
 /// local folding to recover cases such as `msg.sender == msg.sender` without treating concrete
-/// placeholder calldata values as constants.
+/// placeholder calldata values as constants. The infeasible child is only dropped when the feasible
+/// child is complete, since a truncated feasible child may share its continuation with the sibling.
 pub(crate) fn prune_constant_branches(trace: &mut VMTrace) -> PruneStats {
     let mut stats = PruneStats::default();
 
     if let Some(state) = trace.operations.last() {
         let instruction = &state.last_instruction;
-        if instruction.opcode == 0x57 {
+        if instruction.opcode == JUMPI {
             let truthiness = instruction
                 .input_operations
                 .get(1)
@@ -42,7 +59,16 @@ pub(crate) fn prune_constant_branches(trace: &mut VMTrace) -> PruneStats {
                 let fallthrough = instruction.instruction.saturating_add(1);
                 let expected = if taken { jump_destination } else { Some(fallthrough) };
 
-                if let Some(expected) = expected {
+                let feasible_is_complete = expected.is_some_and(|expected| {
+                    let mut feasible = trace
+                        .children
+                        .iter()
+                        .filter(|child| child.instruction == expected)
+                        .peekable();
+                    feasible.peek().is_some() && feasible.all(is_complete)
+                });
+
+                if let (Some(expected), true) = (expected, feasible_is_complete) {
                     let old_len = trace.children.len();
                     trace.children.retain(|child| child.instruction == expected);
                     let removed = old_len.saturating_sub(trace.children.len());
@@ -85,40 +111,51 @@ mod tests {
         WrappedInput::Opcode(Arc::new(WrappedOpcode::new(opcodes::CALLER, vec![])))
     }
 
-    fn trace_with_condition(condition: WrappedOpcode) -> VMTrace {
+    fn state(instruction: u128, opcode: u8, input_operations: Vec<WrappedOpcode>) -> State {
+        State {
+            last_instruction: Instruction {
+                instruction,
+                opcode,
+                inputs: vec![U256::from(20), U256::from(1)],
+                outputs: vec![],
+                input_operations,
+                output_operations: vec![],
+            },
+            gas_used: 0,
+            gas_remaining: 0,
+            stack: Stack::new(),
+            memory: Memory::new(),
+            storage: Storage::new(),
+            events: vec![],
+        }
+    }
+
+    fn leaf(instruction: u128, opcode: u8) -> VMTrace {
+        VMTrace {
+            instruction,
+            gas_used: 0,
+            operations: vec![state(instruction, opcode, vec![])],
+            children: vec![],
+        }
+    }
+
+    fn trace_with_condition(condition: WrappedOpcode, taken: VMTrace) -> VMTrace {
         VMTrace {
             instruction: 1,
             gas_used: 0,
-            operations: vec![State {
-                last_instruction: Instruction {
-                    instruction: 10,
-                    opcode: opcodes::JUMPI,
-                    inputs: vec![U256::from(20), U256::from(1)],
-                    outputs: vec![],
-                    input_operations: vec![
-                        WrappedOpcode::new(opcodes::PUSH1, vec![U256::from(20).into()]),
-                        condition,
-                    ],
-                    output_operations: vec![],
-                },
-                gas_used: 0,
-                gas_remaining: 0,
-                stack: Stack::new(),
-                memory: Memory::new(),
-                storage: Storage::new(),
-                events: vec![],
-            }],
-            children: vec![
-                VMTrace { instruction: 11, gas_used: 0, operations: vec![], children: vec![] },
-                VMTrace { instruction: 21, gas_used: 0, operations: vec![], children: vec![] },
-            ],
+            operations: vec![state(
+                10,
+                opcodes::JUMPI,
+                vec![WrappedOpcode::new(opcodes::PUSH1, vec![U256::from(20).into()]), condition],
+            )],
+            children: vec![leaf(11, opcodes::STOP), taken],
         }
     }
 
     #[test]
     fn keeps_only_taken_path_for_identical_equality() {
         let condition = WrappedOpcode::new(opcodes::EQ, vec![caller(), caller()]);
-        let mut trace = trace_with_condition(condition);
+        let mut trace = trace_with_condition(condition, leaf(21, opcodes::STOP));
         let stats = prune_constant_branches(&mut trace);
         assert_eq!(stats, PruneStats { branches: 1, paths: 1 });
         assert_eq!(trace.children.len(), 1);
@@ -126,9 +163,20 @@ mod tests {
     }
 
     #[test]
+    fn keeps_both_paths_when_taken_path_is_truncated() {
+        // The executor deduplicates revisited jumps, so a taken path that stops at a JUMPI without
+        // children relies on its sibling for the rest of the function body.
+        let condition = WrappedOpcode::new(opcodes::EQ, vec![caller(), caller()]);
+        let mut trace = trace_with_condition(condition, leaf(21, opcodes::JUMPI));
+        let stats = prune_constant_branches(&mut trace);
+        assert_eq!(stats, PruneStats::default());
+        assert_eq!(trace.children.len(), 2);
+    }
+
+    #[test]
     fn keeps_both_paths_for_symbolic_condition() {
         let condition = WrappedOpcode::new(opcodes::CALLDATALOAD, vec![U256::from(4).into()]);
-        let mut trace = trace_with_condition(condition);
+        let mut trace = trace_with_condition(condition, leaf(21, opcodes::STOP));
         let stats = prune_constant_branches(&mut trace);
         assert_eq!(stats, PruneStats::default());
         assert_eq!(trace.children.len(), 2);
