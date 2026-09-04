@@ -6,7 +6,7 @@ use tracing::debug;
 
 use crate::{
     core::{
-        control_flow::prune_constant_branches,
+        control_flow::{constant_truthiness, prune_constant_branches},
         ir::{Expr, Statement},
     },
     interfaces::AnalyzedFunction,
@@ -202,6 +202,21 @@ impl Analyzer {
                                 .get(1)
                                 .map(Expr::from_opcode)
                                 .unwrap_or_else(|| Expr::identifier("unknown_condition"));
+
+                            // A constant condition that survived pruning means the feasible
+                            // child was cut short by jump deduplication and its sibling holds
+                            // the rest of the body, so render both sequentially.
+                            if let Some(truthiness) = constant_truthiness(condition.clone()) {
+                                let (feasible, sibling) = if truthiness {
+                                    (taken, not_taken)
+                                } else {
+                                    (not_taken, taken)
+                                };
+                                self.analyze_inner(feasible, analyzer_state).await?;
+                                self.analyze_inner(sibling, analyzer_state).await?;
+                                return Ok(())
+                            }
+
                             self.function.push_statement(Statement::If { condition });
                             let mut taken_state = analyzer_state.clone();
                             self.analyze_inner(taken, &mut taken_state).await?;
