@@ -147,7 +147,11 @@ pub(crate) fn storage_postprocessor(
     statement.visit_exprs_mut(&mut |expr| {
         let original = expr.clone();
         let Expr::StorageAccess(path) = expr else { return };
-        let key = naming_key(path);
+        let key = if state.storage_type_hints.contains_key(path.root()) {
+            path.root().clone()
+        } else {
+            naming_key(path)
+        };
         let root = state.storage_roots.get(&key).cloned().unwrap_or_else(|| {
             let suffix = base26_encode(state.storage_roots.len() + 1);
             let root = if is_collection(path) {
@@ -158,6 +162,7 @@ pub(crate) fn storage_postprocessor(
             state.storage_roots.insert(key, root.clone());
             root
         });
+        state.storage_root_slots.entry(root.clone()).or_insert_with(|| path.root().clone());
         let replacement = render_path(path, &root);
         observed_paths.push((root, (**path).clone()));
         state.storage_map.insert(original, replacement.clone());

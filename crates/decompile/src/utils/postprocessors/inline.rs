@@ -37,6 +37,11 @@ fn is_pure_inline_candidate(expr: &Expr) -> bool {
             is_pure_inline_candidate(lhs) && is_pure_inline_candidate(rhs)
         }
         Expr::Member { base, .. } => is_pure_inline_candidate(base),
+        Expr::Call { callee, args }
+            if matches!(callee.as_str(), "address" | "blockhash" | "keccak256") =>
+        {
+            args.iter().all(is_pure_inline_candidate)
+        }
         Expr::Raw(_) |
         Expr::Index { .. } |
         Expr::Slice { .. } |
@@ -137,6 +142,27 @@ mod tests {
         assert_eq!(
             function.statements[1].render(RenderTarget::Solidity),
             "return storage_map_a[address(arg0)];"
+        );
+    }
+
+    #[test]
+    fn inlines_single_use_pure_builtin() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.statements = vec![
+            Statement::DeclareAssign {
+                ty: "bytes32".to_string(),
+                target: Expr::identifier("var_a"),
+                value: Expr::Call {
+                    callee: "blockhash".to_string(),
+                    args: vec![Expr::identifier("arg0")],
+                },
+            },
+            Statement::Return(Expr::identifier("var_a")),
+        ];
+        inline_single_use_variables(&mut function, &mut PostprocessorState::default()).unwrap();
+        assert_eq!(
+            function.statements[1].render(RenderTarget::Solidity),
+            "return blockhash(arg0);"
         );
     }
 

@@ -31,7 +31,10 @@ use std::time::{Duration, Instant};
 use crate::{
     core::{
         analyze::{Analyzer, AnalyzerType},
-        out::{build_abi, build_abi_with_details, source::build_source},
+        out::{
+            build_abi, build_abi_with_details,
+            source::{build_source, StorageVariable},
+        },
         postprocess::PostprocessOrchestrator,
         resolve::match_parameters,
     },
@@ -346,12 +349,25 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         })
         .collect::<Vec<_>>();
 
+    let storage_slots = states
+        .iter()
+        .flat_map(|state| state.storage_root_slots.iter())
+        .map(|(name, slot)| {
+            let rendered = slot.render();
+            (name.clone(), if rendered == "0" { "0x00".to_string() } else { rendered })
+        })
+        .collect::<HashMap<String, String>>();
     let storage_variables = states
         .iter()
-        .flat_map(|s| s.storage_type_map.iter())
-        .chain(states.iter().flat_map(|s| s.transient_type_map.iter()))
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect::<HashMap<String, String>>();
+        .flat_map(|state| state.storage_type_map.iter())
+        .chain(states.iter().flat_map(|state| state.transient_type_map.iter()))
+        .map(|(name, typ)| {
+            (
+                name.clone(),
+                StorageVariable { typ: typ.clone(), slot: storage_slots.get(name).cloned() },
+            )
+        })
+        .collect::<HashMap<_, _>>();
 
     // construct the abi for the given analyzed functions
     let abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;

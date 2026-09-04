@@ -7,11 +7,11 @@ use tracing::debug;
 use crate::{
     interfaces::AnalyzedFunction,
     utils::postprocessors::{
-        arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
-        inline_single_use_variables, memory_postprocessor, normalize_typed_returns,
-        storage_inference_postprocessor, storage_postprocessor, structure_control_flow,
-        transient_postprocessor, type_cleanup_postprocessor, variable_postprocessor,
-        IrFunctionPostprocessor, IrPostprocessor,
+        arithmetic_postprocessor, bitwise_mask_postprocessor, detect_string_storage_getter,
+        eliminate_dead_variables, inline_single_use_variables, memory_postprocessor,
+        normalize_typed_returns, storage_inference_postprocessor, storage_postprocessor,
+        structure_control_flow, transient_postprocessor, type_cleanup_postprocessor,
+        variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
     },
     Error,
 };
@@ -44,6 +44,26 @@ fn is_storage_access(expr: &Expr) -> bool {
     matches!(expr, Expr::StorageAccess(_))
 }
 
+fn returned_storage(statements: &[Statement]) -> Option<Expr> {
+    statements.iter().find_map(|statement| match statement {
+        Statement::Return(value) => {
+            find_expression(&[Statement::Return(value.clone())], is_storage_access)
+        }
+        Statement::IfElse { then_body, else_body, .. } => {
+            returned_storage(then_body).or_else(|| returned_storage(else_body))
+        }
+        _ => None,
+    })
+}
+
+fn likely_string_getter_name(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.contains("name") ||
+        name.contains("symbol") ||
+        name.contains("uri") ||
+        name.contains("provenance")
+}
+
 fn path_has_packed_width(path: &super::ir::StoragePath, width: u16) -> bool {
     match path {
         super::ir::StoragePath::PackedField { parent, bit_width, .. } => {
@@ -54,6 +74,75 @@ fn path_has_packed_width(path: &super::ir::StoragePath, width: u16) -> bool {
         super::ir::StoragePath::Field { parent, .. } => path_has_packed_width(parent, width),
         super::ir::StoragePath::Slot { .. } => false,
     }
+}
+
+fn normalize_type(ty: &str) -> String {
+    match ty.replace(" memory", "").trim() {
+        "uint" => "uint256".to_string(),
+        "int" => "int256".to_string(),
+        ty => ty.to_string(),
+    }
+}
+
+fn mapping_parts(ty: &str) -> Option<(&str, &str)> {
+    let inner = ty.strip_prefix("mapping(")?.strip_suffix(')')?;
+    let mut depth = 0usize;
+    for (index, byte) in inner.as_bytes().iter().enumerate() {
+        match byte {
+            b'(' => depth += 1,
+            b')' => depth = depth.saturating_sub(1),
+            b'=' if depth == 0 && inner.as_bytes().get(index + 1) == Some(&b'>') => {
+                return Some((inner[..index].trim(), inner[index + 2..].trim()))
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn storage_getter_signature(ty: &str) -> (Vec<String>, String) {
+    let mut inputs = Vec::new();
+    let mut value = ty.trim();
+    while let Some((key, nested)) = mapping_parts(value) {
+        inputs.push(normalize_type(key));
+        value = nested;
+    }
+    while let Some(element) = value.strip_suffix("[]") {
+        inputs.push("uint256".to_string());
+        value = element;
+    }
+    (inputs, normalize_type(value))
+}
+
+pub(crate) fn getter_type_matches(function: &AnalyzedFunction, storage_type: &str) -> bool {
+    let (expected_inputs, expected_output) = storage_getter_signature(storage_type);
+    let actual_inputs: Vec<String> = function
+        .resolved_function
+        .as_ref()
+        .map(|function| {
+            function.inputs().iter().map(|ty| normalize_type(&ty.to_string())).collect()
+        })
+        .unwrap_or_else(|| {
+            function
+                .sorted_arguments()
+                .iter()
+                .map(|(_, argument)| {
+                    normalize_type(
+                        &argument
+                            .potential_types()
+                            .first()
+                            .cloned()
+                            .unwrap_or_else(|| "bytes32".to_string()),
+                    )
+                })
+                .collect()
+        });
+    let output_matches =
+        function.returns.as_deref().is_some_and(|output| normalize_type(output) == expected_output);
+    let decimals = expected_inputs.is_empty() &&
+        expected_output == "uint8" &&
+        function.resolved_function.as_ref().is_some_and(|function| function.name == "decimals");
+    actual_inputs == expected_inputs && (output_matches || decimals)
 }
 
 fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> bool {
@@ -90,6 +179,8 @@ pub(crate) struct PostprocessorState {
     pub storage_roots: HashMap<Expr, String>,
     /// Type hints associated with canonical root slots.
     pub storage_type_hints: HashMap<Expr, String>,
+    /// Generated variable names mapped back to their physical base slots.
+    pub storage_root_slots: HashMap<String, Expr>,
     /// A mapping from storage locations to their corresponding variable names
     pub storage_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for storage variables
@@ -172,6 +263,7 @@ impl PostprocessOrchestrator {
         let mut state = PostprocessorState {
             storage_roots: self.state.storage_roots.clone(),
             storage_type_hints: self.state.storage_type_hints.clone(),
+            storage_root_slots: self.state.storage_root_slots.clone(),
             storage_map: self.state.storage_map.clone(),
             transient_map: self.state.transient_map.clone(),
             storage_type_map: self.state.storage_type_map.clone(),
@@ -212,6 +304,16 @@ impl PostprocessOrchestrator {
             }
         }
 
+        // A direct storage return is a getter even when mapping/array keys are function arguments.
+        if function.view {
+            if let Some(root) = function.statements.iter().find_map(|statement| match statement {
+                Statement::Return(Expr::StorageAccess(path)) => Some(path.root().clone()),
+                _ => None,
+            }) {
+                state.maybe_getter_for = Some(root);
+            }
+        }
+
         if let Some(returns) = function.returns.as_deref() {
             let hint = if returns.starts_with("string") {
                 Some("string")
@@ -232,15 +334,28 @@ impl PostprocessOrchestrator {
             }
         }
 
+        detect_string_storage_getter(function, &mut state)?;
+
+        // `bytes` and `string` use the same storage and ABI encoding. When selector resolution
+        // supplies a string-semantic getter name, prefer `string` over the analyzer's generic
+        // `bytes` fallback and carry that evidence into the canonical storage declaration.
+        let named_string_getter = function
+            .resolved_function
+            .as_ref()
+            .is_some_and(|resolved| likely_string_getter_name(&resolved.name));
+        if named_string_getter && function.returns.as_deref() == Some("bytes memory") {
+            function.returns = Some("string memory".to_string());
+            if let Some(root) = state.maybe_getter_for.clone() {
+                state.storage_type_hints.insert(root, "string".to_string());
+            }
+        }
+
         // Detect simple getters and Solidity's RLP-backed string pattern directly on the IR.
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
-            let returned_storage = function.statements.iter().find_map(|statement| {
-                let Statement::Return(value) = statement else { return None };
-                find_expression(&[Statement::Return(value.clone())], is_storage_access)
-            });
-
-            if let Some(storage) = returned_storage {
-                state.maybe_getter_for = Some(storage.clone());
+            if let Some(storage) = returned_storage(&function.statements) {
+                if let Expr::StorageAccess(path) = &storage {
+                    state.maybe_getter_for = Some(path.root().clone());
+                }
 
                 if has_binary_literal(&function.statements, BinaryOp::Mul, U256::from(0x100)) &&
                     (has_binary_literal(&function.statements, BinaryOp::BitAnd, U256::from(1)) ||
@@ -314,7 +429,11 @@ impl PostprocessOrchestrator {
 
         // if this is a getter, replace function.maybe_getter_for with the actual getter
         if let Some(getter_for) = self.state.maybe_getter_for.as_ref() {
-            function.maybe_getter_for = self.state.storage_map.get(getter_for).map(Expr::render);
+            if let Some((name, _)) =
+                self.state.storage_root_slots.iter().find(|(_, slot)| *slot == getter_for)
+            {
+                function.maybe_getter_for = Some(name.clone());
+            }
         }
 
         debug!(
@@ -331,6 +450,57 @@ impl PostprocessOrchestrator {
 mod tests {
     use super::*;
     use crate::core::ir::StoragePath;
+
+    #[test]
+    fn recognizes_string_semantic_getter_names() {
+        assert!(likely_string_getter_name("BAYC_PROVENANCE"));
+        assert!(likely_string_getter_name("baseURI"));
+        assert!(likely_string_getter_name("name"));
+        assert!(likely_string_getter_name("symbol"));
+        assert!(!likely_string_getter_name("payload"));
+    }
+
+    #[test]
+    fn recognizes_nested_string_getter_return() {
+        let root = Expr::Literal(U256::from(9));
+        let storage = Expr::StorageAccess(Box::new(StoragePath::DynamicArray {
+            parent: Box::new(StoragePath::Slot { slot: Box::new(root) }),
+            index: Box::new(Expr::identifier("index")),
+        }));
+        let statements = vec![Statement::IfElse {
+            condition: Expr::identifier("long_string"),
+            then_body: vec![Statement::Return(Expr::Call {
+                callee: "abi.encodePacked".to_string(),
+                args: vec![storage.clone()],
+            })],
+            else_body: Vec::new(),
+        }];
+        assert_eq!(returned_storage(&statements), Some(storage));
+    }
+
+    #[test]
+    fn links_string_getter_to_canonical_storage_root() {
+        let root = Expr::Literal(U256::from(2));
+        let mut function = AnalyzedFunction::new("06fdde03", false);
+        function.analyzer_type = AnalyzerType::Solidity;
+        function.view = true;
+        function.payable = false;
+        function.returns = Some("string memory".to_string());
+        function.statements = vec![
+            Statement::Expression(Expr::StorageAccess(Box::new(StoragePath::PackedField {
+                parent: Box::new(StoragePath::Slot { slot: Box::new(root.clone()) }),
+                bit_offset: 0,
+                bit_width: 8,
+            }))),
+            Statement::Return(Expr::StorageAccess(Box::new(StoragePath::DynamicArray {
+                parent: Box::new(StoragePath::Slot { slot: Box::new(root) }),
+                index: Box::new(Expr::identifier("index")),
+            }))),
+        ];
+        let mut orchestrator = PostprocessOrchestrator::new(AnalyzerType::Solidity).unwrap();
+        orchestrator.postprocess(&mut function).unwrap();
+        assert_eq!(function.maybe_getter_for.as_deref(), Some("store_a"));
+    }
 
     #[test]
     fn recovers_mapping_through_full_pipeline() {

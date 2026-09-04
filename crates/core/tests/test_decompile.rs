@@ -160,10 +160,13 @@ mod integration_tests {
             "function Unresolved_18160ddd() public view returns (uint256) {",
             "function Unresolved_23b872dd(address arg0, address arg1, uint256 arg2) public returns (bool) {",
             "function Unresolved_2e1a7d4d(uint256 arg0) public {",
-            "function Unresolved_70a08231(address arg0) public view returns (uint256) {",
+            "string public unresolved_06fdde03; // storage slot: 0x00",
+            "string public unresolved_95d89b41; // storage slot: 0x01",
+            "uint8 store_e; // storage slot: 0x02",
+            "mapping(address => uint256) public unresolved_70a08231; // storage slot: 0x03",
+            "mapping(address => mapping(address => uint256)) public unresolved_dd62ed3e; // storage slot: 0x04",
             "function Unresolved_a9059cbb(address arg0, uint256 arg1) public returns (bool) {",
-            "function Unresolved_d0e30db0() public payable {",
-            "function Unresolved_dd62ed3e(address arg0, address arg1) public view returns (uint256) {"] {
+            "function Unresolved_d0e30db0() public payable {"] {
             println!("{line}");
             assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }
