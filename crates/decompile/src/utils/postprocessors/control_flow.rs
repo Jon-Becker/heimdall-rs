@@ -149,7 +149,24 @@ fn simplify_block(block: Vec<Statement>) -> Vec<Statement> {
             }
         }
 
-        if let Some(reason) = revert_reason(&then_body) {
+        let then_is_revert = revert_reason(&then_body).is_some();
+        let else_is_revert = revert_reason(&else_body).is_some();
+
+        if then_is_revert && else_is_revert {
+            // Both branches revert. Prefer the one with a reason string, since a bare
+            // `revert()` is often a truncated success path.
+            match (revert_reason(&then_body), revert_reason(&else_body)) {
+                (Some(None), Some(Some(reason))) => {
+                    push_require(&mut output, condition, Some(reason));
+                }
+                (Some(Some(reason)), Some(None)) => {
+                    push_require(&mut output, negate(condition), Some(reason));
+                }
+                _ => {
+                    output.push(Statement::IfElse { condition, then_body, else_body });
+                }
+            }
+        } else if let Some(reason) = revert_reason(&then_body) {
             push_require(&mut output, negate(condition), reason);
             output.extend(else_body);
         } else if let Some(reason) = revert_reason(&else_body) {
@@ -253,16 +270,56 @@ mod tests {
     }
 
     #[test]
-    fn promotes_revert_branch_to_require() {
+    fn prefers_revert_with_reason_when_both_branches_revert() {
         let mut function = AnalyzedFunction::new("00000000", false);
         function.statements = vec![
-            Statement::If { condition: Expr::identifier("failed") },
+            Statement::If { condition: Expr::identifier("authorized") },
             Statement::Revert(None),
             Statement::Else,
-            Statement::Return(Expr::Literal(U256::from(1))),
+            Statement::Revert(Some(Expr::StringLiteral("not-authorized".to_string()))),
             Statement::CloseBlock,
         ];
         structure_control_flow(&mut function, &mut PostprocessorState::default()).unwrap();
-        assert_eq!(function.statements[0].render(RenderTarget::Solidity), "require(!failed);");
+        assert_eq!(
+            function.statements[0].render(RenderTarget::Solidity),
+            "require(authorized, \"not-authorized\");"
+        );
+    }
+
+    #[test]
+    fn prefers_negated_condition_when_bare_revert_is_in_else() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.statements = vec![
+            Statement::If { condition: Expr::identifier("ok") },
+            Statement::Revert(Some(Expr::StringLiteral("bad".to_string()))),
+            Statement::Else,
+            Statement::Revert(None),
+            Statement::CloseBlock,
+        ];
+        structure_control_flow(&mut function, &mut PostprocessorState::default()).unwrap();
+        assert_eq!(
+            function.statements[0].render(RenderTarget::Solidity),
+            "require(!ok, \"bad\");"
+        );
+    }
+
+    #[test]
+    fn keeps_if_else_when_both_branches_have_reasoned_reverts() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.statements = vec![
+            Statement::If { condition: Expr::identifier("x") },
+            Statement::Revert(Some(Expr::StringLiteral("a".to_string()))),
+            Statement::Else,
+            Statement::Revert(Some(Expr::StringLiteral("b".to_string()))),
+            Statement::CloseBlock,
+        ];
+        structure_control_flow(&mut function, &mut PostprocessorState::default()).unwrap();
+        assert!(
+            matches!(&function.statements[0], Statement::IfElse { then_body, else_body, .. }
+                if then_body.len() == 1 && else_body.len() == 1
+            ),
+            "expected IfElse, got {:?}",
+            function.statements[0]
+        );
     }
 }
