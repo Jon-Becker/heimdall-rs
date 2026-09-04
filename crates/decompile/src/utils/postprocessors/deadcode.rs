@@ -50,7 +50,9 @@ fn statement_usages(statement: &Statement) -> HashSet<String> {
                 collect(reason);
             }
         }
-        Statement::Return(value) | Statement::Expression(value) => collect(value),
+        Statement::Return(value) |
+        Statement::Expression(value) |
+        Statement::KeccakSnapshot(value) => collect(value),
         Statement::Emit { args, .. } | Statement::AssemblyAssign { args, .. } => {
             for arg in args {
                 collect(arg);
@@ -68,7 +70,7 @@ fn statement_usages(statement: &Statement) -> HashSet<String> {
                 collect(value);
             }
         }
-        Statement::CloseBlock => {}
+        Statement::Noop | Statement::CloseBlock => {}
     }
 
     usages
@@ -117,7 +119,9 @@ pub(crate) fn eliminate_dead_variables(
         .statements
         .drain(..)
         .enumerate()
-        .filter_map(|(idx, statement)| (!dead.contains(&idx)).then_some(statement))
+        .filter_map(|(idx, statement)| {
+            (!dead.contains(&idx) && !matches!(statement, Statement::Noop)).then_some(statement)
+        })
         .collect();
     Ok(())
 }

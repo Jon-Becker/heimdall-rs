@@ -7,7 +7,7 @@ use heimdall_vm::core::vm::State;
 use crate::{
     core::{
         analyze::AnalyzerState,
-        ir::{BinaryOp, Expr, Statement},
+        ir::{BinaryOp, Expr, Statement, StoragePath},
     },
     interfaces::{AnalyzedFunction, StorageFrame},
     utils::constants::VARIABLE_SIZE_CHECK_REGEX,
@@ -23,6 +23,15 @@ pub(crate) fn solidity_heuristic<'a>(
         let instruction = &state.last_instruction;
 
         match instruction.opcode {
+            // SHA3: retain a point-in-time memory snapshot for storage-path recovery.
+            0x20 => {
+                function.push_statement(Statement::KeccakSnapshot(Expr::Keccak {
+                    offset: Box::new(Expr::from_opcode(&instruction.input_operations[0])),
+                    size: Box::new(Expr::from_opcode(&instruction.input_operations[1])),
+                    preimage: None,
+                }));
+            }
+
             // CALLDATACOPY
             0x37 => {
                 let source_offset = Expr::from_opcode(&instruction.input_operations[1]);
@@ -94,10 +103,9 @@ pub(crate) fn solidity_heuristic<'a>(
             // SSTORE
             0x55 => {
                 function.push_statement(Statement::Assign {
-                    target: Expr::index(
-                        "storage",
-                        Expr::from_opcode(&instruction.input_operations[0]),
-                    ),
+                    target: Expr::StorageAccess(Box::new(StoragePath::Slot {
+                        slot: Box::new(Expr::from_opcode(&instruction.input_operations[0])),
+                    })),
                     value: Expr::from_opcode(&instruction.input_operations[1]),
                 });
             }

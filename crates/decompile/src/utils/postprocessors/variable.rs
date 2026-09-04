@@ -1,5 +1,8 @@
 use crate::{
-    core::{ir::Statement, postprocess::PostprocessorState},
+    core::{
+        ir::{Expr, Statement},
+        postprocess::PostprocessorState,
+    },
     Error,
 };
 
@@ -17,7 +20,12 @@ pub(crate) fn variable_postprocessor(
 
     statement.visit_exprs_mut(&mut |expr| {
         let replacement = state.variable_map.iter().find_map(|(variable, value)| {
-            (value == expr && assignment_target.as_ref() != Some(variable)).then_some(variable)
+            let is_trivial = matches!(
+                value,
+                Expr::Identifier(_) | Expr::Literal(_) | Expr::Bool(_) | Expr::StringLiteral(_)
+            );
+            (!is_trivial && value == expr && assignment_target.as_ref() != Some(variable))
+                .then_some(variable)
         });
         if let Some(variable) = replacement {
             *expr = variable.clone();
@@ -32,7 +40,7 @@ mod tests {
     use alloy::primitives::U256;
 
     use super::*;
-    use crate::core::ir::{BinaryOp, Expr, RenderTarget};
+    use crate::core::ir::{BinaryOp, RenderTarget};
 
     #[test]
     fn replaces_matching_expression_subtree() {
