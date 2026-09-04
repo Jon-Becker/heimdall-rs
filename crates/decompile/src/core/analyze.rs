@@ -6,7 +6,7 @@ use tracing::debug;
 
 use crate::{
     core::{
-        control_flow::{constant_truthiness, prune_constant_branches},
+        control_flow::{constant_truthiness, is_bare_reverting, prune_constant_branches},
         ir::{Expr, Statement},
     },
     interfaces::AnalyzedFunction,
@@ -180,7 +180,25 @@ impl Analyzer {
                     let instruction = &state.last_instruction;
                     if instruction.opcode == 0x57 && !branch.children.is_empty() {
                         if branch.children.len() == 1 {
-                            self.analyze_inner(&branch.children[0], analyzer_state).await?;
+                            let condition = instruction
+                                .input_operations
+                                .get(1)
+                                .map(Expr::from_opcode)
+                                .unwrap_or_else(|| Expr::identifier("unknown_condition"));
+                            if constant_truthiness(condition.clone()).is_none() &&
+                                is_bare_reverting(&branch.children[0])
+                            {
+                                // The executor can deduplicate the successful sibling while
+                                // retaining only its revert path. Preserve the branch as a guard
+                                // instead of silently dropping its condition.
+                                self.function.push_statement(Statement::If { condition });
+                                self.function.push_statement(Statement::Else);
+                                let mut revert_state = analyzer_state.clone();
+                                self.analyze_inner(&branch.children[0], &mut revert_state).await?;
+                                self.function.push_statement(Statement::CloseBlock);
+                            } else {
+                                self.analyze_inner(&branch.children[0], analyzer_state).await?;
+                            }
                             return Ok(())
                         }
 
