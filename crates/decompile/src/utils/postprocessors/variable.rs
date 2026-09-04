@@ -7,10 +7,23 @@ use crate::{
 };
 
 /// Replaces complete expression subtrees with previously assigned variables.
+///
+/// Only top-level assignments (outside of any If/Else/CloseBlock) are added to the
+/// replacement map, so a variable declared inside a conditional branch is not
+/// substituted into code that might run when that branch has been discarded.
 pub(crate) fn variable_postprocessor(
     statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
+    // Track conditional nesting depth so we don't record block-local variables.
+    match statement {
+        Statement::If { .. } => state.conditional_depth += 1,
+        Statement::Else | Statement::CloseBlock => {
+            state.conditional_depth = state.conditional_depth.saturating_sub(1);
+        }
+        _ => {}
+    }
+
     let assignment_target = match statement {
         Statement::Assign { target, .. } | Statement::DeclareAssign { target, .. } => {
             Some(target.clone())
@@ -39,6 +52,21 @@ pub(crate) fn variable_postprocessor(
                 *expr = variable.clone();
             }
         });
+    }
+
+    // Only record the assignment for future substitution if it is at the top level.
+    if state.conditional_depth == 0 {
+        if let Some(target) = assignment_target {
+            if let Expr::Identifier(name) = &target {
+                if name.starts_with("var_") {
+                    if let Statement::Assign { value, .. } | Statement::DeclareAssign { value, .. } =
+                        statement
+                    {
+                        state.variable_map.insert(target.clone(), value.clone());
+                    }
+                }
+            }
+        }
     }
 
     Ok(())

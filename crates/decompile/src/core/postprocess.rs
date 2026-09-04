@@ -100,6 +100,8 @@ pub(crate) struct PostprocessorState {
     pub transient_type_map: HashMap<String, String>,
     /// An optional field which holds the storage location if the function is a public getter
     pub maybe_getter_for: Option<Expr>,
+    /// Current conditional nesting depth during flat-statement iteration.
+    pub conditional_depth: usize,
 }
 
 /// The [`PostprocessOrchestrator`] is responsible for managing the cleanup of

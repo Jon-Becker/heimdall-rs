@@ -40,6 +40,15 @@ pub(crate) fn transient_postprocessor(
     statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
+    // Track conditional nesting depth so we don't record block-local variables.
+    match statement {
+        Statement::If { .. } => state.conditional_depth += 1,
+        Statement::Else | Statement::CloseBlock => {
+            state.conditional_depth = state.conditional_depth.saturating_sub(1);
+        }
+        _ => {}
+    }
+
     statement.visit_exprs_mut(&mut |expr| {
         let Expr::Index { base, index } = expr else { return };
         if !is_transient_base(base) {
@@ -81,7 +90,10 @@ pub(crate) fn transient_postprocessor(
         return Ok(())
     }
 
-    state.variable_map.insert(target.clone(), value.clone());
+    // Only record the assignment for future substitution if it is at the top level.
+    if state.conditional_depth == 0 {
+        state.variable_map.insert(target.clone(), value.clone());
+    }
     if root.starts_with("transient_map_") {
         let key_type = match target {
             Expr::Index { index, .. } => expression_type(index, state),
