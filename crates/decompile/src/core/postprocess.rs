@@ -85,6 +85,10 @@ pub(crate) struct PostprocessorState {
     pub variable_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for memory variables
     pub memory_type_map: HashMap<String, String>,
+    /// Canonical root slots and their generated source names.
+    pub storage_roots: HashMap<Expr, String>,
+    /// Type hints associated with canonical root slots.
+    pub storage_type_hints: HashMap<Expr, String>,
     /// A mapping from storage locations to their corresponding variable names
     pub storage_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for storage variables
@@ -161,6 +165,8 @@ impl PostprocessOrchestrator {
 
         // get postprocessor state
         let mut state = PostprocessorState {
+            storage_roots: self.state.storage_roots.clone(),
+            storage_type_hints: self.state.storage_type_hints.clone(),
             storage_map: self.state.storage_map.clone(),
             transient_map: self.state.transient_map.clone(),
             storage_type_map: self.state.storage_type_map.clone(),
@@ -198,6 +204,26 @@ impl PostprocessOrchestrator {
         if self.typ == AnalyzerType::Solidity {
             for statement in &mut function.statements {
                 storage_inference_postprocessor(statement, &mut state)?;
+            }
+        }
+
+        if let Some(returns) = function.returns.as_deref() {
+            let hint = if returns.starts_with("string") {
+                Some("string")
+            } else if returns.starts_with("bytes") && returns != "bytes32" {
+                Some("bytes")
+            } else {
+                None
+            };
+            if let Some(hint) = hint {
+                for statement in &function.statements {
+                    let mut statement = statement.clone();
+                    statement.visit_exprs_mut(&mut |expr| {
+                        if let Expr::StorageAccess(path) = expr {
+                            state.storage_type_hints.insert(path.root().clone(), hint.to_string());
+                        }
+                    });
+                }
             }
         }
 
