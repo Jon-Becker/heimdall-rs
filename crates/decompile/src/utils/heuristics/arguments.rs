@@ -12,7 +12,10 @@ use heimdall_vm::core::{
 use tracing::{debug, trace};
 
 use crate::{
-    core::analyze::{AnalyzerState, AnalyzerType},
+    core::{
+        analyze::{AnalyzerState, AnalyzerType},
+        ir::{Expr, Statement},
+    },
     interfaces::{AnalyzedFunction, CalldataFrame, TypeHeuristic},
     utils::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2, STORAGE_ACCESS_REGEX},
     Error,
@@ -105,21 +108,29 @@ pub(crate) fn argument_heuristic<'a>(
 
                 // add the return statement to the function logic
                 if analyzer_state.analyzer_type == AnalyzerType::Solidity {
-                    if return_memory_operations.len() <= 1 {
-                        function
-                            .logic
-                            .push(format!("return {return_memory_operations_solidified};"));
+                    let value = if return_memory_operations.len() <= 1 {
+                        return_memory_operations
+                            .first()
+                            .map(|frame| Expr::from_opcode(&frame.operation))
+                            .unwrap_or(Expr::Empty)
                     } else {
-                        function.logic.push(format!(
-                            "return abi.encodePacked({return_memory_operations_solidified});"
-                        ));
-                    }
+                        Expr::Call {
+                            callee: "abi.encodePacked".to_string(),
+                            args: return_memory_operations
+                                .iter()
+                                .map(|frame| Expr::from_opcode(&frame.operation))
+                                .collect(),
+                        }
+                    };
+                    function.push_statement(Statement::Return(value));
                 } else if analyzer_state.analyzer_type == AnalyzerType::Yul {
-                    function.logic.push(format!(
-                        "return({}, {})",
-                        state.last_instruction.input_operations[0].yulify(),
-                        state.last_instruction.input_operations[1].yulify()
-                    ));
+                    function.push_statement(Statement::Expression(Expr::Call {
+                        callee: "return".to_string(),
+                        args: vec![
+                            Expr::from_yul_opcode(&state.last_instruction.input_operations[0]),
+                            Expr::from_yul_opcode(&state.last_instruction.input_operations[1]),
+                        ],
+                    }));
                 }
 
                 // if we've already determined a return type, we don't want to do it again.

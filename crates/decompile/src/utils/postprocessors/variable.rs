@@ -1,42 +1,60 @@
-use crate::{core::postprocess::PostprocessorState, Error};
+use crate::{
+    core::{ir::Statement, postprocess::PostprocessorState},
+    Error,
+};
 
-/// Handles simplifying expressions by replacing equivalent expressions with variables.
+/// Replaces complete expression subtrees with previously assigned variables.
 pub(crate) fn variable_postprocessor(
-    line: &mut String,
+    statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
-    state
-        .variable_map
-        .iter()
-        .chain(state.storage_map.iter())
-        .chain(state.transient_map.iter())
-        .for_each(|(variable, expr)| {
-            // skip exprs that are already variables
-            if !expr.contains(' ') &&
-                ["store", "tstore", "transient", "storage", "var"]
-                    .iter()
-                    .any(|x| expr.starts_with(x))
-            {
-                return;
-            }
+    let assignment_target = match statement {
+        Statement::Assign { target, .. } | Statement::DeclareAssign { target, .. } => {
+            Some(target.clone())
+        }
+        _ => None,
+    };
 
-            // little short circuit type beat
-            if line.contains(expr) && !line.trim().contains(variable) {
-                // split line by space,
-                let mut line_parts = line.split_whitespace().collect::<Vec<&str>>();
-
-                // iter over line parts, replace only whole words that match expr
-                for part in line_parts.iter_mut() {
-                    if *part == expr {
-                        *part = variable;
-                    }
-                }
-                *line = line_parts.join(" ");
-            }
+    statement.visit_exprs_mut(&mut |expr| {
+        let replacement = state.variable_map.iter().find_map(|(variable, value)| {
+            (value == expr && assignment_target.as_ref() != Some(variable)).then_some(variable)
         });
+        if let Some(variable) = replacement {
+            *expr = variable.clone();
+        }
+    });
 
     Ok(())
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use alloy::primitives::U256;
+
+    use super::*;
+    use crate::core::ir::{BinaryOp, Expr, RenderTarget};
+
+    #[test]
+    fn replaces_matching_expression_subtree() {
+        let mut statement = Statement::Return(Expr::Binary {
+            op: BinaryOp::Mul,
+            lhs: Box::new(Expr::Binary {
+                op: BinaryOp::Add,
+                lhs: Box::new(Expr::identifier("arg0")),
+                rhs: Box::new(Expr::Literal(U256::from(1))),
+            }),
+            rhs: Box::new(Expr::Literal(U256::from(2))),
+        });
+        let mut state = PostprocessorState::default();
+        state.variable_map.insert(
+            Expr::identifier("var_a"),
+            Expr::Binary {
+                op: BinaryOp::Add,
+                lhs: Box::new(Expr::identifier("arg0")),
+                rhs: Box::new(Expr::Literal(U256::from(1))),
+            },
+        );
+        variable_postprocessor(&mut statement, &mut state).unwrap();
+        assert_eq!(statement.render(RenderTarget::Solidity), "return var_a * 0x02;");
+    }
+}

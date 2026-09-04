@@ -1,44 +1,79 @@
 use hashbrown::HashMap;
 use std::time::Instant;
 
-use eyre::eyre;
-use heimdall_common::utils::strings::find_balanced_encapsulator;
+use alloy::primitives::U256;
 use tracing::debug;
 
 use crate::{
     interfaces::AnalyzedFunction,
-    utils::{
-        constants::STORAGE_ACCESS_REGEX,
-        postprocessors::{
-            arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
-            memory_postprocessor, remove_empty_lines, storage_postprocessor,
-            transient_postprocessor, variable_postprocessor, Pass,
-        },
+    utils::postprocessors::{
+        arithmetic_postprocessor, bitwise_mask_postprocessor, eliminate_dead_variables,
+        memory_postprocessor, storage_postprocessor, transient_postprocessor,
+        variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
     },
     Error,
 };
 
-use super::analyze::AnalyzerType;
+use super::{
+    analyze::AnalyzerType,
+    ir::{BinaryOp, Expr, Statement},
+};
+
+fn find_expression(
+    statements: &[Statement],
+    mut predicate: impl FnMut(&Expr) -> bool,
+) -> Option<Expr> {
+    let mut found = None;
+    for statement in statements {
+        let mut statement = statement.clone();
+        statement.visit_exprs_mut(&mut |expr| {
+            if found.is_none() && predicate(expr) {
+                found = Some(expr.clone());
+            }
+        });
+        if found.is_some() {
+            break;
+        }
+    }
+    found
+}
+
+fn is_storage_access(expr: &Expr) -> bool {
+    matches!(expr, Expr::Index { base, .. } if base.render() == "storage")
+}
+
+fn has_binary_literal(statements: &[Statement], op: BinaryOp, literal: U256) -> bool {
+    find_expression(statements, |expr| {
+        matches!(
+            expr,
+            Expr::Binary { op: candidate, lhs, rhs }
+                if *candidate == op &&
+                    (matches!(&**lhs, Expr::Literal(value) if *value == literal) ||
+                     matches!(&**rhs, Expr::Literal(value) if *value == literal))
+        )
+    })
+    .is_some()
+}
 
 /// State shared between postprocessors
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PostprocessorState {
     /// A mapping from memory locations to their corresponding variable names
-    pub memory_map: HashMap<String, String>,
+    pub memory_map: HashMap<Expr, Expr>,
     /// A mapping which holds the last assigned value for a given variable
-    pub variable_map: HashMap<String, String>,
+    pub variable_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for memory variables
     pub memory_type_map: HashMap<String, String>,
     /// A mapping from storage locations to their corresponding variable names
-    pub storage_map: HashMap<String, String>,
+    pub storage_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for storage variables
     pub storage_type_map: HashMap<String, String>,
     /// A mapping from transient storage locations to their corresponding variable names
-    pub transient_map: HashMap<String, String>,
+    pub transient_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for transient storage variables
     pub transient_type_map: HashMap<String, String>,
     /// An optional field which holds the storage location if the function is a public getter
-    pub maybe_getter_for: Option<String>,
+    pub maybe_getter_for: Option<Expr>,
 }
 
 /// The [`PostprocessOrchestrator`] is responsible for managing the cleanup of
@@ -49,8 +84,10 @@ pub(crate) struct PostprocessorState {
 pub(crate) struct PostprocessOrchestrator {
     /// The type of postprocessor to use. this is taken from the analyzer
     typ: AnalyzerType,
-    /// A list of registered passes
-    passes: Vec<Pass>,
+    /// Structured passes run before lowering to source text.
+    ir_passes: Vec<IrPostprocessor>,
+    /// Function-wide structured passes run after statement-local passes.
+    ir_function_passes: Vec<IrFunctionPostprocessor>,
     /// The state shared between postprocessors
     state: PostprocessorState,
 }
@@ -58,8 +95,12 @@ pub(crate) struct PostprocessOrchestrator {
 impl PostprocessOrchestrator {
     /// Build a new postprocessor with the given analyzer type
     pub(crate) fn new(typ: AnalyzerType) -> Result<Self, Error> {
-        let mut orchestrator =
-            Self { typ, passes: Vec::new(), state: PostprocessorState::default() };
+        let mut orchestrator = Self {
+            typ,
+            ir_passes: Vec::new(),
+            ir_function_passes: Vec::new(),
+            state: PostprocessorState::default(),
+        };
         orchestrator.register_passes()?;
         Ok(orchestrator)
     }
@@ -68,25 +109,18 @@ impl PostprocessOrchestrator {
     pub(crate) fn register_passes(&mut self) -> Result<(), Error> {
         match self.typ {
             AnalyzerType::Solidity => {
-                // Line-level postprocessors that run on each line
-                self.passes.push(Pass::line_level(vec![
-                    bitwise_mask_postprocessor,
-                    arithmetic_postprocessor,
-                    memory_postprocessor,
-                    storage_postprocessor,
-                    transient_postprocessor,
-                    variable_postprocessor,
-                ]));
+                self.ir_passes.push(bitwise_mask_postprocessor);
+                self.ir_passes.push(arithmetic_postprocessor);
+                self.ir_passes.push(memory_postprocessor);
+                self.ir_passes.push(storage_postprocessor);
+                self.ir_passes.push(transient_postprocessor);
+                self.ir_passes.push(variable_postprocessor);
 
-                // Function-level passes that run on the entire function
-                self.passes.push(Pass::function_level(eliminate_dead_variables));
+                self.ir_function_passes.push(eliminate_dead_variables);
             }
             AnalyzerType::Yul => {}
             _ => {}
         };
-
-        // Always run empty line removal last
-        self.passes.push(Pass::function_level(remove_empty_lines));
 
         Ok(())
     }
@@ -136,55 +170,49 @@ impl PostprocessOrchestrator {
             (String::from(".chainid"), String::from("uint256")),
         ]);
 
-        // If this is a constant / getter, we can simplify it
-        // Note: this can't be done with a postprocessor because it needs all lines
+        // Detect simple getters and Solidity's RLP-backed string pattern directly on the IR.
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
-            // check for RLP encoding. very naive check, but it works for now
-            if function.logic.iter().any(|line| line.contains("0x0100 *")) &&
-                function.logic.iter().any(|line| line.contains("0x01) &"))
-            {
-                // find any storage accesses
-                let joined = function.logic.join(" ");
-                if let Some(storage_access) = STORAGE_ACCESS_REGEX.find(&joined).unwrap_or(None) {
-                    let storage_access = storage_access.as_str();
-                    let access_range = find_balanced_encapsulator(storage_access, ('[', ']'))
-                        .map_err(|e| eyre!("failed to find access range: {e}"))?;
+            let returned_storage = function.statements.iter().find_map(|statement| {
+                let Statement::Return(value) = statement else { return None };
+                find_expression(&[Statement::Return(value.clone())], is_storage_access)
+            });
 
-                    // update returns
+            if let Some(storage) = returned_storage {
+                state.maybe_getter_for = Some(storage.clone());
+
+                if has_binary_literal(&function.statements, BinaryOp::Mul, U256::from(0x100)) &&
+                    has_binary_literal(&function.statements, BinaryOp::BitAnd, U256::from(1))
+                {
                     function.returns = Some(String::from("string memory"));
-                    function.logic = vec![format!(
-                        "return string(rlp.encodePacked(storage[{}]));",
-                        storage_access[access_range].to_string()
-                    )]
-                }
-            }
-
-            // iterate over logic, if we find a return w/ a storage variable:
-            if let Some(line) = function
-                .logic
-                .iter()
-                .find(|line| line.contains("return") && line.contains("storage"))
-            {
-                if let Some(storage_access) = STORAGE_ACCESS_REGEX.find(line).unwrap_or(None) {
-                    let storage_access = storage_access.as_str();
-                    let access_range = find_balanced_encapsulator(storage_access, ('[', ']'))
-                        .map_err(|e| eyre!("failed to find access range: {e}"))?;
-
-                    state.maybe_getter_for =
-                        Some(format!("storage[{}]", &storage_access[access_range]));
+                    function.statements = vec![Statement::Return(Expr::Call {
+                        callee: "string".to_string(),
+                        args: vec![Expr::Call {
+                            callee: "rlp.encodePacked".to_string(),
+                            args: vec![storage],
+                        }],
+                    })];
                 }
             }
         }
 
-        // Run all registered passes
-        for pass in &self.passes {
-            pass.run(function, &mut state)?;
+        // Transform structured statements before lowering to source text.
+        for pass in &self.ir_passes {
+            for statement in &mut function.statements {
+                pass(statement, &mut state)?;
+            }
         }
+
+        for pass in &self.ir_function_passes {
+            pass(function, &mut state)?;
+        }
+
+        function.render_statements();
 
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
-        state.storage_map.iter().for_each(|(_, v)| {
-            let storage_var_name = v.split('[').collect::<Vec<&str>>()[0];
+        state.storage_map.iter().for_each(|(_, value)| {
+            let rendered = value.render();
+            let storage_var_name = rendered.split('[').next().unwrap_or(&rendered);
             if !state.storage_type_map.contains_key(storage_var_name) {
                 if storage_var_name.contains("map") {
                     state.storage_type_map.insert(
@@ -198,8 +226,9 @@ impl PostprocessOrchestrator {
                 }
             }
         });
-        state.transient_map.iter().for_each(|(_, v)| {
-            let storage_var_name = v.split('[').collect::<Vec<&str>>()[0];
+        state.transient_map.iter().for_each(|(_, value)| {
+            let rendered = value.render();
+            let storage_var_name = rendered.split('[').next().unwrap_or(&rendered);
             if !state.transient_type_map.contains_key(storage_var_name) {
                 if storage_var_name.contains("map") {
                     state.transient_type_map.insert(
@@ -218,10 +247,8 @@ impl PostprocessOrchestrator {
         self.state = state;
 
         // if this is a getter, replace function.maybe_getter_for with the actual getter
-        if let Some(getter_for) =
-            self.state.maybe_getter_for.as_ref().or(function.maybe_getter_for.as_ref())
-        {
-            function.maybe_getter_for = self.state.storage_map.get(getter_for).cloned();
+        if let Some(getter_for) = self.state.maybe_getter_for.as_ref() {
+            function.maybe_getter_for = self.state.storage_map.get(getter_for).map(Expr::render);
         }
 
         debug!(

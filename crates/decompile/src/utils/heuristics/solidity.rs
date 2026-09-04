@@ -5,7 +5,10 @@ use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::core::vm::State;
 
 use crate::{
-    core::analyze::AnalyzerState,
+    core::{
+        analyze::AnalyzerState,
+        ir::{BinaryOp, Expr, Statement},
+    },
     interfaces::{AnalyzedFunction, StorageFrame},
     utils::constants::VARIABLE_SIZE_CHECK_REGEX,
     Error,
@@ -22,49 +25,56 @@ pub(crate) fn solidity_heuristic<'a>(
         match instruction.opcode {
             // CALLDATACOPY
             0x37 => {
-                let memory_offset = &instruction.input_operations[0];
-                let source_offset = instruction.inputs[1];
-                let size_bytes = instruction.inputs[2];
-
-                // add the mstore to the function's memory map
-                function.logic.push(format!(
-                    "memory[{}] = msg.data[{}:{}];",
-                    memory_offset.solidify(),
-                    source_offset,
-                    source_offset.saturating_add(size_bytes)
-                ));
+                let source_offset = Expr::from_opcode(&instruction.input_operations[1]);
+                let size = Expr::from_opcode(&instruction.input_operations[2]);
+                function.push_statement(Statement::Assign {
+                    target: Expr::index(
+                        "memory",
+                        Expr::from_opcode(&instruction.input_operations[0]),
+                    ),
+                    value: Expr::slice(
+                        "msg.data",
+                        source_offset.clone(),
+                        Expr::binary(BinaryOp::Add, source_offset, size),
+                    ),
+                });
             }
 
             // CODECOPY
             0x39 => {
-                let memory_offset = &instruction.input_operations[0];
-                let source_offset = instruction.inputs[1];
-                let size_bytes = instruction.inputs[2];
-
-                // add the mstore to the function's memory map
-                function.logic.push(format!(
-                    "memory[{}] = this.code[{}:{}];",
-                    memory_offset.solidify(),
-                    source_offset,
-                    source_offset.saturating_add(size_bytes)
-                ));
+                let source_offset = Expr::from_opcode(&instruction.input_operations[1]);
+                let size = Expr::from_opcode(&instruction.input_operations[2]);
+                function.push_statement(Statement::Assign {
+                    target: Expr::index(
+                        "memory",
+                        Expr::from_opcode(&instruction.input_operations[0]),
+                    ),
+                    value: Expr::slice(
+                        "this.code",
+                        source_offset.clone(),
+                        Expr::binary(BinaryOp::Add, source_offset, size),
+                    ),
+                });
             }
 
             // EXTCODECOPY
             0x3C => {
-                let address = &instruction.input_operations[0];
-                let memory_offset = &instruction.input_operations[1];
-                let source_offset = instruction.inputs[2];
-                let size_bytes = instruction.inputs[3];
-
-                // add the mstore to the function's memory map
-                function.logic.push(format!(
-                    "memory[{}] = address({}).code[{}:{}]",
-                    memory_offset.solidify(),
-                    address.solidify(),
-                    source_offset,
-                    source_offset.saturating_add(size_bytes)
-                ));
+                let source_offset = Expr::from_opcode(&instruction.input_operations[2]);
+                let size = Expr::from_opcode(&instruction.input_operations[3]);
+                function.push_statement(Statement::Assign {
+                    target: Expr::index(
+                        "memory",
+                        Expr::from_opcode(&instruction.input_operations[1]),
+                    ),
+                    value: Expr::slice(
+                        format!(
+                            "address({}).code",
+                            Expr::from_opcode(&instruction.input_operations[0]).render()
+                        ),
+                        source_offset.clone(),
+                        Expr::binary(BinaryOp::Add, source_offset, size),
+                    ),
+                });
             }
 
             // MSTORE / MSTORE8
@@ -75,26 +85,28 @@ pub(crate) fn solidity_heuristic<'a>(
 
                 // add the mstore to the function's memory map
                 function.memory.insert(key, StorageFrame { operation, value });
-                function.logic.push(format!(
-                    "memory[{}] = {};",
-                    encode_hex_reduced(key),
-                    instruction.input_operations[1].solidify()
-                ));
+                function.push_statement(Statement::Assign {
+                    target: Expr::index("memory", Expr::Literal(key)),
+                    value: Expr::from_opcode(&instruction.input_operations[1]),
+                });
             }
 
             // SSTORE
             0x55 => {
-                function.logic.push(format!(
-                    "storage[{}] = {};",
-                    instruction.input_operations[0].solidify(),
-                    instruction.input_operations[1].solidify(),
-                ));
+                function.push_statement(Statement::Assign {
+                    target: Expr::index(
+                        "storage",
+                        Expr::from_opcode(&instruction.input_operations[0]),
+                    ),
+                    value: Expr::from_opcode(&instruction.input_operations[1]),
+                });
             }
 
             // JUMPI
             0x57 => {
                 // this is an if conditional for the children branches
-                let conditional = instruction.input_operations[1].solidify();
+                let conditional_expr = Expr::from_opcode(&instruction.input_operations[1]);
+                let conditional = conditional_expr.render();
 
                 // perform a series of checks to determine if the condition
                 // is added by the compiler and can be ignored
@@ -106,33 +118,35 @@ pub(crate) fn solidity_heuristic<'a>(
                     return Ok(());
                 }
 
-                function.logic.push(format!("if ({conditional}) {{"));
+                function.push_statement(Statement::If { condition: conditional_expr.clone() });
 
                 // save a copy of the conditional and add it to the conditional map
-                analyzer_state.jumped_conditional = Some(conditional.clone());
-                analyzer_state.conditional_stack.push(conditional);
+                analyzer_state.jumped_conditional = Some(conditional_expr.clone());
+                analyzer_state.conditional_stack.push(conditional_expr);
             }
 
             // TSTORE
             0x5d => {
-                function.logic.push(format!(
-                    "transient[{}] = {};",
-                    instruction.input_operations[0].solidify(),
-                    instruction.input_operations[1].solidify(),
-                ));
+                function.push_statement(Statement::Assign {
+                    target: Expr::index(
+                        "transient",
+                        Expr::from_opcode(&instruction.input_operations[0]),
+                    ),
+                    value: Expr::from_opcode(&instruction.input_operations[1]),
+                });
             }
 
             // CREATE / CREATE2
             0xf0 | 0xf5 => {
-                function.logic.push(format!(
-                    "assembly {{ addr := create({}) }}",
-                    instruction
-                        .input_operations
-                        .iter()
-                        .map(|x| x.solidify())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                ));
+                function.push_statement(Statement::AssemblyAssign {
+                    target: "addr".to_string(),
+                    function: if instruction.opcode == 0xf5 {
+                        "create2".to_string()
+                    } else {
+                        "create".to_string()
+                    },
+                    args: instruction.input_operations.iter().map(Expr::from_opcode).collect(),
+                });
             }
 
             // REVERT
@@ -150,98 +164,66 @@ pub(crate) fn solidity_heuristic<'a>(
                 // (4) if revert_data is empty, it is an empty revert. Ex:
                 //       - if (true != false) { revert() };
                 //       - require(true != false)
-                let revert_logic;
-
-                // handle case with error string abiencoded
-                if revert_data.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
+                let reason = if revert_data.starts_with(&[0x08, 0xc3, 0x79, 0xa0]) {
                     let revert_string = match revert_data.get(4..) {
                         Some(hex_data) => match DynSolType::String.abi_decode(hex_data) {
-                            Ok(revert) => match revert {
-                                DynSolValue::String(revert) => revert,
-                                _ => "decoding error".to_string(),
-                            },
-                            Err(_) => "decoding error".to_string(),
+                            Ok(DynSolValue::String(revert)) => revert,
+                            _ => "decoding error".to_string(),
                         },
                         None => "decoding error".to_string(),
                     };
-                    revert_logic = match analyzer_state.jumped_conditional.clone() {
-                        Some(condition) => {
-                            analyzer_state.jumped_conditional = None;
-                            format!("require({condition}, \"{revert_string}\");")
-                        }
-                        None => {
-                            // loop backwards through logic to find the last IF statement
-                            for i in (0..function.logic.len()).rev() {
-                                if function.logic[i].starts_with("if") {
-                                    let conditional = match analyzer_state.conditional_stack.pop() {
-                                        Some(condition) => condition,
-                                        None => break,
-                                    };
-
-                                    function.logic[i] =
-                                        format!("require({conditional}, \"{revert_string}\");");
-                                }
-                            }
-                            return Ok(());
-                        }
-                    }
-                }
-                // handle case with custom error OR empty revert
-                else if !revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
-                    let custom_error_placeholder = match revert_data.get(0..4) {
+                    Some(Expr::StringLiteral(revert_string))
+                } else if !revert_data.starts_with(&[0x4e, 0x48, 0x7b, 0x71]) {
+                    match revert_data.get(0..4) {
                         Some(selector) => {
                             function.errors.insert(U256::from_be_slice(selector));
-                            format!(
-                                "CustomError_{}()",
-                                encode_hex_reduced(U256::from_be_slice(selector))
-                                    .replacen("0x", "", 1)
-                            )
+                            Some(Expr::Call {
+                                callee: format!(
+                                    "CustomError_{}",
+                                    encode_hex_reduced(U256::from_be_slice(selector))
+                                        .replacen("0x", "", 1)
+                                ),
+                                args: vec![],
+                            })
                         }
-                        None => "()".to_string(),
-                    };
-
-                    revert_logic = match analyzer_state.jumped_conditional.clone() {
-                        Some(condition) => {
-                            analyzer_state.jumped_conditional = None;
-                            if custom_error_placeholder == *"()" {
-                                format!("require({condition});",)
-                            } else {
-                                format!("require({condition}, {custom_error_placeholder});")
-                            }
-                        }
-                        None => {
-                            // loop backwards through logic to find the last IF statement
-                            for i in (0..function.logic.len()).rev() {
-                                if function.logic[i].starts_with("if") {
-                                    let conditional = match analyzer_state.conditional_stack.pop() {
-                                        Some(condition) => condition,
-                                        None => break,
-                                    };
-
-                                    if custom_error_placeholder == *"()" {
-                                        function.logic[i] = format!("require({conditional});",);
-                                    } else {
-                                        function.logic[i] = format!(
-                                            "require({conditional}, {custom_error_placeholder});"
-                                        );
-                                    }
-                                }
-                            }
-                            return Ok(());
-                        }
+                        None => None,
                     }
                 } else {
                     return Ok(());
-                }
+                };
 
-                function.logic.push(revert_logic);
+                let conditional = match analyzer_state.jumped_conditional.take() {
+                    Some(condition) => condition,
+                    None => match analyzer_state.conditional_stack.pop() {
+                        Some(condition) => condition,
+                        None => return Ok(()),
+                    },
+                };
+                // A revert may be observed in the child trace after its opening conditional was
+                // emitted. Preserve that condition's expression tree when promoting it to a
+                // require, rather than falling back to its rendered representation.
+                if let Some(statement) = function
+                    .statements
+                    .iter_mut()
+                    .rev()
+                    .find(|statement| matches!(statement, Statement::If { .. }))
+                {
+                    let condition = match statement {
+                        Statement::If { condition } => condition.clone(),
+                        _ => unreachable!("matched an if statement"),
+                    };
+                    *statement = Statement::Require { condition, reason };
+                } else {
+                    function.push_statement(Statement::Require { condition: conditional, reason });
+                }
             }
 
             // SELFDESTRUCT
             0xff => {
-                function
-                    .logic
-                    .push(format!("selfdestruct({});", instruction.input_operations[0].solidify()));
+                function.push_statement(Statement::Expression(Expr::Call {
+                    callee: "selfdestruct".to_string(),
+                    args: vec![Expr::from_opcode(&instruction.input_operations[0])],
+                }));
             }
 
             _ => {}

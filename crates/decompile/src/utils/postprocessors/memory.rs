@@ -1,97 +1,112 @@
-use eyre::eyre;
-use heimdall_common::{
-    constants::TYPE_CAST_REGEX,
-    utils::strings::{base26_encode, find_balanced_encapsulator},
+use heimdall_common::utils::strings::base26_encode;
+
+use crate::{
+    core::{
+        ir::{BinaryOp, Expr, Statement},
+        postprocess::PostprocessorState,
+    },
+    Error,
 };
 
-use crate::{core::postprocess::PostprocessorState, utils::constants::MEMORY_ACCESS_REGEX, Error};
+fn is_memory_base(expr: &Expr) -> bool {
+    matches!(expr, Expr::Raw(name) | Expr::Identifier(name) if name == "memory")
+}
 
-/// Handles converting memory operations to variables. For example:
-/// - `memory[0x20]` would become `var_a`, and so on.
+fn infer_type(expr: &Expr, state: &PostprocessorState) -> Option<String> {
+    match expr {
+        Expr::Cast { ty, .. } => Some(ty.clone()),
+        Expr::Identifier(name) => state.memory_type_map.get(name).cloned(),
+        Expr::Binary { op, .. } => Some(
+            if matches!(
+                op,
+                BinaryOp::BitAnd |
+                    BinaryOp::BitOr |
+                    BinaryOp::BitXor |
+                    BinaryOp::Shl |
+                    BinaryOp::Shr
+            ) {
+                "bytes32"
+            } else {
+                "uint256"
+            }
+            .to_string(),
+        ),
+        Expr::Literal(_) => Some("uint256".to_string()),
+        Expr::Unary { .. } => Some("bytes32".to_string()),
+        Expr::Call { args, .. } => args.iter().find_map(|arg| infer_type(arg, state)),
+        Expr::Index { base, index } => infer_type(base, state).or_else(|| infer_type(index, state)),
+        Expr::Slice { base, start, end } => infer_type(base, state)
+            .or_else(|| infer_type(start, state))
+            .or_else(|| infer_type(end, state)),
+        Expr::Member { base, .. } => infer_type(base, state),
+        _ => None,
+    }
+}
+
+/// Replaces memory accesses with stable local variables and records assignment/type information.
 pub(crate) fn memory_postprocessor(
-    line: &mut String,
+    statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
-    // find a memory access
-    let memory_access = match MEMORY_ACCESS_REGEX.find(line).unwrap_or(None) {
-        Some(x) => x.as_str(),
-        None => "",
-    };
+    statement.visit_exprs_mut(&mut |expr| {
+        let Expr::Index { base, .. } = expr else { return };
+        if !is_memory_base(base) {
+            return;
+        }
 
-    // handle a single memory access
-    if let Ok(memory_range) = find_balanced_encapsulator(memory_access, ('[', ']')) {
-        let memory_loc = format!(
-            "memory[{}]",
-            memory_access
-                .get(memory_range)
-                .ok_or_else(|| eyre!("failed to extract memory location"))?
-        );
+        let memory_loc = expr.clone();
+        let variable = state.memory_map.get(&memory_loc).cloned().unwrap_or_else(|| {
+            let variable =
+                Expr::identifier(format!("var_{}", base26_encode(state.memory_map.len() + 1)));
+            state.memory_map.insert(memory_loc, variable.clone());
+            variable
+        });
+        *expr = variable;
+    });
 
-        let variable_name = match state.memory_map.get(&memory_loc) {
-            Some(loc) => loc.to_owned(),
-            None => {
-                // add the variable to the map
-                let variable_name = format!("var_{}", base26_encode(state.memory_map.len() + 1));
-                state.memory_map.insert(memory_loc.clone(), variable_name.clone());
-                variable_name
-            }
-        };
-
-        // replace the memory location with the new variable name,
-        // then recurse until no more memory locations are found
-        *line = line.replace(memory_loc.as_str(), &variable_name);
-        memory_postprocessor(line, state)?;
+    let Statement::Assign { target, value } = statement else { return Ok(()) };
+    let Expr::Identifier(var_name) = target else { return Ok(()) };
+    if !var_name.starts_with("var_") {
+        return Ok(())
     }
+    let var_name = var_name.clone();
 
-    // if there is an assignment to a memory variable, save it to variable_map
-    if line.trim().starts_with("var_") && line.contains(" = ") {
-        let assignment: Vec<String> =
-            line.split(" = ").collect::<Vec<&str>>().iter().map(|x| x.to_string()).collect();
-        state.variable_map.insert(assignment[0].clone(), assignment[1].replace(';', ""));
-        let var_name = assignment[0].clone();
-
-        // infer the type from args and vars in the expression
-        for (var, var_type) in state.memory_type_map.iter() {
-            if line.contains(var) &&
-                !state.memory_type_map.contains_key(&var_name) &&
-                !var_type.is_empty()
-            {
-                *line = format!("{var_type} {line}");
-                state.memory_type_map.insert(var_name.to_string(), var_type.to_string());
-                break;
-            }
-        }
-
-        if !state.memory_type_map.contains_key(&var_name) {
-            // if the line contains a cast, we can infer the type from the cast
-            if let Some(cast_range) = TYPE_CAST_REGEX.find(&assignment[1]).unwrap_or(None) {
-                // get the type of the cast
-                let cast_type = assignment[1]
-                    .get(cast_range.start()..)
-                    .expect("impossible case: failed to get cast type after check")
-                    .split('(')
-                    .collect::<Vec<&str>>()[0];
-
-                *line = format!("{cast_type} {line}");
-                state.memory_type_map.insert(var_name, cast_type.to_string());
-                return Ok(());
-            }
-
-            // we can do some type inference here
-            if ["+", "-", "/", "*", "int", ">=", "<="].iter().any(|op| line.contains(op)) ||
-                assignment[1].replace(';', "").parse::<i64>().is_ok()
-            {
-                *line = format!("uint256 {line}");
-                state.memory_type_map.insert(var_name, "uint256".to_string());
-            } else if ["&", "~", "byte", ">>", "<<"].iter().any(|op| line.contains(op)) {
-                *line = format!("bytes32 {line}");
-                state.memory_type_map.insert(var_name, "bytes32".to_string());
-            }
-        }
+    state.variable_map.insert(Expr::identifier(&var_name), value.clone());
+    if let Some(ty) = infer_type(value, state) {
+        state.memory_type_map.entry(var_name.clone()).or_insert_with(|| ty.clone());
+        *statement = Statement::DeclareAssign {
+            ty,
+            target: Expr::identifier(var_name),
+            value: value.clone(),
+        };
     }
 
     Ok(())
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use alloy::primitives::U256;
+
+    use super::*;
+    use crate::core::ir::RenderTarget;
+
+    #[test]
+    fn promotes_memory_assignment_to_typed_variable() {
+        let mut statement = Statement::Assign {
+            target: Expr::index("memory", Expr::Literal(U256::from(32))),
+            value: Expr::Binary {
+                op: BinaryOp::Add,
+                lhs: Box::new(Expr::identifier("arg0")),
+                rhs: Box::new(Expr::Literal(U256::from(1))),
+            },
+        };
+        let mut state = PostprocessorState::default();
+        memory_postprocessor(&mut statement, &mut state).unwrap();
+        assert_eq!(statement.render(RenderTarget::Solidity), "uint256 var_a = arg0 + 0x01;");
+        assert_eq!(
+            state.memory_map.get(&Expr::index("memory", Expr::Literal(U256::from(32)))),
+            Some(&Expr::identifier("var_a"))
+        );
+    }
+}

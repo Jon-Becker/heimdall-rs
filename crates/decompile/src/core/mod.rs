@@ -1,4 +1,5 @@
 pub(crate) mod analyze;
+pub(crate) mod ir;
 pub(crate) mod out;
 pub(crate) mod postprocess;
 pub(crate) mod resolve;
