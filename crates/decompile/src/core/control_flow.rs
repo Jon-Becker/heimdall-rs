@@ -76,16 +76,14 @@ pub(crate) fn prune_constant_branches(trace: &mut VMTrace) -> PruneStats {
                 // child when it is the only path exposing a RETURN; concrete placeholder values
                 // can otherwise make a live return look constant during symbolic execution.
                 let drops_unique_return = expected.is_some_and(|expected| {
-                    let feasible_has_return = trace
-                        .children
-                        .iter()
-                        .filter(|child| child.instruction == expected)
-                        .any(|child| contains_opcode(child, heimdall_vm::core::opcodes::RETURN));
-                    let discarded_has_return = trace
-                        .children
-                        .iter()
-                        .filter(|child| child.instruction != expected)
-                        .any(|child| contains_opcode(child, heimdall_vm::core::opcodes::RETURN));
+                    let feasible_has_return =
+                        trace.children.iter().filter(|child| child.instruction == expected).any(
+                            |child| contains_opcode(child, heimdall_vm::core::opcodes::RETURN),
+                        );
+                    let discarded_has_return =
+                        trace.children.iter().filter(|child| child.instruction != expected).any(
+                            |child| contains_opcode(child, heimdall_vm::core::opcodes::RETURN),
+                        );
                     discarded_has_return && !feasible_has_return
                 });
 
