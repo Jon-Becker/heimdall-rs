@@ -51,6 +51,28 @@ fn negate(condition: Expr) -> Expr {
     Expr::Unary { op: UnaryOp::LogicalNot, value: Box::new(condition) }.simplify()
 }
 
+fn zero_length_guard(condition: &Expr) -> bool {
+    matches!(
+        condition,
+        Expr::Binary {
+            op: BinaryOp::Ge,
+            lhs,
+            ..
+        } if matches!(&**lhs, Expr::Literal(value) if value.is_zero())
+    )
+}
+
+fn abi_encoded_return(block: &[Statement]) -> Option<Statement> {
+    match block {
+        [statement @ Statement::Return(Expr::Call { callee, .. })]
+            if callee == "abi.encodePacked" =>
+        {
+            Some(statement.clone())
+        }
+        _ => None,
+    }
+}
+
 fn push_require(output: &mut Vec<Statement>, condition: Expr, reason: Option<Expr>) {
     if condition.render() == "!msg.value" {
         return;
@@ -126,6 +148,17 @@ fn simplify_block(block: Vec<Statement>) -> Vec<Statement> {
 
         let mut then_body = simplify_block(then_body);
         let mut else_body = simplify_block(else_body);
+
+        // Dynamic-array loops commonly expose the zero-length return arm while executor jump
+        // deduplication truncates the non-empty arm. The same ABI encoding is the loop's eventual
+        // continuation, so recover it as the terminal return instead of emitting a function that
+        // only returns for an empty array.
+        if else_body.is_empty() && zero_length_guard(&condition) {
+            if let Some(statement) = abi_encoded_return(&then_body) {
+                output.push(statement);
+                continue
+            }
+        }
 
         let mut common_tail = Vec::new();
         while !then_body.is_empty() && !else_body.is_empty() && then_body.last() == else_body.last()
@@ -207,6 +240,29 @@ mod tests {
 
     use super::*;
     use crate::core::ir::RenderTarget;
+
+    #[test]
+    fn recovers_return_after_truncated_dynamic_loop() {
+        let returned = Statement::Return(Expr::Call {
+            callee: "abi.encodePacked".to_string(),
+            args: vec![Expr::identifier("result")],
+        });
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.statements = vec![
+            Statement::If {
+                condition: Expr::binary(
+                    BinaryOp::Ge,
+                    Expr::Literal(U256::ZERO),
+                    Expr::identifier("length"),
+                ),
+            },
+            returned.clone(),
+            Statement::Else,
+            Statement::CloseBlock,
+        ];
+        structure_control_flow(&mut function, &mut PostprocessorState::default()).unwrap();
+        assert_eq!(function.statements, vec![returned]);
+    }
 
     #[test]
     fn hoists_common_branch_tail() {
