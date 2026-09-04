@@ -353,10 +353,7 @@ mod tests {
             Statement::CloseBlock,
         ];
         structure_control_flow(&mut function, &mut PostprocessorState::default()).unwrap();
-        assert_eq!(
-            function.statements[0].render(RenderTarget::Solidity),
-            "require(!ok, \"bad\");"
-        );
+        assert_eq!(function.statements[0].render(RenderTarget::Solidity), "require(!ok, \"bad\");");
     }
 
     #[test]

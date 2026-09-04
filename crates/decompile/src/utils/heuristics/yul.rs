@@ -61,15 +61,10 @@ pub(crate) fn yul_heuristic<'a>(
                 // rendered Yul line. Stop at the nearest control-flow marker, whether If or
                 // already-promoted IfRevertElse, so a second revert on a path does not walk back
                 // to an outer guard.
-                if let Some(statement) = function
-                    .statements
-                    .iter_mut()
-                    .rev()
-                    .find(|statement| {
-                        matches!(statement, Statement::If { .. }) ||
-                            matches!(statement, Statement::IfRevertElse { .. })
-                    })
-                {
+                if let Some(statement) = function.statements.iter_mut().rev().find(|statement| {
+                    matches!(statement, Statement::If { .. }) ||
+                        matches!(statement, Statement::IfRevertElse { .. })
+                }) {
                     if let Statement::If { condition } = statement {
                         let condition = condition.clone();
                         *statement = Statement::IfRevertElse {

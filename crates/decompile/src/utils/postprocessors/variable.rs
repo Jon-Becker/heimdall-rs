@@ -59,8 +59,8 @@ pub(crate) fn variable_postprocessor(
         if let Some(target) = assignment_target {
             if let Expr::Identifier(name) = &target {
                 if name.starts_with("var_") {
-                    if let Statement::Assign { value, .. } | Statement::DeclareAssign { value, .. } =
-                        statement
+                    if let Statement::Assign { value, .. } |
+                    Statement::DeclareAssign { value, .. } = statement
                     {
                         state.variable_map.insert(target.clone(), value.clone());
                     }
