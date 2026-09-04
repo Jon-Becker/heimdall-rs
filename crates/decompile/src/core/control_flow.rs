@@ -33,6 +33,11 @@ fn is_complete(trace: &VMTrace) -> bool {
     }
 }
 
+fn contains_opcode(trace: &VMTrace, opcode: u8) -> bool {
+    trace.operations.iter().any(|state| state.last_instruction.opcode == opcode) ||
+        trace.children.iter().any(|child| contains_opcode(child, opcode))
+}
+
 /// Remove the infeasible child of each JUMPI whose condition is provably constant.
 ///
 /// Symbolic execution intentionally explores both children. This pass uses expression identity and
@@ -67,8 +72,26 @@ pub(crate) fn prune_constant_branches(trace: &mut VMTrace) -> PruneStats {
                         .peekable();
                     feasible.peek().is_some() && feasible.all(is_complete)
                 });
+                // Return paths also determine the recovered ABI. Preserve a nominally infeasible
+                // child when it is the only path exposing a RETURN; concrete placeholder values
+                // can otherwise make a live return look constant during symbolic execution.
+                let drops_unique_return = expected.is_some_and(|expected| {
+                    let feasible_has_return = trace
+                        .children
+                        .iter()
+                        .filter(|child| child.instruction == expected)
+                        .any(|child| contains_opcode(child, heimdall_vm::core::opcodes::RETURN));
+                    let discarded_has_return = trace
+                        .children
+                        .iter()
+                        .filter(|child| child.instruction != expected)
+                        .any(|child| contains_opcode(child, heimdall_vm::core::opcodes::RETURN));
+                    discarded_has_return && !feasible_has_return
+                });
 
-                if let (Some(expected), true) = (expected, feasible_is_complete) {
+                if let (Some(expected), true, false) =
+                    (expected, feasible_is_complete, drops_unique_return)
+                {
                     let old_len = trace.children.len();
                     trace.children.retain(|child| child.instruction == expected);
                     let removed = old_len.saturating_sub(trace.children.len());
@@ -168,6 +191,16 @@ mod tests {
         // children relies on its sibling for the rest of the function body.
         let condition = WrappedOpcode::new(opcodes::EQ, vec![caller(), caller()]);
         let mut trace = trace_with_condition(condition, leaf(21, opcodes::JUMPI));
+        let stats = prune_constant_branches(&mut trace);
+        assert_eq!(stats, PruneStats::default());
+        assert_eq!(trace.children.len(), 2);
+    }
+
+    #[test]
+    fn keeps_unique_return_path_for_abi_recovery() {
+        let condition = WrappedOpcode::new(opcodes::EQ, vec![caller(), caller()]);
+        let mut trace = trace_with_condition(condition, leaf(21, opcodes::REVERT));
+        trace.children[0] = leaf(11, opcodes::RETURN);
         let stats = prune_constant_branches(&mut trace);
         assert_eq!(stats, PruneStats::default());
         assert_eq!(trace.children.len(), 2);
