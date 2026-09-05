@@ -94,6 +94,13 @@ pub(crate) fn inline_single_use_variables(
                 assignment(&function.statements[idx]).is_some_and(|(name, _)| name == variable)
             })
             .unwrap_or(function.statements.len());
+        // Substitution is only sound while every identifier captured by the value retains the
+        // value it had at the original assignment.
+        if function.statements[assignment_idx + 1..end].iter().any(|statement| {
+            assignment(statement).is_some_and(|(name, _)| identifiers.contains(name))
+        }) {
+            continue
+        }
         let uses = function.statements[assignment_idx + 1..end]
             .iter()
             .map(|statement| usage_count(statement, &variable))
@@ -165,6 +172,29 @@ mod tests {
             function.statements[1].render(RenderTarget::Solidity),
             "return blockhash(arg0);"
         );
+    }
+
+    #[test]
+    fn does_not_inline_when_operand_is_reassigned_before_use() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.statements = vec![
+            Statement::Assign {
+                target: Expr::identifier("var_a"),
+                value: Expr::binary(
+                    crate::core::ir::BinaryOp::Add,
+                    Expr::identifier("var_b"),
+                    Expr::Literal(U256::from(1)),
+                ),
+            },
+            Statement::Assign {
+                target: Expr::identifier("var_b"),
+                value: Expr::Literal(U256::from(99)),
+            },
+            Statement::Return(Expr::identifier("var_a")),
+        ];
+        inline_single_use_variables(&mut function, &mut PostprocessorState::default()).unwrap();
+        assert!(!matches!(function.statements[0], Statement::Noop));
+        assert_eq!(function.statements[2].render(RenderTarget::Solidity), "return var_a;");
     }
 
     #[test]
