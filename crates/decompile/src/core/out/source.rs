@@ -261,7 +261,9 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
             output
                 .extend(f.notices.iter().map(|notice| format!("/// @notice             {notice}")));
             output.extend(f.sorted_arguments().iter().map(|(i, arg)| {
-                format!("/// @param              arg{i} {:?}", arg.potential_types(),)
+                let potential_types =
+                    arg.potential_types().iter().map(ToString::to_string).collect::<Vec<_>>();
+                format!("/// @param              arg{i} {potential_types:?}")
             }));
             output.push(format!("function {function_signature} {{"));
 
@@ -276,7 +278,9 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
             output
                 .extend(f.notices.iter().map(|notice| format!(" * @notice             {notice}")));
             output.extend(f.sorted_arguments().iter().map(|(i, arg)| {
-                format!(" * @param                arg{i} {:?}", arg.potential_types(),)
+                let potential_types =
+                    arg.potential_types().iter().map(ToString::to_string).collect::<Vec<_>>();
+                format!(" * @param                arg{i} {potential_types:?}")
             }));
             output.extend(vec![" */".to_string(), format!("case 0x{} {{", f.selector)]);
 
