@@ -39,9 +39,9 @@ pub(crate) fn match_parameters(
             trace!("    checking for parameter {} with type {}", &index.to_string(), &input);
             match function.arguments.get(&index) {
                 Some(f) => {
-                    // arrays are typically recorded as bytes by the decompiler's potential
-                    // types
-                    if input.contains("[]") {
+                    let input_type = SolidityType::parse(input);
+                    // Arrays are typically recorded as bytes by the decompiler's potential types.
+                    if matches!(input_type.without_location(), SolidityType::Array { .. }) {
                         if !f.potential_types().contains(&SolidityType::Bytes) {
                             trace!(
                                 "        parameter {} does not match type {} for function {}({})",
@@ -52,7 +52,7 @@ pub(crate) fn match_parameters(
                             );
                             continue;
                         }
-                    } else if !f.potential_types().contains(&SolidityType::parse(input)) {
+                    } else if !f.potential_types().contains(&input_type) {
                         matched = false;
                         trace!(
                             "        parameter {} does not match type {} for function {}({})",
