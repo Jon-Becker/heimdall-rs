@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::{error::Error, interfaces::DisassemblerArgs};
 use eyre::eyre;
 use heimdall_common::utils::strings::encode_hex;
-use heimdall_vm::core::opcodes::OpCodeInfo;
+use heimdall_vm::core::{opcodes::OpCodeInfo, program::Program};
 use tracing::{debug, info};
 
 /// Disassembles EVM bytecode into readable assembly instructions
@@ -22,7 +22,6 @@ use tracing::{debug, info};
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     // init
     let start_time = Instant::now();
-    let mut program_counter = 0;
     let mut asm = String::new();
 
     // Resolve hardfork (handles Auto detection if needed)
@@ -36,47 +35,35 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
         args.get_bytecode().await.map_err(|e| eyre!("fetching target bytecode failed: {}", e))?;
     debug!("fetching target bytecode took {:?}", start_fetch_time.elapsed());
 
-    // iterate over the bytecode, disassembling each instruction
+    // Decode through the shared structural front end so disassembly, CFG recovery, and future
+    // analysis passes agree on instruction boundaries and truncated PUSH semantics.
     let start_disassemble_time = Instant::now();
-    while program_counter < contract_bytecode.len() {
-        let opcode = contract_bytecode[program_counter];
-        let mut pushed_bytes = String::new();
-
-        // handle PUSH0 -> PUSH32, which require us to push the next N bytes
-        // onto the stack
-        let mut byte_count_to_push_offset = 0;
-        if (0x5f..=0x7f).contains(&opcode) {
-            let byte_count_to_push: u8 = opcode - 0x5f;
-            pushed_bytes = match contract_bytecode
-                .get(program_counter + 1..program_counter + 1 + byte_count_to_push as usize)
-            {
-                Some(bytes) => encode_hex(bytes),
-                None => break,
-            };
-            byte_count_to_push_offset += byte_count_to_push as usize;
-        }
-
-        // Get the opcode name, respecting hardfork activation
-        let opcode_name = match OpCodeInfo::for_fork(opcode, hardfork) {
-            Some(info) => info.name(),
-            None => "unknown",
+    let program = Program::decode(&contract_bytecode, hardfork);
+    for instruction in &program.instructions {
+        let opcode_name = OpCodeInfo::for_fork(instruction.opcode, hardfork)
+            .map_or("unknown", |info| info.name());
+        let pushed_bytes = if instruction.immediate.is_empty() {
+            String::new()
+        } else {
+            encode_hex(&instruction.immediate)
         };
-
-        let offset = program_counter;
         asm.push_str(
             format!(
                 "{} {} {}\n",
-                if args.decimal_counter { offset.to_string() } else { format!("{offset:06x}") },
+                if args.decimal_counter {
+                    instruction.pc.to_string()
+                } else {
+                    format!("{:06x}", instruction.pc)
+                },
                 opcode_name,
                 pushed_bytes
             )
             .as_str(),
         );
-        program_counter += 1 + byte_count_to_push_offset;
     }
     debug!("disassembly took {:?}", start_disassemble_time.elapsed());
 
-    info!("disassembled {} bytes successfully", program_counter);
+    info!("disassembled {} bytes successfully", contract_bytecode.len());
     debug!("disassembly took {:?}", start_time.elapsed());
     Ok(asm)
 }
