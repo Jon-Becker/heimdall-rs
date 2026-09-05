@@ -36,7 +36,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.pull_request.number,
-                body: `${marker}\n## AI Evaluation Suite\n\nTo run the AI evaluation suite, add the checkbox below to a comment **you author** on this PR, then check it. Checking another user's comment is not supported by GitHub.\n\n- [ ] Run AI Evaluation Suite`,
+                body: `${marker}\n## AI Evaluation Suite\n\nCheck the box below to run the AI evaluation suite.\n\n- [ ] Run AI Evaluation Suite`,
               });
             }
 
@@ -45,16 +45,15 @@ jobs:
     if: >-
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
+      contains(github.event.comment.body, '<!-- heimdall-eval-request -->') &&
       contains(github.event.comment.body, '- [x] Run AI Evaluation Suite') &&
       (github.event.action == 'created' ||
-       !contains(github.event.changes.body.from, '- [x] Run AI Evaluation Suite')) &&
-      (github.event.comment.author_association == 'OWNER' ||
-       github.event.comment.author_association == 'MEMBER' ||
-       github.event.comment.author_association == 'COLLABORATOR')
+       !contains(github.event.changes.body.from, '- [x] Run AI Evaluation Suite'))
     runs-on: ubuntu-latest
     outputs:
       head_sha: ${{ steps.pr.outputs.head_sha }}
       same_repository: ${{ steps.pr.outputs.same_repository }}
+      trusted_requester: ${{ steps.pr.outputs.trusted_requester }}
     steps:
       - name: Resolve pull request head
         id: pr
@@ -66,15 +65,23 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.payload.issue.number,
             });
+            const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.actor,
+            });
+
             core.setOutput('head_sha', pr.head.sha);
             core.setOutput('same_repository', String(pr.head.repo?.full_name === context.repo.owner + '/' + context.repo.repo));
+            core.setOutput('trusted_requester', String(['admin', 'maintain', 'write'].includes(permission.permission)));
 
   eval:
     name: run eval
     needs: resolve-pr
     if: >-
       needs.resolve-pr.result == 'success' &&
-      needs.resolve-pr.outputs.same_repository == 'true'
+      needs.resolve-pr.outputs.same_repository == 'true' &&
+      needs.resolve-pr.outputs.trusted_requester == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout heimdall-rs (PR branch)
