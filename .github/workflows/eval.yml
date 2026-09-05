@@ -2,9 +2,12 @@ name: eval
 
 on:
   pull_request:
+    types: [opened, reopened]
+  issue_comment:
+    types: [created, edited]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -12,12 +15,72 @@ permissions:
   pull-requests: write
 
 jobs:
+  request-eval:
+    name: Post evaluation request instructions
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment with evaluation instructions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- heimdall-eval-request -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+
+            if (!comments.some(comment => comment.body.includes(marker))) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: `${marker}\n## AI Evaluation Suite\n\nTo run the AI evaluation suite, add the checkbox below to a comment **you author** on this PR, then check it. Checking another user's comment is not supported by GitHub.\n\n- [ ] Run AI Evaluation Suite`,
+              });
+            }
+
+  resolve-pr:
+    name: Validate evaluation request
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '- [x] Run AI Evaluation Suite') &&
+      (github.event.action == 'created' ||
+       !contains(github.event.changes.body.from, '- [x] Run AI Evaluation Suite')) &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER' ||
+       github.event.comment.author_association == 'COLLABORATOR')
+    runs-on: ubuntu-latest
+    outputs:
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      same_repository: ${{ steps.pr.outputs.same_repository }}
+    steps:
+      - name: Resolve pull request head
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.issue.number,
+            });
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('same_repository', String(pr.head.repo?.full_name === context.repo.owner + '/' + context.repo.repo));
+
   eval:
     name: run eval
+    needs: resolve-pr
+    if: >-
+      needs.resolve-pr.result == 'success' &&
+      needs.resolve-pr.outputs.same_repository == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout heimdall-rs (PR branch)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-pr.outputs.head_sha }}
 
       - name: Checkout heimdall-eval
         uses: actions/checkout@v4
