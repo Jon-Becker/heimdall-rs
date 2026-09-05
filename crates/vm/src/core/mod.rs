@@ -28,6 +28,9 @@ pub mod program;
 /// Stack implementation for the VM
 pub mod stack;
 
+/// Interned symbolic expressions for abstract analysis
+pub mod symbolic;
+
 /// Storage implementation for contract storage
 pub mod storage;
 
