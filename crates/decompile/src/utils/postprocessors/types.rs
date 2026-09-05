@@ -96,13 +96,12 @@ pub(crate) fn finalize_function(
                 Statement::IfElse { condition, then_body, else_body } => {
                     let then_body = finalize_block(then_body, state)?;
                     let else_body = finalize_block(else_body, state)?;
-                    match condition {
-                        Expr::Bool(true) => output.extend(then_body),
-                        Expr::Bool(false) => output.extend(else_body),
-                        _ if then_body.is_empty() && else_body.is_empty() => {}
-                        condition => {
-                            output.push(Statement::IfElse { condition, then_body, else_body });
-                        }
+                    // Constant-looking branches can be artifacts of concrete placeholder values
+                    // in an incomplete symbolic trace. Preserve both alternatives unless neither
+                    // contains behavior; branch pruning is only safe while trace completeness is
+                    // still available to the control-flow analyzer.
+                    if !then_body.is_empty() || !else_body.is_empty() {
+                        output.push(Statement::IfElse { condition, then_body, else_body });
                     }
                 }
                 statement => output.push(statement),
@@ -240,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn finalization_removes_tautologies_and_constant_branches() {
+    fn finalization_removes_tautologies_but_preserves_constant_branches() {
         let mut function = AnalyzedFunction::new("00000000", false);
         function.statements = vec![
             Statement::Require { condition: Expr::Bool(true), reason: None },
@@ -258,6 +257,13 @@ mod tests {
 
         finalize_function(&mut function, &mut state).unwrap();
 
-        assert_eq!(function.statements, vec![Statement::Return(Expr::identifier("arg0"))]);
+        assert_eq!(
+            function.statements,
+            vec![Statement::IfElse {
+                condition: Expr::Bool(false),
+                then_body: vec![Statement::Return(Expr::Literal(alloy::primitives::U256::ZERO,))],
+                else_body: vec![Statement::Return(Expr::identifier("arg0"))],
+            }]
+        );
     }
 }
