@@ -40,6 +40,11 @@ pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
     let start_disassemble_time = Instant::now();
     let program = Program::decode(&contract_bytecode, hardfork);
     for instruction in &program.instructions {
+        // Preserve the disassembler's existing behavior for incomplete trailing PUSH data. The
+        // structural frontend still retains the instruction for analysis with EVM zero-padding.
+        if instruction.truncated {
+            break
+        }
         let opcode_name = OpCodeInfo::for_fork(instruction.opcode, hardfork)
             .map_or("unknown", |info| info.name());
         let pushed_bytes = if instruction.immediate.is_empty() {
