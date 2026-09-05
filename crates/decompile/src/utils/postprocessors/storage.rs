@@ -5,30 +5,30 @@ use crate::{
     core::{
         ir::{BinaryOp, Expr, Statement, StoragePath},
         postprocess::PostprocessorState,
+        types::SolidityType,
     },
     Error,
 };
 
-fn expression_type(expr: &Expr, state: &PostprocessorState) -> String {
+fn expression_type(expr: &Expr, state: &PostprocessorState) -> SolidityType {
     match expr {
         Expr::Cast { ty, .. } => ty.clone(),
         Expr::Identifier(name) => {
             if matches!(name.as_str(), "msg.sender" | "tx.origin" | "address(this)") {
-                "address".to_string()
+                SolidityType::Address
             } else {
-                state.memory_type_map.get(name).cloned().unwrap_or_else(|| "bytes32".to_string())
+                state.memory_type_map.get(name).cloned().unwrap_or(SolidityType::FixedBytes(32))
             }
         }
         Expr::Binary { op, .. }
             if !matches!(op, BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor) =>
         {
-            "uint256".to_string()
+            SolidityType::Uint(256)
         }
-        Expr::Bool(_) => "bool".to_string(),
-        Expr::Literal(_) => "uint256".to_string(),
-        Expr::Keccak { .. } => "bytes32".to_string(),
-        Expr::Call { callee, .. } if callee == "address" => "address".to_string(),
-        _ => "bytes32".to_string(),
+        Expr::Bool(_) => SolidityType::Bool,
+        Expr::Literal(_) => SolidityType::Uint(256),
+        Expr::Keccak { .. } => SolidityType::FixedBytes(32),
+        _ => SolidityType::FixedBytes(32),
     }
 }
 
@@ -94,31 +94,41 @@ fn render_path(path: &StoragePath, root: &str) -> Expr {
 
 fn storage_type(
     path: &StoragePath,
-    leaf: String,
+    leaf: SolidityType,
     state: &PostprocessorState,
     collapse_dynamic: bool,
-) -> String {
+) -> SolidityType {
     match path {
         StoragePath::Slot { .. } => leaf,
         StoragePath::Mapping { parent, key } => storage_type(
             parent,
-            format!("mapping({} => {leaf})", expression_type(key, state)),
+            SolidityType::Mapping {
+                key: Box::new(expression_type(key, state)),
+                value: Box::new(leaf),
+            },
             state,
             collapse_dynamic,
         ),
         StoragePath::DynamicArray { parent, .. } => storage_type(
             parent,
-            if collapse_dynamic { leaf } else { format!("{leaf}[]") },
+            if collapse_dynamic {
+                leaf
+            } else {
+                SolidityType::Array { element: Box::new(leaf), length: None }
+            },
             state,
             collapse_dynamic,
         ),
         // Struct synthesis will replace this placeholder in a subsequent layout pass.
         StoragePath::Field { parent, .. } => {
-            storage_type(parent, "bytes32".to_string(), state, collapse_dynamic)
+            storage_type(parent, SolidityType::FixedBytes(32), state, collapse_dynamic)
         }
         StoragePath::PackedField { parent, bit_width, .. } => {
-            let packed_type =
-                if *bit_width == 160 { "address".to_string() } else { format!("uint{bit_width}") };
+            let packed_type = if *bit_width == 160 {
+                SolidityType::Address
+            } else {
+                SolidityType::Uint(*bit_width)
+            };
             storage_type(parent, packed_type, state, collapse_dynamic)
         }
     }
@@ -173,12 +183,15 @@ pub(crate) fn storage_postprocessor(
         let hint = state.storage_type_hints.get(path.root()).cloned();
         let inferred = storage_type(
             &path,
-            hint.clone().unwrap_or_else(|| "bytes32".to_string()),
+            hint.clone().unwrap_or(SolidityType::FixedBytes(32)),
             state,
             hint.is_some(),
         );
         let existing = state.storage_type_map.get(&root);
-        if hint.is_some() || existing.is_none() || existing.is_some_and(|ty| ty == "bytes32") {
+        if hint.is_some() ||
+            existing.is_none() ||
+            existing.is_some_and(|ty| ty == &SolidityType::FixedBytes(32))
+        {
             state.storage_type_map.insert(root, inferred);
         }
     }
@@ -226,10 +239,10 @@ mod tests {
             value: Expr::identifier("arg0"),
         };
         let mut state = PostprocessorState::default();
-        state.memory_type_map.insert("arg0".to_string(), "address".to_string());
+        state.memory_type_map.insert("arg0".to_string(), SolidityType::Address);
         storage_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "store_a = arg0;");
-        assert_eq!(state.storage_type_map.get("store_a"), Some(&"address".to_string()));
+        assert_eq!(state.storage_type_map.get("store_a"), Some(&SolidityType::Address));
     }
 
     #[test]
@@ -248,12 +261,12 @@ mod tests {
             value: Expr::Literal(U256::from(1)),
         };
         let mut state = PostprocessorState::default();
-        state.memory_type_map.insert("arg0".to_string(), "address".to_string());
-        state.memory_type_map.insert("arg1".to_string(), "address".to_string());
+        state.memory_type_map.insert("arg0".to_string(), SolidityType::Address);
+        state.memory_type_map.insert("arg1".to_string(), SolidityType::Address);
         storage_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(
-            state.storage_type_map.get("storage_map_a"),
-            Some(&"mapping(address => mapping(address => uint256))".to_string())
+            state.storage_type_map.get("storage_map_a").map(ToString::to_string),
+            Some("mapping(address => mapping(address => uint256))".to_string())
         );
     }
 
@@ -269,13 +282,13 @@ mod tests {
                 index: Box::new(Expr::identifier("arg0")),
             })));
         let mut state = PostprocessorState::default();
-        state.storage_type_hints.insert(root, "string".to_string());
+        state.storage_type_hints.insert(root, SolidityType::String);
         storage_postprocessor(&mut direct, &mut state).unwrap();
         storage_postprocessor(&mut dynamic, &mut state).unwrap();
         assert_eq!(state.storage_roots.len(), 1);
         assert_eq!(direct.render(RenderTarget::Solidity), "return store_a;");
         assert_eq!(dynamic.render(RenderTarget::Solidity), "return store_a[arg0];");
-        assert_eq!(state.storage_type_map.get("store_a"), Some(&"string".to_string()));
+        assert_eq!(state.storage_type_map.get("store_a"), Some(&SolidityType::String));
     }
 
     #[test]

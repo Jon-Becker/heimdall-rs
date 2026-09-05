@@ -14,7 +14,7 @@ use heimdall_common::{
 use tracing::debug;
 
 use crate::{
-    core::{analyze::AnalyzerType, postprocess::getter_type_matches},
+    core::{analyze::AnalyzerType, postprocess::getter_type_matches, types::SolidityType},
     interfaces::AnalyzedFunction,
     utils::constants::{
         DECOMPILED_SOURCE_HEADER_SOL, DECOMPILED_SOURCE_HEADER_YUL, LLM_POSTPROCESSING_PROMPT,
@@ -37,7 +37,7 @@ async fn annotate_contract(source: &str, openrouter_api_key: &str, model: &str) 
 
 #[derive(Clone, Debug)]
 pub(crate) struct StorageVariable {
-    pub typ: String,
+    pub typ: SolidityType,
     pub slot: Option<String>,
 }
 
@@ -242,7 +242,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
                         arg.potential_types()
                             .first()
                             .cloned()
-                            .unwrap_or_else(|| "bytes32".to_string())
+                            .unwrap_or(SolidityType::FixedBytes(32))
                     )
                 })
                 .collect::<Vec<String>>()
@@ -261,7 +261,9 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
             output
                 .extend(f.notices.iter().map(|notice| format!("/// @notice             {notice}")));
             output.extend(f.sorted_arguments().iter().map(|(i, arg)| {
-                format!("/// @param              arg{i} {:?}", arg.potential_types(),)
+                let potential_types =
+                    arg.potential_types().iter().map(ToString::to_string).collect::<Vec<_>>();
+                format!("/// @param              arg{i} {potential_types:?}")
             }));
             output.push(format!("function {function_signature} {{"));
 
@@ -276,7 +278,9 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
             output
                 .extend(f.notices.iter().map(|notice| format!(" * @notice             {notice}")));
             output.extend(f.sorted_arguments().iter().map(|(i, arg)| {
-                format!(" * @param                arg{i} {:?}", arg.potential_types(),)
+                let potential_types =
+                    arg.potential_types().iter().map(ToString::to_string).collect::<Vec<_>>();
+                format!(" * @param                arg{i} {potential_types:?}")
             }));
             output.extend(vec![" */".to_string(), format!("case 0x{} {{", f.selector)]);
 
@@ -319,7 +323,10 @@ fn get_constants(functions: &[AnalyzedFunction]) -> Vec<String> {
             if f.is_constant() && f.maybe_getter_for.is_none() {
                 Some(format!(
                     "{} public constant {} = {};",
-                    f.returns.as_deref().unwrap_or("bytes").replacen("memory", "", 1).trim(),
+                    f.returns
+                        .as_ref()
+                        .map(SolidityType::without_location)
+                        .unwrap_or(SolidityType::Bytes),
                     f.resolved_function
                         .as_ref()
                         .map(|x| x.name.clone())
@@ -357,14 +364,14 @@ fn get_storage_variables(
 
                 // TODO: for public getters, we can use `eth_getStorageAt` to get the value
                 return (
-                    typ.starts_with("mapping("),
+                    typ.is_mapping(),
                     U256::from_str(slot).ok(),
                     format!("{typ} public {name}; // storage slot: {slot}"),
                 );
             }
 
             (
-                typ.starts_with("mapping("),
+                typ.is_mapping(),
                 U256::from_str(slot).ok(),
                 format!("{typ} {name}; // storage slot: {slot}"),
             )
@@ -514,13 +521,13 @@ mod tests {
     fn duplicate_getters_are_not_collapsed() {
         let mut first = AnalyzedFunction::new("00000001", false);
         first.maybe_getter_for = Some("store_a".to_string());
-        first.returns = Some("uint256".to_string());
+        first.returns = Some(SolidityType::Uint(256));
         let mut second = AnalyzedFunction::new("00000002", false);
         second.maybe_getter_for = Some("store_a".to_string());
-        second.returns = Some("uint256".to_string());
+        second.returns = Some(SolidityType::Uint(256));
         let variables = HashMap::from([(
             "store_a".to_string(),
-            StorageVariable { typ: "uint256".to_string(), slot: Some("0x00".to_string()) },
+            StorageVariable { typ: SolidityType::Uint(256), slot: Some("0x00".to_string()) },
         )]);
         assert!(unique_getter(&[first, second], &variables, "store_a").is_none());
     }
@@ -529,14 +536,14 @@ mod tests {
     fn incompatible_alias_is_not_collapsed_with_canonical_getter() {
         let mut canonical = AnalyzedFunction::new("00000001", false);
         canonical.maybe_getter_for = Some("store_a".to_string());
-        canonical.returns = Some("uint256".to_string());
+        canonical.returns = Some(SolidityType::Uint(256));
         let mut alias = AnalyzedFunction::new("00000002", false);
         alias.maybe_getter_for = Some("store_a".to_string());
-        alias.returns = Some("address".to_string());
+        alias.returns = Some(SolidityType::Address);
         let functions = vec![canonical, alias];
         let variables = HashMap::from([(
             "store_a".to_string(),
-            StorageVariable { typ: "uint256".to_string(), slot: Some("0x00".to_string()) },
+            StorageVariable { typ: SolidityType::Uint(256), slot: Some("0x00".to_string()) },
         )]);
         assert!(is_collapsible_getter(&functions[0], &functions, &variables));
         assert!(!is_collapsible_getter(&functions[1], &functions, &variables));
@@ -548,13 +555,16 @@ mod tests {
             (
                 "storage_map_a".to_string(),
                 StorageVariable {
-                    typ: "mapping(address => uint256)".to_string(),
+                    typ: SolidityType::Mapping {
+                        key: Box::new(SolidityType::Address),
+                        value: Box::new(SolidityType::Uint(256)),
+                    },
                     slot: Some("0x03".to_string()),
                 },
             ),
             (
                 "store_b".to_string(),
-                StorageVariable { typ: "string".to_string(), slot: Some("0x00".to_string()) },
+                StorageVariable { typ: SolidityType::String, slot: Some("0x00".to_string()) },
             ),
         ]);
         let output = get_storage_variables(&variables, &[]);

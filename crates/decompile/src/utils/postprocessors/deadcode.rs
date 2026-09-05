@@ -142,10 +142,11 @@ mod tests {
     use alloy::primitives::U256;
 
     use super::*;
+    use crate::core::types::SolidityType;
 
     fn assignment(name: &str, value: Expr) -> Statement {
         Statement::DeclareAssign {
-            ty: "uint256".to_string(),
+            ty: SolidityType::Uint(256),
             target: Expr::identifier(name),
             value,
         }

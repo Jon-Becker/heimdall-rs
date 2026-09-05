@@ -4,6 +4,8 @@ use alloy::primitives::U256;
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::core::opcodes::{self, WrappedInput, WrappedOpcode};
 
+use super::types::SolidityType;
+
 /// Unary source operators.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum UnaryOp {
@@ -186,7 +188,7 @@ pub(crate) enum Expr {
     Member { base: Box<Expr>, member: String },
     Keccak { offset: Box<Expr>, size: Box<Expr>, preimage: Option<Vec<Expr>> },
     StorageAccess(Box<StoragePath>),
-    Cast { ty: String, value: Box<Expr> },
+    Cast { ty: SolidityType, value: Box<Expr> },
     Call { callee: String, args: Vec<Expr> },
 }
 
@@ -309,15 +311,15 @@ impl Expr {
                 Self::Call { callee: "blockhash".to_string(), args: vec![input(0)] }
             }
             opcodes::BALANCE => Self::Member {
-                base: Box::new(Self::Call { callee: "address".to_string(), args: vec![input(0)] }),
+                base: Box::new(Self::Cast { ty: SolidityType::Address, value: Box::new(input(0)) }),
                 member: "balance".to_string(),
             },
             opcodes::EXTCODESIZE => Self::Member {
-                base: Box::new(Self::Call { callee: "address".to_string(), args: vec![input(0)] }),
+                base: Box::new(Self::Cast { ty: SolidityType::Address, value: Box::new(input(0)) }),
                 member: "code.length".to_string(),
             },
             opcodes::EXTCODEHASH => Self::Member {
-                base: Box::new(Self::Call { callee: "address".to_string(), args: vec![input(0)] }),
+                base: Box::new(Self::Cast { ty: SolidityType::Address, value: Box::new(input(0)) }),
                 member: "codehash".to_string(),
             },
             _ => Self::raw(opcode.solidify()),
@@ -343,7 +345,11 @@ impl Expr {
         }
 
         let width = 32 - first_nonzero;
-        let ty = if width == 20 { "address".to_string() } else { format!("uint{}", width * 8) };
+        let ty = if width == 20 {
+            SolidityType::Address
+        } else {
+            SolidityType::Uint((width * 8) as u16)
+        };
         Some(Self::Cast { ty, value: Box::new(value) })
     }
 
@@ -670,7 +676,7 @@ pub(crate) enum Statement {
         value: Expr,
     },
     DeclareAssign {
-        ty: String,
+        ty: SolidityType,
         target: Expr,
         value: Expr,
     },

@@ -4,6 +4,7 @@ use crate::{
     core::{
         ir::{BinaryOp, Expr, Statement, StoragePath},
         postprocess::PostprocessorState,
+        types::SolidityType,
     },
     Error,
 };
@@ -55,19 +56,13 @@ fn path_from_keccak(expr: &Expr) -> Option<StoragePath> {
     }
 }
 
-fn cast_width(ty: &str) -> Option<u16> {
-    match ty {
-        "address" => Some(160),
-        "bool" => Some(8),
-        _ => ty
-            .strip_prefix("uint")
-            .or_else(|| ty.strip_prefix("int"))
-            .and_then(|width| width.parse().ok())
-            .or_else(|| {
-                ty.strip_prefix("bytes")
-                    .and_then(|width| width.parse::<u16>().ok())
-                    .map(|width| width * 8)
-            }),
+fn cast_width(ty: &SolidityType) -> Option<u16> {
+    match ty.without_location() {
+        SolidityType::Address => Some(160),
+        SolidityType::Bool => Some(8),
+        SolidityType::Uint(width) | SolidityType::Int(width) => Some(width),
+        SolidityType::FixedBytes(size) => Some(u16::from(size) * 8),
+        _ => None,
     }
 }
 
@@ -188,7 +183,7 @@ pub(crate) fn storage_inference_postprocessor(
     }
 
     if let Statement::Assign { target: Expr::Index { base, index }, value } = statement {
-        if base.render() == "memory" {
+        if matches!(&**base, Expr::Raw(name) | Expr::Identifier(name) if name == "memory") {
             if let Expr::Literal(offset) = &**index {
                 state.symbolic_memory.insert(*offset, value.clone());
             }
@@ -292,7 +287,7 @@ mod tests {
     #[test]
     fn recognizes_packed_field() {
         let mut statement = Statement::Return(Expr::Cast {
-            ty: "address".to_string(),
+            ty: SolidityType::Address,
             value: Box::new(Expr::Binary {
                 op: BinaryOp::Shr,
                 lhs: Box::new(Expr::StorageAccess(Box::new(StoragePath::Slot {

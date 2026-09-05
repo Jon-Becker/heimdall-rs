@@ -13,6 +13,7 @@ use crate::{
     core::{
         analyze::{AnalyzerState, AnalyzerType},
         ir::{Expr, Statement},
+        types::SolidityType,
     },
     interfaces::{AnalyzedFunction, CalldataFrame, TypeHeuristic},
     utils::constants::{AND_BITMASK_REGEX, AND_BITMASK_REGEX_2},
@@ -133,13 +134,15 @@ pub(crate) fn argument_heuristic<'a>(
 
                 // if we've already determined a return type, we don't want to do it again.
                 // we use bytes32 as a default return type
-                if function.returns.is_some() && function.returns.as_deref() != Some("bytes32") {
+                if function.returns.is_some() &&
+                    function.returns.as_ref() != Some(&SolidityType::FixedBytes(32))
+                {
                     return Ok(());
                 }
 
                 // if the any input op is ISZERO(x), this is a boolean return
                 if return_memory_operations.iter().any(|x| x.operation.opcode == ISZERO) {
-                    function.returns = Some(String::from("bool"));
+                    function.returns = Some(SolidityType::Bool);
                 }
                 // if the input op is any of the following, it is a uint256 return
                 // this is because these push numeric values onto the stack
@@ -147,7 +150,7 @@ pub(crate) fn argument_heuristic<'a>(
                     [0x31, 0x34, 0x3a, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x58, 0x5a]
                         .contains(&x.operation.opcode)
                 }) {
-                    function.returns = Some(String::from("uint256"));
+                    function.returns = Some(SolidityType::Uint(256));
                 }
                 // if the input op is any of the following, it is an address return
                 // this is because these push address values onto the stack
@@ -155,7 +158,7 @@ pub(crate) fn argument_heuristic<'a>(
                     .iter()
                     .any(|x| [0x30, 0x32, 0x33, 0x41].contains(&x.operation.opcode))
                 {
-                    function.returns = Some(String::from("address"));
+                    function.returns = Some(SolidityType::Address);
                 }
                 // if the size of returndata is > 32, it must be a bytes or string return.
                 else if size > 32 {
@@ -164,9 +167,9 @@ pub(crate) fn argument_heuristic<'a>(
                     if ["06fdde03", "95d89b41", "6a98de4c", "9d2b0822", "1a0d4bca"]
                         .contains(&function.selector.as_str())
                     {
-                        function.returns = Some(String::from("string memory"));
+                        function.returns = Some(SolidityType::String.in_memory());
                     } else {
-                        function.returns = Some(String::from("bytes memory"));
+                        function.returns = Some(SolidityType::Bytes.in_memory());
                     }
                 } else {
                     // attempt to find a return type within the return memory operations
@@ -196,7 +199,7 @@ pub(crate) fn argument_heuristic<'a>(
 
                     // convert the cast size to a string
                     let (_, cast_types) = byte_size_to_type(byte_size);
-                    function.returns = Some(cast_types[0].to_string());
+                    function.returns = Some(SolidityType::parse(&cast_types[0]));
                 }
 
                 debug!(

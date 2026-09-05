@@ -37,9 +37,7 @@ fn is_pure_inline_candidate(expr: &Expr) -> bool {
             is_pure_inline_candidate(lhs) && is_pure_inline_candidate(rhs)
         }
         Expr::Member { base, .. } => is_pure_inline_candidate(base),
-        Expr::Call { callee, args }
-            if matches!(callee.as_str(), "address" | "blockhash" | "keccak256") =>
-        {
+        Expr::Call { callee, args } if matches!(callee.as_str(), "blockhash" | "keccak256") => {
             args.iter().all(is_pure_inline_candidate)
         }
         Expr::Raw(_) |
@@ -128,17 +126,20 @@ mod tests {
     use alloy::primitives::U256;
 
     use super::*;
-    use crate::core::ir::{RenderTarget, Statement};
+    use crate::core::{
+        ir::{RenderTarget, Statement},
+        types::SolidityType,
+    };
 
     #[test]
     fn inlines_single_use_cast() {
         let mut function = AnalyzedFunction::new("00000000", false);
         function.statements = vec![
             Statement::DeclareAssign {
-                ty: "address".to_string(),
+                ty: SolidityType::Address,
                 target: Expr::identifier("var_a"),
                 value: Expr::Cast {
-                    ty: "address".to_string(),
+                    ty: SolidityType::Address,
                     value: Box::new(Expr::identifier("arg0")),
                 },
             },
@@ -157,7 +158,7 @@ mod tests {
         let mut function = AnalyzedFunction::new("00000000", false);
         function.statements = vec![
             Statement::DeclareAssign {
-                ty: "bytes32".to_string(),
+                ty: SolidityType::FixedBytes(32),
                 target: Expr::identifier("var_a"),
                 value: Expr::Call {
                     callee: "blockhash".to_string(),

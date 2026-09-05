@@ -19,7 +19,28 @@ use crate::{
 use super::{
     analyze::AnalyzerType,
     ir::{BinaryOp, Expr, Statement},
+    types::SolidityType,
 };
+
+fn expression_root(expr: &Expr) -> Option<(&str, bool)> {
+    match expr {
+        Expr::Identifier(name) | Expr::Raw(name) => Some((name, false)),
+        Expr::Index { base, .. } => expression_root(base).map(|(name, _)| (name, true)),
+        Expr::Member { base, .. } => expression_root(base),
+        _ => None,
+    }
+}
+
+fn default_storage_type(indexed: bool) -> SolidityType {
+    if indexed {
+        SolidityType::Mapping {
+            key: Box::new(SolidityType::FixedBytes(32)),
+            value: Box::new(SolidityType::FixedBytes(32)),
+        }
+    } else {
+        SolidityType::FixedBytes(32)
+    }
+}
 
 fn find_expression(
     statements: &[Statement],
@@ -76,71 +97,58 @@ fn path_has_packed_width(path: &super::ir::StoragePath, width: u16) -> bool {
     }
 }
 
-fn normalize_type(ty: &str) -> String {
-    match ty.replace(" memory", "").trim() {
-        "uint" => "uint256".to_string(),
-        "int" => "int256".to_string(),
-        ty => ty.to_string(),
-    }
-}
-
-fn mapping_parts(ty: &str) -> Option<(&str, &str)> {
-    let inner = ty.strip_prefix("mapping(")?.strip_suffix(')')?;
-    let mut depth = 0usize;
-    for (index, byte) in inner.as_bytes().iter().enumerate() {
-        match byte {
-            b'(' => depth += 1,
-            b')' => depth = depth.saturating_sub(1),
-            b'=' if depth == 0 && inner.as_bytes().get(index + 1) == Some(&b'>') => {
-                return Some((inner[..index].trim(), inner[index + 2..].trim()))
+fn storage_getter_signature(ty: &SolidityType) -> (Vec<SolidityType>, SolidityType) {
+    let mut inputs = Vec::new();
+    let mut value = ty.without_location();
+    loop {
+        match value {
+            SolidityType::Mapping { key, value: nested } => {
+                inputs.push(key.without_location());
+                value = nested.without_location();
             }
-            _ => {}
+            SolidityType::Array { element, .. } => {
+                inputs.push(SolidityType::Uint(256));
+                value = element.without_location();
+            }
+            _ => return (inputs, value),
         }
     }
-    None
 }
 
-fn storage_getter_signature(ty: &str) -> (Vec<String>, String) {
-    let mut inputs = Vec::new();
-    let mut value = ty.trim();
-    while let Some((key, nested)) = mapping_parts(value) {
-        inputs.push(normalize_type(key));
-        value = nested;
-    }
-    while let Some(element) = value.strip_suffix("[]") {
-        inputs.push("uint256".to_string());
-        value = element;
-    }
-    (inputs, normalize_type(value))
-}
-
-pub(crate) fn getter_type_matches(function: &AnalyzedFunction, storage_type: &str) -> bool {
+pub(crate) fn getter_type_matches(
+    function: &AnalyzedFunction,
+    storage_type: &SolidityType,
+) -> bool {
     let (expected_inputs, expected_output) = storage_getter_signature(storage_type);
-    let actual_inputs: Vec<String> = function
+    let actual_inputs: Vec<SolidityType> = function
         .resolved_function
         .as_ref()
         .map(|function| {
-            function.inputs().iter().map(|ty| normalize_type(&ty.to_string())).collect()
+            function
+                .inputs()
+                .iter()
+                .map(|ty| SolidityType::parse(&ty.to_string()).without_location())
+                .collect()
         })
         .unwrap_or_else(|| {
             function
                 .sorted_arguments()
                 .iter()
                 .map(|(_, argument)| {
-                    normalize_type(
-                        &argument
-                            .potential_types()
-                            .first()
-                            .cloned()
-                            .unwrap_or_else(|| "bytes32".to_string()),
-                    )
+                    argument
+                        .potential_types()
+                        .first()
+                        .map(SolidityType::without_location)
+                        .unwrap_or(SolidityType::FixedBytes(32))
                 })
                 .collect()
         });
-    let output_matches =
-        function.returns.as_deref().is_some_and(|output| normalize_type(output) == expected_output);
+    let output_matches = function
+        .returns
+        .as_ref()
+        .is_some_and(|output| output.without_location() == expected_output);
     let decimals = expected_inputs.is_empty() &&
-        expected_output == "uint8" &&
+        expected_output == SolidityType::Uint(8) &&
         function.resolved_function.as_ref().is_some_and(|function| function.name == "decimals");
     actual_inputs == expected_inputs && (output_matches || decimals)
 }
@@ -174,21 +182,21 @@ pub(crate) struct PostprocessorState {
     /// A mapping which holds the last assigned value for a given variable
     pub variable_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for memory variables
-    pub memory_type_map: HashMap<String, String>,
+    pub memory_type_map: HashMap<String, SolidityType>,
     /// Canonical root slots and their generated source names.
     pub storage_roots: HashMap<Expr, String>,
     /// Type hints associated with canonical root slots.
-    pub storage_type_hints: HashMap<Expr, String>,
+    pub storage_type_hints: HashMap<Expr, SolidityType>,
     /// Generated variable names mapped back to their physical base slots.
     pub storage_root_slots: HashMap<String, Expr>,
     /// A mapping from storage locations to their corresponding variable names
     pub storage_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for storage variables
-    pub storage_type_map: HashMap<String, String>,
+    pub storage_type_map: HashMap<String, SolidityType>,
     /// A mapping from transient storage locations to their corresponding variable names
     pub transient_map: HashMap<Expr, Expr>,
     /// A mapping which holds inferred types for transient storage variables
-    pub transient_type_map: HashMap<String, String>,
+    pub transient_type_map: HashMap<String, SolidityType>,
     /// An optional field which holds the storage location if the function is a public getter
     pub maybe_getter_for: Option<Expr>,
     /// Current conditional nesting depth during flat-statement iteration.
@@ -275,25 +283,25 @@ impl PostprocessOrchestrator {
         state.memory_type_map.extend(function.arguments.iter().map(|(i, frame)| {
             (
                 format!("arg{i}"),
-                frame.potential_types().first().cloned().unwrap_or_else(|| String::from("bytes32")),
+                frame.potential_types().first().cloned().unwrap_or(SolidityType::FixedBytes(32)),
             )
         }));
 
         // add known variables to memory_type_map
         state.memory_type_map.extend([
-            (String::from(".balance"), String::from("uint256")),
-            (String::from(".blockhash"), String::from("bytes32")),
-            (String::from(".codehash"), String::from("bytes32")),
-            (String::from(".sender"), String::from("address")),
-            (String::from(".origin"), String::from("address")),
-            (String::from(".timestamp"), String::from("uint256")),
-            (String::from(".value"), String::from("uint256")),
-            (String::from(".length"), String::from("uint256")),
-            (String::from(".coinbase"), String::from("address")),
-            (String::from(".number"), String::from("uint256")),
-            (String::from(".prevrandao"), String::from("uint256")),
-            (String::from(".gaslimit"), String::from("uint256")),
-            (String::from(".chainid"), String::from("uint256")),
+            (String::from(".balance"), SolidityType::Uint(256)),
+            (String::from(".blockhash"), SolidityType::FixedBytes(32)),
+            (String::from(".codehash"), SolidityType::FixedBytes(32)),
+            (String::from(".sender"), SolidityType::Address),
+            (String::from(".origin"), SolidityType::Address),
+            (String::from(".timestamp"), SolidityType::Uint(256)),
+            (String::from(".value"), SolidityType::Uint(256)),
+            (String::from(".length"), SolidityType::Uint(256)),
+            (String::from(".coinbase"), SolidityType::Address),
+            (String::from(".number"), SolidityType::Uint(256)),
+            (String::from(".prevrandao"), SolidityType::Uint(256)),
+            (String::from(".gaslimit"), SolidityType::Uint(256)),
+            (String::from(".chainid"), SolidityType::Uint(256)),
         ]);
 
         // Storage inference must run before getter detection and before memory accesses are
@@ -314,20 +322,18 @@ impl PostprocessOrchestrator {
             }
         }
 
-        if let Some(returns) = function.returns.as_deref() {
-            let hint = if returns.starts_with("string") {
-                Some("string")
-            } else if returns.starts_with("bytes") && returns != "bytes32" {
-                Some("bytes")
-            } else {
-                None
+        if let Some(returns) = function.returns.as_ref() {
+            let hint = match returns.without_location() {
+                SolidityType::String => Some(SolidityType::String),
+                SolidityType::Bytes => Some(SolidityType::Bytes),
+                _ => None,
             };
             if let Some(hint) = hint {
                 for statement in &function.statements {
                     let mut statement = statement.clone();
                     statement.visit_exprs_mut(&mut |expr| {
                         if let Expr::StorageAccess(path) = expr {
-                            state.storage_type_hints.insert(path.root().clone(), hint.to_string());
+                            state.storage_type_hints.insert(path.root().clone(), hint.clone());
                         }
                     });
                 }
@@ -343,10 +349,12 @@ impl PostprocessOrchestrator {
             .resolved_function
             .as_ref()
             .is_some_and(|resolved| likely_string_getter_name(&resolved.name));
-        if named_string_getter && function.returns.as_deref() == Some("bytes memory") {
-            function.returns = Some("string memory".to_string());
+        if named_string_getter &&
+            function.returns.as_ref() == Some(&SolidityType::Bytes.in_memory())
+        {
+            function.returns = Some(SolidityType::String.in_memory());
             if let Some(root) = state.maybe_getter_for.clone() {
-                state.storage_type_hints.insert(root, "string".to_string());
+                state.storage_type_hints.insert(root, SolidityType::String);
             }
         }
 
@@ -364,13 +372,13 @@ impl PostprocessOrchestrator {
                         })
                         .is_some())
                 {
-                    function.returns = Some(String::from("string memory"));
-                    function.statements = vec![Statement::Return(Expr::Call {
-                        callee: "string".to_string(),
-                        args: vec![Expr::Call {
+                    function.returns = Some(SolidityType::String.in_memory());
+                    function.statements = vec![Statement::Return(Expr::Cast {
+                        ty: SolidityType::String,
+                        value: Box::new(Expr::Call {
                             callee: "rlp.encodePacked".to_string(),
                             args: vec![storage],
-                        }],
+                        }),
                     })];
                 }
             }
@@ -391,36 +399,20 @@ impl PostprocessOrchestrator {
 
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
-        state.storage_map.iter().for_each(|(_, value)| {
-            let rendered = value.render();
-            let storage_var_name = rendered.split('[').next().unwrap_or(&rendered);
-            if !state.storage_type_map.contains_key(storage_var_name) {
-                if storage_var_name.contains("map") {
-                    state.storage_type_map.insert(
-                        storage_var_name.to_string(),
-                        "mapping(bytes32 => bytes32)".to_string(),
-                    );
-                } else {
-                    state
-                        .storage_type_map
-                        .insert(storage_var_name.to_string(), "bytes32".to_string());
-                }
+        state.storage_map.values().for_each(|value| {
+            if let Some((name, indexed)) = expression_root(value) {
+                state
+                    .storage_type_map
+                    .entry(name.to_string())
+                    .or_insert_with(|| default_storage_type(indexed));
             }
         });
-        state.transient_map.iter().for_each(|(_, value)| {
-            let rendered = value.render();
-            let storage_var_name = rendered.split('[').next().unwrap_or(&rendered);
-            if !state.transient_type_map.contains_key(storage_var_name) {
-                if storage_var_name.contains("map") {
-                    state.transient_type_map.insert(
-                        storage_var_name.to_string(),
-                        "mapping(bytes32 => bytes32)".to_string(),
-                    );
-                } else {
-                    state
-                        .transient_type_map
-                        .insert(storage_var_name.to_string(), "bytes32".to_string());
-                }
+        state.transient_map.values().for_each(|value| {
+            if let Some((name, indexed)) = expression_root(value) {
+                state
+                    .transient_type_map
+                    .entry(name.to_string())
+                    .or_insert_with(|| default_storage_type(indexed));
             }
         });
 
@@ -485,7 +477,7 @@ mod tests {
         function.analyzer_type = AnalyzerType::Solidity;
         function.view = true;
         function.payable = false;
-        function.returns = Some("string memory".to_string());
+        function.returns = Some(SolidityType::String.in_memory());
         function.statements = vec![
             Statement::Expression(Expr::StorageAccess(Box::new(StoragePath::PackedField {
                 parent: Box::new(StoragePath::Slot { slot: Box::new(root.clone()) }),
@@ -529,7 +521,10 @@ mod tests {
         assert_eq!(function.logic, vec!["return storage_map_a[msg.sender];"]);
         assert_eq!(
             state.storage_type_map.get("storage_map_a"),
-            Some(&"mapping(address => bytes32)".to_string())
+            Some(&SolidityType::Mapping {
+                key: Box::new(SolidityType::Address),
+                value: Box::new(SolidityType::FixedBytes(32)),
+            })
         );
     }
 }

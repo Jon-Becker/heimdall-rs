@@ -8,6 +8,7 @@ use crate::{
     core::{
         analyze::AnalyzerState,
         ir::{BinaryOp, Expr, Statement, StoragePath},
+        types::SolidityType,
     },
     interfaces::{AnalyzedFunction, StorageFrame},
     Error,
@@ -74,14 +75,19 @@ pub(crate) fn solidity_heuristic<'a>(
                         "memory",
                         Expr::from_opcode(&instruction.input_operations[1]),
                     ),
-                    value: Expr::slice(
-                        format!(
-                            "address({}).code",
-                            Expr::from_opcode(&instruction.input_operations[0]).render()
-                        ),
-                        source_offset.clone(),
-                        Expr::binary(BinaryOp::Add, source_offset, size),
-                    ),
+                    value: Expr::Slice {
+                        base: Box::new(Expr::Member {
+                            base: Box::new(Expr::Cast {
+                                ty: SolidityType::Address,
+                                value: Box::new(Expr::from_opcode(
+                                    &instruction.input_operations[0],
+                                )),
+                            }),
+                            member: "code".to_string(),
+                        }),
+                        start: Box::new(source_offset.clone()),
+                        end: Box::new(Expr::binary(BinaryOp::Add, source_offset, size)),
+                    },
                 });
             }
 

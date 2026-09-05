@@ -2,67 +2,32 @@ use crate::{
     core::{
         ir::{BinaryOp, Expr, Statement, UnaryOp},
         postprocess::PostprocessorState,
+        types::SolidityType,
     },
     interfaces::AnalyzedFunction,
     Error,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum InferredType {
-    Address,
-    Bool,
-    Uint(u16),
-    Int(u16),
-    Bytes(u16),
-    DynamicBytes,
-    String,
-    Unknown,
-}
-
-impl InferredType {
-    fn parse(ty: &str) -> Self {
-        let ty = ty.trim().trim_end_matches(" memory");
-        match ty {
-            "address" => Self::Address,
-            "bool" => Self::Bool,
-            "bytes" => Self::DynamicBytes,
-            "string" => Self::String,
-            _ if ty.starts_with("uint") => Self::Uint(ty[4..].parse().unwrap_or(256)),
-            _ if ty.starts_with("int") => Self::Int(ty[3..].parse().unwrap_or(256)),
-            _ if ty.starts_with("bytes") => Self::Bytes(ty[5..].parse::<u16>().unwrap_or(32) * 8),
-            _ => Self::Unknown,
-        }
-    }
-}
-
-fn mapping_value_type(ty: &str) -> Option<InferredType> {
-    if !ty.starts_with("mapping(") {
-        return None;
-    }
-    let value = ty.rsplit_once("=>")?.1.trim().trim_end_matches(')').trim();
-    Some(InferredType::parse(value))
-}
-
-fn infer_type(expr: &Expr, state: &PostprocessorState) -> InferredType {
+fn infer_type(expr: &Expr, state: &PostprocessorState) -> SolidityType {
     match expr {
         Expr::Identifier(name) => match name.as_str() {
-            "msg.sender" | "tx.origin" | "address(this)" => InferredType::Address,
+            "msg.sender" | "tx.origin" | "address(this)" => SolidityType::Address,
             "msg.value" | "block.timestamp" | "block.number" | "block.chainid" => {
-                InferredType::Uint(256)
+                SolidityType::Uint(256)
             }
             _ => state
                 .memory_type_map
                 .get(name)
                 .or_else(|| state.storage_type_map.get(name))
-                .map(|ty| InferredType::parse(ty))
-                .unwrap_or(InferredType::Unknown),
+                .cloned()
+                .unwrap_or(SolidityType::Unknown),
         },
-        Expr::Literal(_) => InferredType::Uint(256),
-        Expr::Bool(_) => InferredType::Bool,
-        Expr::StringLiteral(_) => InferredType::String,
-        Expr::Cast { ty, .. } => InferredType::parse(ty),
-        Expr::Unary { op: UnaryOp::LogicalNot, .. } => InferredType::Bool,
-        Expr::Unary { .. } => InferredType::Uint(256),
+        Expr::Literal(_) => SolidityType::Uint(256),
+        Expr::Bool(_) => SolidityType::Bool,
+        Expr::StringLiteral(_) => SolidityType::String,
+        Expr::Cast { ty, .. } => ty.clone(),
+        Expr::Unary { op: UnaryOp::LogicalNot, .. } => SolidityType::Bool,
+        Expr::Unary { .. } => SolidityType::Uint(256),
         Expr::Binary { op, .. } => match op {
             BinaryOp::LogicalAnd |
             BinaryOp::Lt |
@@ -70,25 +35,17 @@ fn infer_type(expr: &Expr, state: &PostprocessorState) -> InferredType {
             BinaryOp::Gt |
             BinaryOp::Ge |
             BinaryOp::Eq |
-            BinaryOp::Ne => InferredType::Bool,
-            _ => InferredType::Uint(256),
+            BinaryOp::Ne => SolidityType::Bool,
+            _ => SolidityType::Uint(256),
         },
-        Expr::Call { callee, .. } if callee == "address" => InferredType::Address,
-        Expr::Call { callee, .. } if callee == "keccak256" => InferredType::Bytes(256),
-        Expr::Keccak { .. } => InferredType::Bytes(256),
-        Expr::Index { base, .. } => match &**base {
-            Expr::Identifier(name) => state
-                .storage_type_map
-                .get(name)
-                .and_then(|ty| mapping_value_type(ty))
-                .unwrap_or(InferredType::Unknown),
-            _ => InferredType::Unknown,
-        },
+        Expr::Call { callee, .. } if callee == "keccak256" => SolidityType::FixedBytes(32),
+        Expr::Keccak { .. } => SolidityType::FixedBytes(32),
+        Expr::Index { base, .. } => infer_type(base, state).indexed(),
         Expr::Member { base, member } if member == "balance" => {
             let _ = base;
-            InferredType::Uint(256)
+            SolidityType::Uint(256)
         }
-        _ => InferredType::Unknown,
+        _ => SolidityType::Unknown,
     }
 }
 
@@ -102,17 +59,12 @@ pub(crate) fn type_cleanup_postprocessor(
             *expr = Expr::identifier("type(uint256).max");
         }
         Expr::Cast { ty, value } => {
-            let target = InferredType::parse(ty);
-            if target != InferredType::Unknown && infer_type(value, state) == target {
+            let target = ty.without_location();
+            if target != SolidityType::Unknown &&
+                infer_type(value, state).without_location() == target
+            {
                 *expr = *value.clone();
             }
-        }
-        Expr::Call { callee, args }
-            if callee == "address" &&
-                args.len() == 1 &&
-                infer_type(&args[0], state) == InferredType::Address =>
-        {
-            *expr = args.remove(0);
         }
         _ => {}
     });
@@ -124,7 +76,7 @@ pub(crate) fn normalize_typed_returns(
     function: &mut AnalyzedFunction,
     _: &mut PostprocessorState,
 ) -> Result<(), Error> {
-    if function.returns.as_deref() != Some("bool") {
+    if function.returns.as_ref() != Some(&SolidityType::Bool) {
         return Ok(())
     }
     for statement in &mut function.statements {
@@ -152,7 +104,7 @@ mod tests {
     #[test]
     fn renders_boolean_return() {
         let mut function = AnalyzedFunction::new("00000000", false);
-        function.returns = Some("bool".to_string());
+        function.returns = Some(SolidityType::Bool);
         function.statements =
             vec![Statement::Return(Expr::Literal(alloy::primitives::U256::from(1)))];
         normalize_typed_returns(&mut function, &mut PostprocessorState::default()).unwrap();
@@ -162,36 +114,83 @@ mod tests {
     #[test]
     fn removes_redundant_address_casts() {
         let mut statement = Statement::Return(Expr::Cast {
-            ty: "address".to_string(),
+            ty: SolidityType::Address,
             value: Box::new(Expr::Cast {
-                ty: "address".to_string(),
+                ty: SolidityType::Address,
                 value: Box::new(Expr::identifier("arg0")),
             }),
         });
         let mut state = PostprocessorState::default();
-        state.memory_type_map.insert("arg0".to_string(), "address".to_string());
+        state.memory_type_map.insert("arg0".to_string(), SolidityType::Address);
         type_cleanup_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return arg0;");
     }
 
     #[test]
     fn removes_redundant_address_conversion() {
-        let mut statement = Statement::Return(Expr::Call {
-            callee: "address".to_string(),
-            args: vec![Expr::identifier("msg.sender")],
+        let mut statement = Statement::Return(Expr::Cast {
+            ty: SolidityType::Address,
+            value: Box::new(Expr::identifier("msg.sender")),
         });
         type_cleanup_postprocessor(&mut statement, &mut PostprocessorState::default()).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return msg.sender;");
     }
 
     #[test]
+    fn keeps_cast_for_single_index_into_nested_mapping() {
+        let mut statement = Statement::Return(Expr::Cast {
+            ty: SolidityType::Bool,
+            value: Box::new(Expr::Index {
+                base: Box::new(Expr::identifier("storage_map")),
+                index: Box::new(Expr::identifier("arg0")),
+            }),
+        });
+        let mut state = PostprocessorState::default();
+        state.storage_type_map.insert(
+            "storage_map".to_string(),
+            SolidityType::Mapping {
+                key: Box::new(SolidityType::Address),
+                value: Box::new(SolidityType::Mapping {
+                    key: Box::new(SolidityType::Uint(256)),
+                    value: Box::new(SolidityType::Bool),
+                }),
+            },
+        );
+        type_cleanup_postprocessor(&mut statement, &mut state).unwrap();
+        assert_eq!(statement.render(RenderTarget::Solidity), "return bool(storage_map[arg0]);");
+    }
+
+    #[test]
+    fn infers_value_after_indexing_every_mapping_layer() {
+        let indexed = Expr::Index {
+            base: Box::new(Expr::Index {
+                base: Box::new(Expr::identifier("storage_map")),
+                index: Box::new(Expr::identifier("arg0")),
+            }),
+            index: Box::new(Expr::identifier("arg1")),
+        };
+        let mut state = PostprocessorState::default();
+        state.storage_type_map.insert(
+            "storage_map".to_string(),
+            SolidityType::Mapping {
+                key: Box::new(SolidityType::Address),
+                value: Box::new(SolidityType::Mapping {
+                    key: Box::new(SolidityType::Uint(256)),
+                    value: Box::new(SolidityType::Bool),
+                }),
+            },
+        );
+        assert_eq!(infer_type(&indexed, &state), SolidityType::Bool);
+    }
+
+    #[test]
     fn keeps_narrowing_cast() {
         let mut statement = Statement::Return(Expr::Cast {
-            ty: "uint8".to_string(),
+            ty: SolidityType::Uint(8),
             value: Box::new(Expr::identifier("arg0")),
         });
         let mut state = PostprocessorState::default();
-        state.memory_type_map.insert("arg0".to_string(), "uint256".to_string());
+        state.memory_type_map.insert("arg0".to_string(), SolidityType::Uint(256));
         type_cleanup_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return uint8(arg0);");
     }
