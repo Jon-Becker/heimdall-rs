@@ -155,7 +155,7 @@ impl AbstractState {
         Self { stack }
     }
 
-    fn join(&self, other: &Self, max_values: usize) -> Self {
+    pub(crate) fn join(&self, other: &Self, max_values: usize) -> Self {
         Self { stack: self.stack.join(&other.stack, max_values) }
     }
 }
@@ -279,10 +279,10 @@ pub fn analyze_from(
 }
 
 #[derive(Clone, Debug)]
-struct BlockExit {
-    state: AbstractState,
-    jump_target: Option<AbstractValue>,
-    condition: Option<AbstractValue>,
+pub(crate) struct BlockExit {
+    pub(crate) state: AbstractState,
+    pub(crate) jump_target: Option<AbstractValue>,
+    pub(crate) condition: Option<AbstractValue>,
 }
 
 #[derive(Clone, Debug)]
@@ -292,7 +292,7 @@ struct Successor {
     state: AbstractState,
 }
 
-fn execute_block(
+pub(crate) fn execute_block(
     program: &Program,
     block_id: BlockId,
     mut state: AbstractState,
@@ -435,7 +435,7 @@ fn successors(
     successors
 }
 
-fn branch_feasibility(condition: Option<&AbstractValue>) -> (bool, bool) {
+pub(crate) fn branch_feasibility(condition: Option<&AbstractValue>) -> (bool, bool) {
     match condition {
         None => (true, false),
         Some(AbstractValue::Unknown) => (true, true),
