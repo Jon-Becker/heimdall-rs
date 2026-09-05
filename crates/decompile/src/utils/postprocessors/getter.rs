@@ -4,6 +4,7 @@ use crate::{
     core::{
         ir::{Expr, Statement, StoragePath},
         postprocess::PostprocessorState,
+        types::SolidityType,
     },
     interfaces::AnalyzedFunction,
     Error,
@@ -88,11 +89,9 @@ pub(crate) fn detect_string_storage_getter(
     function: &AnalyzedFunction,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
-    let string_like = matches!(
-        function.returns.as_deref(),
-        Some(returns) if returns.starts_with("string") ||
-            (returns.starts_with("bytes") && returns != "bytes32")
-    );
+    let string_like = function.returns.as_ref().is_some_and(|returns| {
+        matches!(returns.without_location(), SolidityType::String | SolidityType::Bytes)
+    });
     if !string_like ||
         !function.arguments.is_empty() ||
         !function.view ||
@@ -138,7 +137,7 @@ mod tests {
         let root = Expr::Literal(U256::from(2));
         let mut function = AnalyzedFunction::new("06fdde03", false);
         function.view = true;
-        function.returns = Some("string memory".to_string());
+        function.returns = Some(SolidityType::String.in_memory());
         function.statements = vec![
             Statement::Expression(Expr::StorageAccess(Box::new(StoragePath::PackedField {
                 parent: Box::new(StoragePath::Slot { slot: Box::new(root.clone()) }),
@@ -159,7 +158,7 @@ mod tests {
     fn rejects_computed_string_view() {
         let mut function = AnalyzedFunction::new("00000000", false);
         function.view = true;
-        function.returns = Some("string memory".to_string());
+        function.returns = Some(SolidityType::String.in_memory());
         function.statements = vec![Statement::Return(Expr::StringLiteral("constant".to_string()))];
         let mut state = PostprocessorState::default();
         detect_string_storage_getter(&function, &mut state).unwrap();

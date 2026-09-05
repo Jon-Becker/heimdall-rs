@@ -7,6 +7,7 @@ use heimdall_vm::core::{opcodes::WrappedOpcode, types::byte_size_to_type};
 use crate::core::{
     analyze::AnalyzerType,
     ir::{RenderTarget, Statement},
+    types::SolidityType,
 };
 
 /// The [`AnalyzedFunction`] struct represents a function that has been analyzed by the decompiler.
@@ -26,7 +27,7 @@ pub(crate) struct AnalyzedFunction {
     pub memory: HashMap<U256, StorageFrame>,
 
     /// returns the return type for the function.
-    pub returns: Option<String>,
+    pub returns: Option<SolidityType>,
 
     /// Structured statements produced by analysis before source rendering.
     pub statements: Vec<Statement>,
@@ -79,9 +80,9 @@ pub(crate) struct CalldataFrame {
 
 impl CalldataFrame {
     /// Get the potential types for the given argument
-    pub(crate) fn potential_types(&self) -> Vec<String> {
+    pub(crate) fn potential_types(&self) -> Vec<SolidityType> {
         // get all potential types that can fit in self.mask_size
-        byte_size_to_type(self.mask_size).1.to_vec()
+        byte_size_to_type(self.mask_size).1.iter().map(|ty| SolidityType::parse(ty)).collect()
     }
 }
 

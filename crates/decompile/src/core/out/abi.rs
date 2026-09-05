@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 
 use tracing::debug;
 
-use crate::interfaces::AnalyzedFunction;
+use crate::{core::types::SolidityType, interfaces::AnalyzedFunction};
 
 pub(crate) fn build_abi(
     functions: &[AnalyzedFunction],
@@ -64,7 +64,8 @@ pub(crate) fn build_abi(
                             .potential_types()
                             .first()
                             .cloned()
-                            .unwrap_or_else(|| "bytes32".to_string()),
+                            .unwrap_or(SolidityType::FixedBytes(32))
+                            .to_string(),
                     },
                     components: match f.resolved_function {
                         Some(ref sig) => {
@@ -81,7 +82,7 @@ pub(crate) fn build_abi(
                     vec![Param {
                         name: "".to_string(),
                         internal_type: None,
-                        ty: r.replacen("memory", "", 1).trim().to_string(),
+                        ty: r.without_location().to_string(),
                         components: vec![],
                     }]
                 })

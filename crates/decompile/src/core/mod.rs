@@ -4,6 +4,7 @@ pub(crate) mod ir;
 pub(crate) mod out;
 pub(crate) mod postprocess;
 pub(crate) mod resolve;
+pub(crate) mod types;
 
 use alloy::primitives::Address;
 use alloy_dyn_abi::{DynSolType, DynSolValue};
@@ -225,7 +226,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                 let returns_param_type = analyzed_function
                     .returns
                     .as_ref()
-                    .map(|ret_type| to_type(ret_type.replace("memory", "").trim()))
+                    .map(|ret_type| to_type(&ret_type.without_location().to_string()))
                     .unwrap_or(DynSolType::Bytes);
 
                 let decoded = returns_param_type

@@ -1,4 +1,4 @@
-use crate::interfaces::AnalyzedFunction;
+use crate::{core::types::SolidityType, interfaces::AnalyzedFunction};
 use heimdall_common::ether::signatures::ResolvedFunction;
 use tracing::trace;
 
@@ -22,7 +22,8 @@ pub(crate) fn match_parameters(
                     .potential_types()
                     .first()
                     .cloned()
-                    .unwrap_or_else(|| "bytes32".to_string()))
+                    .unwrap_or(SolidityType::FixedBytes(32))
+                    .to_string())
                 .collect::<Vec<String>>()
                 .join(",")
         );
@@ -41,7 +42,7 @@ pub(crate) fn match_parameters(
                     // arrays are typically recorded as bytes by the decompiler's potential
                     // types
                     if input.contains("[]") {
-                        if !f.potential_types().contains(&"bytes".to_string()) {
+                        if !f.potential_types().contains(&SolidityType::Bytes) {
                             trace!(
                                 "        parameter {} does not match type {} for function {}({})",
                                 &index.to_string(),
@@ -51,7 +52,7 @@ pub(crate) fn match_parameters(
                             );
                             continue;
                         }
-                    } else if !f.potential_types().contains(input) {
+                    } else if !f.potential_types().contains(&SolidityType::parse(input)) {
                         matched = false;
                         trace!(
                             "        parameter {} does not match type {} for function {}({})",

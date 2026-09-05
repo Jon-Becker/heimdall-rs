@@ -121,17 +121,20 @@ mod tests {
     use alloy::primitives::U256;
 
     use super::*;
-    use crate::core::ir::{RenderTarget, Statement};
+    use crate::core::{
+        ir::{RenderTarget, Statement},
+        types::SolidityType,
+    };
 
     #[test]
     fn inlines_single_use_cast() {
         let mut function = AnalyzedFunction::new("00000000", false);
         function.statements = vec![
             Statement::DeclareAssign {
-                ty: "address".to_string(),
+                ty: SolidityType::Address,
                 target: Expr::identifier("var_a"),
                 value: Expr::Cast {
-                    ty: "address".to_string(),
+                    ty: SolidityType::Address,
                     value: Box::new(Expr::identifier("arg0")),
                 },
             },
@@ -150,7 +153,7 @@ mod tests {
         let mut function = AnalyzedFunction::new("00000000", false);
         function.statements = vec![
             Statement::DeclareAssign {
-                ty: "bytes32".to_string(),
+                ty: SolidityType::FixedBytes(32),
                 target: Expr::identifier("var_a"),
                 value: Expr::Call {
                     callee: "blockhash".to_string(),

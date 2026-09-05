@@ -2,7 +2,10 @@ use alloy::primitives::U256;
 use heimdall_vm::core::opcodes::WrappedOpcode;
 
 use crate::{
-    core::ir::{Expr, Statement},
+    core::{
+        ir::{Expr, Statement},
+        types::SolidityType,
+    },
     interfaces::StorageFrame,
 };
 
@@ -19,14 +22,14 @@ pub(crate) fn decode_precompile(
 ) -> Option<Statement> {
     let address: usize = precompile_address.try_into().unwrap_or(usize::MAX);
     let (ty, callee) = match address {
-        1 => ("address", "ecrecover"),
-        2 => ("bytes", "sha256"),
-        3 => ("bytes", "ripemd160"),
+        1 => (SolidityType::Address, "ecrecover"),
+        2 => (SolidityType::Bytes, "sha256"),
+        3 => (SolidityType::Bytes, "ripemd160"),
         _ => return None,
     };
 
     Some(Statement::DeclareAssign {
-        ty: ty.to_string(),
+        ty,
         target: Expr::index("memory", Expr::from_opcode(return_data_offset)),
         value: Expr::Call {
             callee: callee.to_string(),

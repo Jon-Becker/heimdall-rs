@@ -4,6 +4,7 @@ use crate::{
     core::{
         ir::{BinaryOp, Expr, Statement},
         postprocess::PostprocessorState,
+        types::SolidityType,
     },
     Error,
 };
@@ -12,19 +13,19 @@ fn is_transient_base(expr: &Expr) -> bool {
     matches!(expr, Expr::Raw(name) | Expr::Identifier(name) if name == "transient")
 }
 
-fn expression_type(expr: &Expr, state: &PostprocessorState) -> String {
+fn expression_type(expr: &Expr, state: &PostprocessorState) -> SolidityType {
     match expr {
         Expr::Cast { ty, .. } => ty.clone(),
         Expr::Identifier(name) => {
-            state.memory_type_map.get(name).cloned().unwrap_or_else(|| "bytes32".to_string())
+            state.memory_type_map.get(name).cloned().unwrap_or(SolidityType::FixedBytes(32))
         }
         Expr::Binary { op, .. }
             if !matches!(op, BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor) =>
         {
-            "uint256".to_string()
+            SolidityType::Uint(256)
         }
-        Expr::Literal(_) => "uint256".to_string(),
-        _ => "bytes32".to_string(),
+        Expr::Literal(_) => SolidityType::Uint(256),
+        _ => SolidityType::FixedBytes(32),
     }
 }
 
@@ -97,11 +98,15 @@ pub(crate) fn transient_postprocessor(
     if root.starts_with("transient_map_") {
         let key_type = match target {
             Expr::Index { index, .. } => expression_type(index, state),
-            _ => "bytes32".to_string(),
+            _ => SolidityType::FixedBytes(32),
         };
-        state
-            .transient_type_map
-            .insert(root, format!("mapping({key_type} => {})", expression_type(value, state)));
+        state.transient_type_map.insert(
+            root,
+            SolidityType::Mapping {
+                key: Box::new(key_type),
+                value: Box::new(expression_type(value, state)),
+            },
+        );
     } else {
         state.transient_type_map.insert(root, expression_type(value, state));
     }
@@ -125,6 +130,6 @@ mod tests {
         let mut state = PostprocessorState::default();
         transient_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "tstore_a = arg0;");
-        assert_eq!(state.transient_type_map.get("tstore_a"), Some(&"bytes32".to_string()));
+        assert_eq!(state.transient_type_map.get("tstore_a"), Some(&SolidityType::FixedBytes(32)));
     }
 }

@@ -4,6 +4,7 @@ use crate::{
     core::{
         ir::{BinaryOp, Expr, Statement},
         postprocess::PostprocessorState,
+        types::SolidityType,
     },
     Error,
 };
@@ -12,7 +13,7 @@ fn is_memory_base(expr: &Expr) -> bool {
     matches!(expr, Expr::Raw(name) | Expr::Identifier(name) if name == "memory")
 }
 
-fn infer_type(expr: &Expr, state: &PostprocessorState) -> Option<String> {
+fn infer_type(expr: &Expr, state: &PostprocessorState) -> Option<SolidityType> {
     match expr {
         Expr::Cast { ty, .. } => Some(ty.clone()),
         Expr::Identifier(name) => state.memory_type_map.get(name).cloned(),
@@ -25,14 +26,13 @@ fn infer_type(expr: &Expr, state: &PostprocessorState) -> Option<String> {
                     BinaryOp::Shl |
                     BinaryOp::Shr
             ) {
-                "bytes32"
+                SolidityType::FixedBytes(32)
             } else {
-                "uint256"
-            }
-            .to_string(),
+                SolidityType::Uint(256)
+            },
         ),
-        Expr::Literal(_) => Some("uint256".to_string()),
-        Expr::Unary { .. } => Some("bytes32".to_string()),
+        Expr::Literal(_) => Some(SolidityType::Uint(256)),
+        Expr::Unary { .. } => Some(SolidityType::FixedBytes(32)),
         Expr::Call { args, .. } => args.iter().find_map(|arg| infer_type(arg, state)),
         Expr::Index { base, index } => infer_type(base, state).or_else(|| infer_type(index, state)),
         Expr::Slice { base, start, end } => infer_type(base, state)
