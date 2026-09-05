@@ -35,14 +35,9 @@ pub fn jump(
     // Safely convert U256 to u128
     let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
-    // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-    if (pc <=
-        vm.bytecode
-            .len()
-            .try_into()
-            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-        (vm.bytecode[pc as usize] != opcodes::JUMPDEST)
-    {
+    // A destination outside the bytecode (including an unrepresentable U256 that was
+    // saturated above) is invalid. Check the bound before indexing or incrementing it.
+    if pc >= vm.bytecode.len() as u128 || vm.bytecode[pc as usize] != opcodes::JUMPDEST {
         vm.exit(790, Vec::new());
         return Some(Instruction {
             instruction: last_instruction,
@@ -72,15 +67,8 @@ pub fn jumpi(
     let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
     if !condition.is_zero() {
-        // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
-        // destination)
-        if (pc <
-            vm.bytecode
-                .len()
-                .try_into()
-                .expect("impossible case: bytecode is larger than u128::MAX")) &&
-            (vm.bytecode[pc as usize] != opcodes::JUMPDEST)
-        {
+        // Check bounds before indexing or incrementing an invalid symbolic destination.
+        if pc >= vm.bytecode.len() as u128 || vm.bytecode[pc as usize] != opcodes::JUMPDEST {
             vm.exit(790, Vec::new());
             return Some(Instruction {
                 instruction: last_instruction,

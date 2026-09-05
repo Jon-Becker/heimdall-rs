@@ -132,7 +132,9 @@ pub(crate) fn storage_postprocessor(
     // Track conditional nesting depth so we don't record block-local variables.
     match statement {
         Statement::If { .. } => state.conditional_depth += 1,
-        Statement::Else | Statement::CloseBlock => {
+        // `Else` is a sibling arm, not the end of the conditional scope. Keep it scoped so
+        // branch-local storage assignments cannot be recorded as unconditional aliases.
+        Statement::CloseBlock => {
             state.conditional_depth = state.conditional_depth.saturating_sub(1);
         }
         _ => {}

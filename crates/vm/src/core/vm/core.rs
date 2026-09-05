@@ -1399,10 +1399,9 @@ mod tests {
         let mut vm = new_test_vm("0x60fe56");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
-        );
+        // EVM destinations must point at an in-range JUMPDEST; do not advance an invalid
+        // symbolic destination, which can overflow the program counter.
+        assert_eq!(vm.exitcode, 790);
     }
 
     #[test]
@@ -1410,10 +1409,7 @@ mod tests {
         let mut vm = new_test_vm("0x600160fe57");
         vm.execute().expect("execution failed!");
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
-        );
+        assert_eq!(vm.exitcode, 790);
 
         let mut vm = new_test_vm("0x600060fe5758");
         vm.execute().expect("execution failed!");

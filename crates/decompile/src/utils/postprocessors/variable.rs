@@ -18,7 +18,9 @@ pub(crate) fn variable_postprocessor(
     // Track conditional nesting depth so we don't record block-local variables.
     match statement {
         Statement::If { .. } => state.conditional_depth += 1,
-        Statement::Else | Statement::CloseBlock => {
+        // Both arms share the conditional scope. Decrementing at `Else` incorrectly lets
+        // aliases produced by the else arm escape into later unconditional statements.
+        Statement::CloseBlock => {
             state.conditional_depth = state.conditional_depth.saturating_sub(1);
         }
         _ => {}
@@ -121,5 +123,26 @@ mod tests {
         );
         variable_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return var_a * 0x02;");
+    }
+
+    #[test]
+    fn does_not_promote_else_assignment_to_function_scope() {
+        let mut state = PostprocessorState::default();
+        let mut statements = vec![
+            Statement::If { condition: Expr::identifier("condition") },
+            Statement::Else,
+            Statement::Assign {
+                target: Expr::identifier("var_a"),
+                value: Expr::identifier("arg0"),
+            },
+            Statement::CloseBlock,
+        ];
+
+        for statement in &mut statements {
+            variable_postprocessor(statement, &mut state).unwrap();
+        }
+
+        assert!(!state.variable_map.contains_key(&Expr::identifier("var_a")));
+        assert_eq!(state.conditional_depth, 0);
     }
 }

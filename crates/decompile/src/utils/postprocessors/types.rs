@@ -119,6 +119,52 @@ pub(crate) fn type_cleanup_postprocessor(
     Ok(())
 }
 
+/// Canonicalizes a fully transformed function immediately before source lowering.
+///
+/// Function-wide passes can expose redundant casts, constant conditions, and no-op statements
+/// after the statement-local cleanup phase has already run. Revisit the structured tree here so
+/// those opportunities are handled without ever parsing rendered Solidity.
+pub(crate) fn finalize_function(
+    function: &mut AnalyzedFunction,
+    state: &mut PostprocessorState,
+) -> Result<(), Error> {
+    fn finalize_block(
+        statements: Vec<Statement>,
+        state: &mut PostprocessorState,
+    ) -> Result<Vec<Statement>, Error> {
+        let mut output = Vec::with_capacity(statements.len());
+        for mut statement in statements {
+            // Simplify before and after type cleanup: the latter can remove a cast and thereby
+            // expose an identity in its parent expression.
+            statement = statement.simplify();
+            type_cleanup_postprocessor(&mut statement, state)?;
+            statement = statement.simplify();
+
+            match statement {
+                Statement::Noop => {}
+                Statement::Require { condition: Expr::Bool(true), .. } => {}
+                Statement::IfElse { condition, then_body, else_body } => {
+                    let then_body = finalize_block(then_body, state)?;
+                    let else_body = finalize_block(else_body, state)?;
+                    match condition {
+                        Expr::Bool(true) => output.extend(then_body),
+                        Expr::Bool(false) => output.extend(else_body),
+                        _ if then_body.is_empty() && else_body.is_empty() => {}
+                        condition => {
+                            output.push(Statement::IfElse { condition, then_body, else_body })
+                        }
+                    }
+                }
+                statement => output.push(statement),
+            }
+        }
+        Ok(output)
+    }
+
+    function.statements = finalize_block(std::mem::take(&mut function.statements), state)?;
+    Ok(())
+}
+
 /// Rewrites literal return values using the function's inferred return type.
 pub(crate) fn normalize_typed_returns(
     function: &mut AnalyzedFunction,
@@ -194,5 +240,27 @@ mod tests {
         state.memory_type_map.insert("arg0".to_string(), "uint256".to_string());
         type_cleanup_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return uint8(arg0);");
+    }
+
+    #[test]
+    fn finalization_removes_post_inline_redundant_cast_and_constant_branches() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.statements = vec![
+            Statement::Require { condition: Expr::Bool(true), reason: None },
+            Statement::IfElse {
+                condition: Expr::Bool(false),
+                then_body: vec![Statement::Return(Expr::Literal(alloy::primitives::U256::ZERO))],
+                else_body: vec![Statement::Return(Expr::Cast {
+                    ty: "address".to_string(),
+                    value: Box::new(Expr::identifier("arg0")),
+                })],
+            },
+        ];
+        let mut state = PostprocessorState::default();
+        state.memory_type_map.insert("arg0".to_string(), "address".to_string());
+
+        finalize_function(&mut function, &mut state).unwrap();
+
+        assert_eq!(function.statements, vec![Statement::Return(Expr::identifier("arg0"))]);
     }
 }
