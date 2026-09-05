@@ -438,6 +438,29 @@ impl Expr {
         visitor(self);
     }
 
+    /// Whether evaluating this expression has no observable effects and may safely be deduplicated.
+    ///
+    /// This deliberately excludes raw opcode renderings, calls, and storage/memory accesses. Those
+    /// can conceal reads or calls whose repeated evaluation must remain visible in decompiled code.
+    fn is_duplicate_safe(&self) -> bool {
+        match self {
+            Self::Empty |
+            Self::Identifier(_) |
+            Self::Literal(_) |
+            Self::Bool(_) |
+            Self::StringLiteral(_) => true,
+            Self::Unary { value, .. } | Self::Cast { value, .. } => value.is_duplicate_safe(),
+            Self::Binary { lhs, rhs, .. } => lhs.is_duplicate_safe() && rhs.is_duplicate_safe(),
+            Self::Raw(_) |
+            Self::Index { .. } |
+            Self::Slice { .. } |
+            Self::Member { .. } |
+            Self::Keccak { .. } |
+            Self::StorageAccess(_) |
+            Self::Call { .. } => false,
+        }
+    }
+
     /// Apply local, semantics-preserving simplifications before source rendering.
     pub(crate) fn simplify(self) -> Self {
         match self {
@@ -501,6 +524,19 @@ impl Expr {
                     (BinaryOp::Mul, Self::Literal(value), _) if *value == U256::from(1) => rhs,
                     (BinaryOp::BitAnd, _, Self::Literal(value)) if *value == U256::MAX => lhs,
                     (BinaryOp::BitAnd, Self::Literal(value), _) if *value == U256::MAX => rhs,
+                    (BinaryOp::BitAnd | BinaryOp::BitOr, ..)
+                        if lhs == rhs && lhs.is_duplicate_safe() =>
+                    {
+                        lhs
+                    }
+                    (BinaryOp::LogicalAnd, Self::Bool(true), _) => rhs,
+                    (BinaryOp::LogicalAnd, _, Self::Bool(true)) => lhs,
+                    (BinaryOp::LogicalAnd, Self::Bool(false), _) if rhs.is_duplicate_safe() => {
+                        Self::Bool(false)
+                    }
+                    (BinaryOp::LogicalAnd, _, Self::Bool(false)) if lhs.is_duplicate_safe() => {
+                        Self::Bool(false)
+                    }
                     (BinaryOp::BitAnd, _, Self::Literal(mask)) => {
                         Self::mask_cast(lhs.clone(), *mask).unwrap_or_else(|| Self::Binary {
                             op,
@@ -1019,6 +1055,37 @@ mod tests {
             vec![U256::from(1).into(), U256::from(2).into(), U256::from(3).into()],
         );
         assert_eq!(Expr::from_opcode(&addmod).render(), "(0x01 + 0x02) % 0x03");
+    }
+
+    #[test]
+    fn simplifies_duplicate_safe_identities() {
+        let identifier = Expr::identifier("arg0");
+        assert_eq!(
+            Expr::binary(BinaryOp::BitAnd, identifier.clone(), identifier.clone()).render(),
+            "arg0"
+        );
+        assert_eq!(Expr::binary(BinaryOp::BitOr, identifier.clone(), identifier).render(), "arg0");
+    }
+
+    #[test]
+    fn does_not_fold_effectful_duplicate_expressions() {
+        let call = Expr::Call { callee: "unknown".to_string(), args: vec![] };
+        assert!(matches!(
+            Expr::binary(BinaryOp::BitAnd, call.clone(), call),
+            Expr::Binary { op: BinaryOp::BitAnd, .. }
+        ));
+    }
+
+    #[test]
+    fn simplifies_boolean_identities() {
+        assert_eq!(
+            Expr::binary(BinaryOp::LogicalAnd, Expr::Bool(true), Expr::identifier("ok")).render(),
+            "ok"
+        );
+        assert_eq!(
+            Expr::binary(BinaryOp::LogicalAnd, Expr::Bool(false), Expr::identifier("ok")).render(),
+            "false"
+        );
     }
 
     #[test]
