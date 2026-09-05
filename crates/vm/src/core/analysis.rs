@@ -12,51 +12,15 @@ use std::{
 
 use alloy::primitives::U256;
 
+pub use super::symbolic::{AbstractValue, ExprId, ExpressionArena, ExpressionNode};
 use super::{
     opcodes::{self, OpCodeInfo},
     program::{BlockId, BlockTerminator, EdgeKind, Program},
+    symbolic::operation_result,
 };
 
 /// Default maximum number of alternatives retained for one abstract value before widening.
 pub const DEFAULT_MAX_VALUE_SET: usize = 8;
-
-/// A stack value in the finite constant-set abstract domain.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AbstractValue {
-    /// A non-empty set of possible concrete values.
-    Known(BTreeSet<U256>),
-    /// Any 256-bit value.
-    Unknown,
-}
-
-impl AbstractValue {
-    /// Construct a singleton known value.
-    pub fn constant(value: U256) -> Self {
-        Self::Known(BTreeSet::from([value]))
-    }
-
-    /// Return the known alternatives, or `None` when the value is unknown.
-    pub fn known_values(&self) -> Option<&BTreeSet<U256>> {
-        match self {
-            Self::Known(values) => Some(values),
-            Self::Unknown => None,
-        }
-    }
-
-    fn join(&self, other: &Self, max_values: usize) -> Self {
-        match (self, other) {
-            (Self::Known(left), Self::Known(right)) => {
-                let values = left.union(right).copied().collect::<BTreeSet<_>>();
-                if values.len() <= max_values {
-                    Self::Known(values)
-                } else {
-                    Self::Unknown
-                }
-            }
-            _ => Self::Unknown,
-        }
-    }
-}
 
 /// Abstract EVM stack, stored from top to bottom.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -100,8 +64,8 @@ impl AbstractStack {
         }
     }
 
-    fn pop_n(&mut self, count: usize) -> bool {
-        (0..count).all(|_| self.pop().is_some())
+    fn pop_n(&mut self, count: usize) -> Option<Vec<AbstractValue>> {
+        (0..count).map(|_| self.pop()).collect()
     }
 
     fn peek(&self, index: usize) -> Option<AbstractValue> {
@@ -200,6 +164,8 @@ impl Default for AnalysisConfig {
 /// Result of context-free worklist analysis.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AbstractCfg {
+    /// Hash-consed symbolic expressions referenced by abstract states.
+    pub expressions: ExpressionArena,
     /// Joined abstract state at every reachable block entry.
     pub entry_states: HashMap<BlockId, AbstractState>,
     /// Reachable, resolved control-flow edges.
@@ -245,7 +211,13 @@ pub fn analyze_from(
 
     while let Some(block_id) = worklist.pop_front() {
         let entry_state = result.entry_states[&block_id].clone();
-        let Some(exit) = execute_block(program, block_id, entry_state) else {
+        let Some(exit) = execute_block(
+            program,
+            block_id,
+            entry_state,
+            &mut result.expressions,
+            config.max_value_set,
+        ) else {
             result.invalid_stack_blocks.insert(block_id);
             continue
         };
@@ -296,6 +268,8 @@ pub(crate) fn execute_block(
     program: &Program,
     block_id: BlockId,
     mut state: AbstractState,
+    expressions: &mut ExpressionArena,
+    max_values: usize,
 ) -> Option<BlockExit> {
     let block = &program.blocks[block_id.index()];
     let instructions = program.block_instructions(block_id);
@@ -336,11 +310,15 @@ pub(crate) fn execute_block(
             opcodes::JUMPDEST => {}
             opcode => {
                 let info = OpCodeInfo::from(opcode);
-                if !state.stack.pop_n(info.inputs() as usize) {
-                    return None
-                }
-                for _ in 0..info.outputs() {
-                    state.stack.push(AbstractValue::Unknown);
+                let inputs = state.stack.pop_n(info.inputs() as usize)?;
+                for output in 0..info.outputs() {
+                    state.stack.push(operation_result(
+                        instruction,
+                        inputs.clone(),
+                        output,
+                        expressions,
+                        max_values,
+                    ));
                 }
             }
         }
@@ -390,7 +368,7 @@ fn successors(
                     }
                 }
             }
-            Some(AbstractValue::Unknown) | None => {
+            Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) | None => {
                 // Retain locally-known direct edges from the structural frontend as a fallback.
                 let mut resolved = false;
                 for edge in &block.static_edges {
@@ -438,7 +416,7 @@ fn successors(
 pub(crate) fn branch_feasibility(condition: Option<&AbstractValue>) -> (bool, bool) {
     match condition {
         None => (true, false),
-        Some(AbstractValue::Unknown) => (true, true),
+        Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) => (true, true),
         Some(AbstractValue::Known(values)) => {
             (values.iter().any(|value| !value.is_zero()), values.contains(&U256::ZERO))
         }
@@ -557,6 +535,33 @@ mod tests {
         let left = AbstractValue::Known(BTreeSet::from([U256::from(1), U256::from(2)]));
         let right = AbstractValue::Known(BTreeSet::from([U256::from(3), U256::from(4)]));
         assert_eq!(left.join(&right, 3), AbstractValue::Unknown);
+    }
+
+    #[test]
+    fn carries_symbolic_expressions_across_block_edges() {
+        let program = program(&[
+            opcodes::CALLER,
+            opcodes::PUSH2,
+            0xff,
+            0xff,
+            opcodes::AND,
+            opcodes::PUSH1,
+            0x08,
+            opcodes::JUMP,
+            opcodes::JUMPDEST,
+            opcodes::STOP,
+        ]);
+        let cfg = analyze(&program);
+        let target = program.block_at(8).expect("jump target");
+        let value = &cfg.entry_states[&target.id].stack.values()[0];
+        let expressions = value.expressions().expect("symbolic masked caller");
+        let expression = cfg
+            .expressions
+            .get(*expressions.first().expect("one expression"))
+            .expect("interned expression");
+
+        assert_eq!(expression.opcode, opcodes::AND);
+        assert_eq!(cfg.expressions.len(), 2);
     }
 
     #[test]

@@ -13,6 +13,7 @@ use alloy::primitives::U256;
 use super::{
     analysis::{
         branch_feasibility, execute_block, AbstractState, AbstractValue, AnalysisConfig, BlockExit,
+        ExpressionArena,
     },
     program::{BlockId, BlockTerminator, EdgeKind, Program},
 };
@@ -221,6 +222,8 @@ impl Default for ContextualAnalysisConfig {
 /// Result of shrinking-context worklist analysis.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ContextualCfg {
+    /// Hash-consed symbolic expressions referenced by contextual states.
+    pub expressions: ExpressionArena,
     /// Joined abstract states keyed by block and calling context.
     pub entry_states: HashMap<ContextualPoint, AbstractState>,
     /// Reachable context-sensitive edges.
@@ -268,7 +271,13 @@ pub fn analyze_contextual_from(
 
     while let Some(point) = worklist.pop_front() {
         let entry_state = result.entry_states[&point].clone();
-        let Some(exit) = execute_block(program, point.block, entry_state) else {
+        let Some(exit) = execute_block(
+            program,
+            point.block,
+            entry_state,
+            &mut result.expressions,
+            config.values.max_value_set,
+        ) else {
             result.invalid_stack_points.insert(point);
             continue
         };
@@ -349,7 +358,7 @@ fn successors(
                     }
                 }
             }
-            Some(AbstractValue::Unknown) | None => {
+            Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) | None => {
                 let mut resolved = false;
                 for edge in &block.static_edges {
                     if edge.kind == EdgeKind::Jump {
