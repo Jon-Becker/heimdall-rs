@@ -193,10 +193,7 @@ mod tests {
         ];
         inline_single_use_variables(&mut function, &mut PostprocessorState::default()).unwrap();
         assert!(!matches!(function.statements[0], Statement::Noop));
-        assert_eq!(
-            function.statements[2].render(RenderTarget::Solidity),
-            "return var_a;"
-        );
+        assert_eq!(function.statements[2].render(RenderTarget::Solidity), "return var_a;");
     }
 
     #[test]
