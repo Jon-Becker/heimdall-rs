@@ -22,6 +22,26 @@ use super::{
     types::SolidityType,
 };
 
+fn expression_root(expr: &Expr) -> Option<(&str, bool)> {
+    match expr {
+        Expr::Identifier(name) | Expr::Raw(name) => Some((name, false)),
+        Expr::Index { base, .. } => expression_root(base).map(|(name, _)| (name, true)),
+        Expr::Member { base, .. } => expression_root(base),
+        _ => None,
+    }
+}
+
+fn default_storage_type(indexed: bool) -> SolidityType {
+    if indexed {
+        SolidityType::Mapping {
+            key: Box::new(SolidityType::FixedBytes(32)),
+            value: Box::new(SolidityType::FixedBytes(32)),
+        }
+    } else {
+        SolidityType::FixedBytes(32)
+    }
+}
+
 fn find_expression(
     statements: &[Statement],
     mut predicate: impl FnMut(&Expr) -> bool,
@@ -353,12 +373,12 @@ impl PostprocessOrchestrator {
                         .is_some())
                 {
                     function.returns = Some(SolidityType::String.in_memory());
-                    function.statements = vec![Statement::Return(Expr::Call {
-                        callee: "string".to_string(),
-                        args: vec![Expr::Call {
+                    function.statements = vec![Statement::Return(Expr::Cast {
+                        ty: SolidityType::String,
+                        value: Box::new(Expr::Call {
                             callee: "rlp.encodePacked".to_string(),
                             args: vec![storage],
-                        }],
+                        }),
                     })];
                 }
             }
@@ -379,42 +399,20 @@ impl PostprocessOrchestrator {
 
         // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
         // a default value
-        state.storage_map.iter().for_each(|(_, value)| {
-            let rendered = value.render();
-            let storage_var_name = rendered.split('[').next().unwrap_or(&rendered);
-            if !state.storage_type_map.contains_key(storage_var_name) {
-                if storage_var_name.contains("map") {
-                    state.storage_type_map.insert(
-                        storage_var_name.to_string(),
-                        SolidityType::Mapping {
-                            key: Box::new(SolidityType::FixedBytes(32)),
-                            value: Box::new(SolidityType::FixedBytes(32)),
-                        },
-                    );
-                } else {
-                    state
-                        .storage_type_map
-                        .insert(storage_var_name.to_string(), SolidityType::FixedBytes(32));
-                }
+        state.storage_map.values().for_each(|value| {
+            if let Some((name, indexed)) = expression_root(value) {
+                state
+                    .storage_type_map
+                    .entry(name.to_string())
+                    .or_insert_with(|| default_storage_type(indexed));
             }
         });
-        state.transient_map.iter().for_each(|(_, value)| {
-            let rendered = value.render();
-            let storage_var_name = rendered.split('[').next().unwrap_or(&rendered);
-            if !state.transient_type_map.contains_key(storage_var_name) {
-                if storage_var_name.contains("map") {
-                    state.transient_type_map.insert(
-                        storage_var_name.to_string(),
-                        SolidityType::Mapping {
-                            key: Box::new(SolidityType::FixedBytes(32)),
-                            value: Box::new(SolidityType::FixedBytes(32)),
-                        },
-                    );
-                } else {
-                    state
-                        .transient_type_map
-                        .insert(storage_var_name.to_string(), SolidityType::FixedBytes(32));
-                }
+        state.transient_map.values().for_each(|value| {
+            if let Some((name, indexed)) = expression_root(value) {
+                state
+                    .transient_type_map
+                    .entry(name.to_string())
+                    .or_insert_with(|| default_storage_type(indexed));
             }
         });
 

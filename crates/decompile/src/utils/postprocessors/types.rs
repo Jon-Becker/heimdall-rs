@@ -38,7 +38,6 @@ fn infer_type(expr: &Expr, state: &PostprocessorState) -> SolidityType {
             BinaryOp::Ne => SolidityType::Bool,
             _ => SolidityType::Uint(256),
         },
-        Expr::Call { callee, .. } if callee == "address" => SolidityType::Address,
         Expr::Call { callee, .. } if callee == "keccak256" => SolidityType::FixedBytes(32),
         Expr::Keccak { .. } => SolidityType::FixedBytes(32),
         Expr::Index { base, .. } => infer_type(base, state).indexed(),
@@ -66,13 +65,6 @@ pub(crate) fn type_cleanup_postprocessor(
             {
                 *expr = *value.clone();
             }
-        }
-        Expr::Call { callee, args }
-            if callee == "address" &&
-                args.len() == 1 &&
-                infer_type(&args[0], state).without_location() == SolidityType::Address =>
-        {
-            *expr = args.remove(0);
         }
         _ => {}
     });
@@ -136,9 +128,9 @@ mod tests {
 
     #[test]
     fn removes_redundant_address_conversion() {
-        let mut statement = Statement::Return(Expr::Call {
-            callee: "address".to_string(),
-            args: vec![Expr::identifier("msg.sender")],
+        let mut statement = Statement::Return(Expr::Cast {
+            ty: SolidityType::Address,
+            value: Box::new(Expr::identifier("msg.sender")),
         });
         type_cleanup_postprocessor(&mut statement, &mut PostprocessorState::default()).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return msg.sender;");

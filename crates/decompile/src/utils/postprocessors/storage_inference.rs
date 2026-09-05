@@ -183,7 +183,7 @@ pub(crate) fn storage_inference_postprocessor(
     }
 
     if let Statement::Assign { target: Expr::Index { base, index }, value } = statement {
-        if base.render() == "memory" {
+        if matches!(&**base, Expr::Raw(name) | Expr::Identifier(name) if name == "memory") {
             if let Expr::Literal(offset) = &**index {
                 state.symbolic_memory.insert(*offset, value.clone());
             }

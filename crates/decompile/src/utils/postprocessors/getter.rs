@@ -67,9 +67,7 @@ fn has_side_effects(statement: &Statement) -> bool {
         Statement::ExternalCall { .. } |
         Statement::Emit { .. } |
         Statement::AssemblyAssign { .. } => true,
-        Statement::Assign { target: Expr::Index { base, .. }, .. }
-            if base.render() == "transient" =>
-        {
+        Statement::Assign { target: Expr::Index { base, .. }, .. } if matches!(&**base, Expr::Raw(name) | Expr::Identifier(name) if name == "transient") => {
             true
         }
         Statement::Expression(Expr::Call { callee, .. }) if callee == "selfdestruct" => true,

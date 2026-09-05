@@ -37,9 +37,7 @@ fn is_pure_inline_candidate(expr: &Expr) -> bool {
             is_pure_inline_candidate(lhs) && is_pure_inline_candidate(rhs)
         }
         Expr::Member { base, .. } => is_pure_inline_candidate(base),
-        Expr::Call { callee, args }
-            if matches!(callee.as_str(), "address" | "blockhash" | "keccak256") =>
-        {
+        Expr::Call { callee, args } if matches!(callee.as_str(), "blockhash" | "keccak256") => {
             args.iter().all(is_pure_inline_candidate)
         }
         Expr::Raw(_) |

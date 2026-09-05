@@ -28,7 +28,6 @@ fn expression_type(expr: &Expr, state: &PostprocessorState) -> SolidityType {
         Expr::Bool(_) => SolidityType::Bool,
         Expr::Literal(_) => SolidityType::Uint(256),
         Expr::Keccak { .. } => SolidityType::FixedBytes(32),
-        Expr::Call { callee, .. } if callee == "address" => SolidityType::Address,
         _ => SolidityType::FixedBytes(32),
     }
 }

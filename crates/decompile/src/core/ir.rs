@@ -311,15 +311,15 @@ impl Expr {
                 Self::Call { callee: "blockhash".to_string(), args: vec![input(0)] }
             }
             opcodes::BALANCE => Self::Member {
-                base: Box::new(Self::Call { callee: "address".to_string(), args: vec![input(0)] }),
+                base: Box::new(Self::Cast { ty: SolidityType::Address, value: Box::new(input(0)) }),
                 member: "balance".to_string(),
             },
             opcodes::EXTCODESIZE => Self::Member {
-                base: Box::new(Self::Call { callee: "address".to_string(), args: vec![input(0)] }),
+                base: Box::new(Self::Cast { ty: SolidityType::Address, value: Box::new(input(0)) }),
                 member: "code.length".to_string(),
             },
             opcodes::EXTCODEHASH => Self::Member {
-                base: Box::new(Self::Call { callee: "address".to_string(), args: vec![input(0)] }),
+                base: Box::new(Self::Cast { ty: SolidityType::Address, value: Box::new(input(0)) }),
                 member: "codehash".to_string(),
             },
             _ => Self::raw(opcode.solidify()),
