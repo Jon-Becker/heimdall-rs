@@ -7,6 +7,9 @@ pub mod chains;
 /// Constants used throughout the VM implementation
 pub mod constants;
 
+/// Shrinking continuation context for abstract CFG analysis
+pub mod context;
+
 /// Ethereum hard fork definitions
 pub mod hardfork;
 
