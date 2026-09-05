@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+heimdall="${HEIMDALL_BIN:-$repo_root/target/debug/heimdall}"
+fixture="$repo_root/crates/core/tests/fixtures/CompileSmoke.sol"
+workdir="$(mktemp -d)"
+trap 'rm -rf "$workdir"' EXIT
+
+mkdir -p "$workdir/src"
+cp "$fixture" "$workdir/src/CompileSmoke.sol"
+cat > "$workdir/foundry.toml" <<'EOF'
+[profile.default]
+src = "src"
+out = "out"
+solc_version = "0.8.28"
+optimizer = true
+EOF
+
+(
+    cd "$workdir"
+    forge build --silent
+    jq -r '.deployedBytecode.object' out/CompileSmoke.sol/CompileSmoke.json > runtime.hex
+    "$heimdall" decompile runtime.hex \
+        --include-sol \
+        --skip-resolving \
+        --default \
+        --output print \
+        --color never > decompiled.txt
+    awk 'found { print } /^Source:$/ { found = 1; next }' decompiled.txt > src/Decompiled.sol
+    python3 - <<'PY'
+import json
+
+output = open("decompiled.txt").read()
+abi = json.loads(output.split("ABI:\n\n", 1)[1].split("\nSource:", 1)[0])
+event = next(item for item in abi if item["type"] == "event")
+assert [item["indexed"] for item in event["inputs"]] == [True, False]
+assert [item["type"] for item in event["inputs"]] == ["address", "uint256"]
+PY
+    rm src/CompileSmoke.sol
+    test -s src/Decompiled.sol
+    forge build --silent
+)

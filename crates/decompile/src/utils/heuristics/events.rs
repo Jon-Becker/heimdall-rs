@@ -35,19 +35,23 @@ pub(crate) fn event_heuristic<'a>(
             );
             // add the event emission to the function's logic
             if analyzer_state.analyzer_type == AnalyzerType::Solidity {
+                let topic_start = usize::from(!anonymous);
                 let mut args = event
                     .topics
-                    .get(1..)
+                    .get(topic_start..)
                     .map(|topics| {
                         topics
                             .iter()
                             .enumerate()
                             .map(|(i, _)| {
-                                Expr::from_opcode(&state.last_instruction.input_operations[i + 3])
+                                Expr::from_opcode(
+                                    &state.last_instruction.input_operations[i + 2 + topic_start],
+                                )
                             })
                             .collect::<Vec<_>>()
                     })
                     .unwrap_or_default();
+                let indexed_args = args.len();
                 args.extend(data_mem_ops.iter().map(|frame| Expr::from_opcode(&frame.operation)));
                 function.push_statement(Statement::Emit {
                     event: format!(
@@ -60,6 +64,7 @@ pub(crate) fn event_heuristic<'a>(
                             .replacen("0x", "", 1)[0..8]
                     ),
                     args,
+                    indexed_args,
                     comment: anonymous.then(|| "anonymous event".to_string()),
                 });
             }

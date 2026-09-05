@@ -8,10 +8,11 @@ use crate::{
     interfaces::AnalyzedFunction,
     utils::postprocessors::{
         arithmetic_postprocessor, bitwise_mask_postprocessor, detect_string_storage_getter,
-        eliminate_dead_variables, inline_single_use_variables, memory_postprocessor,
-        normalize_typed_returns, storage_inference_postprocessor, storage_postprocessor,
-        structure_control_flow, transient_postprocessor, type_cleanup_postprocessor,
-        variable_postprocessor, IrFunctionPostprocessor, IrPostprocessor,
+        eliminate_dead_variables, finalize_function, inline_single_use_variables,
+        memory_postprocessor, normalize_typed_returns, storage_inference_postprocessor,
+        storage_postprocessor, structure_control_flow, transient_postprocessor,
+        type_cleanup_postprocessor, variable_postprocessor, IrFunctionPostprocessor,
+        IrPostprocessor,
     },
     Error,
 };
@@ -248,6 +249,7 @@ impl PostprocessOrchestrator {
                 self.ir_function_passes.push(inline_single_use_variables);
                 self.ir_function_passes.push(eliminate_dead_variables);
                 self.ir_function_passes.push(structure_control_flow);
+                self.ir_function_passes.push(finalize_function);
             }
             AnalyzerType::Yul => {}
             _ => {}

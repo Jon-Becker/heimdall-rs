@@ -18,7 +18,8 @@ pub(crate) fn variable_postprocessor(
     // Track conditional nesting depth so we don't record block-local variables.
     match statement {
         Statement::If { .. } => state.conditional_depth += 1,
-        Statement::Else | Statement::CloseBlock => {
+        // The else arm remains conditional until its matching closing marker.
+        Statement::CloseBlock => {
             state.conditional_depth = state.conditional_depth.saturating_sub(1);
         }
         _ => {}
@@ -97,6 +98,25 @@ mod tests {
         state.variable_map.insert(Expr::identifier("var_a"), sum);
         variable_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "if (amount + total >= total) {");
+    }
+
+    #[test]
+    fn does_not_publish_else_arm_assignments() {
+        let mut state = PostprocessorState::default();
+        let mut statements = vec![
+            Statement::If { condition: Expr::identifier("condition") },
+            Statement::Else,
+            Statement::Assign {
+                target: Expr::identifier("var_a"),
+                value: Expr::identifier("arg0"),
+            },
+            Statement::CloseBlock,
+        ];
+        for statement in &mut statements {
+            variable_postprocessor(statement, &mut state).unwrap();
+        }
+        assert!(!state.variable_map.contains_key(&Expr::identifier("var_a")));
+        assert_eq!(state.conditional_depth, 0);
     }
 
     #[test]

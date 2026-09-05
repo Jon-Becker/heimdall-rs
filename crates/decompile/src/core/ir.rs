@@ -704,6 +704,8 @@ pub(crate) enum Statement {
     Emit {
         event: String,
         args: Vec<Expr>,
+        /// Number of leading arguments encoded as indexed log topics.
+        indexed_args: usize,
         comment: Option<String>,
     },
     ExternalCall {
@@ -805,9 +807,12 @@ impl Statement {
             },
             Self::Return(value) => Self::Return(value.simplify()),
             Self::Revert(reason) => Self::Revert(reason.map(Expr::simplify)),
-            Self::Emit { event, args, comment } => {
-                Self::Emit { event, args: args.into_iter().map(Expr::simplify).collect(), comment }
-            }
+            Self::Emit { event, args, indexed_args, comment } => Self::Emit {
+                event,
+                args: args.into_iter().map(Expr::simplify).collect(),
+                indexed_args,
+                comment,
+            },
             Self::ExternalCall { address, function, args, gas, value, comment } => {
                 Self::ExternalCall {
                     address: address.simplify(),
@@ -909,7 +914,7 @@ impl Statement {
                 Some(reason) => format!("revert({});", reason.render()),
                 None => "revert();".to_string(),
             },
-            Self::Emit { event, args, comment } => {
+            Self::Emit { event, args, comment, .. } => {
                 let mut output = format!(
                     "emit {event}({});",
                     args.iter().map(Expr::render).collect::<Vec<_>>().join(", ")

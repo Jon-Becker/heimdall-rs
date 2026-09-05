@@ -138,9 +138,26 @@ impl AnalyzedFunction {
         }
     }
 
-    /// Whether this is a constant or not
+    /// Whether this function has positive evidence of being a constant getter.
+    ///
+    /// Purity and an empty parameter list are not sufficient: an incomplete trace can otherwise
+    /// turn a stateful no-argument function into a bogus constant declaration. Require a recovered
+    /// return value as well as a return type.
     pub(crate) fn is_constant(&self) -> bool {
-        self.pure && self.arguments.is_empty()
+        fn has_return(statements: &[Statement]) -> bool {
+            statements.iter().any(|statement| match statement {
+                Statement::Return(_) => true,
+                Statement::IfElse { then_body, else_body, .. } => {
+                    has_return(then_body) || has_return(else_body)
+                }
+                _ => false,
+            })
+        }
+
+        self.pure &&
+            self.arguments.is_empty() &&
+            self.returns.is_some() &&
+            has_return(&self.statements)
     }
 
     /// Gets the inputs for a range of memory
@@ -168,5 +185,22 @@ impl AnalyzedFunction {
         let mut arguments: Vec<_> = self.arguments.clone().into_iter().collect();
         arguments.sort_by(|x, y| x.0.cmp(&y.0));
         arguments
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::ir::Expr;
+
+    #[test]
+    fn incomplete_no_argument_function_is_not_a_constant() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.pure = true;
+        function.returns = Some(SolidityType::Uint(256));
+        assert!(!function.is_constant());
+
+        function.statements.push(Statement::Return(Expr::Literal(U256::from(7))));
+        assert!(function.is_constant());
     }
 }

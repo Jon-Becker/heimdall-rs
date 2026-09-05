@@ -14,7 +14,12 @@ use heimdall_common::{
 use tracing::debug;
 
 use crate::{
-    core::{analyze::AnalyzerType, postprocess::getter_type_matches, types::SolidityType},
+    core::{
+        analyze::AnalyzerType,
+        ir::{BinaryOp, Expr, Statement},
+        postprocess::getter_type_matches,
+        types::SolidityType,
+    },
     interfaces::AnalyzedFunction,
     utils::constants::{
         DECOMPILED_SOURCE_HEADER_SOL, DECOMPILED_SOURCE_HEADER_YUL, LLM_POSTPROCESSING_PROMPT,
@@ -225,7 +230,12 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
             sig.inputs()
                 .iter()
                 .enumerate()
-                .map(|(i, arg)| { format!("{} arg{i}", arg.to_string()) })
+                .map(|(i, arg)| {
+                    format!(
+                        "{} arg{i}",
+                        SolidityType::parse(&arg.to_string()).as_public_parameter()
+                    )
+                })
                 .collect::<Vec<String>>()
                 .join(", "),
             function_modifiers.join(" ")
@@ -243,6 +253,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
                             .first()
                             .cloned()
                             .unwrap_or(SolidityType::FixedBytes(32))
+                            .as_public_parameter()
                     )
                 })
                 .collect::<Vec<String>>()
@@ -397,7 +408,72 @@ fn get_storage_variables(
     output
 }
 
+fn event_argument_type(expr: &Expr, function: &AnalyzedFunction) -> SolidityType {
+    match expr {
+        Expr::Identifier(name)
+            if matches!(name.as_str(), "msg.sender" | "tx.origin" | "address(this)") =>
+        {
+            SolidityType::Address
+        }
+        Expr::Identifier(name) => name
+            .strip_prefix("arg")
+            .and_then(|index| index.parse::<usize>().ok())
+            .and_then(|index| function.arguments.get(&index))
+            .and_then(|argument| argument.potential_types().first().cloned())
+            .unwrap_or(SolidityType::FixedBytes(32)),
+        Expr::Cast { ty, .. } => ty.without_location(),
+        Expr::Bool(_) => SolidityType::Bool,
+        Expr::Literal(_) => SolidityType::Uint(256),
+        Expr::StringLiteral(_) => SolidityType::String,
+        Expr::Binary {
+            op:
+                BinaryOp::LogicalAnd |
+                BinaryOp::Lt |
+                BinaryOp::Le |
+                BinaryOp::Gt |
+                BinaryOp::Ge |
+                BinaryOp::Eq |
+                BinaryOp::Ne,
+            ..
+        } => SolidityType::Bool,
+        Expr::Binary { .. } => SolidityType::Uint(256),
+        _ => SolidityType::FixedBytes(32),
+    }
+}
+
+fn find_event_observation<'a>(
+    statements: &'a [Statement],
+    event_name: &str,
+) -> Option<(&'a [Expr], usize)> {
+    statements.iter().find_map(|statement| match statement {
+        Statement::Emit { event, args, indexed_args, .. } if event == event_name => {
+            Some((args.as_slice(), *indexed_args))
+        }
+        Statement::IfElse { then_body, else_body, .. } => {
+            find_event_observation(then_body, event_name)
+                .or_else(|| find_event_observation(else_body, event_name))
+        }
+        _ => None,
+    })
+}
+
+fn observed_event(
+    functions: &[AnalyzedFunction],
+    event_name: &str,
+) -> Option<(Vec<SolidityType>, usize)> {
+    functions.iter().find_map(|function| {
+        find_event_observation(&function.statements, event_name).map(|(args, indexed)| {
+            (args.iter().map(|arg| event_argument_type(arg, function)).collect(), indexed)
+        })
+    })
+}
+
 /// Helper function which will get the event and error declarations for the decompiled source code.
+fn short_selector(value: U256) -> String {
+    let padded = format!("{value:064x}");
+    padded[padded.len() - 8..].to_string()
+}
+
 fn get_event_and_error_declarations(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
@@ -411,30 +487,46 @@ fn get_event_and_error_declarations(
 
     // add event declarations
     all_events.iter().for_each(|event_selector| {
+        let unresolved_name = format!(
+            "Event_{}",
+            event_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
+        );
+        let observation = observed_event(functions, &unresolved_name);
+
         // determine the name of the event
         let (name, inputs) = match all_resolved_logs
             .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
         {
             Some(event) => {
-                (event.name.clone(), event.inputs().iter().map(|i| i.to_string()).collect())
+                let indexed = observation.as_ref().map(|(_, count)| *count).unwrap_or(0);
+                (
+                    event.name.clone(),
+                    event
+                        .inputs()
+                        .iter()
+                        .enumerate()
+                        .map(|(index, input)| {
+                            format!("{}{}", input, if index < indexed { " indexed" } else { "" })
+                        })
+                        .collect(),
+                )
             }
-            None => (
-                format!(
-                    "Event_{}",
-                    event_selector
-                        .to_lower_hex()
-                        .replacen("0x", "", 1)
-                        .get(0..8)
-                        .unwrap_or("00000000")
-                ),
-                vec![],
-            ),
+            None => {
+                let inputs: Vec<String> = observation
+                    .as_ref()
+                    .map(|(types, indexed)| {
+                        types
+                            .iter()
+                            .enumerate()
+                            .map(|(index, ty)| {
+                                format!("{ty}{}", if index < *indexed { " indexed" } else { "" })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                (unresolved_name.clone(), inputs)
+            }
         };
-
-        let unresolved_name = format!(
-            "Event_{}",
-            event_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
-        );
         output.insert(
             unresolved_name,
             (format!("{name}({});", inputs.join(", ")), "event".to_string()),
@@ -450,23 +542,10 @@ fn get_event_and_error_declarations(
             Some(error) => {
                 (error.name.clone(), error.inputs().iter().map(|i| i.to_string()).collect())
             }
-            None => (
-                format!(
-                    "CustomError_{}",
-                    error_selector
-                        .to_lower_hex()
-                        .replacen("0x", "", 1)
-                        .get(0..8)
-                        .unwrap_or("00000000")
-                ),
-                vec![],
-            ),
+            None => (format!("CustomError_{}", short_selector(*error_selector)), vec![]),
         };
 
-        let unresolved_name = format!(
-            "CustomError_{}",
-            error_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
-        );
+        let unresolved_name = format!("CustomError_{}", short_selector(*error_selector));
         output.insert(
             unresolved_name,
             (format!("{name}({});", inputs.join(", ")), "error".to_string()),
