@@ -36,7 +36,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.payload.pull_request.number,
-                body: `${marker}\n## AI Evaluation Suite\n\nCheck the box below to run the AI evaluation suite.\n\n- [ ] Run AI Evaluation Suite`,
+                body: `${marker}\n## AI Evaluation Suite\n\nCheck the box below to run the [heimdall-eval](https://github.com/Jon-Becker/heimdall-eval) AI evaluation suite.\n\n- [ ] Run AI Evaluation Suite`,
               });
             }
 
