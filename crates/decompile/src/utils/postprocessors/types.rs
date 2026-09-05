@@ -36,11 +36,30 @@ impl InferredType {
 }
 
 fn mapping_value_type(ty: &str) -> Option<InferredType> {
-    if !ty.starts_with("mapping(") {
-        return None;
+    let inner = ty.strip_prefix("mapping(")?;
+    let mut depth = 0usize;
+    let mut separator = None;
+    let mut end = None;
+
+    for (idx, character) in inner.char_indices() {
+        match character {
+            '(' => depth += 1,
+            ')' if depth == 0 => {
+                end = Some(idx);
+                break
+            }
+            ')' => depth -= 1,
+            '=' if depth == 0 && inner[idx..].starts_with("=>") => separator = Some(idx),
+            _ => {}
+        }
     }
-    let value = ty.rsplit_once("=>")?.1.trim().trim_end_matches(')').trim();
-    Some(InferredType::parse(value))
+
+    let end = end?;
+    if !inner[end + 1..].trim().is_empty() {
+        return None
+    }
+    let value = inner[separator? + 2..end].trim();
+    (!value.is_empty()).then(|| InferredType::parse(value))
 }
 
 fn infer_type(expr: &Expr, state: &PostprocessorState) -> InferredType {
@@ -182,6 +201,21 @@ mod tests {
         });
         type_cleanup_postprocessor(&mut statement, &mut PostprocessorState::default()).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return msg.sender;");
+    }
+
+    #[test]
+    fn keeps_cast_for_single_index_into_nested_mapping() {
+        let mut statement = Statement::Return(Expr::Cast {
+            ty: "bool".to_string(),
+            value: Box::new(Expr::index("storage_map", Expr::identifier("arg0"))),
+        });
+        let mut state = PostprocessorState::default();
+        state.storage_type_map.insert(
+            "storage_map".to_string(),
+            "mapping(address => mapping(uint256 => bool))".to_string(),
+        );
+        type_cleanup_postprocessor(&mut statement, &mut state).unwrap();
+        assert_eq!(statement.render(RenderTarget::Solidity), "return bool(storage_map[arg0]);");
     }
 
     #[test]
