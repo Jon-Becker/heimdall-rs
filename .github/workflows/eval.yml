@@ -52,6 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       head_sha: ${{ steps.pr.outputs.head_sha }}
+      request_comment_id: ${{ steps.pr.outputs.request_comment_id }}
       same_repository: ${{ steps.pr.outputs.same_repository }}
       trusted_requester: ${{ steps.pr.outputs.trusted_requester }}
     steps:
@@ -72,6 +73,7 @@ jobs:
             });
 
             core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('request_comment_id', context.payload.comment.id);
             core.setOutput('same_repository', String(pr.head.repo?.full_name === context.repo.owner + '/' + context.repo.repo));
             core.setOutput('trusted_requester', String(['admin', 'maintain', 'write'].includes(permission.permission)));
 
@@ -84,6 +86,26 @@ jobs:
       needs.resolve-pr.outputs.trusted_requester == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Show evaluation progress on PR
+        uses: actions/github-script@v7
+        env:
+          EVAL_SHA: ${{ needs.resolve-pr.outputs.head_sha }}
+        with:
+          script: |
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: ${{ needs.resolve-pr.outputs.request_comment_id }},
+              body: [
+                '<!-- heimdall-eval-request -->',
+                '## AI Evaluation Suite',
+                '',
+                `:hourglass_flowing_sand: Running the [heimdall-eval](https://github.com/Jon-Becker/heimdall-eval) AI evaluation suite for ${process.env.EVAL_SHA}.`,
+                '',
+                '- [x] Run AI Evaluation Suite',
+              ].join('\n'),
+            });
+
       - name: Checkout heimdall-rs (PR branch)
         uses: actions/checkout@v4
         with:
@@ -127,6 +149,8 @@ jobs:
 
       - name: Comment on PR
         uses: actions/github-script@v7
+        env:
+          EVAL_SHA: ${{ needs.resolve-pr.outputs.head_sha }}
         with:
           script: |
             const fs = require('fs');
@@ -199,38 +223,45 @@ jobs:
               detailsBlock = `\n\n<details>\n<summary>:warning: ${lowScoringEntries.length} eval(s) scoring &lt;70%</summary>\n\n${detailsSections.join('\n---\n\n')}\n</details>`;
             }
 
-            const body = `## ${icon} Eval Report for ${context.sha}
+            const body = [
+              '<!-- heimdall-eval-request -->',
+              `## ${icon} AI Evaluation Suite for ${process.env.EVAL_SHA}`,
+              '',
+              'Completed [heimdall-eval](https://github.com/Jon-Becker/heimdall-eval).',
+              '',
+              '| Test Case | CFG | Decompilation |',
+              '|-----------|-----|---------------|',
+              tableRows,
+              `| **Average** | **${avgCfg}** | **${avgDecomp}** |${detailsBlock}`,
+              '',
+              '- [x] Run AI Evaluation Suite',
+            ].join('\n');
 
-            | Test Case | CFG | Decompilation |
-            |-----------|-----|---------------|
-            ${tableRows}
-            | **Average** | **${avgCfg}** | **${avgDecomp}** |${detailsBlock}`;
-
-            // Delete old eval comments
-            const { data: comments } = await github.rest.issues.listComments({
+            // Replace the request comment so the PR has one live evaluation status.
+            await github.rest.issues.updateComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              comment_id: ${{ needs.resolve-pr.outputs.request_comment_id }},
+              body,
             });
 
-            const evalComments = comments.filter(
-              c => c.user.login === 'github-actions[bot]' && c.body.includes('Eval Report for')
-            );
-
-            for (const comment of evalComments) {
-              await github.rest.issues.deleteComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: comment.id,
-              });
-            }
-
-            // Create new comment
-            await github.rest.issues.createComment({
+      - name: Show evaluation failure on PR
+        if: ${{ failure() }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.updateComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body
+              comment_id: ${{ needs.resolve-pr.outputs.request_comment_id }},
+              body: [
+                '<!-- heimdall-eval-request -->',
+                '## :x: AI Evaluation Suite',
+                '',
+                `The [heimdall-eval](https://github.com/Jon-Becker/heimdall-eval) run failed. See [the workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`,
+                '',
+                '- [x] Run AI Evaluation Suite',
+              ].join('\n'),
             });
 
       - name: Upload eval artifacts
