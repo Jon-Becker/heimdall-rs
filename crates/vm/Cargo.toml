@@ -43,6 +43,7 @@ alloy.workspace = true
 hashbrown.workspace = true
 once_cell.workspace = true
 paste = { workspace = true }
+petgraph.workspace = true
 z3 = { workspace = true, optional = true }
 
 [features]

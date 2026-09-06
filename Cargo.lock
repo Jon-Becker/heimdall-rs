@@ -2981,6 +2981,7 @@ dependencies = [
  "memory-stats",
  "once_cell",
  "paste",
+ "petgraph",
  "rand 0.8.6",
  "reqwest 0.12.28",
  "serde",
