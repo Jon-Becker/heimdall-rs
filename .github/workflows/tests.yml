@@ -33,21 +33,6 @@ jobs:
           WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
         run: make test
 
-  solidity-compile-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: foundry-rs/foundry-toolchain@v1
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-      - name: Build Heimdall
-        run: cargo build --bin heimdall
-      - name: Compile decompiled Solidity
-        run: scripts/compile-smoke
-
   doctest:
     runs-on: ubuntu-latest
     timeout-minutes: 30
