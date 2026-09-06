@@ -131,6 +131,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Jon-Becker/heimdall-eval
+          ref: jon-becker/openrouter-python-harness
           path: heimdall-eval
           token: ${{ secrets.EVAL_REPO_TOKEN }}
 
@@ -154,13 +155,10 @@ jobs:
       - name: Add heimdall to PATH
         run: echo "${{ github.workspace }}/target/release" >> $GITHUB_PATH
 
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
-
       - name: Run main baseline AI evaluation
         working-directory: heimdall-eval
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           PATH="${GITHUB_WORKSPACE}/heimdall-main/target/release:${PATH}" make eval-all
           mv heimdall baseline
@@ -174,7 +172,7 @@ jobs:
       - name: Run AI evaluation
         working-directory: heimdall-eval
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: make eval-all
 
       - name: Generate HTML evaluation report
