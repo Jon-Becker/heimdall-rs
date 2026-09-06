@@ -96,5 +96,6 @@ mod tests {
 
         assert!(!analysis.cfg.expressions.is_empty());
         assert!(analysis.cfg.state_versions.version_count() > 3);
+        assert_eq!(analysis.cfg.exit_states.len(), analysis.cfg.entry_states.len());
     }
 }

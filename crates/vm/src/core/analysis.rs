@@ -194,6 +194,8 @@ pub struct AbstractCfg {
     pub state_versions: StateVersionArena,
     /// Joined abstract state at every reachable block entry.
     pub entry_states: HashMap<BlockId, AbstractState>,
+    /// Most recent fixpoint exit state and control operands for each executed block.
+    pub exit_states: HashMap<BlockId, BlockExit>,
     /// Reachable, resolved control-flow edges.
     pub edges: BTreeSet<AbstractEdge>,
     /// Reachable jump blocks whose destination could not be finitely resolved.
@@ -252,9 +254,11 @@ pub fn analyze_from(
             &mut result.state_versions,
             config.max_value_set,
         ) else {
+            result.exit_states.remove(&block_id);
             result.invalid_stack_blocks.insert(block_id);
             continue
         };
+        result.exit_states.insert(block_id, exit.clone());
 
         let successors = successors(
             program,
@@ -303,11 +307,15 @@ pub fn analyze_from(
     result
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct BlockExit {
-    pub(crate) state: AbstractState,
-    pub(crate) jump_target: Option<AbstractValue>,
-    pub(crate) condition: Option<AbstractValue>,
+/// Abstract state and control operands after executing one canonical basic block.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BlockExit {
+    /// State after the final instruction and after consuming jump operands.
+    pub state: AbstractState,
+    /// Abstract jump destination consumed by `JUMP` or `JUMPI`.
+    pub jump_target: Option<AbstractValue>,
+    /// Abstract branch condition consumed by `JUMPI`.
+    pub condition: Option<AbstractValue>,
 }
 
 #[derive(Clone, Debug)]
@@ -744,6 +752,17 @@ mod tests {
             cfg.edges.first().expect("fallthrough edge").kind,
             AbstractEdgeKind::ConditionalFalse
         );
+        let entry = program.blocks[0].id;
+        let exit = &cfg.exit_states[&entry];
+        assert_eq!(
+            exit.jump_target.as_ref().and_then(AbstractValue::known_values),
+            Some(&BTreeSet::from([U256::from(5)]))
+        );
+        assert_eq!(
+            exit.condition.as_ref().and_then(AbstractValue::known_values),
+            Some(&BTreeSet::from([U256::ZERO]))
+        );
+        assert!(exit.state.stack.values().is_empty());
         assert!(!cfg.entry_states.contains_key(&program.block_at(5).expect("target").id));
     }
 

@@ -237,6 +237,8 @@ pub struct ContextualCfg {
     pub state_versions: StateVersionArena,
     /// Joined abstract states keyed by block and calling context.
     pub entry_states: HashMap<ContextualPoint, AbstractState>,
+    /// Most recent fixpoint exit state and control operands for each executed contextual point.
+    pub exit_states: HashMap<ContextualPoint, BlockExit>,
     /// Reachable context-sensitive edges.
     pub edges: BTreeSet<ContextualEdge>,
     /// Jump points whose destination could not be finitely resolved.
@@ -315,9 +317,11 @@ pub fn analyze_contextual_from(
             &mut result.state_versions,
             config.values.max_value_set,
         ) else {
+            result.exit_states.remove(&point);
             result.invalid_stack_points.insert(point);
             continue
         };
+        result.exit_states.insert(point.clone(), exit.clone());
 
         let successors = successors(
             program,
