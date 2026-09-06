@@ -40,9 +40,13 @@ pub struct CfgArgs {
     #[clap(long, short, default_value = "", hide_default_value = true)]
     pub name: String,
 
-    /// Timeout for symbolic execution
+    /// Timeout for legacy recursive symbolic execution.
     #[clap(long, short, default_value = "10000", hide_default_value = true)]
     pub timeout: u64,
+
+    /// Use the legacy recursive VMTrace pipeline instead of canonical abstract analysis.
+    #[clap(long)]
+    pub legacy: bool,
 
     /// The hardfork to use for opcode recognition. Opcodes introduced after this hardfork
     /// will be treated as unknown. Defaults to 'latest'.
@@ -120,6 +124,7 @@ impl CfgArgsBuilder {
             output: Some(String::new()),
             name: Some(String::new()),
             timeout: Some(10000),
+            legacy: Some(false),
             hardfork: Some(HardFork::Latest),
             etherscan_api_key: Some(String::new()),
         }

@@ -7,7 +7,7 @@ mod core;
 mod interfaces;
 
 // re-export the public interface
-pub use core::{cfg, CfgResult};
+pub use core::{cfg, CfgDiagnostics, CfgResult};
 pub use error::Error;
 pub use heimdall_vm::core::hardfork::HardFork;
 pub use interfaces::{CfgArgs, CfgArgsBuilder};
