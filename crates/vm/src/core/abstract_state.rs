@@ -226,7 +226,7 @@ impl VersionedState {
         }
     }
 
-    /// Forget exact forwarding while retaining a distinct version.
+    /// Forget values overlapping an unknown write while retaining a distinct version.
     pub fn havoc(
         &mut self,
         key: AbstractValue,
@@ -234,7 +234,6 @@ impl VersionedState {
         versions: &mut StateVersionArena,
     ) {
         self.store(key, None, size, versions);
-        self.known.clear();
     }
 
     pub(crate) fn join(
@@ -380,6 +379,30 @@ mod tests {
         );
 
         assert_eq!(memory.load(&word), None);
+    }
+
+    #[test]
+    fn precise_memory_havoc_retains_non_overlapping_words() {
+        let mut versions = StateVersionArena::new();
+        let mut memory = VersionedState::initial(StateDomain::Memory);
+        let first = AbstractValue::constant(U256::ZERO);
+        let second = AbstractValue::constant(U256::from(64));
+        memory.store(
+            first.clone(),
+            Some(AbstractValue::constant(U256::from(1))),
+            Some(32),
+            &mut versions,
+        );
+        memory.store(
+            second.clone(),
+            Some(AbstractValue::constant(U256::from(2))),
+            Some(32),
+            &mut versions,
+        );
+        memory.havoc(AbstractValue::constant(U256::from(16)), Some(32), &mut versions);
+
+        assert_eq!(memory.load(&first), None);
+        assert_eq!(memory.load(&second), Some(&AbstractValue::constant(U256::from(2))));
     }
 
     #[test]
