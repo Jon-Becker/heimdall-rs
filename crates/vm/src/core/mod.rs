@@ -13,6 +13,9 @@ pub mod constants;
 /// Shrinking continuation context for abstract CFG analysis
 pub mod context;
 
+/// Dominators, strongly connected components, and natural loops
+pub mod control_flow;
+
 /// Lightweight path predicates for abstract analysis
 pub mod facts;
 
