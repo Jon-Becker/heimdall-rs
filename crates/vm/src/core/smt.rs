@@ -283,7 +283,7 @@ impl<'a> Translator<'a> {
     }
 
     fn node(&mut self, expression: ExprId, node: &ExpressionNode) -> Option<BV> {
-        if is_symbolic_leaf(node.opcode) {
+        if node.state_version.is_some() || is_symbolic_leaf(node.opcode) {
             return Some(BV::new_const(format!("e{}", expression.index()), 256))
         }
         let inputs =
@@ -406,7 +406,12 @@ mod tests {
         opcode: u8,
         inputs: Vec<AbstractValue>,
     ) -> AbstractValue {
-        AbstractValue::expression(arena.intern(ExpressionNode { opcode, inputs, output: 0 }))
+        AbstractValue::expression(arena.intern(ExpressionNode {
+            opcode,
+            inputs,
+            output: 0,
+            state_version: None,
+        }))
     }
 
     #[test]

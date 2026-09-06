@@ -13,6 +13,7 @@ use alloy::primitives::U256;
 #[cfg(feature = "smt")]
 use super::smt::{SmtRefiner, SmtStats};
 use super::{
+    abstract_state::StateVersionArena,
     analysis::{
         assumed_state, branch_feasibility, execute_block, AbstractState, AbstractValue,
         AnalysisConfig, BlockExit, ExpressionArena,
@@ -226,6 +227,8 @@ impl Default for ContextualAnalysisConfig {
 pub struct ContextualCfg {
     /// Hash-consed symbolic expressions referenced by contextual states.
     pub expressions: ExpressionArena,
+    /// Persistent versions referenced by memory and storage expressions.
+    pub state_versions: StateVersionArena,
     /// Joined abstract states keyed by block and calling context.
     pub entry_states: HashMap<ContextualPoint, AbstractState>,
     /// Reachable context-sensitive edges.
@@ -285,6 +288,7 @@ pub fn analyze_contextual_from(
             point.block,
             entry_state,
             &mut result.expressions,
+            &mut result.state_versions,
             config.values.max_value_set,
         ) else {
             result.invalid_stack_points.insert(point);
@@ -313,7 +317,11 @@ pub fn analyze_contextual_from(
             });
             let changed = match result.entry_states.get(&target) {
                 Some(previous) => {
-                    let joined = previous.join(&successor.state, config.values.max_value_set);
+                    let joined = previous.join(
+                        &successor.state,
+                        config.values.max_value_set,
+                        &mut result.state_versions,
+                    );
                     if &joined == previous {
                         false
                     } else {
