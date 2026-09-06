@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use hashbrown::HashMap;
 use heimdall_vm::core::{
     context::{analyze_contextual, ContextualCfg, ContextualPoint},
+    control_flow::{analyze_contextual_control_flow, ContextualControlFlow},
     hardfork::HardFork,
     program::{BlockId, Program},
     ssa::{build_contextual_ssa, ContextualSsa},
@@ -31,6 +32,8 @@ pub struct CanonicalAnalysis {
     pub cfg: ContextualCfg,
     /// Contextual stack SSA and effect operands derived from `cfg`.
     pub ssa: ContextualSsa,
+    /// Dominators, post-dominators, SCCs, loops, and structural uncertainty.
+    pub control_flow: ContextualControlFlow,
     /// Legacy-discovered selectors annotated with canonical entry blocks.
     pub function_entries: BTreeMap<String, CanonicalFunctionEntry>,
 }
@@ -51,6 +54,7 @@ pub(crate) fn build_canonical_analysis(
     let program = Program::decode(bytecode, hardfork);
     let cfg = analyze_contextual(&program);
     let ssa = build_contextual_ssa(&cfg);
+    let control_flow = analyze_contextual_control_flow(&cfg);
     let function_entries = selectors
         .iter()
         .map(|(selector, &entry_pc)| {
@@ -61,7 +65,7 @@ pub(crate) fn build_canonical_analysis(
             (selector.clone(), CanonicalFunctionEntry { entry_pc, block })
         })
         .collect();
-    CanonicalAnalysis { program, cfg, ssa, function_entries }
+    CanonicalAnalysis { program, cfg, ssa, control_flow, function_entries }
 }
 
 #[cfg(test)]
@@ -109,5 +113,10 @@ mod tests {
             .flat_map(|block| &block.effects)
             .any(|effect| effect.kind ==
                 heimdall_vm::core::analysis::InstructionEffectKind::StorageWrite));
+        assert_eq!(
+            analysis.control_flow.immediate_dominators.len(),
+            analysis.cfg.entry_states.len()
+        );
+        assert!(analysis.control_flow.is_exact());
     }
 }
