@@ -25,7 +25,10 @@ use super::{
 pub const DEFAULT_CONTEXT_DEPTH: usize = 20;
 
 /// Default number of distinct contexts retained for one block before they are collapsed.
-pub const DEFAULT_CONTEXTS_PER_BLOCK: usize = 64;
+///
+/// This bound accommodates continuation-heavy production contracts without sacrificing the
+/// deterministic global iteration limit.
+pub const DEFAULT_CONTEXTS_PER_BLOCK: usize = 256;
 
 /// Default maximum block-state executions in one contextual analysis.
 pub const DEFAULT_MAX_ANALYSIS_ITERATIONS: usize = 250_000;
@@ -708,6 +711,14 @@ mod tests {
             20,
         );
         assert!(after_outer.private_calls().is_empty());
+    }
+
+    #[test]
+    fn default_context_budget_favors_precision_within_the_global_work_bound() {
+        let config = ContextualAnalysisConfig::default();
+
+        assert_eq!(config.max_contexts_per_block, 256);
+        assert_eq!(config.max_iterations, DEFAULT_MAX_ANALYSIS_ITERATIONS);
     }
 
     #[test]
