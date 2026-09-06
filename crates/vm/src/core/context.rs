@@ -12,8 +12,8 @@ use alloy::primitives::U256;
 
 use super::{
     analysis::{
-        branch_feasibility, execute_block, AbstractState, AbstractValue, AnalysisConfig, BlockExit,
-        ExpressionArena,
+        assumed_state, branch_feasibility, execute_block, AbstractState, AbstractValue,
+        AnalysisConfig, BlockExit, ExpressionArena,
     },
     program::{BlockId, BlockTerminator, EdgeKind, Program},
 };
@@ -236,6 +236,8 @@ pub struct ContextualCfg {
     pub invalid_jump_points: BTreeSet<ContextualPoint>,
     /// Destination contexts collapsed by the per-block context budget.
     pub collapsed_contexts: BTreeSet<ContextualPoint>,
+    /// Contextual conditional edge directions proven infeasible.
+    pub pruned_branches: BTreeSet<(ContextualPoint, bool)>,
 }
 
 /// Analyze from bytecode entry with inferred continuation hints and default bounds.
@@ -282,7 +284,18 @@ pub fn analyze_contextual_from(
             continue
         };
 
-        for successor in successors(program, &point, &exit, hints, config, &mut result) {
+        let successors = successors(
+            program,
+            &point,
+            &exit,
+            hints,
+            config,
+            &result.expressions,
+            &mut result.unresolved_jumps,
+            &mut result.invalid_jump_points,
+            &mut result.pruned_branches,
+        );
+        for successor in successors {
             let target = budget_context(program, successor.target, config, &mut result);
             result.edges.insert(ContextualEdge {
                 source: point.clone(),
@@ -326,72 +339,88 @@ fn successors(
     exit: &BlockExit,
     hints: &ContinuationHints,
     config: ContextualAnalysisConfig,
-    result: &mut ContextualCfg,
+    expressions: &ExpressionArena,
+    unresolved_jumps: &mut BTreeSet<ContextualPoint>,
+    invalid_jump_points: &mut BTreeSet<ContextualPoint>,
+    pruned_branches: &mut BTreeSet<(ContextualPoint, bool)>,
 ) -> Vec<ContextualSuccessor> {
     let block = &program.blocks[point.block.index()];
-    let (take_true, take_false) = branch_feasibility(exit.condition.as_ref());
+    let (take_true, take_false) =
+        branch_feasibility(exit.condition.as_ref(), &exit.state.facts, expressions);
+    if block.terminator == BlockTerminator::ConditionalJump {
+        if !take_true {
+            pruned_branches.insert((point.clone(), true));
+        }
+        if !take_false {
+            pruned_branches.insert((point.clone(), false));
+        }
+    }
+    let true_state = take_true.then(|| assumed_state(exit, true, expressions)).flatten();
+    let false_state = take_false.then(|| assumed_state(exit, false, expressions)).flatten();
     let mut successors = Vec::new();
 
-    if take_true &&
-        matches!(block.terminator, BlockTerminator::Jump | BlockTerminator::ConditionalJump)
-    {
-        let kind = if block.terminator == BlockTerminator::ConditionalJump {
-            ContextualEdgeKind::ConditionalTrue
-        } else {
-            ContextualEdgeKind::Jump
-        };
-        match exit.jump_target.as_ref() {
-            Some(AbstractValue::Known(targets)) => {
-                for target in targets {
-                    match valid_target(program, *target) {
-                        Some(target) => successors.push(contextual_successor(
-                            point,
-                            target,
-                            kind,
-                            exit.state.clone(),
-                            hints,
-                            config.max_context_depth,
-                        )),
-                        None => {
-                            result.invalid_jump_points.insert(point.clone());
+    if let Some(true_state) = true_state {
+        if matches!(block.terminator, BlockTerminator::Jump | BlockTerminator::ConditionalJump) {
+            let kind = if block.terminator == BlockTerminator::ConditionalJump {
+                ContextualEdgeKind::ConditionalTrue
+            } else {
+                ContextualEdgeKind::Jump
+            };
+            match exit.jump_target.as_ref() {
+                Some(AbstractValue::Known(targets)) => {
+                    for target in targets {
+                        match valid_target(program, *target) {
+                            Some(target) => successors.push(contextual_successor(
+                                point,
+                                target,
+                                kind,
+                                true_state.clone(),
+                                hints,
+                                config.max_context_depth,
+                            )),
+                            None => {
+                                invalid_jump_points.insert(point.clone());
+                            }
                         }
                     }
                 }
-            }
-            Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) | None => {
-                let mut resolved = false;
-                for edge in &block.static_edges {
-                    if edge.kind == EdgeKind::Jump {
-                        resolved = true;
-                        successors.push(contextual_successor(
-                            point,
-                            edge.target,
-                            kind,
-                            exit.state.clone(),
-                            hints,
-                            config.max_context_depth,
-                        ));
+                Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) | None => {
+                    let mut resolved = false;
+                    for edge in &block.static_edges {
+                        if edge.kind == EdgeKind::Jump {
+                            resolved = true;
+                            successors.push(contextual_successor(
+                                point,
+                                edge.target,
+                                kind,
+                                true_state.clone(),
+                                hints,
+                                config.max_context_depth,
+                            ));
+                        }
                     }
-                }
-                if !resolved {
-                    result.unresolved_jumps.insert(point.clone());
+                    if !resolved {
+                        unresolved_jumps.insert(point.clone());
+                    }
                 }
             }
         }
     }
 
-    if take_false && block.terminator == BlockTerminator::ConditionalJump {
-        if let Some(edge) =
-            block.static_edges.iter().find(|edge| edge.kind == EdgeKind::ConditionalFalse)
-        {
-            successors.push(contextual_successor(
-                point,
-                edge.target,
-                ContextualEdgeKind::ConditionalFalse,
-                exit.state.clone(),
-                hints,
-                config.max_context_depth,
-            ));
+    if let Some(false_state) = false_state {
+        if block.terminator == BlockTerminator::ConditionalJump {
+            if let Some(edge) =
+                block.static_edges.iter().find(|edge| edge.kind == EdgeKind::ConditionalFalse)
+            {
+                successors.push(contextual_successor(
+                    point,
+                    edge.target,
+                    ContextualEdgeKind::ConditionalFalse,
+                    false_state,
+                    hints,
+                    config.max_context_depth,
+                ));
+            }
         }
     } else if block.terminator == BlockTerminator::Fallthrough {
         if let Some(edge) =
