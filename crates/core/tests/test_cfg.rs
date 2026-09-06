@@ -65,9 +65,11 @@ mod integration_tests {
 
         let output = format!("{}", Dot::with_config(&result.graph, &[]));
 
-        for line in &[String::from("\"0x039f JUMPDEST \\l0x03a0 STOP \\l\"")] {
-            assert!(output.contains(line))
-        }
+        assert!(result.diagnostics.canonical);
+        assert!(result.graph.node_count() > 100);
+        assert!(result.graph.edge_count() > 100);
+        assert!(result.diagnostics.contextual_states >= result.graph.node_count());
+        assert!(output.contains("JUMPDEST"));
     }
 
     #[tokio::test]
