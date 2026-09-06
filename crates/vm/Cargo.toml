@@ -43,10 +43,12 @@ alloy.workspace = true
 hashbrown.workspace = true
 once_cell.workspace = true
 paste = { workspace = true }
+z3 = { workspace = true, optional = true }
 
 [features]
 step-tracing = []
 experimental = []
+smt = ["dep:z3"]
 
 [dev-dependencies]
 criterion = { workspace = true }
