@@ -3,31 +3,200 @@ name: bench
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   runBenchmark:
     name: run benchmark
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    env:
+      # Scope the upload to this exact run so a canceled or superseded run can
+      # never overwrite a report that is already linked from the PR.
+      REPORT_PREFIX: pull/${{ github.event.pull_request.number }}/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: boa-dev/criterion-compare-action@v3
+      - uses: actions/checkout@v4
+      - id: bench
+        uses: boa-dev/criterion-compare-action@v3
         with:
           package: "heimdall-core"
           branchName: ${{ github.base_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Delete old benchmark comments
+
+      # Fork PRs are intentionally denied AWS access, so the artifact is the
+      # fallback that keeps the full report reachable on every run.
+      - name: Upload benchmark report artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-report
+          path: target/criterion
+          if-no-files-found: warn
+
+      - name: Resolve report upload target
+        id: target
+        if: ${{ !cancelled() }}
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          BUCKET: ${{ vars.BENCH_REPORT_S3_BUCKET }}
+          REGION: ${{ vars.BENCH_REPORT_AWS_REGION }}
+          ROLE_ARN: ${{ vars.BENCH_REPORT_AWS_ROLE_ARN }}
+          BASE_URL: ${{ vars.BENCH_REPORT_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ "$IS_FORK" = "true" ]; then
+            reason="this is a fork pull request, which is never given AWS access"
+          elif [ -z "$BUCKET" ] || [ -z "$REGION" ] || [ -z "$ROLE_ARN" ]; then
+            reason="the BENCH_REPORT_* repository variables are not configured"
+          elif [ ! -f target/criterion/report/index.html ]; then
+            reason="the benchmark run produced no Criterion HTML report"
+          fi
+
+          if [ -n "${reason:-}" ]; then
+            echo "Skipping S3 upload: $reason"
+            {
+              echo "enabled=false"
+              echo "skip_reason=$reason"
+              echo "url="
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # A CloudFront (or equivalent) origin is preferred; fall back to the
+          # bucket's virtual-hosted endpoint when no base URL is configured.
+          base="${BASE_URL:-https://${BUCKET}.s3.${REGION}.amazonaws.com}"
+          {
+            echo "enabled=true"
+            echo "skip_reason="
+            echo "url=${base%/}/${REPORT_PREFIX}/report/index.html"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        if: ${{ steps.target.outputs.enabled == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.BENCH_REPORT_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.BENCH_REPORT_AWS_REGION }}
+          role-session-name: heimdall-bench-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Upload Criterion report to S3
+        if: ${{ steps.target.outputs.enabled == 'true' }}
+        env:
+          BUCKET: ${{ vars.BENCH_REPORT_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          dest="s3://${BUCKET}/${REPORT_PREFIX}"
+
+          # Upload the raw measurement data first, letting the CLI guess its
+          # types, then the browser-facing assets with explicit content types so
+          # the report renders instead of downloading. The two passes cover
+          # disjoint file sets, so neither can shadow the other.
+          aws s3 sync target/criterion "$dest" --only-show-errors \
+            --exclude "*.html" --exclude "*.svg" --exclude "*.css" --exclude "*.js"
+
+          sync_typed() {
+            aws s3 sync target/criterion "$dest" --only-show-errors \
+              --exclude "*" --include "$1" --content-type "$2"
+          }
+          sync_typed "*.html" "text/html; charset=utf-8"
+          sync_typed "*.svg" "image/svg+xml"
+          sync_typed "*.css" "text/css; charset=utf-8"
+          sync_typed "*.js" "text/javascript; charset=utf-8"
+
+      # Forks hold a read-only token and cannot comment at all, so this only runs
+      # for same-repository pull requests.
+      - name: Link the full report from the benchmark comment
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
         uses: actions/github-script@v7
+        env:
+          BENCH_COMMENT_ID: ${{ steps.bench.outputs.comment-id }}
+          REPORT_URL: ${{ steps.target.outputs.url }}
+          SKIP_REASON: ${{ steps.target.outputs.skip_reason }}
         with:
           script: |
+            const marker = '<!-- heimdall-bench-report -->';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const line = process.env.REPORT_URL
+              ? `:bar_chart: [View the full Criterion report](${process.env.REPORT_URL})`
+              : `:bar_chart: The full Criterion report was not uploaded because ${process.env.SKIP_REASON}. Download the \`criterion-report\` artifact from [the workflow run](${runUrl}) instead.`;
+            const section = `${marker}\n${line}`;
+
+            // Everything from the marker onwards is this step's own output, so
+            // dropping it keeps reruns replacing the link rather than stacking.
+            const withSection = (body) => {
+              const kept = (body || '').split(marker)[0].trimEnd();
+              return kept ? `${kept}\n\n${section}` : section;
+            };
+
+            const commentId = Number(process.env.BENCH_COMMENT_ID);
+            if (commentId) {
+              const { data: comment } = await github.rest.issues.getComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: commentId,
+              });
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: commentId,
+                body: withSection(comment.body),
+              });
+              return;
+            }
+
+            // The action did not report a comment to amend, so keep the link on a
+            // separate comment that the cleanup step below also prunes.
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            const benchmarkComments = comments.filter(
-              c => c.user.login === 'github-actions[bot]' && c.body.includes('Benchmark for')
+            const existing = comments.find(
+              c => c.user.login === 'github-actions[bot]' && c.body.includes(marker)
             );
-            // Delete all but the most recent benchmark comment
-            for (const comment of benchmarkComments.slice(0, -1)) {
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: withSection(existing.body),
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: section,
+              });
+            }
+
+      - name: Delete old benchmark comments
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- heimdall-bench-report -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const fromBot = comments.filter(c => c.user.login === 'github-actions[bot]');
+            const benchmarkComments = fromBot.filter(c => c.body.includes('Benchmark for'));
+            // Standalone report links only exist when the action's comment could
+            // not be amended; prune them independently so neither kind stacks up.
+            const reportComments = fromBot.filter(
+              c => c.body.includes(marker) && !c.body.includes('Benchmark for')
+            );
+
+            // Delete all but the most recent comment of each kind
+            for (const comment of [...benchmarkComments.slice(0, -1), ...reportComments.slice(0, -1)]) {
               await github.rest.issues.deleteComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
