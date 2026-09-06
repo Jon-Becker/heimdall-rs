@@ -169,6 +169,20 @@ mod tests {
     }
 
     #[test]
+    async fn cfg_surfaces_exhausted_analysis_budget() {
+        let result = cfg(CfgArgsBuilder::new()
+            .target("0x6000".to_owned())
+            .max_iterations(0)
+            .build()
+            .expect("valid arguments"))
+        .await
+        .expect("bounded cfg");
+
+        assert_eq!(result.diagnostics.analysis_iterations, 0);
+        assert_eq!(result.diagnostics.budget_exhausted_points, 1);
+    }
+
+    #[test]
     async fn legacy_graph_remains_available_explicitly() {
         let result = cfg(CfgArgsBuilder::new()
             .target("0x60006000fd".to_owned())
