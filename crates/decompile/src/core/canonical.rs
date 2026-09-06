@@ -7,6 +7,7 @@ use heimdall_vm::core::{
     context::{analyze_contextual, ContextualCfg, ContextualPoint},
     hardfork::HardFork,
     program::{BlockId, Program},
+    ssa::{build_contextual_ssa, ContextualSsa},
 };
 
 /// Existing selector discovery mapped onto canonical basic blocks.
@@ -28,6 +29,8 @@ pub struct CanonicalAnalysis {
     pub program: Program,
     /// Context-sensitive abstract CFG, including all uncertainty diagnostics.
     pub cfg: ContextualCfg,
+    /// Contextual stack SSA and effect operands derived from `cfg`.
+    pub ssa: ContextualSsa,
     /// Legacy-discovered selectors annotated with canonical entry blocks.
     pub function_entries: BTreeMap<String, CanonicalFunctionEntry>,
 }
@@ -47,6 +50,7 @@ pub(crate) fn build_canonical_analysis(
 ) -> CanonicalAnalysis {
     let program = Program::decode(bytecode, hardfork);
     let cfg = analyze_contextual(&program);
+    let ssa = build_contextual_ssa(&cfg);
     let function_entries = selectors
         .iter()
         .map(|(selector, &entry_pc)| {
@@ -57,7 +61,7 @@ pub(crate) fn build_canonical_analysis(
             (selector.clone(), CanonicalFunctionEntry { entry_pc, block })
         })
         .collect();
-    CanonicalAnalysis { program, cfg, function_entries }
+    CanonicalAnalysis { program, cfg, ssa, function_entries }
 }
 
 #[cfg(test)]
@@ -97,5 +101,13 @@ mod tests {
         assert!(!analysis.cfg.expressions.is_empty());
         assert!(analysis.cfg.state_versions.version_count() > 3);
         assert_eq!(analysis.cfg.exit_states.len(), analysis.cfg.entry_states.len());
+        assert_eq!(analysis.ssa.blocks.len(), analysis.cfg.entry_states.len());
+        assert!(analysis
+            .ssa
+            .blocks
+            .values()
+            .flat_map(|block| &block.effects)
+            .any(|effect| effect.kind ==
+                heimdall_vm::core::analysis::InstructionEffectKind::StorageWrite));
     }
 }
