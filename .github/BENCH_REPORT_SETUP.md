@@ -6,11 +6,12 @@ request. `.github/workflows/eval.yml` uses the same configuration to upload the
 static `heimdall-eval` report (`heimdall/report.html` plus its `report/` detail
 pages) and links it from the evaluation comment.
 
-The upload is **optional**. When the configuration below is missing, or when the
-pull request comes from a fork, the workflow skips the upload, says so in the
-relevant pull-request comment, and points at the `criterion-report` or
-`eval-results` workflow artifact instead. Nothing in this document is provisioned
-by this repository — the bucket, role, and policies have to be created manually.
+The upload is **optional**. When the configuration below is missing or the pull
+request comes from a fork, the workflow skips the upload, says so in the relevant
+pull-request comment, and points at the `criterion-report` or `eval-results`
+workflow artifact instead. Evaluation runs also fall back to the artifact when
+AWS cannot assume the configured role. Nothing in this document is provisioned by
+this repository — the bucket, role, and policies have to be created manually.
 
 ## Repository variables
 

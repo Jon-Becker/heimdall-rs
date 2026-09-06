@@ -198,15 +198,45 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
+        id: aws_credentials
         if: ${{ steps.target.outputs.enabled == 'true' }}
+        continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.BENCH_REPORT_AWS_ROLE_ARN }}
           aws-region: ${{ vars.BENCH_REPORT_AWS_REGION }}
           role-session-name: heimdall-eval-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Report hosting is an optional enhancement. In particular, an AWS role
+      # trust-policy change must not make an otherwise successful evaluation
+      # appear to have failed.
+      - name: Resolve report publication result
+        id: report
+        if: ${{ !cancelled() }}
+        env:
+          ENABLED: ${{ steps.target.outputs.enabled }}
+          URL: ${{ steps.target.outputs.url }}
+          SKIP_REASON: ${{ steps.target.outputs.skip_reason }}
+          AWS_CREDENTIALS_OUTCOME: ${{ steps.aws_credentials.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$ENABLED" != "true" ]; then
+            url=""
+            reason="$SKIP_REASON"
+          elif [ "$AWS_CREDENTIALS_OUTCOME" = "success" ]; then
+            url="$URL"
+            reason=""
+          else
+            url=""
+            reason="AWS credentials could not be configured; the report is available in the eval-results artifact"
+          fi
+          {
+            echo "url=$url"
+            echo "skip_reason=$reason"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload evaluation report to S3
-        if: ${{ steps.target.outputs.enabled == 'true' }}
+        if: ${{ steps.target.outputs.enabled == 'true' && steps.aws_credentials.outcome == 'success' }}
         env:
           BUCKET: ${{ vars.BENCH_REPORT_S3_BUCKET }}
         run: |
@@ -221,8 +251,8 @@ jobs:
         uses: actions/github-script@v7
         env:
           EVAL_SHA: ${{ needs.resolve-pr.outputs.head_sha }}
-          REPORT_URL: ${{ steps.target.outputs.url }}
-          REPORT_SKIP_REASON: ${{ steps.target.outputs.skip_reason }}
+          REPORT_URL: ${{ steps.report.outputs.url }}
+          REPORT_SKIP_REASON: ${{ steps.report.outputs.skip_reason }}
         with:
           script: |
             const fs = require('fs');
