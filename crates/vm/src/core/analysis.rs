@@ -496,6 +496,12 @@ pub(crate) fn execute_block(
     Some(BlockExit { state, jump_target, condition })
 }
 
+fn valid_target(program: &Program, target: U256) -> Option<BlockId> {
+    let pc = usize::try_from(target).ok()?;
+    let block = program.block_at(pc)?;
+    program.is_valid_jumpdest(pc).then_some(block.id)
+}
+
 fn exact_usize(value: &AbstractValue) -> Option<usize> {
     value
         .known_values()
@@ -567,7 +573,21 @@ fn successors(
                         }
                     }
                 }
-                Some(AbstractValue::Symbolic { .. }) => {
+                Some(AbstractValue::Symbolic { constants, .. }) => {
+                    for target in constants {
+                        match valid_target(program, *target) {
+                            Some(target) => successors.push(Successor {
+                                target,
+                                kind,
+                                state: true_state.clone(),
+                            }),
+                            None => {
+                                invalid_jump_blocks.insert(block_id);
+                            }
+                        }
+                    }
+                    // Retained concrete alternatives are real edges, but expressions mean the
+                    // target set remains incomplete unless SMT proves otherwise.
                     let mut resolved = false;
                     #[cfg(feature = "smt")]
                     if let Some(refiner) = smt.as_mut() {
@@ -985,6 +1005,48 @@ mod tests {
 
         assert_eq!(outgoing.len(), 1);
         assert_eq!(outgoing[0].kind, AbstractEdgeKind::ConditionalFalse);
+    }
+
+    #[test]
+    fn retains_concrete_alternatives_from_a_symbolic_jump() {
+        let program = program(&[
+            opcodes::CALLVALUE,
+            opcodes::PUSH1,
+            9,
+            opcodes::JUMPI,
+            opcodes::PUSH1,
+            18,
+            opcodes::PUSH1,
+            15,
+            opcodes::JUMP,
+            opcodes::JUMPDEST,
+            opcodes::PUSH0,
+            opcodes::CALLDATALOAD,
+            opcodes::PUSH1,
+            15,
+            opcodes::JUMP,
+            opcodes::JUMPDEST,
+            opcodes::JUMP,
+            opcodes::STOP,
+            opcodes::JUMPDEST,
+            opcodes::STOP,
+        ]);
+        #[allow(unused_mut)]
+        let mut config = AnalysisConfig::default();
+        #[cfg(feature = "smt")]
+        {
+            config.smt = None;
+        }
+        let cfg = analyze_with_config(&program, config);
+        let dynamic = program.block_at(15).unwrap().id;
+        let concrete = program.block_at(18).unwrap().id;
+
+        assert!(cfg.edges.contains(&AbstractEdge {
+            source: dynamic,
+            target: concrete,
+            kind: AbstractEdgeKind::Jump,
+        }));
+        assert!(cfg.unresolved_jumps.contains(&dynamic));
     }
 
     #[test]
