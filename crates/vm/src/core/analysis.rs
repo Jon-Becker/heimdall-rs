@@ -14,6 +14,7 @@ use alloy::primitives::U256;
 
 pub use super::symbolic::{AbstractValue, ExprId, ExpressionArena, ExpressionNode};
 use super::{
+    facts::{condition_may_be, PathFacts},
     opcodes::{self, OpCodeInfo},
     program::{BlockId, BlockTerminator, EdgeKind, Program},
     symbolic::operation_result,
@@ -106,6 +107,8 @@ impl AbstractStack {
 pub struct AbstractState {
     /// Abstract operand stack.
     pub stack: AbstractStack,
+    /// Predicates known to hold on this path.
+    pub facts: PathFacts,
 }
 
 impl AbstractState {
@@ -116,11 +119,14 @@ impl AbstractState {
 
     /// Construct a state with an explicit abstract stack.
     pub fn with_stack(stack: AbstractStack) -> Self {
-        Self { stack }
+        Self { stack, facts: PathFacts::new() }
     }
 
     pub(crate) fn join(&self, other: &Self, max_values: usize) -> Self {
-        Self { stack: self.stack.join(&other.stack, max_values) }
+        Self {
+            stack: self.stack.join(&other.stack, max_values),
+            facts: self.facts.join(&other.facts),
+        }
     }
 }
 
@@ -176,6 +182,8 @@ pub struct AbstractCfg {
     pub invalid_stack_blocks: BTreeSet<BlockId>,
     /// Reachable jumps for which at least one concrete target is not a valid JUMPDEST.
     pub invalid_jump_blocks: BTreeSet<BlockId>,
+    /// Conditional edge directions proven infeasible by constants or path facts.
+    pub pruned_branches: BTreeSet<(BlockId, bool)>,
 }
 
 /// Analyze a program from its first block using the default finite-domain configuration.
@@ -222,7 +230,16 @@ pub fn analyze_from(
             continue
         };
 
-        for successor in successors(program, block_id, &exit, &mut result) {
+        let successors = successors(
+            program,
+            block_id,
+            &exit,
+            &result.expressions,
+            &mut result.unresolved_jumps,
+            &mut result.invalid_jump_blocks,
+            &mut result.pruned_branches,
+        );
+        for successor in successors {
             let edge =
                 AbstractEdge { source: block_id, target: successor.target, kind: successor.kind };
             result.edges.insert(edge);
@@ -337,66 +354,84 @@ fn successors(
     program: &Program,
     block_id: BlockId,
     exit: &BlockExit,
-    result: &mut AbstractCfg,
+    expressions: &ExpressionArena,
+    unresolved_jumps: &mut BTreeSet<BlockId>,
+    invalid_jump_blocks: &mut BTreeSet<BlockId>,
+    pruned_branches: &mut BTreeSet<(BlockId, bool)>,
 ) -> Vec<Successor> {
     let block = &program.blocks[block_id.index()];
-    let (take_true, take_false) = branch_feasibility(exit.condition.as_ref());
+    let (take_true, take_false) =
+        branch_feasibility(exit.condition.as_ref(), &exit.state.facts, expressions);
+    if block.terminator == BlockTerminator::ConditionalJump {
+        if !take_true {
+            pruned_branches.insert((block_id, true));
+        }
+        if !take_false {
+            pruned_branches.insert((block_id, false));
+        }
+    }
+    let true_state = take_true.then(|| assumed_state(exit, true, expressions)).flatten();
+    let false_state = take_false.then(|| assumed_state(exit, false, expressions)).flatten();
     let mut successors = Vec::new();
 
-    if take_true &&
-        matches!(block.terminator, BlockTerminator::Jump | BlockTerminator::ConditionalJump)
-    {
-        let kind = if block.terminator == BlockTerminator::ConditionalJump {
-            AbstractEdgeKind::ConditionalTrue
-        } else {
-            AbstractEdgeKind::Jump
-        };
-        match exit.jump_target.as_ref() {
-            Some(AbstractValue::Known(targets)) => {
-                for target in targets {
-                    match usize::try_from(*target).ok().and_then(|pc| program.block_at(pc)) {
-                        Some(target_block) if program.is_valid_jumpdest(target_block.start_pc) => {
+    if let Some(true_state) = true_state {
+        if matches!(block.terminator, BlockTerminator::Jump | BlockTerminator::ConditionalJump) {
+            let kind = if block.terminator == BlockTerminator::ConditionalJump {
+                AbstractEdgeKind::ConditionalTrue
+            } else {
+                AbstractEdgeKind::Jump
+            };
+            match exit.jump_target.as_ref() {
+                Some(AbstractValue::Known(targets)) => {
+                    for target in targets {
+                        match usize::try_from(*target).ok().and_then(|pc| program.block_at(pc)) {
+                            Some(target_block)
+                                if program.is_valid_jumpdest(target_block.start_pc) =>
+                            {
+                                successors.push(Successor {
+                                    target: target_block.id,
+                                    kind,
+                                    state: true_state.clone(),
+                                });
+                            }
+                            _ => {
+                                invalid_jump_blocks.insert(block_id);
+                            }
+                        }
+                    }
+                }
+                Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) | None => {
+                    // Retain locally-known direct edges from the structural frontend as a fallback.
+                    let mut resolved = false;
+                    for edge in &block.static_edges {
+                        if edge.kind == EdgeKind::Jump {
+                            resolved = true;
                             successors.push(Successor {
-                                target: target_block.id,
+                                target: edge.target,
                                 kind,
-                                state: exit.state.clone(),
+                                state: true_state.clone(),
                             });
                         }
-                        _ => {
-                            result.invalid_jump_blocks.insert(block_id);
-                        }
                     }
-                }
-            }
-            Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) | None => {
-                // Retain locally-known direct edges from the structural frontend as a fallback.
-                let mut resolved = false;
-                for edge in &block.static_edges {
-                    if edge.kind == EdgeKind::Jump {
-                        resolved = true;
-                        successors.push(Successor {
-                            target: edge.target,
-                            kind,
-                            state: exit.state.clone(),
-                        });
+                    if !resolved {
+                        unresolved_jumps.insert(block_id);
                     }
-                }
-                if !resolved {
-                    result.unresolved_jumps.insert(block_id);
                 }
             }
         }
     }
 
-    if take_false && block.terminator == BlockTerminator::ConditionalJump {
-        if let Some(edge) =
-            block.static_edges.iter().find(|edge| edge.kind == EdgeKind::ConditionalFalse)
-        {
-            successors.push(Successor {
-                target: edge.target,
-                kind: AbstractEdgeKind::ConditionalFalse,
-                state: exit.state.clone(),
-            });
+    if let Some(false_state) = false_state {
+        if block.terminator == BlockTerminator::ConditionalJump {
+            if let Some(edge) =
+                block.static_edges.iter().find(|edge| edge.kind == EdgeKind::ConditionalFalse)
+            {
+                successors.push(Successor {
+                    target: edge.target,
+                    kind: AbstractEdgeKind::ConditionalFalse,
+                    state: false_state,
+                });
+            }
         }
     } else if block.terminator == BlockTerminator::Fallthrough {
         if let Some(edge) =
@@ -413,13 +448,30 @@ fn successors(
     successors
 }
 
-pub(crate) fn branch_feasibility(condition: Option<&AbstractValue>) -> (bool, bool) {
+pub(crate) fn branch_feasibility(
+    condition: Option<&AbstractValue>,
+    facts: &PathFacts,
+    expressions: &ExpressionArena,
+) -> (bool, bool) {
     match condition {
         None => (true, false),
-        Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) => (true, true),
-        Some(AbstractValue::Known(values)) => {
-            (values.iter().any(|value| !value.is_zero()), values.contains(&U256::ZERO))
-        }
+        Some(condition) => (
+            condition_may_be(condition, true, facts, expressions),
+            condition_may_be(condition, false, facts, expressions),
+        ),
+    }
+}
+
+pub(crate) fn assumed_state(
+    exit: &BlockExit,
+    taken: bool,
+    expressions: &ExpressionArena,
+) -> Option<AbstractState> {
+    let mut state = exit.state.clone();
+    if let Some(condition) = &exit.condition {
+        state.facts.assume(condition, taken, expressions).then_some(state)
+    } else {
+        Some(state)
     }
 }
 
@@ -562,6 +614,35 @@ mod tests {
 
         assert_eq!(expression.opcode, opcodes::AND);
         assert_eq!(cfg.expressions.len(), 2);
+    }
+
+    #[test]
+    fn prunes_repeated_conditions_using_path_facts() {
+        let program = program(&[
+            opcodes::CALLDATASIZE,
+            opcodes::PUSH1,
+            36,
+            opcodes::LT,
+            opcodes::PUSH1,
+            0x0f,
+            opcodes::JUMPI,
+            opcodes::CALLDATASIZE,
+            opcodes::PUSH1,
+            36,
+            opcodes::LT,
+            opcodes::PUSH1,
+            0x0f,
+            opcodes::JUMPI,
+            opcodes::STOP,
+            opcodes::JUMPDEST,
+            opcodes::STOP,
+        ]);
+        let cfg = analyze(&program);
+        let repeated = program.block_at(7).expect("repeated condition block").id;
+        let outgoing = cfg.edges.iter().filter(|edge| edge.source == repeated).collect::<Vec<_>>();
+
+        assert_eq!(outgoing.len(), 1);
+        assert_eq!(outgoing[0].kind, AbstractEdgeKind::ConditionalFalse);
     }
 
     #[test]

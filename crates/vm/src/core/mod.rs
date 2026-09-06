@@ -10,6 +10,9 @@ pub mod constants;
 /// Shrinking continuation context for abstract CFG analysis
 pub mod context;
 
+/// Lightweight path predicates for abstract analysis
+pub mod facts;
+
 /// Ethereum hard fork definitions
 pub mod hardfork;
 

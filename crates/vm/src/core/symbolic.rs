@@ -90,8 +90,6 @@ impl AbstractValue {
 /// One hash-consed symbolic EVM operation.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ExpressionNode {
-    /// Bytecode offset at which the value was produced.
-    pub pc: usize,
     /// EVM opcode producing the value.
     pub opcode: u8,
     /// Abstract operands in EVM pop order.
@@ -104,6 +102,7 @@ pub struct ExpressionNode {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ExpressionArena {
     nodes: Vec<ExpressionNode>,
+    sites: Vec<BTreeSet<usize>>,
     interned: HashMap<ExpressionNode, ExprId>,
 }
 
@@ -115,11 +114,24 @@ impl ExpressionArena {
 
     /// Intern a node, returning the existing identifier when it was already present.
     pub fn intern(&mut self, node: ExpressionNode) -> ExprId {
-        if let Some(id) = self.interned.get(&node) {
-            return *id
+        self.intern_with_site(node, None)
+    }
+
+    /// Intern an expression and record a bytecode site that computes it.
+    pub fn intern_at(&mut self, node: ExpressionNode, pc: usize) -> ExprId {
+        self.intern_with_site(node, Some(pc))
+    }
+
+    fn intern_with_site(&mut self, node: ExpressionNode, pc: Option<usize>) -> ExprId {
+        if let Some(id) = self.interned.get(&node).copied() {
+            if let Some(pc) = pc {
+                self.sites[id.0].insert(pc);
+            }
+            return id
         }
         let id = ExprId(self.nodes.len());
         self.nodes.push(node.clone());
+        self.sites.push(pc.into_iter().collect());
         self.interned.insert(node, id);
         id
     }
@@ -127,6 +139,11 @@ impl ExpressionArena {
     /// Look up an interned expression.
     pub fn get(&self, id: ExprId) -> Option<&ExpressionNode> {
         self.nodes.get(id.0)
+    }
+
+    /// Bytecode sites known to compute an expression.
+    pub fn sites(&self, id: ExprId) -> Option<&BTreeSet<usize>> {
+        self.sites.get(id.0)
     }
 
     /// Number of unique expression nodes.
@@ -157,12 +174,10 @@ pub(crate) fn operation_result(
     }
 
     if is_symbolically_stable(instruction.opcode) {
-        return AbstractValue::expression(arena.intern(ExpressionNode {
-            pc: instruction.pc,
-            opcode: instruction.opcode,
-            inputs,
-            output,
-        }))
+        return AbstractValue::expression(arena.intern_at(
+            ExpressionNode { opcode: instruction.opcode, inputs, output },
+            instruction.pc,
+        ))
     }
 
     AbstractValue::Unknown
@@ -291,9 +306,11 @@ mod tests {
     #[test]
     fn interns_structurally_equal_expressions() {
         let mut arena = ExpressionArena::new();
-        let node = ExpressionNode { pc: 7, opcode: opcodes::CALLER, inputs: vec![], output: 0 };
-        assert_eq!(arena.intern(node.clone()), arena.intern(node));
+        let node = ExpressionNode { opcode: opcodes::CALLER, inputs: vec![], output: 0 };
+        let id = arena.intern_at(node.clone(), 7);
+        assert_eq!(id, arena.intern_at(node, 11));
         assert_eq!(arena.len(), 1);
+        assert_eq!(arena.sites(id), Some(&BTreeSet::from([7, 11])));
     }
 
     #[test]
