@@ -34,6 +34,10 @@ pub mod stack;
 /// Interned symbolic expressions for abstract analysis
 pub mod symbolic;
 
+#[cfg(feature = "smt")]
+/// Demand-driven SMT refinement for abstract analysis
+pub mod smt;
+
 /// Storage implementation for contract storage
 pub mod storage;
 

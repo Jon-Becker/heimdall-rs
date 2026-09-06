@@ -96,6 +96,21 @@ impl PathFacts {
         self.disequalities.contains(&ordered_pair(left, right))
     }
 
+    #[cfg(feature = "smt")]
+    pub(crate) fn constraints(&self) -> &BTreeMap<ExprId, ValueConstraint> {
+        &self.constraints
+    }
+
+    #[cfg(feature = "smt")]
+    pub(crate) fn equalities(&self) -> &BTreeSet<(ExprId, ExprId)> {
+        &self.equalities
+    }
+
+    #[cfg(feature = "smt")]
+    pub(crate) fn disequalities(&self) -> &BTreeSet<(ExprId, ExprId)> {
+        &self.disequalities
+    }
+
     /// Intersect path knowledge at a control-flow join.
     pub(crate) fn join(&self, other: &Self) -> Self {
         let constraints = self

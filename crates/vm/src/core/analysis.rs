@@ -12,6 +12,8 @@ use std::{
 
 use alloy::primitives::U256;
 
+#[cfg(feature = "smt")]
+use super::smt::{SmtConfig, SmtRefiner, SmtStats};
 pub use super::symbolic::{AbstractValue, ExprId, ExpressionArena, ExpressionNode};
 use super::{
     facts::{condition_may_be, PathFacts},
@@ -159,11 +161,18 @@ pub struct AbstractEdge {
 pub struct AnalysisConfig {
     /// Maximum alternatives retained in one [`AbstractValue::Known`] set.
     pub max_value_set: usize,
+    #[cfg(feature = "smt")]
+    /// Optional demand-driven SMT refinement limits.
+    pub smt: Option<SmtConfig>,
 }
 
 impl Default for AnalysisConfig {
     fn default() -> Self {
-        Self { max_value_set: DEFAULT_MAX_VALUE_SET }
+        Self {
+            max_value_set: DEFAULT_MAX_VALUE_SET,
+            #[cfg(feature = "smt")]
+            smt: Some(SmtConfig::default()),
+        }
     }
 }
 
@@ -182,8 +191,11 @@ pub struct AbstractCfg {
     pub invalid_stack_blocks: BTreeSet<BlockId>,
     /// Reachable jumps for which at least one concrete target is not a valid JUMPDEST.
     pub invalid_jump_blocks: BTreeSet<BlockId>,
-    /// Conditional edge directions proven infeasible by constants or path facts.
+    /// Conditional edge directions proven infeasible by constants, path facts, or SMT.
     pub pruned_branches: BTreeSet<(BlockId, bool)>,
+    #[cfg(feature = "smt")]
+    /// Aggregate demand-driven SMT activity.
+    pub smt_stats: SmtStats,
 }
 
 /// Analyze a program from its first block using the default finite-domain configuration.
@@ -215,6 +227,8 @@ pub fn analyze_from(
 
     let mut result = AbstractCfg::default();
     result.entry_states.insert(entry, initial_state);
+    #[cfg(feature = "smt")]
+    let mut smt = config.smt.map(SmtRefiner::new);
     let mut worklist = VecDeque::from([entry]);
 
     while let Some(block_id) = worklist.pop_front() {
@@ -238,6 +252,8 @@ pub fn analyze_from(
             &mut result.unresolved_jumps,
             &mut result.invalid_jump_blocks,
             &mut result.pruned_branches,
+            #[cfg(feature = "smt")]
+            &mut smt,
         );
         for successor in successors {
             let edge =
@@ -264,6 +280,10 @@ pub fn analyze_from(
         }
     }
 
+    #[cfg(feature = "smt")]
+    if let Some(smt) = smt {
+        result.smt_stats = smt.stats();
+    }
     result
 }
 
@@ -358,10 +378,23 @@ fn successors(
     unresolved_jumps: &mut BTreeSet<BlockId>,
     invalid_jump_blocks: &mut BTreeSet<BlockId>,
     pruned_branches: &mut BTreeSet<(BlockId, bool)>,
+    #[cfg(feature = "smt")] smt: &mut Option<SmtRefiner>,
 ) -> Vec<Successor> {
     let block = &program.blocks[block_id.index()];
-    let (take_true, take_false) =
+    #[allow(unused_mut)]
+    let (mut take_true, mut take_false) =
         branch_feasibility(exit.condition.as_ref(), &exit.state.facts, expressions);
+    #[cfg(feature = "smt")]
+    if take_true && take_false {
+        if let (Some(condition), Some(refiner)) = (exit.condition.as_ref(), smt.as_mut()) {
+            take_true = refiner
+                .branch_feasible(condition, true, &exit.state.facts, expressions)
+                .unwrap_or(true);
+            take_false = refiner
+                .branch_feasible(condition, false, &exit.state.facts, expressions)
+                .unwrap_or(true);
+        }
+    }
     if block.terminator == BlockTerminator::ConditionalJump {
         if !take_true {
             pruned_branches.insert((block_id, true));
@@ -400,8 +433,54 @@ fn successors(
                         }
                     }
                 }
-                Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) | None => {
+                Some(AbstractValue::Symbolic { .. }) => {
+                    let mut resolved = false;
+                    #[cfg(feature = "smt")]
+                    if let Some(refiner) = smt.as_mut() {
+                        if let Some(models) = refiner.jump_targets(
+                            exit.jump_target.as_ref().expect("matched symbolic target"),
+                            &true_state.facts,
+                            expressions,
+                            program,
+                        ) {
+                            resolved = true;
+                            if models.targets.is_empty() {
+                                pruned_branches.insert((block_id, true));
+                            }
+                            for target in models.targets {
+                                if let Some(target_block) =
+                                    usize::try_from(target).ok().and_then(|pc| program.block_at(pc))
+                                {
+                                    successors.push(Successor {
+                                        target: target_block.id,
+                                        kind,
+                                        state: true_state.clone(),
+                                    });
+                                }
+                            }
+                            if !models.complete {
+                                unresolved_jumps.insert(block_id);
+                            }
+                        }
+                    }
                     // Retain locally-known direct edges from the structural frontend as a fallback.
+                    if !resolved {
+                        for edge in &block.static_edges {
+                            if edge.kind == EdgeKind::Jump {
+                                resolved = true;
+                                successors.push(Successor {
+                                    target: edge.target,
+                                    kind,
+                                    state: true_state.clone(),
+                                });
+                            }
+                        }
+                    }
+                    if !resolved {
+                        unresolved_jumps.insert(block_id);
+                    }
+                }
+                Some(AbstractValue::Unknown) | None => {
                     let mut resolved = false;
                     for edge in &block.static_edges {
                         if edge.kind == EdgeKind::Jump {
@@ -651,7 +730,68 @@ mod tests {
         let cfg = analyze(&program);
 
         assert_eq!(cfg.entry_states.len(), 1);
+        #[cfg(not(feature = "smt"))]
         assert_eq!(cfg.unresolved_jumps, BTreeSet::from([program.blocks[0].id]));
+        #[cfg(feature = "smt")]
+        assert!(cfg.pruned_branches.contains(&(program.blocks[0].id, true)));
         assert!(cfg.invalid_stack_blocks.is_empty());
+    }
+
+    #[cfg(feature = "smt")]
+    #[test]
+    fn smt_resolves_computed_dynamic_jump_targets() {
+        let program = program(&[
+            opcodes::PUSH0,
+            opcodes::CALLDATALOAD,
+            opcodes::PUSH1,
+            1,
+            opcodes::AND,
+            opcodes::PUSH1,
+            12,
+            opcodes::ADD,
+            opcodes::JUMP,
+            opcodes::STOP,
+            opcodes::STOP,
+            opcodes::STOP,
+            opcodes::JUMPDEST,
+            opcodes::JUMPDEST,
+            opcodes::STOP,
+        ]);
+        let cfg = analyze(&program);
+        let targets = cfg
+            .edges
+            .iter()
+            .filter(|edge| edge.source == program.blocks[0].id)
+            .map(|edge| program.blocks[edge.target.index()].start_pc)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(targets, BTreeSet::from([12, 13]));
+        assert!(cfg.unresolved_jumps.is_empty());
+        assert_eq!(cfg.smt_stats.resolved_targets, 2);
+    }
+
+    #[cfg(feature = "smt")]
+    #[test]
+    fn smt_prunes_nontrivial_modular_identity() {
+        let program = program(&[
+            opcodes::PUSH0,
+            opcodes::CALLDATALOAD,
+            opcodes::DUP1,
+            opcodes::PUSH1,
+            1,
+            opcodes::ADD,
+            opcodes::EQ,
+            opcodes::PUSH1,
+            0x0b,
+            opcodes::JUMPI,
+            opcodes::STOP,
+            opcodes::JUMPDEST,
+            opcodes::STOP,
+        ]);
+        let cfg = analyze(&program);
+
+        assert!(cfg.pruned_branches.contains(&(program.blocks[0].id, true)));
+        assert_eq!(cfg.smt_stats.infeasible_branches, 1);
+        assert!(!cfg.edges.iter().any(|edge| edge.kind == AbstractEdgeKind::ConditionalTrue));
     }
 }

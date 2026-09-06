@@ -10,6 +10,8 @@ use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use alloy::primitives::U256;
 
+#[cfg(feature = "smt")]
+use super::smt::{SmtRefiner, SmtStats};
 use super::{
     analysis::{
         assumed_state, branch_feasibility, execute_block, AbstractState, AbstractValue,
@@ -238,6 +240,9 @@ pub struct ContextualCfg {
     pub collapsed_contexts: BTreeSet<ContextualPoint>,
     /// Contextual conditional edge directions proven infeasible.
     pub pruned_branches: BTreeSet<(ContextualPoint, bool)>,
+    #[cfg(feature = "smt")]
+    /// Aggregate demand-driven SMT activity.
+    pub smt_stats: SmtStats,
 }
 
 /// Analyze from bytecode entry with inferred continuation hints and default bounds.
@@ -269,6 +274,8 @@ pub fn analyze_contextual_from(
     let entry_point = ContextualPoint { block: entry, context: AnalysisContext::new(entry) };
     let mut result = ContextualCfg::default();
     result.entry_states.insert(entry_point.clone(), initial_state);
+    #[cfg(feature = "smt")]
+    let mut smt = config.values.smt.map(SmtRefiner::new);
     let mut worklist = VecDeque::from([entry_point]);
 
     while let Some(point) = worklist.pop_front() {
@@ -294,6 +301,8 @@ pub fn analyze_contextual_from(
             &mut result.unresolved_jumps,
             &mut result.invalid_jump_points,
             &mut result.pruned_branches,
+            #[cfg(feature = "smt")]
+            &mut smt,
         );
         for successor in successors {
             let target = budget_context(program, successor.target, config, &mut result);
@@ -323,6 +332,10 @@ pub fn analyze_contextual_from(
         }
     }
 
+    #[cfg(feature = "smt")]
+    if let Some(smt) = smt {
+        result.smt_stats = smt.stats();
+    }
     result
 }
 
@@ -343,10 +356,23 @@ fn successors(
     unresolved_jumps: &mut BTreeSet<ContextualPoint>,
     invalid_jump_points: &mut BTreeSet<ContextualPoint>,
     pruned_branches: &mut BTreeSet<(ContextualPoint, bool)>,
+    #[cfg(feature = "smt")] smt: &mut Option<SmtRefiner>,
 ) -> Vec<ContextualSuccessor> {
     let block = &program.blocks[point.block.index()];
-    let (take_true, take_false) =
+    #[allow(unused_mut)]
+    let (mut take_true, mut take_false) =
         branch_feasibility(exit.condition.as_ref(), &exit.state.facts, expressions);
+    #[cfg(feature = "smt")]
+    if take_true && take_false {
+        if let (Some(condition), Some(refiner)) = (exit.condition.as_ref(), smt.as_mut()) {
+            take_true = refiner
+                .branch_feasible(condition, true, &exit.state.facts, expressions)
+                .unwrap_or(true);
+            take_false = refiner
+                .branch_feasible(condition, false, &exit.state.facts, expressions)
+                .unwrap_or(true);
+        }
+    }
     if block.terminator == BlockTerminator::ConditionalJump {
         if !take_true {
             pruned_branches.insert((point.clone(), true));
@@ -384,7 +410,57 @@ fn successors(
                         }
                     }
                 }
-                Some(AbstractValue::Symbolic { .. } | AbstractValue::Unknown) | None => {
+                Some(AbstractValue::Symbolic { .. }) => {
+                    let mut resolved = false;
+                    #[cfg(feature = "smt")]
+                    if let Some(refiner) = smt.as_mut() {
+                        if let Some(models) = refiner.jump_targets(
+                            exit.jump_target.as_ref().expect("matched symbolic target"),
+                            &true_state.facts,
+                            expressions,
+                            program,
+                        ) {
+                            resolved = true;
+                            if models.targets.is_empty() {
+                                pruned_branches.insert((point.clone(), true));
+                            }
+                            for target in models.targets {
+                                if let Some(target) = valid_target(program, target) {
+                                    successors.push(contextual_successor(
+                                        point,
+                                        target,
+                                        kind,
+                                        true_state.clone(),
+                                        hints,
+                                        config.max_context_depth,
+                                    ));
+                                }
+                            }
+                            if !models.complete {
+                                unresolved_jumps.insert(point.clone());
+                            }
+                        }
+                    }
+                    if !resolved {
+                        for edge in &block.static_edges {
+                            if edge.kind == EdgeKind::Jump {
+                                resolved = true;
+                                successors.push(contextual_successor(
+                                    point,
+                                    edge.target,
+                                    kind,
+                                    true_state.clone(),
+                                    hints,
+                                    config.max_context_depth,
+                                ));
+                            }
+                        }
+                    }
+                    if !resolved {
+                        unresolved_jumps.insert(point.clone());
+                    }
+                }
+                Some(AbstractValue::Unknown) | None => {
                     let mut resolved = false;
                     for edge in &block.static_edges {
                         if edge.kind == EdgeKind::Jump {
