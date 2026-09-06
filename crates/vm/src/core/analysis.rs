@@ -16,7 +16,7 @@ use alloy::primitives::U256;
 use super::smt::{SmtConfig, SmtRefiner, SmtStats};
 pub use super::symbolic::{AbstractValue, ExprId, ExpressionArena, ExpressionNode};
 use super::{
-    abstract_state::{AbstractStateSpaces, StateVersionArena},
+    abstract_state::{AbstractStateSpaces, StateVersionArena, StateVersionId},
     facts::{condition_may_be, PathFacts},
     opcodes::{self, OpCodeInfo},
     program::{BlockId, BlockTerminator, EdgeKind, Program},
@@ -321,6 +321,61 @@ pub fn analyze_from(
     result
 }
 
+/// Category of observable EVM instruction effect retained for canonical lowering.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum InstructionEffectKind {
+    /// Direct memory write through `MSTORE` or `MSTORE8`.
+    MemoryWrite,
+    /// Memory mutation caused by a copy instruction.
+    MemoryCopy,
+    /// Persistent contract storage write.
+    StorageWrite,
+    /// EIP-1153 transient storage write.
+    TransientStorageWrite,
+    /// External message call and its success/returndata outputs.
+    ExternalCall,
+    /// Contract creation through `CREATE` or `CREATE2`.
+    ContractCreate,
+    /// Event log emission.
+    Log,
+    /// Successful returndata termination.
+    Return,
+    /// Reverting returndata termination.
+    Revert,
+    /// Contract destruction.
+    SelfDestruct,
+}
+
+/// Persistent state roots immediately before or after an instruction effect.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EffectStateRoots {
+    /// Memory version root.
+    pub memory: StateVersionId,
+    /// Persistent storage version root.
+    pub storage: StateVersionId,
+    /// Transient storage version root.
+    pub transient_storage: StateVersionId,
+}
+
+/// One effectful canonical instruction under a particular abstract block state.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InstructionEffect {
+    /// Bytecode program counter.
+    pub pc: usize,
+    /// Raw EVM opcode.
+    pub opcode: u8,
+    /// Semantic effect category.
+    pub kind: InstructionEffectKind,
+    /// Abstract operands in EVM pop order.
+    pub inputs: Vec<AbstractValue>,
+    /// Abstract values produced by the effect, where applicable.
+    pub outputs: Vec<AbstractValue>,
+    /// Persistent roots before executing the instruction.
+    pub before: EffectStateRoots,
+    /// Persistent roots after executing the instruction.
+    pub after: EffectStateRoots,
+}
+
 /// Abstract state and control operands after executing one canonical basic block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BlockExit {
@@ -330,6 +385,8 @@ pub struct BlockExit {
     pub jump_target: Option<AbstractValue>,
     /// Abstract branch condition consumed by `JUMPI`.
     pub condition: Option<AbstractValue>,
+    /// Observable instruction effects executed in program order.
+    pub effects: Vec<InstructionEffect>,
 }
 
 #[derive(Clone, Debug)]
@@ -351,8 +408,16 @@ pub(crate) fn execute_block(
     let instructions = program.block_instructions(block_id);
     let mut jump_target = None;
     let mut condition = None;
+    let mut effects = Vec::new();
 
     for instruction in instructions {
+        let effect_kind = instruction_effect_kind(instruction.opcode);
+        let effect_inputs = effect_kind.map(|_| {
+            let input_count = OpCodeInfo::from(instruction.opcode).inputs() as usize;
+            (0..input_count).map(|index| state.stack.peek(index)).collect::<Option<Vec<_>>>()
+        });
+        let before = effect_kind.map(|_| effect_state_roots(&state));
+
         match instruction.opcode {
             opcodes::MLOAD => {
                 let key = state.stack.pop()?;
@@ -504,6 +569,26 @@ pub(crate) fn execute_block(
                 }
             }
         }
+
+        if let Some(kind) = effect_kind {
+            let inputs = effect_inputs.flatten()?;
+            let outputs = match kind {
+                InstructionEffectKind::ExternalCall => {
+                    vec![state.stack.peek(0)?, state.returndata_size.clone()]
+                }
+                InstructionEffectKind::ContractCreate => vec![state.stack.peek(0)?],
+                _ => Vec::new(),
+            };
+            effects.push(InstructionEffect {
+                pc: instruction.pc,
+                opcode: instruction.opcode,
+                kind,
+                inputs,
+                outputs,
+                before: before.expect("effect roots captured"),
+                after: effect_state_roots(&state),
+            });
+        }
     }
 
     if matches!(block.terminator, BlockTerminator::Jump | BlockTerminator::ConditionalJump) &&
@@ -512,7 +597,37 @@ pub(crate) fn execute_block(
         return None
     }
 
-    Some(BlockExit { state, jump_target, condition })
+    Some(BlockExit { state, jump_target, condition, effects })
+}
+
+fn instruction_effect_kind(opcode: u8) -> Option<InstructionEffectKind> {
+    match opcode {
+        opcodes::MSTORE | opcodes::MSTORE8 => Some(InstructionEffectKind::MemoryWrite),
+        opcodes::CALLDATACOPY |
+        opcodes::CODECOPY |
+        opcodes::EXTCODECOPY |
+        opcodes::RETURNDATACOPY |
+        opcodes::MCOPY => Some(InstructionEffectKind::MemoryCopy),
+        opcodes::SSTORE => Some(InstructionEffectKind::StorageWrite),
+        opcodes::TSTORE => Some(InstructionEffectKind::TransientStorageWrite),
+        opcodes::CALL | opcodes::CALLCODE | opcodes::DELEGATECALL | opcodes::STATICCALL => {
+            Some(InstructionEffectKind::ExternalCall)
+        }
+        opcodes::CREATE | opcodes::CREATE2 => Some(InstructionEffectKind::ContractCreate),
+        opcodes::LOG0..=opcodes::LOG4 => Some(InstructionEffectKind::Log),
+        opcodes::RETURN => Some(InstructionEffectKind::Return),
+        opcodes::REVERT => Some(InstructionEffectKind::Revert),
+        opcodes::SELFDESTRUCT => Some(InstructionEffectKind::SelfDestruct),
+        _ => None,
+    }
+}
+
+fn effect_state_roots(state: &AbstractState) -> EffectStateRoots {
+    EffectStateRoots {
+        memory: state.state.memory.version,
+        storage: state.state.storage.version,
+        transient_storage: state.state.transient_storage.version,
+    }
 }
 
 fn valid_target(program: &Program, target: U256) -> Option<BlockId> {
@@ -912,6 +1027,56 @@ mod tests {
 
         assert_eq!(expression.opcode, opcodes::MLOAD);
         assert!(value.known_values().is_none());
+        let call = exit
+            .effects
+            .iter()
+            .find(|effect| effect.kind == InstructionEffectKind::ExternalCall)
+            .expect("call effect");
+        assert_eq!(call.inputs.len(), 7);
+        assert_eq!(call.outputs.len(), 2);
+        assert_ne!(call.before.memory, call.after.memory);
+    }
+
+    #[test]
+    fn records_ordered_store_log_and_termination_effects() {
+        let program = program(&[
+            opcodes::PUSH1,
+            42,
+            opcodes::PUSH0,
+            opcodes::MSTORE,
+            opcodes::PUSH1,
+            7,
+            opcodes::PUSH0,
+            opcodes::SSTORE,
+            opcodes::PUSH1,
+            8,
+            opcodes::PUSH0,
+            opcodes::TSTORE,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::LOG0,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::RETURN,
+        ]);
+        let cfg = analyze(&program);
+        let effects = &cfg.exit_states[&program.blocks[0].id].effects;
+
+        assert_eq!(
+            effects.iter().map(|effect| effect.kind).collect::<Vec<_>>(),
+            vec![
+                InstructionEffectKind::MemoryWrite,
+                InstructionEffectKind::StorageWrite,
+                InstructionEffectKind::TransientStorageWrite,
+                InstructionEffectKind::Log,
+                InstructionEffectKind::Return,
+            ]
+        );
+        assert_ne!(effects[0].before.memory, effects[0].after.memory);
+        assert_ne!(effects[1].before.storage, effects[1].after.storage);
+        assert_ne!(effects[2].before.transient_storage, effects[2].after.transient_storage);
+        assert_eq!(effects[3].before, effects[3].after);
+        assert_eq!(effects[4].inputs.len(), 2);
     }
 
     #[test]
