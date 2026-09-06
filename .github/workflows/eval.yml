@@ -314,9 +314,11 @@ jobs:
               '</details>',
               detailsBlock,
               '',
-              '- [x] Run AI Evaluation Suite',
+              '- [ ] Run AI Evaluation Suite',
             ].join('\n');
 
+            // Reset the checkbox after completion so reviewers can request a rerun.
+            // The edited-comment trigger only reacts to unchecked → checked.
             // Replace the request comment so the PR has one live evaluation status.
             await github.rest.issues.updateComment({
               owner: context.repo.owner,
@@ -340,7 +342,7 @@ jobs:
                 '',
                 `The [heimdall-eval](https://github.com/Jon-Becker/heimdall-eval) run failed. See [the workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`,
                 '',
-                '- [x] Run AI Evaluation Suite',
+                '- [ ] Run AI Evaluation Suite',
               ].join('\n'),
             });
 
