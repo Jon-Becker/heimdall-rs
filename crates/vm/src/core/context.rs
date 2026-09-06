@@ -238,6 +238,8 @@ pub struct ContextualCfg {
     pub expressions: ExpressionArena,
     /// Persistent versions referenced by memory and storage expressions.
     pub state_versions: StateVersionArena,
+    /// Seed states supplied for roots before any back-edge joins.
+    pub initial_states: HashMap<ContextualPoint, AbstractState>,
     /// Joined abstract states keyed by block and calling context.
     pub entry_states: HashMap<ContextualPoint, AbstractState>,
     /// Most recent fixpoint exit state and control operands for each executed contextual point.
@@ -299,6 +301,7 @@ pub fn analyze_contextual_from(
 
     let entry_point = ContextualPoint { block: entry, context: AnalysisContext::new(entry) };
     let mut result = ContextualCfg::default();
+    result.initial_states.insert(entry_point.clone(), initial_state.clone());
     result.entry_states.insert(entry_point.clone(), initial_state);
     #[cfg(feature = "smt")]
     let mut smt = config.values.smt.map(SmtRefiner::new);
