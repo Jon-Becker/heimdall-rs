@@ -2,13 +2,15 @@
 
 `.github/workflows/bench.yml` uploads the full Criterion HTML report tree
 (`target/criterion/`) to S3 and links it from the benchmark comment on the pull
-request.
+request. `.github/workflows/eval.yml` uses the same configuration to upload the
+static `heimdall-eval` report (`heimdall/report.html` plus its `report/` detail
+pages) and links it from the evaluation comment.
 
 The upload is **optional**. When the configuration below is missing, or when the
 pull request comes from a fork, the workflow skips the upload, says so in the
-benchmark comment, and points at the `criterion-report` workflow artifact
-instead. Nothing in this document is provisioned by this repository — the bucket,
-role, and policies have to be created manually.
+relevant pull-request comment, and points at the `criterion-report` or
+`eval-results` workflow artifact instead. Nothing in this document is provisioned
+by this repository — the bucket, role, and policies have to be created manually.
 
 ## Repository variables
 
@@ -24,10 +26,16 @@ authenticates with GitHub OIDC.
 | `BENCH_REPORT_BASE_URL` | no | Public origin serving the bucket, e.g. a CloudFront distribution. Defaults to `https://<bucket>.s3.<region>.amazonaws.com`. |
 
 Objects are written under a run-scoped prefix so a canceled or superseded run can
-never overwrite a report that is already linked:
+never overwrite a report that is already linked. Criterion reports use:
 
 ```
 <base url>/pull/<pr number>/<run id>-<run attempt>/report/index.html
+```
+
+Evaluation reports use:
+
+```
+<base url>/pull/<pr number>/<run id>-<run attempt>/report.html
 ```
 
 `.html`, `.svg`, `.css`, and `.js` objects are uploaded with explicit content
@@ -43,9 +51,12 @@ after ~30 days keeps the bucket from growing without bound.
 
 Register GitHub as an OIDC provider (`token.actions.githubusercontent.com`,
 audience `sts.amazonaws.com`), then create the role referenced by
-`BENCH_REPORT_AWS_ROLE_ARN` with this trust policy. The `sub` condition limits
-the role to pull requests on this repository — fork pull requests run with a
-read-only token and no `id-token: write` permission, so they cannot reach it.
+`BENCH_REPORT_AWS_ROLE_ARN` with this trust policy. The first `sub` value is for
+the pull-request-triggered benchmark workflow. The evaluation workflow is
+triggered by an issue comment and therefore uses the default-branch ref in its
+OIDC subject; replace `main` below if this repository's default branch changes.
+Fork pull requests run with a read-only token and no `id-token: write`
+permission, so they cannot reach it.
 
 ```json
 {
@@ -62,7 +73,10 @@ read-only token and no `id-token: write` permission, so they cannot reach it.
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
         },
         "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:Jon-Becker/heimdall-rs:pull_request"
+          "token.actions.githubusercontent.com:sub": [
+            "repo:Jon-Becker/heimdall-rs:pull_request",
+            "repo:Jon-Becker/heimdall-rs:ref:refs/heads/main"
+          ]
         }
       }
     }
