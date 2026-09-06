@@ -1,3 +1,6 @@
+/// Persistent versions for abstract memory and storage
+pub mod abstract_state;
+
 /// Worklist-based abstract CFG analysis
 pub mod analysis;
 
