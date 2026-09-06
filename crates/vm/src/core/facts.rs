@@ -557,7 +557,7 @@ mod tests {
         opcode: u8,
         inputs: Vec<AbstractValue>,
     ) -> AbstractValue {
-        let id = arena.intern(ExpressionNode { opcode, inputs, output: 0 });
+        let id = arena.intern(ExpressionNode { opcode, inputs, output: 0, state_version: None });
         AbstractValue::expression(id)
     }
 

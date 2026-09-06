@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use alloy::primitives::U256;
 
-use super::{opcodes, program::DecodedInstruction};
+use super::{abstract_state::StateVersionId, opcodes, program::DecodedInstruction};
 
 /// Stable identifier of an expression in an [`ExpressionArena`].
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -96,6 +96,8 @@ pub struct ExpressionNode {
     pub inputs: Vec<AbstractValue>,
     /// Output position for opcodes producing more than one value.
     pub output: u8,
+    /// Memory or storage version read by a stateful operation.
+    pub state_version: Option<StateVersionId>,
 }
 
 /// Hash-consed expression DAG shared by all states in one analysis.
@@ -175,12 +177,33 @@ pub(crate) fn operation_result(
 
     if is_symbolically_stable(instruction.opcode) {
         return AbstractValue::expression(arena.intern_at(
-            ExpressionNode { opcode: instruction.opcode, inputs, output },
+            ExpressionNode { opcode: instruction.opcode, inputs, output, state_version: None },
             instruction.pc,
         ))
     }
 
     AbstractValue::Unknown
+}
+
+/// Preserve a memory or storage read against a specific persistent state version.
+pub(crate) fn stateful_operation_result(
+    instruction: &DecodedInstruction,
+    inputs: Vec<AbstractValue>,
+    state_version: StateVersionId,
+    arena: &mut ExpressionArena,
+) -> AbstractValue {
+    if inputs.iter().any(|input| matches!(input, AbstractValue::Unknown)) {
+        return AbstractValue::Unknown
+    }
+    AbstractValue::expression(arena.intern_at(
+        ExpressionNode {
+            opcode: instruction.opcode,
+            inputs,
+            output: 0,
+            state_version: Some(state_version),
+        },
+        instruction.pc,
+    ))
 }
 
 fn evaluate_constants(
@@ -306,7 +329,12 @@ mod tests {
     #[test]
     fn interns_structurally_equal_expressions() {
         let mut arena = ExpressionArena::new();
-        let node = ExpressionNode { opcode: opcodes::CALLER, inputs: vec![], output: 0 };
+        let node = ExpressionNode {
+            opcode: opcodes::CALLER,
+            inputs: vec![],
+            output: 0,
+            state_version: None,
+        };
         let id = arena.intern_at(node.clone(), 7);
         assert_eq!(id, arena.intern_at(node, 11));
         assert_eq!(arena.len(), 1);
