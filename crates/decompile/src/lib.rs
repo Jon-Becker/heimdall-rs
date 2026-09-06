@@ -13,7 +13,10 @@ mod interfaces;
 mod utils;
 
 // re-export the public interface
-pub use core::{decompile, DecompileResult};
+pub use core::{
+    canonical::{CanonicalAnalysis, CanonicalFunctionEntry},
+    decompile, DecompileResult,
+};
 pub use error::Error;
 pub use heimdall_vm::core::hardfork::HardFork;
 pub use interfaces::{DecompilerArgs, DecompilerArgsBuilder};
