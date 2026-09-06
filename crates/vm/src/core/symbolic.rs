@@ -98,6 +98,8 @@ pub struct ExpressionNode {
     pub output: u8,
     /// Memory or storage version read by a stateful operation.
     pub state_version: Option<StateVersionId>,
+    /// Bytecode site distinguishing effectful results that may differ for equal operands.
+    pub effect_site: Option<usize>,
 }
 
 /// Hash-consed expression DAG shared by all states in one analysis.
@@ -167,7 +169,8 @@ pub(crate) fn operation_result(
     arena: &mut ExpressionArena,
     max_values: usize,
 ) -> AbstractValue {
-    if inputs.iter().any(|input| matches!(input, AbstractValue::Unknown)) {
+    let effect_site = is_external_call(instruction.opcode).then_some(instruction.pc);
+    if effect_site.is_none() && inputs.iter().any(|input| matches!(input, AbstractValue::Unknown)) {
         return AbstractValue::Unknown
     }
 
@@ -177,7 +180,13 @@ pub(crate) fn operation_result(
 
     if is_symbolically_stable(instruction.opcode) {
         return AbstractValue::expression(arena.intern_at(
-            ExpressionNode { opcode: instruction.opcode, inputs, output, state_version: None },
+            ExpressionNode {
+                opcode: instruction.opcode,
+                inputs,
+                output,
+                state_version: None,
+                effect_site,
+            },
             instruction.pc,
         ))
     }
@@ -201,6 +210,7 @@ pub(crate) fn stateful_operation_result(
             inputs,
             output: 0,
             state_version: Some(state_version),
+            effect_site: None,
         },
         instruction.pc,
     ))
@@ -293,6 +303,13 @@ fn evaluate_constant(opcode: u8, inputs: &[U256]) -> Option<U256> {
     }
 }
 
+fn is_external_call(opcode: u8) -> bool {
+    matches!(
+        opcode,
+        opcodes::CALL | opcodes::CALLCODE | opcodes::DELEGATECALL | opcodes::STATICCALL
+    )
+}
+
 fn is_symbolically_stable(opcode: u8) -> bool {
     matches!(
         opcode,
@@ -314,7 +331,11 @@ fn is_symbolically_stable(opcode: u8) -> bool {
             opcodes::CHAINID |
             opcodes::BASEFEE |
             opcodes::BLOBHASH |
-            opcodes::BLOBBASEFEE
+            opcodes::BLOBBASEFEE |
+            opcodes::CALL |
+            opcodes::CALLCODE |
+            opcodes::DELEGATECALL |
+            opcodes::STATICCALL
     )
 }
 
@@ -334,6 +355,7 @@ mod tests {
             inputs: vec![],
             output: 0,
             state_version: None,
+            effect_site: None,
         };
         let id = arena.intern_at(node.clone(), 7);
         assert_eq!(id, arena.intern_at(node, 11));
@@ -383,6 +405,24 @@ mod tests {
         };
         assert_eq!(constants, BTreeSet::from([U256::from(7)]));
         assert_eq!(expressions.len(), 1);
+    }
+
+    #[test]
+    fn qualifies_external_call_results_by_bytecode_site() {
+        let mut arena = ExpressionArena::new();
+        let inputs = vec![AbstractValue::Unknown; 7];
+        let first =
+            operation_result(&instruction(10, opcodes::CALL), inputs.clone(), 0, &mut arena, 8);
+        let same_site =
+            operation_result(&instruction(10, opcodes::CALL), inputs.clone(), 0, &mut arena, 8);
+        let other_site =
+            operation_result(&instruction(20, opcodes::CALL), inputs, 0, &mut arena, 8);
+
+        assert_eq!(first, same_site);
+        assert_ne!(first, other_site);
+        assert_eq!(arena.len(), 2);
+        let first_id = *first.expressions().unwrap().first().unwrap();
+        assert_eq!(arena.get(first_id).unwrap().effect_site, Some(10));
     }
 
     #[test]
