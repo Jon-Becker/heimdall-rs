@@ -571,7 +571,8 @@ fn successors(
 
 fn valid_target(program: &Program, target: U256) -> Option<BlockId> {
     let pc = usize::try_from(target).ok()?;
-    program.is_valid_jumpdest(pc).then(|| program.block_at(pc).expect("validated block").id)
+    let block = program.block_at(pc)?;
+    program.is_valid_jumpdest(pc).then_some(block.id)
 }
 
 fn contextual_successor(
