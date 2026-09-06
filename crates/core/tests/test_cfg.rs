@@ -25,6 +25,7 @@ mod integration_tests {
             name: String::from(""),
             timeout: 10000,
             legacy: false,
+            max_iterations: 250_000,
             hardfork: HardFork::Latest,
             etherscan_api_key: String::from(""),
         })
@@ -57,6 +58,7 @@ mod integration_tests {
             name: String::from(""),
             timeout: 10000,
             legacy: false,
+            max_iterations: 250_000,
             hardfork: HardFork::Latest,
             etherscan_api_key: String::from(""),
         })
@@ -93,6 +95,7 @@ mod integration_tests {
             name: String::from(""),
             timeout: 10000,
             legacy: false,
+            max_iterations: 250_000,
             hardfork: HardFork::Latest,
             etherscan_api_key: String::from(""),
         })
@@ -138,6 +141,7 @@ mod integration_tests {
             name: String::from(""),
             timeout: 10000,
             legacy: false,
+            max_iterations: 250_000,
             hardfork: HardFork::Auto,
             etherscan_api_key: String::from(""),
         })
@@ -165,6 +169,7 @@ mod integration_tests {
             name: String::from(""),
             timeout: 10000,
             legacy: false,
+            max_iterations: 250_000,
             hardfork: HardFork::Auto,
             etherscan_api_key: String::from(""),
         })
