@@ -90,5 +90,6 @@ Heimdall has been cited in the following academic papers & theses:
 - Sun, Y., Bao, L., & Yang, X. (2025). FIRE: Smart contract bytecode function identification via graph-refined hybrid feature encoding. ACM. https://doi.org/10.1145/3755881.3755883
 - Wang, Z., Yu, J., Qin, K., Song, D., Gervais, A., & Zhou, L. (2026). *TxRay: Agentic postmortem of live blockchain attacks*. arXiv. https://doi.org/10.48550/arXiv.2602.01317
 - Ye, M., Lin, X., Nan, Y., Wu, J., & Zheng, Z. (2024). Midas: Mining profitable exploits in on-chain smart contracts via feedback-driven fuzzing and differential analysis. In M. Christakis & M. Pradel (Eds.), *ISSTA 2024: Proceedings of the 33rd ACM SIGSOFT International Symposium on Software Testing and Analysis* (pp. 794–805). Association for Computing Machinery. https://doi.org/10.1145/3650212.3680321
+- Huang, M., Ji, Z., Mo, Y., & Wang, S. (2026). *When Verified Source Becomes Attack Input: Defending Smart Contracts Against LLM-Based Vulnerability Scanning*. arXiv. https://doi.org/10.48550/arXiv.2608.28400
 
 If you have used or plan to use Heimdall in your research, please reach out to me via [email](mailto:jonathan@jbecker.dev) or [Twitter](https://x.com/BeckerrJon)! I'd love to hear about what you're using heimdall for :)
