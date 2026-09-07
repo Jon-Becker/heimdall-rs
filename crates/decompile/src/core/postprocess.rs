@@ -421,8 +421,13 @@ impl PostprocessOrchestrator {
 
         // if this is a getter, replace function.maybe_getter_for with the actual getter
         if let Some(getter_for) = self.state.maybe_getter_for.as_ref() {
-            if let Some((name, _)) =
-                self.state.storage_root_slots.iter().find(|(_, slot)| *slot == getter_for)
+            // the smallest matching name is used, since map iteration order is not stable
+            if let Some((name, _)) = self
+                .state
+                .storage_root_slots
+                .iter()
+                .filter(|(_, slot)| *slot == getter_for)
+                .min_by_key(|(name, _)| *name)
             {
                 function.maybe_getter_for = Some(name.clone());
             }

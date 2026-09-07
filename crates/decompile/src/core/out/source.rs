@@ -1,5 +1,5 @@
-use hashbrown::{HashMap, HashSet};
-use std::{str::FromStr, time::Instant};
+use hashbrown::HashMap;
+use std::{collections::BTreeSet, str::FromStr, time::Instant};
 
 use alloy::primitives::U256;
 use alloy_json_abi::StateMutability;
@@ -75,12 +75,10 @@ pub(crate) async fn build_source(
     }
 
     // add event and error declarations
-    let resolved_event_error_map =
+    let declarations =
         get_event_and_error_declarations(functions, all_resolved_errors, all_resolved_logs);
     if analyzer_type == AnalyzerType::Solidity {
-        resolved_event_error_map.iter().for_each(|(_, (resolved_name, typ))| {
-            source.push(format!("{typ} {resolved_name}"));
-        });
+        source.extend(declarations.iter().map(|declaration| declaration.line.clone()));
 
         // add the fallback function, if it exists
         if let Some(fallback) = functions.iter().find(|f| f.fallback) {
@@ -130,11 +128,8 @@ pub(crate) async fn build_source(
     let mut source = source.join("\n");
 
     // replace all custom event and error declarations with their resolved names
-    resolved_event_error_map.iter().for_each(|(unresolved_name, (resolved_name, _))| {
-        // get only the name of both (remove `(..)`)
-        let unresolved_name = unresolved_name.split('(').next().expect("unresolved name is empty");
-        let resolved_name = resolved_name.split('(').next().expect("resolved name is empty");
-        source = source.replace(unresolved_name, resolved_name);
+    declarations.iter().for_each(|declaration| {
+        source = source.replace(&declaration.unresolved_name, &declaration.name);
     });
 
     // replace all storage variables w/ getters w/ their resolved names
@@ -213,10 +208,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
     }
 
     // determine the name of the function
-    let function_name = match f.resolved_function {
-        Some(ref sig) => sig.name.clone(),
-        None => format!("Unresolved_{}", f.selector),
-    };
+    let function_name = f.emitted_name();
 
     let function_signature = match f.resolved_function {
         Some(ref sig) => format!(
@@ -397,20 +389,34 @@ fn get_storage_variables(
     output
 }
 
-/// Helper function which will get the event and error declarations for the decompiled source code.
+/// A single event or custom error declaration emitted in the decompiled source code.
+struct Declaration {
+    /// the name the declaration is emitted with before resolution, i.e. `Event_ddf252ad`
+    unresolved_name: String,
+    /// the name the declaration is emitted with, i.e. `Transfer`
+    name: String,
+    /// the full declaration line, i.e. `event Transfer(address, address);`
+    line: String,
+}
+
+/// Helper function which will get the event and error declarations for the decompiled source code,
+/// deduplicated by their unresolved name and sorted for deterministic output.
 fn get_event_and_error_declarations(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
-) -> HashMap<String, (String, String)> {
-    let mut output = HashMap::new();
-
-    // get all events and errors
-    let all_events = functions.iter().flat_map(|f| f.events.clone()).collect::<HashSet<_>>();
-    let all_errors = functions.iter().flat_map(|f| f.errors.clone()).collect::<HashSet<_>>();
+) -> Vec<Declaration> {
+    let mut declarations = HashMap::new();
 
     // add event declarations
+    let all_events =
+        functions.iter().flat_map(|f| f.events.iter().copied()).collect::<BTreeSet<_>>();
     all_events.iter().for_each(|event_selector| {
+        let unresolved_name = format!(
+            "Event_{}",
+            event_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
+        );
+
         // determine the name of the event
         let (name, inputs) = match all_resolved_logs
             .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
@@ -418,31 +424,28 @@ fn get_event_and_error_declarations(
             Some(event) => {
                 (event.name.clone(), event.inputs().iter().map(|i| i.to_string()).collect())
             }
-            None => (
-                format!(
-                    "Event_{}",
-                    event_selector
-                        .to_lower_hex()
-                        .replacen("0x", "", 1)
-                        .get(0..8)
-                        .unwrap_or("00000000")
-                ),
-                vec![],
-            ),
+            None => (unresolved_name.clone(), vec![]),
         };
 
-        let unresolved_name = format!(
-            "Event_{}",
-            event_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
-        );
-        output.insert(
-            unresolved_name,
-            (format!("{name}({});", inputs.join(", ")), "event".to_string()),
+        declarations.insert(
+            unresolved_name.clone(),
+            Declaration {
+                unresolved_name,
+                line: format!("event {name}({});", inputs.join(", ")),
+                name,
+            },
         );
     });
 
     // add error declarations
+    let all_errors =
+        functions.iter().flat_map(|f| f.errors.iter().copied()).collect::<BTreeSet<_>>();
     all_errors.iter().for_each(|error_selector| {
+        let unresolved_name = format!(
+            "CustomError_{}",
+            error_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
+        );
+
         // determine the name of the error
         let (name, inputs) = match all_resolved_errors
             .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
@@ -450,30 +453,23 @@ fn get_event_and_error_declarations(
             Some(error) => {
                 (error.name.clone(), error.inputs().iter().map(|i| i.to_string()).collect())
             }
-            None => (
-                format!(
-                    "CustomError_{}",
-                    error_selector
-                        .to_lower_hex()
-                        .replacen("0x", "", 1)
-                        .get(0..8)
-                        .unwrap_or("00000000")
-                ),
-                vec![],
-            ),
+            None => (unresolved_name.clone(), vec![]),
         };
 
-        let unresolved_name = format!(
-            "CustomError_{}",
-            error_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
-        );
-        output.insert(
-            unresolved_name,
-            (format!("{name}({});", inputs.join(", ")), "error".to_string()),
+        declarations.insert(
+            unresolved_name.clone(),
+            Declaration {
+                unresolved_name,
+                line: format!("error {name}({});", inputs.join(", ")),
+                name,
+            },
         );
     });
 
-    output
+    // sort the declarations, so that the generated output is deterministic
+    let mut declarations = declarations.into_values().collect::<Vec<_>>();
+    declarations.sort_unstable_by(|a, b| a.line.cmp(&b.line));
+    declarations
 }
 
 /// Helper function which will indent the source code.
@@ -516,6 +512,259 @@ fn get_indentation_imbalance(source: &[String]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::interfaces::sort_analyzed_functions;
+    use heimdall_common::ether::signatures::ResolvedFunction;
+
+    /// Builds a function with a distinguishable body, so we can assert that bodies stay attached
+    /// to their headers when functions are reordered.
+    fn analyzed_function(
+        selector: &str,
+        resolved: Option<(&str, &str)>,
+        analyzer_type: AnalyzerType,
+    ) -> AnalyzedFunction {
+        let mut function = AnalyzedFunction::new(selector, false);
+        function.analyzer_type = analyzer_type;
+        function.logic = vec![format!("return {selector};")];
+        function.pure = false;
+        function.view = false;
+        function.payable = false;
+        function.resolved_function = resolved.map(|(name, signature)| ResolvedFunction {
+            name: name.to_string(),
+            signature: signature.to_string(),
+            inputs: vec![],
+            decoded_inputs: None,
+        });
+        function
+    }
+
+    fn fixture(analyzer_type: AnalyzerType) -> Vec<AnalyzedFunction> {
+        let mut transfer = analyzed_function(
+            "a9059cbb",
+            Some(("transfer", "transfer(address,uint256)")),
+            analyzer_type,
+        );
+        transfer.events = BTreeSet::from([U256::from(1), U256::from(2)]);
+        let mut approve = analyzed_function(
+            "095ea7b3",
+            Some(("approve", "approve(address,uint256)")),
+            analyzer_type,
+        );
+        approve.errors = BTreeSet::from([U256::from(3), U256::from(4)]);
+        let mut fallback = analyzed_function("00000000", None, analyzer_type);
+        fallback.fallback = true;
+
+        vec![
+            transfer,
+            approve,
+            analyzed_function("18160ddd", Some(("totalSupply", "totalSupply()")), analyzer_type),
+            analyzed_function("deadbeef", None, analyzer_type),
+            analyzed_function("00c0ffee", None, analyzer_type),
+            fallback,
+        ]
+    }
+
+    fn permutations(functions: &[AnalyzedFunction]) -> Vec<Vec<AnalyzedFunction>> {
+        let reversed = functions.iter().rev().cloned().collect::<Vec<_>>();
+        let mut rotated = functions.to_vec();
+        rotated.rotate_left(3);
+        vec![functions.to_vec(), reversed, rotated]
+    }
+
+    async fn build(functions: &[AnalyzedFunction]) -> String {
+        build_source(
+            functions,
+            &HashMap::new(),
+            &HashMap::new(),
+            &HashMap::new(),
+            false,
+            String::new(),
+            String::new(),
+        )
+        .await
+        .expect("failed to build source")
+        .expect("source is empty")
+    }
+
+    /// Returns the emitted function names, in the order they appear in the source.
+    fn emitted_names(source: &str) -> Vec<String> {
+        source
+            .lines()
+            .filter_map(|line| {
+                line.trim()
+                    .strip_prefix("function ")
+                    .or_else(|| line.trim().strip_prefix("* @custom:signature    "))
+            })
+            .map(|signature| {
+                signature.split('(').next().expect("signature is empty").trim().to_string()
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn solidity_functions_are_sorted_alphabetically() {
+        let mut sources = Vec::new();
+        for mut functions in permutations(&fixture(AnalyzerType::Solidity)) {
+            sort_analyzed_functions(&mut functions);
+            sources.push(build(&functions).await);
+        }
+
+        // repeated generation from any insertion order is byte-identical
+        assert!(sources.windows(2).all(|window| window[0] == window[1]));
+
+        let source = &sources[0];
+        let names = emitted_names(source);
+        assert_eq!(
+            names,
+            vec![
+                "approve",
+                "totalSupply",
+                "transfer",
+                "Unresolved_00c0ffee",
+                "Unresolved_deadbeef",
+            ]
+        );
+
+        // function bodies remain attached to their headers
+        let lines = source.lines().map(|line| line.trim()).collect::<Vec<_>>();
+        for (name, selector) in [
+            ("approve", "095ea7b3"),
+            ("totalSupply", "18160ddd"),
+            ("transfer", "a9059cbb"),
+            ("Unresolved_00c0ffee", "00c0ffee"),
+            ("Unresolved_deadbeef", "deadbeef"),
+        ] {
+            let header = lines
+                .iter()
+                .position(|line| line.starts_with(&format!("function {name}(")))
+                .unwrap_or_else(|| panic!("missing function {name}"));
+            assert_eq!(lines[header + 1], format!("return {selector};"));
+        }
+
+        // the fallback function is still emitted as a fallback
+        let fallback = lines
+            .iter()
+            .position(|line| *line == "fallback() external payable {")
+            .expect("missing fallback");
+        assert_eq!(lines[fallback + 1], "return 00000000;");
+    }
+
+    #[tokio::test]
+    async fn yul_cases_are_sorted_alphabetically() {
+        let mut sources = Vec::new();
+        for mut functions in permutations(&fixture(AnalyzerType::Yul)) {
+            sort_analyzed_functions(&mut functions);
+            sources.push(build(&functions).await);
+        }
+
+        assert!(sources.windows(2).all(|window| window[0] == window[1]));
+
+        // the yul header declares helper functions of its own, so only the trailing signatures
+        // belong to the decompiled contract
+        let source = &sources[0];
+        let names = emitted_names(source);
+        assert_eq!(
+            names[names.len() - 5..],
+            ["approve", "totalSupply", "transfer", "Unresolved_00c0ffee", "Unresolved_deadbeef"]
+        );
+
+        let lines = source.lines().map(|line| line.trim()).collect::<Vec<_>>();
+        let cases =
+            lines.iter().filter(|line| line.starts_with("case 0x")).copied().collect::<Vec<_>>();
+        assert_eq!(
+            cases,
+            vec![
+                "case 0x095ea7b3 {",
+                "case 0x18160ddd {",
+                "case 0xa9059cbb {",
+                "case 0x00c0ffee {",
+                "case 0xdeadbeef {",
+            ]
+        );
+
+        // the fallback function is still emitted as the default case
+        let fallback = lines.iter().position(|line| *line == "default {").expect("missing default");
+        assert_eq!(lines[fallback + 1], "return 00000000;");
+    }
+
+    #[tokio::test]
+    async fn overloads_are_sorted_by_signature() {
+        let mut functions = vec![
+            analyzed_function(
+                "a9059cbb",
+                Some(("transfer", "transfer(address,uint256)")),
+                AnalyzerType::Solidity,
+            ),
+            analyzed_function(
+                "1a695230",
+                Some(("transfer", "transfer(address)")),
+                AnalyzerType::Solidity,
+            ),
+        ];
+        sort_analyzed_functions(&mut functions);
+        assert_eq!(
+            functions.iter().map(|f| f.selector.clone()).collect::<Vec<_>>(),
+            vec!["1a695230", "a9059cbb"]
+        );
+    }
+
+    #[test]
+    fn names_are_sorted_case_insensitively() {
+        let mut functions = vec![
+            analyzed_function("00000001", Some(("Beta", "Beta()")), AnalyzerType::Solidity),
+            analyzed_function("00000002", Some(("alpha", "alpha()")), AnalyzerType::Solidity),
+            analyzed_function(
+                "00000003",
+                Some(("Transfer", "Transfer(address)")),
+                AnalyzerType::Solidity,
+            ),
+            analyzed_function(
+                "00000004",
+                Some(("transfer", "transfer(address,uint256)")),
+                AnalyzerType::Solidity,
+            ),
+        ];
+        sort_analyzed_functions(&mut functions);
+
+        // names which only differ in case are tie-broken by their resolved signature
+        assert_eq!(
+            functions.iter().map(|f| f.emitted_name()).collect::<Vec<_>>(),
+            vec!["alpha", "Beta", "Transfer", "transfer"]
+        );
+    }
+
+    #[test]
+    fn event_and_error_declarations_are_sorted() {
+        let mut function = AnalyzedFunction::new("a9059cbb", false);
+        function.events = BTreeSet::from([U256::from(0xbb) << 248, U256::from(0xaa) << 248]);
+        function.errors = BTreeSet::from([U256::from(0xdd) << 248, U256::from(0xcc) << 248]);
+
+        let declarations =
+            get_event_and_error_declarations(&[function], &HashMap::new(), &HashMap::new());
+        assert_eq!(
+            declarations.iter().map(|d| d.line.clone()).collect::<Vec<_>>(),
+            vec![
+                "error CustomError_cc000000();",
+                "error CustomError_dd000000();",
+                "event Event_aa000000();",
+                "event Event_bb000000();",
+            ]
+        );
+    }
+
+    #[test]
+    fn declarations_are_deduplicated_by_unresolved_name() {
+        // error selectors are stored as 4 byte values, so every unresolved error shares the
+        // `CustomError_00000000` name and only the last one is declared
+        let mut function = AnalyzedFunction::new("a9059cbb", false);
+        function.errors = BTreeSet::from([U256::from(0x11), U256::from(0x22)]);
+
+        let declarations =
+            get_event_and_error_declarations(&[function], &HashMap::new(), &HashMap::new());
+        assert_eq!(
+            declarations.iter().map(|d| d.line.clone()).collect::<Vec<_>>(),
+            vec!["error CustomError_00000000();"]
+        );
+    }
 
     #[test]
     fn duplicate_getters_are_not_collapsed() {

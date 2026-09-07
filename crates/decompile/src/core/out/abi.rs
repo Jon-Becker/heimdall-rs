@@ -42,10 +42,7 @@ pub(crate) fn build_abi(
         };
 
         // determine the name of the function
-        let name = match f.resolved_function {
-            Some(ref sig) => sig.name.clone(),
-            None => format!("Unresolved_{}", f.selector),
-        };
+        let name = f.emitted_name();
 
         let function = Function {
             name: name.clone(),
@@ -166,17 +163,8 @@ pub(crate) fn build_abi_with_details(
     let mut abi_array = serde_json::to_value(abi)?;
 
     // Create a map of function selectors for quick lookup
-    let function_map: HashMap<String, &AnalyzedFunction> = functions
-        .iter()
-        .filter(|f| !f.fallback)
-        .map(|f| {
-            let name = match f.resolved_function {
-                Some(ref sig) => sig.name.clone(),
-                None => format!("Unresolved_{}", f.selector),
-            };
-            (name, f)
-        })
-        .collect();
+    let function_map: HashMap<String, &AnalyzedFunction> =
+        functions.iter().filter(|f| !f.fallback).map(|f| (f.emitted_name(), f)).collect();
 
     // Add selector and signature to each function in the ABI
     if let Some(items) = abi_array.as_array_mut() {

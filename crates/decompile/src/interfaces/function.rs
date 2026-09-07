@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use hashbrown::{HashMap, HashSet};
 
 use alloy::primitives::U256;
@@ -36,10 +38,10 @@ pub(crate) struct AnalyzedFunction {
     pub logic: Vec<String>,
 
     /// holds all found event selectors found
-    pub events: HashSet<U256>,
+    pub events: BTreeSet<U256>,
 
     /// holds all found custom error selectors found
-    pub errors: HashSet<U256>,
+    pub errors: BTreeSet<U256>,
 
     /// stores the matched resolved function for this Functon
     pub resolved_function: Option<ResolvedFunction>,
@@ -102,8 +104,8 @@ impl AnalyzedFunction {
             returns: None,
             statements: Vec::new(),
             logic: Vec::new(),
-            events: HashSet::new(),
-            errors: HashSet::new(),
+            events: BTreeSet::new(),
+            errors: BTreeSet::new(),
             resolved_function: None,
             notices: Vec::new(),
             pure: true,
@@ -169,4 +171,29 @@ impl AnalyzedFunction {
         arguments.sort_by(|x, y| x.0.cmp(&y.0));
         arguments
     }
+
+    /// The name this function is emitted with in the generated output
+    pub(crate) fn emitted_name(&self) -> String {
+        match self.resolved_function {
+            Some(ref sig) => sig.name.clone(),
+            None => format!("Unresolved_{}", self.selector),
+        }
+    }
+
+    /// The key used to order functions in the generated output. Functions are ordered
+    /// alphabetically by their emitted name, using the resolved signature (for overloads) and
+    /// the selector (for unresolved names) as tie-breakers.
+    fn output_order_key(&self) -> (String, String, String) {
+        (
+            self.emitted_name().to_lowercase(),
+            self.resolved_function.as_ref().map(|sig| sig.signature.clone()).unwrap_or_default(),
+            self.selector.clone(),
+        )
+    }
+}
+
+/// Sorts analyzed functions into the deterministic order used by all generated output, so that
+/// decompiling the same bytecode twice always yields byte-identical results.
+pub(crate) fn sort_analyzed_functions(functions: &mut [AnalyzedFunction]) {
+    functions.sort_by_cached_key(|f| f.output_order_key());
 }

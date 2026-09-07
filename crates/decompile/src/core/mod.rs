@@ -40,7 +40,7 @@ use crate::{
         resolve::match_parameters,
     },
     error::Error,
-    interfaces::{AnalyzedFunction, DecompilerArgs},
+    interfaces::{sort_analyzed_functions, AnalyzedFunction, DecompilerArgs},
 };
 use tracing::{debug, info, warn};
 
@@ -339,6 +339,10 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             f.selector
         );
     });
+
+    // sort the analyzed functions into a deterministic order, so that repeated decompilation of
+    // the same bytecode always produces identical output
+    sort_analyzed_functions(&mut analyzed_functions);
 
     // get a new PostprocessorOrchestrator
     // note: this will do nothing if the include_solidity and include_yul flags are false
