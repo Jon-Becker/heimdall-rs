@@ -393,8 +393,8 @@ opcodes! {
     0x5a => GAS => stack_io(0, 1), min_gas(2);
     0x5b => JUMPDEST => min_gas(1);
     // Cancun (EIP-1153)
-    0x5c => TLOAD => stack_io(1, 1), min_gas(100), activated(HardFork::Cancun);
-    0x5d => TSTORE => stack_io(2, 0), min_gas(100), activated(HardFork::Cancun);
+    0x5c => TLOAD => stack_io(1, 1), min_gas(100), non_pure, activated(HardFork::Cancun);
+    0x5d => TSTORE => stack_io(2, 0), min_gas(100), non_pure, non_view, activated(HardFork::Cancun);
     // Cancun (EIP-5656)
     0x5e => MCOPY => stack_io(3, 0), min_gas(3), activated(HardFork::Cancun);
 
@@ -467,11 +467,11 @@ opcodes! {
     0x9e => SWAP15 => stack_io(16, 16), min_gas(3);
     0x9f => SWAP16 => stack_io(17, 17), min_gas(3);
 
-    0xa0 => LOG0 => stack_io(2, 0), min_gas(375);
-    0xa1 => LOG1 => stack_io(3, 0), min_gas(750);
-    0xa2 => LOG2 => stack_io(4, 0), min_gas(1125);
-    0xa3 => LOG3 => stack_io(5, 0), min_gas(1500);
-    0xa4 => LOG4 => stack_io(6, 0), min_gas(1875);
+    0xa0 => LOG0 => stack_io(2, 0), min_gas(375), non_pure, non_view;
+    0xa1 => LOG1 => stack_io(3, 0), min_gas(750), non_pure, non_view;
+    0xa2 => LOG2 => stack_io(4, 0), min_gas(1125), non_pure, non_view;
+    0xa3 => LOG3 => stack_io(5, 0), min_gas(1500), non_pure, non_view;
+    0xa4 => LOG4 => stack_io(6, 0), min_gas(1875), non_pure, non_view;
 
     0xf0 => CREATE => stack_io(3, 1), min_gas(32000), non_pure, non_view;
     0xf1 => CALL => stack_io(7, 1), min_gas(100), non_pure, non_view;
@@ -540,6 +540,18 @@ mod tests {
         // CLZ should not be active before Fusaka
         let clz_info_pectra = OpCodeInfo::for_fork(CLZ, HardFork::Pectra);
         assert!(clz_info_pectra.is_none());
+    }
+
+    #[test]
+    fn stateful_opcodes_report_correct_mutability() {
+        assert!(!OpCodeInfo::from(TLOAD).is_pure());
+        assert!(OpCodeInfo::from(TLOAD).is_view());
+        assert!(!OpCodeInfo::from(TSTORE).is_pure());
+        assert!(!OpCodeInfo::from(TSTORE).is_view());
+        for opcode in LOG0..=LOG4 {
+            assert!(!OpCodeInfo::from(opcode).is_pure());
+            assert!(!OpCodeInfo::from(opcode).is_view());
+        }
     }
 
     #[test]

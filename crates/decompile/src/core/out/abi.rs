@@ -10,13 +10,77 @@ use heimdall_common::{
         signatures::{ResolvedError, ResolvedLog},
         types::{to_abi_string, to_components},
     },
-    utils::{hex::ToLowerHex, strings::encode_hex_reduced},
+    utils::strings::encode_hex_reduced,
 };
 use serde_json::{json, Value};
 
 use tracing::debug;
 
-use crate::{core::types::SolidityType, interfaces::AnalyzedFunction};
+use crate::{
+    core::{
+        ir::{BinaryOp, Expr, Statement},
+        types::SolidityType,
+    },
+    interfaces::AnalyzedFunction,
+};
+
+fn short_selector(value: alloy::primitives::U256) -> String {
+    let padded = format!("{value:064x}");
+    padded[padded.len() - 8..].to_string()
+}
+
+fn event_topic_prefix(value: alloy::primitives::U256) -> String {
+    format!("{value:064x}")[..8].to_string()
+}
+
+fn find_event_observation<'a>(
+    statements: &'a [Statement],
+    event_name: &str,
+) -> Option<(&'a [Expr], usize)> {
+    statements.iter().find_map(|statement| match statement {
+        Statement::Emit { event, args, indexed_args, .. } if event == event_name => {
+            Some((args.as_slice(), *indexed_args))
+        }
+        Statement::IfElse { then_body, else_body, .. } => {
+            find_event_observation(then_body, event_name)
+                .or_else(|| find_event_observation(else_body, event_name))
+        }
+        _ => None,
+    })
+}
+
+fn event_argument_type(expr: &Expr, function: &AnalyzedFunction) -> SolidityType {
+    match expr {
+        Expr::Identifier(name)
+            if matches!(name.as_str(), "msg.sender" | "tx.origin" | "address(this)") =>
+        {
+            SolidityType::Address
+        }
+        Expr::Identifier(name) => name
+            .strip_prefix("arg")
+            .and_then(|index| index.parse::<usize>().ok())
+            .and_then(|index| function.arguments.get(&index))
+            .and_then(|argument| argument.potential_types().first().cloned())
+            .unwrap_or(SolidityType::FixedBytes(32)),
+        Expr::Cast { ty, .. } => ty.without_location(),
+        Expr::Bool(_) => SolidityType::Bool,
+        Expr::Literal(_) => SolidityType::Uint(256),
+        Expr::StringLiteral(_) => SolidityType::String,
+        Expr::Binary {
+            op:
+                BinaryOp::LogicalAnd |
+                BinaryOp::Lt |
+                BinaryOp::Le |
+                BinaryOp::Gt |
+                BinaryOp::Ge |
+                BinaryOp::Eq |
+                BinaryOp::Ne,
+            ..
+        } => SolidityType::Bool,
+        Expr::Binary { .. } => SolidityType::Uint(256),
+        _ => SolidityType::FixedBytes(32),
+    }
+}
 
 pub(crate) fn build_abi(
     functions: &[AnalyzedFunction],
@@ -110,7 +174,7 @@ pub(crate) fn build_abi(
                         })
                         .collect(),
                 ),
-                None => (format!("CustomError_{}", error_selector.to_lower_hex()), vec![]),
+                None => (format!("CustomError_{}", short_selector(*error_selector)), vec![]),
             };
 
             let error = Error { name, inputs };
@@ -120,6 +184,10 @@ pub(crate) fn build_abi(
 
         // add functions events
         f.events.iter().for_each(|event_selector| {
+            let unresolved_name = format!("Event_{}", event_topic_prefix(*event_selector));
+            let observation = find_event_observation(&f.statements, &unresolved_name);
+            let indexed_args = observation.map(|(_, indexed)| indexed).unwrap_or(0);
+
             // determine the name of the event
             let (name, inputs) = match all_resolved_logs
                 .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
@@ -135,11 +203,27 @@ pub(crate) fn build_abi(
                             internal_type: None,
                             ty: to_abi_string(input),
                             components: to_components(input),
-                            indexed: false,
+                            indexed: i < indexed_args,
                         })
                         .collect(),
                 ),
-                None => (format!("Event_{}", event_selector.to_lower_hex()), vec![]),
+                None => {
+                    let inputs = observation
+                        .map(|(args, _)| {
+                            args.iter()
+                                .enumerate()
+                                .map(|(i, arg)| EventParam {
+                                    name: format!("arg{i}"),
+                                    internal_type: None,
+                                    ty: event_argument_type(arg, f).to_string(),
+                                    components: vec![],
+                                    indexed: i < indexed_args,
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    (unresolved_name, inputs)
+                }
             };
 
             let event = Event { name, inputs, anonymous: event_selector.is_zero() };

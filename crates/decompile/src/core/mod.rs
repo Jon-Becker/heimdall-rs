@@ -246,6 +246,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         }
     });
     let mut analyzed_functions = futures::future::try_join_all(handles).await?;
+    // Hash-map iteration order must not determine generated storage names or which type hint wins.
+    analyzed_functions.sort_by(|a, b| a.selector.cmp(&b.selector));
 
     debug!("analyzing symbolic execution results took {:?}", start_analysis_time.elapsed());
     info!("analyzed {} symbolic execution traces", analyzed_functions.len());

@@ -71,6 +71,49 @@ pub(crate) fn type_cleanup_postprocessor(
     Ok(())
 }
 
+/// Canonicalizes a fully transformed function immediately before source lowering.
+///
+/// Function-wide transforms expose fresh simplification opportunities after the statement-local
+/// passes have run. Revisit the nested IR so no-op statements and decidable branches are removed
+/// without parsing rendered Solidity.
+pub(crate) fn finalize_function(
+    function: &mut AnalyzedFunction,
+    state: &mut PostprocessorState,
+) -> Result<(), Error> {
+    fn finalize_block(
+        statements: Vec<Statement>,
+        state: &mut PostprocessorState,
+    ) -> Result<Vec<Statement>, Error> {
+        let mut output = Vec::with_capacity(statements.len());
+        for mut statement in statements {
+            statement = statement.simplify();
+            type_cleanup_postprocessor(&mut statement, state)?;
+            statement = statement.simplify();
+
+            match statement {
+                Statement::Noop => {}
+                Statement::Require { condition: Expr::Bool(true), .. } => {}
+                Statement::IfElse { condition, then_body, else_body } => {
+                    let then_body = finalize_block(then_body, state)?;
+                    let else_body = finalize_block(else_body, state)?;
+                    // Constant-looking branches can be artifacts of concrete placeholder values
+                    // in an incomplete symbolic trace. Preserve both alternatives unless neither
+                    // contains behavior; branch pruning is only safe while trace completeness is
+                    // still available to the control-flow analyzer.
+                    if !then_body.is_empty() || !else_body.is_empty() {
+                        output.push(Statement::IfElse { condition, then_body, else_body });
+                    }
+                }
+                statement => output.push(statement),
+            }
+        }
+        Ok(output)
+    }
+
+    function.statements = finalize_block(std::mem::take(&mut function.statements), state)?;
+    Ok(())
+}
+
 /// Rewrites literal return values using the function's inferred return type.
 pub(crate) fn normalize_typed_returns(
     function: &mut AnalyzedFunction,
@@ -193,5 +236,34 @@ mod tests {
         state.memory_type_map.insert("arg0".to_string(), SolidityType::Uint(256));
         type_cleanup_postprocessor(&mut statement, &mut state).unwrap();
         assert_eq!(statement.render(RenderTarget::Solidity), "return uint8(arg0);");
+    }
+
+    #[test]
+    fn finalization_removes_tautologies_but_preserves_constant_branches() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.statements = vec![
+            Statement::Require { condition: Expr::Bool(true), reason: None },
+            Statement::IfElse {
+                condition: Expr::Bool(false),
+                then_body: vec![Statement::Return(Expr::Literal(alloy::primitives::U256::ZERO))],
+                else_body: vec![Statement::Return(Expr::Cast {
+                    ty: SolidityType::Address,
+                    value: Box::new(Expr::identifier("arg0")),
+                })],
+            },
+        ];
+        let mut state = PostprocessorState::default();
+        state.memory_type_map.insert("arg0".to_string(), SolidityType::Address);
+
+        finalize_function(&mut function, &mut state).unwrap();
+
+        assert_eq!(
+            function.statements,
+            vec![Statement::IfElse {
+                condition: Expr::Bool(false),
+                then_body: vec![Statement::Return(Expr::Literal(alloy::primitives::U256::ZERO,))],
+                else_body: vec![Statement::Return(Expr::identifier("arg0"))],
+            }]
+        );
     }
 }

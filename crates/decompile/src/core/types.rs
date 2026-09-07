@@ -80,6 +80,18 @@ impl SolidityType {
         Self::Located { ty: Box::new(self), location: DataLocation::Memory }
     }
 
+    /// Add the data location required for a reference type in a public function parameter.
+    pub(crate) fn as_public_parameter(&self) -> Self {
+        let ty = self.without_location();
+        if matches!(&ty, Self::Bytes | Self::String | Self::Array { .. }) ||
+            matches!(&ty, Self::Custom(name) if name.starts_with('('))
+        {
+            ty.in_memory()
+        } else {
+            ty
+        }
+    }
+
     /// Return the element/value type produced by one indexing operation.
     pub(crate) fn indexed(&self) -> Self {
         match self.without_location() {
@@ -175,5 +187,16 @@ mod tests {
         let ty = SolidityType::parse("bytes32[4][] memory");
         assert_eq!(ty.to_string(), "bytes32[4][] memory");
         assert_eq!(ty.without_location().indexed().indexed(), SolidityType::FixedBytes(32));
+    }
+
+    #[test]
+    fn adds_locations_only_to_reference_parameters() {
+        assert_eq!(
+            SolidityType::Array { element: Box::new(SolidityType::Address), length: None }
+                .as_public_parameter()
+                .to_string(),
+            "address[] memory"
+        );
+        assert_eq!(SolidityType::Address.as_public_parameter(), SolidityType::Address);
     }
 }

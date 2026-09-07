@@ -51,7 +51,9 @@ pub(crate) fn memory_postprocessor(
     // Track conditional nesting depth so we don't record block-local variables.
     match statement {
         Statement::If { .. } => state.conditional_depth += 1,
-        Statement::Else | Statement::CloseBlock => {
+        // The else arm remains inside the same lexical conditional. Only the closing marker
+        // exits the scope; otherwise aliases created in an else arm can leak past the branch.
+        Statement::CloseBlock => {
             state.conditional_depth = state.conditional_depth.saturating_sub(1);
         }
         _ => {}
