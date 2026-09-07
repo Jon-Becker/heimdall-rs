@@ -1,4 +1,4 @@
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use std::{str::FromStr, time::Instant};
 
 use alloy::primitives::U256;
@@ -213,10 +213,7 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
     }
 
     // determine the name of the function
-    let function_name = match f.resolved_function {
-        Some(ref sig) => sig.name.clone(),
-        None => format!("Unresolved_{}", f.selector),
-    };
+    let function_name = f.emitted_name();
 
     let function_signature = match f.resolved_function {
         Some(ref sig) => format!(
@@ -402,12 +399,18 @@ fn get_event_and_error_declarations(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
-) -> HashMap<String, (String, String)> {
+) -> Vec<(String, (String, String))> {
     let mut output = HashMap::new();
 
-    // get all events and errors
-    let all_events = functions.iter().flat_map(|f| f.events.clone()).collect::<HashSet<_>>();
-    let all_errors = functions.iter().flat_map(|f| f.errors.clone()).collect::<HashSet<_>>();
+    // get all events and errors, sorted by selector for deterministic output
+    let mut all_events =
+        functions.iter().flat_map(|f| f.events.iter().copied()).collect::<Vec<_>>();
+    all_events.sort_unstable();
+    all_events.dedup();
+    let mut all_errors =
+        functions.iter().flat_map(|f| f.errors.iter().copied()).collect::<Vec<_>>();
+    all_errors.sort_unstable();
+    all_errors.dedup();
 
     // add event declarations
     all_events.iter().for_each(|event_selector| {
@@ -473,7 +476,17 @@ fn get_event_and_error_declarations(
         );
     });
 
-    output
+    // sort the declarations, so that the generated output is deterministic
+    let mut declarations = output.into_iter().collect::<Vec<_>>();
+    declarations.sort_by(
+        |(a_unresolved, (a_declaration, a_typ)), (b_unresolved, (b_declaration, b_typ))| {
+            a_typ
+                .cmp(b_typ)
+                .then_with(|| a_declaration.cmp(b_declaration))
+                .then_with(|| a_unresolved.cmp(b_unresolved))
+        },
+    );
+    declarations
 }
 
 /// Helper function which will indent the source code.
@@ -516,6 +529,223 @@ fn get_indentation_imbalance(source: &[String]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::interfaces::sort_analyzed_functions;
+    use hashbrown::HashSet;
+    use heimdall_common::ether::signatures::ResolvedFunction;
+
+    /// Builds a function with a distinguishable body, so we can assert that bodies stay attached
+    /// to their headers when functions are reordered.
+    fn analyzed_function(
+        selector: &str,
+        resolved: Option<(&str, &str)>,
+        analyzer_type: AnalyzerType,
+    ) -> AnalyzedFunction {
+        let mut function = AnalyzedFunction::new(selector, false);
+        function.analyzer_type = analyzer_type;
+        function.logic = vec![format!("return {selector};")];
+        function.pure = false;
+        function.view = false;
+        function.payable = false;
+        function.resolved_function = resolved.map(|(name, signature)| ResolvedFunction {
+            name: name.to_string(),
+            signature: signature.to_string(),
+            inputs: vec![],
+            decoded_inputs: None,
+        });
+        function
+    }
+
+    fn fixture(analyzer_type: AnalyzerType) -> Vec<AnalyzedFunction> {
+        let mut transfer = analyzed_function(
+            "a9059cbb",
+            Some(("transfer", "transfer(address,uint256)")),
+            analyzer_type,
+        );
+        transfer.events = HashSet::from([U256::from(1), U256::from(2)]);
+        let mut approve = analyzed_function(
+            "095ea7b3",
+            Some(("approve", "approve(address,uint256)")),
+            analyzer_type,
+        );
+        approve.errors = HashSet::from([U256::from(3), U256::from(4)]);
+        let mut fallback = analyzed_function("00000000", None, analyzer_type);
+        fallback.fallback = true;
+
+        vec![
+            transfer,
+            approve,
+            analyzed_function("18160ddd", Some(("totalSupply", "totalSupply()")), analyzer_type),
+            analyzed_function("deadbeef", None, analyzer_type),
+            analyzed_function("00c0ffee", None, analyzer_type),
+            fallback,
+        ]
+    }
+
+    fn permutations(functions: &[AnalyzedFunction]) -> Vec<Vec<AnalyzedFunction>> {
+        let reversed = functions.iter().rev().cloned().collect::<Vec<_>>();
+        let mut rotated = functions.to_vec();
+        rotated.rotate_left(3);
+        vec![functions.to_vec(), reversed, rotated]
+    }
+
+    async fn build(functions: &[AnalyzedFunction]) -> String {
+        build_source(
+            functions,
+            &HashMap::new(),
+            &HashMap::new(),
+            &HashMap::new(),
+            false,
+            String::new(),
+            String::new(),
+        )
+        .await
+        .expect("failed to build source")
+        .expect("source is empty")
+    }
+
+    /// Returns the emitted function names, in the order they appear in the source.
+    fn emitted_names(source: &str) -> Vec<String> {
+        source
+            .lines()
+            .filter_map(|line| {
+                line.trim()
+                    .strip_prefix("function ")
+                    .or_else(|| line.trim().strip_prefix("* @custom:signature    "))
+            })
+            .map(|signature| {
+                signature.split('(').next().expect("signature is empty").trim().to_string()
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn solidity_functions_are_sorted_alphabetically() {
+        let mut sources = Vec::new();
+        for mut functions in permutations(&fixture(AnalyzerType::Solidity)) {
+            sort_analyzed_functions(&mut functions);
+            sources.push(build(&functions).await);
+        }
+
+        // repeated generation from any insertion order is byte-identical
+        assert!(sources.windows(2).all(|window| window[0] == window[1]));
+
+        let source = &sources[0];
+        let names = emitted_names(source);
+        assert_eq!(
+            names,
+            vec![
+                "approve",
+                "totalSupply",
+                "transfer",
+                "Unresolved_00c0ffee",
+                "Unresolved_deadbeef",
+            ]
+        );
+
+        // function bodies remain attached to their headers
+        let lines = source.lines().map(|line| line.trim()).collect::<Vec<_>>();
+        for (name, selector) in [
+            ("approve", "095ea7b3"),
+            ("totalSupply", "18160ddd"),
+            ("transfer", "a9059cbb"),
+            ("Unresolved_00c0ffee", "00c0ffee"),
+            ("Unresolved_deadbeef", "deadbeef"),
+        ] {
+            let header = lines
+                .iter()
+                .position(|line| line.starts_with(&format!("function {name}(")))
+                .unwrap_or_else(|| panic!("missing function {name}"));
+            assert_eq!(lines[header + 1], format!("return {selector};"));
+        }
+
+        // the fallback function is still emitted as a fallback
+        let fallback = lines
+            .iter()
+            .position(|line| *line == "fallback() external payable {")
+            .expect("missing fallback");
+        assert_eq!(lines[fallback + 1], "return 00000000;");
+    }
+
+    #[tokio::test]
+    async fn yul_cases_are_sorted_alphabetically() {
+        let mut sources = Vec::new();
+        for mut functions in permutations(&fixture(AnalyzerType::Yul)) {
+            sort_analyzed_functions(&mut functions);
+            sources.push(build(&functions).await);
+        }
+
+        assert!(sources.windows(2).all(|window| window[0] == window[1]));
+
+        // the yul header declares helper functions of its own, so only the trailing signatures
+        // belong to the decompiled contract
+        let source = &sources[0];
+        let names = emitted_names(source);
+        assert_eq!(
+            names[names.len() - 5..],
+            ["approve", "totalSupply", "transfer", "Unresolved_00c0ffee", "Unresolved_deadbeef"]
+        );
+
+        let lines = source.lines().map(|line| line.trim()).collect::<Vec<_>>();
+        let cases =
+            lines.iter().filter(|line| line.starts_with("case 0x")).copied().collect::<Vec<_>>();
+        assert_eq!(
+            cases,
+            vec![
+                "case 0x095ea7b3 {",
+                "case 0x18160ddd {",
+                "case 0xa9059cbb {",
+                "case 0x00c0ffee {",
+                "case 0xdeadbeef {",
+            ]
+        );
+
+        // the fallback function is still emitted as the default case
+        let fallback = lines.iter().position(|line| *line == "default {").expect("missing default");
+        assert_eq!(lines[fallback + 1], "return 00000000;");
+    }
+
+    #[tokio::test]
+    async fn overloads_are_sorted_by_signature() {
+        let mut functions = vec![
+            analyzed_function(
+                "a9059cbb",
+                Some(("transfer", "transfer(address,uint256)")),
+                AnalyzerType::Solidity,
+            ),
+            analyzed_function(
+                "1a695230",
+                Some(("transfer", "transfer(address)")),
+                AnalyzerType::Solidity,
+            ),
+        ];
+        sort_analyzed_functions(&mut functions);
+        assert_eq!(
+            functions.iter().map(|f| f.selector.clone()).collect::<Vec<_>>(),
+            vec!["1a695230", "a9059cbb"]
+        );
+    }
+
+    #[test]
+    fn event_and_error_declarations_are_sorted() {
+        let mut function = AnalyzedFunction::new("a9059cbb", false);
+        function.events = HashSet::from([U256::from(0xbb) << 248, U256::from(0xaa) << 248]);
+        function.errors = HashSet::from([U256::from(0xdd) << 248, U256::from(0xcc) << 248]);
+
+        let declarations =
+            get_event_and_error_declarations(&[function], &HashMap::new(), &HashMap::new());
+        assert_eq!(
+            declarations
+                .iter()
+                .map(|(_, (declaration, typ))| format!("{typ} {declaration}"))
+                .collect::<Vec<_>>(),
+            vec![
+                "error CustomError_cc000000();",
+                "error CustomError_dd000000();",
+                "event Event_aa000000();",
+                "event Event_bb000000();",
+            ]
+        );
+    }
 
     #[test]
     fn duplicate_getters_are_not_collapsed() {

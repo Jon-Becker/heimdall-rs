@@ -42,10 +42,7 @@ pub(crate) fn build_abi(
         };
 
         // determine the name of the function
-        let name = match f.resolved_function {
-            Some(ref sig) => sig.name.clone(),
-            None => format!("Unresolved_{}", f.selector),
-        };
+        let name = f.emitted_name();
 
         let function = Function {
             name: name.clone(),
@@ -91,7 +88,7 @@ pub(crate) fn build_abi(
         };
 
         // add functions errors
-        f.errors.iter().for_each(|error_selector| {
+        f.sorted_errors().iter().for_each(|error_selector| {
             // determine the name of the error
             let (name, inputs) = match all_resolved_errors
                 .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
@@ -119,7 +116,7 @@ pub(crate) fn build_abi(
         });
 
         // add functions events
-        f.events.iter().for_each(|event_selector| {
+        f.sorted_events().iter().for_each(|event_selector| {
             // determine the name of the event
             let (name, inputs) = match all_resolved_logs
                 .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
@@ -166,17 +163,8 @@ pub(crate) fn build_abi_with_details(
     let mut abi_array = serde_json::to_value(abi)?;
 
     // Create a map of function selectors for quick lookup
-    let function_map: HashMap<String, &AnalyzedFunction> = functions
-        .iter()
-        .filter(|f| !f.fallback)
-        .map(|f| {
-            let name = match f.resolved_function {
-                Some(ref sig) => sig.name.clone(),
-                None => format!("Unresolved_{}", f.selector),
-            };
-            (name, f)
-        })
-        .collect();
+    let function_map: HashMap<String, &AnalyzedFunction> =
+        functions.iter().filter(|f| !f.fallback).map(|f| (f.emitted_name(), f)).collect();
 
     // Add selector and signature to each function in the ABI
     if let Some(items) = abi_array.as_array_mut() {

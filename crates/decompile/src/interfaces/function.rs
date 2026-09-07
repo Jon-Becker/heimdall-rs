@@ -169,4 +169,45 @@ impl AnalyzedFunction {
         arguments.sort_by(|x, y| x.0.cmp(&y.0));
         arguments
     }
+
+    /// Get the event selectors in a sorted vec
+    pub(crate) fn sorted_events(&self) -> Vec<U256> {
+        let mut events: Vec<_> = self.events.iter().copied().collect();
+        events.sort_unstable();
+        events
+    }
+
+    /// Get the custom error selectors in a sorted vec
+    pub(crate) fn sorted_errors(&self) -> Vec<U256> {
+        let mut errors: Vec<_> = self.errors.iter().copied().collect();
+        errors.sort_unstable();
+        errors
+    }
+
+    /// The name this function is emitted with in the generated output
+    pub(crate) fn emitted_name(&self) -> String {
+        match self.resolved_function {
+            Some(ref sig) => sig.name.clone(),
+            None => format!("Unresolved_{}", self.selector),
+        }
+    }
+
+    /// The key used to order functions in the generated output. Functions are ordered
+    /// alphabetically by their emitted name, using the resolved signature (for overloads) and
+    /// the selector (for unresolved names) as tie-breakers.
+    fn output_order_key(&self) -> (String, String, String, String) {
+        let name = self.emitted_name();
+        (
+            name.to_lowercase(),
+            name,
+            self.resolved_function.as_ref().map(|sig| sig.signature.clone()).unwrap_or_default(),
+            self.selector.clone(),
+        )
+    }
+}
+
+/// Sorts analyzed functions into the deterministic order used by all generated output, so that
+/// decompiling the same bytecode twice always yields byte-identical results.
+pub(crate) fn sort_analyzed_functions(functions: &mut [AnalyzedFunction]) {
+    functions.sort_by_cached_key(|f| f.output_order_key());
 }

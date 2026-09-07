@@ -40,14 +40,22 @@ pub(crate) fn variable_postprocessor(
     );
     if !preserves_operands {
         statement.visit_exprs_mut(&mut |expr| {
-            let replacement = state.variable_map.iter().find_map(|(variable, value)| {
-                let is_trivial = matches!(
-                    value,
-                    Expr::Identifier(_) | Expr::Literal(_) | Expr::Bool(_) | Expr::StringLiteral(_)
-                );
-                (!is_trivial && value == expr && assignment_target.as_ref() != Some(variable))
-                    .then_some(variable)
-            });
+            // the smallest matching variable is used, since map iteration order is not stable
+            let replacement = state
+                .variable_map
+                .iter()
+                .filter_map(|(variable, value)| {
+                    let is_trivial = matches!(
+                        value,
+                        Expr::Identifier(_) |
+                            Expr::Literal(_) |
+                            Expr::Bool(_) |
+                            Expr::StringLiteral(_)
+                    );
+                    (!is_trivial && value == expr && assignment_target.as_ref() != Some(variable))
+                        .then_some(variable)
+                })
+                .min_by_key(|variable| variable.render());
             if let Some(variable) = replacement {
                 *expr = variable.clone();
             }

@@ -583,4 +583,61 @@ mod integration_tests {
             assert!(error_obj.contains_key("signature"), "Error should have a signature field");
         }
     }
+
+    /// A minimal local dispatcher which routes three selectors, in an order which does not match
+    /// their alphabetical order. Used to assert deterministic output without any RPC dependency.
+    const MULTI_SELECTOR_BYTECODE: &str = "0x60003560e01c8063ffffff011461002c578063111111011461003857806388888801146100405760006000fd5b60005460005260206000f35b600435600155005b60043560020260005260206000f3";
+
+    async fn decompile_local(include_solidity: bool) -> String {
+        let args = DecompilerArgsBuilder::new()
+            .target(MULTI_SELECTOR_BYTECODE.to_string())
+            .skip_resolving(true)
+            .include_solidity(include_solidity)
+            .include_yul(!include_solidity)
+            .build()
+            .expect("failed to build args");
+
+        decompile(args)
+            .await
+            .expect("failed to decompile")
+            .source
+            .expect("decompile source is empty")
+    }
+
+    #[tokio::test]
+    async fn test_decompile_output_is_deterministic_solidity() {
+        let first = decompile_local(true).await;
+        let second = decompile_local(true).await;
+
+        // repeated decompilation of the same bytecode is byte-identical
+        assert_eq!(first, second);
+
+        // functions are emitted in alphabetical order
+        let names = first
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("function "))
+            .map(|signature| signature.split('(').next().expect("empty signature").to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            vec!["Unresolved_11111101", "Unresolved_88888801", "Unresolved_ffffff01"]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_decompile_output_is_deterministic_yul() {
+        let first = decompile_local(false).await;
+        let second = decompile_local(false).await;
+
+        // repeated decompilation of the same bytecode is byte-identical
+        assert_eq!(first, second);
+
+        // cases are emitted in alphabetical order of their emitted function names
+        let cases = first
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| line.starts_with("case 0x"))
+            .collect::<Vec<_>>();
+        assert_eq!(cases, vec!["case 0x11111101 {", "case 0x88888801 {", "case 0xffffff01 {"]);
+    }
 }
