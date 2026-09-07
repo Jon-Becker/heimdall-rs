@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use std::{str::FromStr, time::Instant};
+use std::{collections::BTreeSet, str::FromStr, time::Instant};
 
 use alloy::primitives::U256;
 use alloy_json_abi::StateMutability;
@@ -75,12 +75,10 @@ pub(crate) async fn build_source(
     }
 
     // add event and error declarations
-    let resolved_event_error_map =
+    let declarations =
         get_event_and_error_declarations(functions, all_resolved_errors, all_resolved_logs);
     if analyzer_type == AnalyzerType::Solidity {
-        resolved_event_error_map.iter().for_each(|(_, (resolved_name, typ))| {
-            source.push(format!("{typ} {resolved_name}"));
-        });
+        source.extend(declarations.iter().map(|declaration| declaration.line.clone()));
 
         // add the fallback function, if it exists
         if let Some(fallback) = functions.iter().find(|f| f.fallback) {
@@ -130,11 +128,8 @@ pub(crate) async fn build_source(
     let mut source = source.join("\n");
 
     // replace all custom event and error declarations with their resolved names
-    resolved_event_error_map.iter().for_each(|(unresolved_name, (resolved_name, _))| {
-        // get only the name of both (remove `(..)`)
-        let unresolved_name = unresolved_name.split('(').next().expect("unresolved name is empty");
-        let resolved_name = resolved_name.split('(').next().expect("resolved name is empty");
-        source = source.replace(unresolved_name, resolved_name);
+    declarations.iter().for_each(|declaration| {
+        source = source.replace(&declaration.unresolved_name, &declaration.name);
     });
 
     // replace all storage variables w/ getters w/ their resolved names
@@ -394,26 +389,34 @@ fn get_storage_variables(
     output
 }
 
-/// Helper function which will get the event and error declarations for the decompiled source code.
+/// A single event or custom error declaration emitted in the decompiled source code.
+struct Declaration {
+    /// the name the declaration is emitted with before resolution, i.e. `Event_ddf252ad`
+    unresolved_name: String,
+    /// the name the declaration is emitted with, i.e. `Transfer`
+    name: String,
+    /// the full declaration line, i.e. `event Transfer(address, address);`
+    line: String,
+}
+
+/// Helper function which will get the event and error declarations for the decompiled source code,
+/// deduplicated by their unresolved name and sorted for deterministic output.
 fn get_event_and_error_declarations(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
-) -> Vec<(String, (String, String))> {
-    let mut output = HashMap::new();
-
-    // get all events and errors, sorted by selector for deterministic output
-    let mut all_events =
-        functions.iter().flat_map(|f| f.events.iter().copied()).collect::<Vec<_>>();
-    all_events.sort_unstable();
-    all_events.dedup();
-    let mut all_errors =
-        functions.iter().flat_map(|f| f.errors.iter().copied()).collect::<Vec<_>>();
-    all_errors.sort_unstable();
-    all_errors.dedup();
+) -> Vec<Declaration> {
+    let mut declarations = HashMap::new();
 
     // add event declarations
+    let all_events =
+        functions.iter().flat_map(|f| f.events.iter().copied()).collect::<BTreeSet<_>>();
     all_events.iter().for_each(|event_selector| {
+        let unresolved_name = format!(
+            "Event_{}",
+            event_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
+        );
+
         // determine the name of the event
         let (name, inputs) = match all_resolved_logs
             .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
@@ -421,31 +424,28 @@ fn get_event_and_error_declarations(
             Some(event) => {
                 (event.name.clone(), event.inputs().iter().map(|i| i.to_string()).collect())
             }
-            None => (
-                format!(
-                    "Event_{}",
-                    event_selector
-                        .to_lower_hex()
-                        .replacen("0x", "", 1)
-                        .get(0..8)
-                        .unwrap_or("00000000")
-                ),
-                vec![],
-            ),
+            None => (unresolved_name.clone(), vec![]),
         };
 
-        let unresolved_name = format!(
-            "Event_{}",
-            event_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
-        );
-        output.insert(
-            unresolved_name,
-            (format!("{name}({});", inputs.join(", ")), "event".to_string()),
+        declarations.insert(
+            unresolved_name.clone(),
+            Declaration {
+                unresolved_name,
+                line: format!("event {name}({});", inputs.join(", ")),
+                name,
+            },
         );
     });
 
     // add error declarations
+    let all_errors =
+        functions.iter().flat_map(|f| f.errors.iter().copied()).collect::<BTreeSet<_>>();
     all_errors.iter().for_each(|error_selector| {
+        let unresolved_name = format!(
+            "CustomError_{}",
+            error_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
+        );
+
         // determine the name of the error
         let (name, inputs) = match all_resolved_errors
             .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
@@ -453,39 +453,22 @@ fn get_event_and_error_declarations(
             Some(error) => {
                 (error.name.clone(), error.inputs().iter().map(|i| i.to_string()).collect())
             }
-            None => (
-                format!(
-                    "CustomError_{}",
-                    error_selector
-                        .to_lower_hex()
-                        .replacen("0x", "", 1)
-                        .get(0..8)
-                        .unwrap_or("00000000")
-                ),
-                vec![],
-            ),
+            None => (unresolved_name.clone(), vec![]),
         };
 
-        let unresolved_name = format!(
-            "CustomError_{}",
-            error_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
-        );
-        output.insert(
-            unresolved_name,
-            (format!("{name}({});", inputs.join(", ")), "error".to_string()),
+        declarations.insert(
+            unresolved_name.clone(),
+            Declaration {
+                unresolved_name,
+                line: format!("error {name}({});", inputs.join(", ")),
+                name,
+            },
         );
     });
 
     // sort the declarations, so that the generated output is deterministic
-    let mut declarations = output.into_iter().collect::<Vec<_>>();
-    declarations.sort_by(
-        |(a_unresolved, (a_declaration, a_typ)), (b_unresolved, (b_declaration, b_typ))| {
-            a_typ
-                .cmp(b_typ)
-                .then_with(|| a_declaration.cmp(b_declaration))
-                .then_with(|| a_unresolved.cmp(b_unresolved))
-        },
-    );
+    let mut declarations = declarations.into_values().collect::<Vec<_>>();
+    declarations.sort_unstable_by(|a, b| a.line.cmp(&b.line));
     declarations
 }
 
@@ -530,7 +513,6 @@ fn get_indentation_imbalance(source: &[String]) -> i32 {
 mod tests {
     use super::*;
     use crate::interfaces::sort_analyzed_functions;
-    use hashbrown::HashSet;
     use heimdall_common::ether::signatures::ResolvedFunction;
 
     /// Builds a function with a distinguishable body, so we can assert that bodies stay attached
@@ -561,13 +543,13 @@ mod tests {
             Some(("transfer", "transfer(address,uint256)")),
             analyzer_type,
         );
-        transfer.events = HashSet::from([U256::from(1), U256::from(2)]);
+        transfer.events = BTreeSet::from([U256::from(1), U256::from(2)]);
         let mut approve = analyzed_function(
             "095ea7b3",
             Some(("approve", "approve(address,uint256)")),
             analyzer_type,
         );
-        approve.errors = HashSet::from([U256::from(3), U256::from(4)]);
+        approve.errors = BTreeSet::from([U256::from(3), U256::from(4)]);
         let mut fallback = analyzed_function("00000000", None, analyzer_type);
         fallback.fallback = true;
 
@@ -726,24 +708,61 @@ mod tests {
     }
 
     #[test]
+    fn names_are_sorted_case_insensitively() {
+        let mut functions = vec![
+            analyzed_function("00000001", Some(("Beta", "Beta()")), AnalyzerType::Solidity),
+            analyzed_function("00000002", Some(("alpha", "alpha()")), AnalyzerType::Solidity),
+            analyzed_function(
+                "00000003",
+                Some(("Transfer", "Transfer(address)")),
+                AnalyzerType::Solidity,
+            ),
+            analyzed_function(
+                "00000004",
+                Some(("transfer", "transfer(address,uint256)")),
+                AnalyzerType::Solidity,
+            ),
+        ];
+        sort_analyzed_functions(&mut functions);
+
+        // names which only differ in case are tie-broken by their resolved signature
+        assert_eq!(
+            functions.iter().map(|f| f.emitted_name()).collect::<Vec<_>>(),
+            vec!["alpha", "Beta", "Transfer", "transfer"]
+        );
+    }
+
+    #[test]
     fn event_and_error_declarations_are_sorted() {
         let mut function = AnalyzedFunction::new("a9059cbb", false);
-        function.events = HashSet::from([U256::from(0xbb) << 248, U256::from(0xaa) << 248]);
-        function.errors = HashSet::from([U256::from(0xdd) << 248, U256::from(0xcc) << 248]);
+        function.events = BTreeSet::from([U256::from(0xbb) << 248, U256::from(0xaa) << 248]);
+        function.errors = BTreeSet::from([U256::from(0xdd) << 248, U256::from(0xcc) << 248]);
 
         let declarations =
             get_event_and_error_declarations(&[function], &HashMap::new(), &HashMap::new());
         assert_eq!(
-            declarations
-                .iter()
-                .map(|(_, (declaration, typ))| format!("{typ} {declaration}"))
-                .collect::<Vec<_>>(),
+            declarations.iter().map(|d| d.line.clone()).collect::<Vec<_>>(),
             vec![
                 "error CustomError_cc000000();",
                 "error CustomError_dd000000();",
                 "event Event_aa000000();",
                 "event Event_bb000000();",
             ]
+        );
+    }
+
+    #[test]
+    fn declarations_are_deduplicated_by_unresolved_name() {
+        // error selectors are stored as 4 byte values, so every unresolved error shares the
+        // `CustomError_00000000` name and only the last one is declared
+        let mut function = AnalyzedFunction::new("a9059cbb", false);
+        function.errors = BTreeSet::from([U256::from(0x11), U256::from(0x22)]);
+
+        let declarations =
+            get_event_and_error_declarations(&[function], &HashMap::new(), &HashMap::new());
+        assert_eq!(
+            declarations.iter().map(|d| d.line.clone()).collect::<Vec<_>>(),
+            vec!["error CustomError_00000000();"]
         );
     }
 

@@ -88,7 +88,7 @@ pub(crate) fn build_abi(
         };
 
         // add functions errors
-        f.sorted_errors().iter().for_each(|error_selector| {
+        f.errors.iter().for_each(|error_selector| {
             // determine the name of the error
             let (name, inputs) = match all_resolved_errors
                 .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
@@ -116,7 +116,7 @@ pub(crate) fn build_abi(
         });
 
         // add functions events
-        f.sorted_events().iter().for_each(|event_selector| {
+        f.events.iter().for_each(|event_selector| {
             // determine the name of the event
             let (name, inputs) = match all_resolved_logs
                 .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))

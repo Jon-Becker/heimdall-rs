@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use hashbrown::{HashMap, HashSet};
 
 use alloy::primitives::U256;
@@ -36,10 +38,10 @@ pub(crate) struct AnalyzedFunction {
     pub logic: Vec<String>,
 
     /// holds all found event selectors found
-    pub events: HashSet<U256>,
+    pub events: BTreeSet<U256>,
 
     /// holds all found custom error selectors found
-    pub errors: HashSet<U256>,
+    pub errors: BTreeSet<U256>,
 
     /// stores the matched resolved function for this Functon
     pub resolved_function: Option<ResolvedFunction>,
@@ -102,8 +104,8 @@ impl AnalyzedFunction {
             returns: None,
             statements: Vec::new(),
             logic: Vec::new(),
-            events: HashSet::new(),
-            errors: HashSet::new(),
+            events: BTreeSet::new(),
+            errors: BTreeSet::new(),
             resolved_function: None,
             notices: Vec::new(),
             pure: true,
@@ -170,20 +172,6 @@ impl AnalyzedFunction {
         arguments
     }
 
-    /// Get the event selectors in a sorted vec
-    pub(crate) fn sorted_events(&self) -> Vec<U256> {
-        let mut events: Vec<_> = self.events.iter().copied().collect();
-        events.sort_unstable();
-        events
-    }
-
-    /// Get the custom error selectors in a sorted vec
-    pub(crate) fn sorted_errors(&self) -> Vec<U256> {
-        let mut errors: Vec<_> = self.errors.iter().copied().collect();
-        errors.sort_unstable();
-        errors
-    }
-
     /// The name this function is emitted with in the generated output
     pub(crate) fn emitted_name(&self) -> String {
         match self.resolved_function {
@@ -195,11 +183,9 @@ impl AnalyzedFunction {
     /// The key used to order functions in the generated output. Functions are ordered
     /// alphabetically by their emitted name, using the resolved signature (for overloads) and
     /// the selector (for unresolved names) as tie-breakers.
-    fn output_order_key(&self) -> (String, String, String, String) {
-        let name = self.emitted_name();
+    fn output_order_key(&self) -> (String, String, String) {
         (
-            name.to_lowercase(),
-            name,
+            self.emitted_name().to_lowercase(),
             self.resolved_function.as_ref().map(|sig| sig.signature.clone()).unwrap_or_default(),
             self.selector.clone(),
         )
