@@ -119,10 +119,19 @@ jobs:
         with:
           ref: ${{ needs.resolve-pr.outputs.head_sha }}
 
+      # Reports compare every PR run with a fresh evaluation of the current main
+      # branch, rather than with a prior PR run.
+      - name: Checkout heimdall-rs (main baseline)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: heimdall-main
+
       - name: Checkout heimdall-eval
         uses: actions/checkout@v4
         with:
           repository: Jon-Becker/heimdall-eval
+          ref: main
           path: heimdall-eval
           token: ${{ secrets.EVAL_REPO_TOKEN }}
 
@@ -134,8 +143,11 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Build heimdall
+      - name: Build candidate heimdall
         run: cargo build --release --bin heimdall
+
+      - name: Build main baseline heimdall
+        run: cargo build --release --bin heimdall --manifest-path heimdall-main/Cargo.toml
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -143,17 +155,25 @@ jobs:
       - name: Add heimdall to PATH
         run: echo "${{ github.workspace }}/target/release" >> $GITHUB_PATH
 
-      - name: Run evals
+      - name: Run main baseline AI evaluation
+        working-directory: heimdall-eval
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          PATH="${GITHUB_WORKSPACE}/heimdall-main/target/release:${PATH}" make eval-all
+          mv heimdall baseline
+          mkdir heimdall
+          mv baseline heimdall/baseline
+
+      - name: Run candidate evals
         working-directory: heimdall-eval
         run: make run-all
 
       - name: Run AI evaluation
         working-directory: heimdall-eval
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          npm install -g @anthropic-ai/claude-code
-          make eval-all
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: make eval-all
 
       - name: Generate HTML evaluation report
         working-directory: heimdall-eval
@@ -198,15 +218,45 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
+        id: aws_credentials
         if: ${{ steps.target.outputs.enabled == 'true' }}
+        continue-on-error: true
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.BENCH_REPORT_AWS_ROLE_ARN }}
           aws-region: ${{ vars.BENCH_REPORT_AWS_REGION }}
           role-session-name: heimdall-eval-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Report hosting is an optional enhancement. In particular, an AWS role
+      # trust-policy change must not make an otherwise successful evaluation
+      # appear to have failed.
+      - name: Resolve report publication result
+        id: report
+        if: ${{ !cancelled() }}
+        env:
+          ENABLED: ${{ steps.target.outputs.enabled }}
+          URL: ${{ steps.target.outputs.url }}
+          SKIP_REASON: ${{ steps.target.outputs.skip_reason }}
+          AWS_CREDENTIALS_OUTCOME: ${{ steps.aws_credentials.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$ENABLED" != "true" ]; then
+            url=""
+            reason="$SKIP_REASON"
+          elif [ "$AWS_CREDENTIALS_OUTCOME" = "success" ]; then
+            url="$URL"
+            reason=""
+          else
+            url=""
+            reason="AWS credentials could not be configured; the report is available in the eval-results artifact"
+          fi
+          {
+            echo "url=$url"
+            echo "skip_reason=$reason"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload evaluation report to S3
-        if: ${{ steps.target.outputs.enabled == 'true' }}
+        if: ${{ steps.target.outputs.enabled == 'true' && steps.aws_credentials.outcome == 'success' }}
         env:
           BUCKET: ${{ vars.BENCH_REPORT_S3_BUCKET }}
         run: |
@@ -221,12 +271,11 @@ jobs:
         uses: actions/github-script@v7
         env:
           EVAL_SHA: ${{ needs.resolve-pr.outputs.head_sha }}
-          REPORT_URL: ${{ steps.target.outputs.url }}
-          REPORT_SKIP_REASON: ${{ steps.target.outputs.skip_reason }}
+          REPORT_URL: ${{ steps.report.outputs.url }}
+          REPORT_SKIP_REASON: ${{ steps.report.outputs.skip_reason }}
         with:
           script: |
             const fs = require('fs');
-            const path = require('path');
             const evalsJson = JSON.parse(fs.readFileSync('heimdall-eval/heimdall/evals.json', 'utf8'));
 
             const entries = Object.entries(evalsJson);
@@ -238,71 +287,21 @@ jobs:
 
             const icon = avgDecomp >= 70 ? ':white_check_mark:' : (avgDecomp >= 50 ? ':warning:' : ':x:');
 
-            // Identify low-scoring evals for detailed breakdown
-            const lowScoringEntries = entries.filter(([_, scores]) => {
-              const cfg = scores.cfg ?? null;
-              const decomp = scores.decompilation ?? null;
-              return (cfg != null && cfg < 70) || (decomp != null && decomp < 70);
-            });
-
             let tableRows = entries.map(([name, scores]) => {
               const cfg = scores.cfg ?? 'N/A';
               const decomp = scores.decompilation ?? 'N/A';
               return `| ${name} | ${cfg} | ${decomp} |`;
             }).join('\n');
 
-            // Collect detailed breakdowns for low-scoring evals
-            let detailsSections = [];
-            for (const [name, scores] of lowScoringEntries) {
-              const cfg = scores.cfg ?? null;
-              const decomp = scores.decompilation ?? null;
-
-              let details = [`### ${name} (CFG: ${cfg ?? 'N/A'}, Decompilation: ${decomp ?? 'N/A'})\n`];
-
-              // Read decompilation eval details if score < 70
-              if (decomp != null && decomp < 70) {
-                const evalPath = path.join('heimdall-eval/heimdall', name, 'eval.json');
-                if (fs.existsSync(evalPath)) {
-                  try {
-                    const evalData = JSON.parse(fs.readFileSync(evalPath, 'utf8'));
-                    details.push(`**Decompilation**\n\`\`\`json\n${JSON.stringify(evalData, null, 2)}\n\`\`\`\n`);
-                  } catch (e) {
-                    details.push(`**Decompilation** - Could not read details\n`);
-                  }
-                }
-              }
-
-              // Read CFG eval details if score < 70
-              if (cfg != null && cfg < 70) {
-                const cfgEvalPath = path.join('heimdall-eval/heimdall', name, 'cfg_eval.json');
-                if (fs.existsSync(cfgEvalPath)) {
-                  try {
-                    const cfgEvalData = JSON.parse(fs.readFileSync(cfgEvalPath, 'utf8'));
-                    details.push(`**CFG**\n\`\`\`json\n${JSON.stringify(cfgEvalData, null, 2)}\n\`\`\`\n`);
-                  } catch (e) {
-                    details.push(`**CFG** - Could not read details\n`);
-                  }
-                }
-              }
-
-              if (details.length > 1) {
-                detailsSections.push(details.join('\n'));
-              }
-            }
-
-            let detailsBlock = '';
-            if (detailsSections.length > 0) {
-              detailsBlock = `\n\n<details>\n<summary>:warning: ${lowScoringEntries.length} eval(s) scoring &lt;70%</summary>\n\n${detailsSections.join('\n---\n\n')}\n</details>`;
-            }
 
             const body = [
               '<!-- heimdall-eval-request -->',
               `## ${icon} AI Evaluation Suite for ${process.env.EVAL_SHA}`,
               '',
-              `Completed [heimdall-eval](https://github.com/Jon-Becker/heimdall-eval). [View workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
               process.env.REPORT_URL
                 ? `:bar_chart: [View the full HTML evaluation report](${process.env.REPORT_URL}).`
                 : `:bar_chart: The full HTML evaluation report was not uploaded because ${process.env.REPORT_SKIP_REASON}. Download the \`eval-results\` artifact from the workflow run instead.`,
+              `Completed [heimdall-eval](https://github.com/Jon-Becker/heimdall-eval). [View workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
               '',
               '<details>',
               '<summary>:bar_chart: View evaluation scores</summary>',
@@ -312,7 +311,6 @@ jobs:
               tableRows,
               `| **Average** | **${avgCfg}** | **${avgDecomp}** |`,
               '</details>',
-              detailsBlock,
               '',
               '- [ ] Run AI Evaluation Suite',
             ].join('\n');
@@ -354,6 +352,9 @@ jobs:
           path: |
             heimdall-eval/heimdall/*/eval.json
             heimdall-eval/heimdall/*/cfg_eval.json
+            heimdall-eval/heimdall/baseline/*/eval.json
+            heimdall-eval/heimdall/baseline/*/cfg_eval.json
+            heimdall-eval/heimdall/baseline/evals.json
             heimdall-eval/heimdall/evals.json
             heimdall-eval/heimdall/report.html
             heimdall-eval/heimdall/report/
