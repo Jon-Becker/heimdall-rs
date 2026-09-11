@@ -406,6 +406,22 @@ pub(crate) fn execute_block(
                     expressions,
                 ));
             }
+            opcodes::CALL | opcodes::CALLCODE => {
+                let inputs = state.stack.pop_n(7)?;
+                let output_size = exact_usize(&inputs[6]);
+                if output_size != Some(0) {
+                    state.state.memory.havoc(inputs[5].clone(), output_size, state_versions);
+                }
+                state.stack.push(operation_result(instruction, inputs, 0, expressions, max_values));
+            }
+            opcodes::DELEGATECALL | opcodes::STATICCALL => {
+                let inputs = state.stack.pop_n(6)?;
+                let output_size = exact_usize(&inputs[5]);
+                if output_size != Some(0) {
+                    state.state.memory.havoc(inputs[4].clone(), output_size, state_versions);
+                }
+                state.stack.push(operation_result(instruction, inputs, 0, expressions, max_values));
+            }
             opcodes::CALLDATACOPY |
             opcodes::CODECOPY |
             opcodes::RETURNDATACOPY |
@@ -822,6 +838,41 @@ mod tests {
             cfg.entry_states[&target].stack.values()[0].known_values(),
             Some(&BTreeSet::from([U256::from(42)]))
         );
+    }
+
+    #[test]
+    fn external_call_invalidates_its_output_memory() {
+        let program = program(&[
+            opcodes::PUSH1,
+            42,
+            opcodes::PUSH0,
+            opcodes::MSTORE,
+            opcodes::PUSH1,
+            32,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::PUSH1,
+            1,
+            opcodes::PUSH0,
+            opcodes::CALL,
+            opcodes::POP,
+            opcodes::PUSH0,
+            opcodes::MLOAD,
+            opcodes::STOP,
+        ]);
+        let cfg = analyze(&program);
+        let exit = &cfg.exit_states[&program.blocks[0].id];
+        let value = &exit.state.stack.values()[0];
+        let expression = value
+            .expressions()
+            .and_then(|expressions| expressions.first())
+            .and_then(|expression| cfg.expressions.get(*expression))
+            .expect("memory read after call");
+
+        assert_eq!(expression.opcode, opcodes::MLOAD);
+        assert!(value.known_values().is_none());
     }
 
     #[test]
