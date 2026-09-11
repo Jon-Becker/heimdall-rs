@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+#
+# Regression tests for bifrost's platform / package-manager detection.
+#
+# These tests source `bifrost` and exercise its pure decision functions in
+# isolation. They mock the presence of package managers by placing fake
+# executables on a controlled PATH, so they do NOT require apt-get, root
+# privileges, a live network, or any particular host distribution.
+#
+# Run with: bash bifrost/tests/bifrost-tests
+
+TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIFROST="$TESTS_DIR/../bifrost"
+
+# shellcheck source=/dev/null
+source "$BIFROST"
+set +e  # bifrost enables `set -e`; disable it so a failing assertion is reported
+
+FAILURES=0
+
+assert_eq() {
+    local expected=$1 actual=$2 name=$3
+    if [ "$expected" = "$actual" ]; then
+        echo "ok   - $name"
+    else
+        echo "FAIL - $name"
+        echo "         expected: '$expected'"
+        echo "         actual:   '$actual'"
+        FAILURES=$((FAILURES + 1))
+    fi
+}
+
+assert_not_contains() {
+    local haystack=$1 needle=$2 name=$3
+    if [[ "$haystack" != *"$needle"* ]]; then
+        echo "ok   - $name"
+    else
+        echo "FAIL - $name (found '$needle' in '$haystack')"
+        FAILURES=$((FAILURES + 1))
+    fi
+}
+
+# build a PATH containing only fake executables for the given package managers
+mock_path() {
+    local dir
+    dir=$(mktemp -d)
+    for pm in "$@"; do
+        printf '#!/bin/sh\n' > "$dir/$pm"
+        chmod +x "$dir/$pm"
+    done
+    echo "$dir"
+}
+
+# --- detect_package_manager -------------------------------------------------
+
+# Debian/Ubuntu: apt-get is preferred even when other managers coexist.
+d=$(mock_path apt-get dnf yum)
+assert_eq "apt-get" "$(PATH="$d" detect_package_manager)" \
+    "detect prefers apt-get (Debian/Ubuntu behavior preserved)"
+
+# Amazon Linux 2023 / Fedora / RHEL: dnf is detected, no apt-get present.
+d=$(mock_path dnf yum)
+assert_eq "dnf" "$(PATH="$d" detect_package_manager)" \
+    "detect returns dnf on Amazon Linux 2023 / Fedora (the reproduction)"
+
+# Older RHEL/CentOS/Amazon Linux 2: only yum available.
+d=$(mock_path yum)
+assert_eq "yum" "$(PATH="$d" detect_package_manager)" \
+    "detect returns yum when only yum is available"
+
+# Arch / Alpine / SUSE.
+d=$(mock_path pacman); assert_eq "pacman" "$(PATH="$d" detect_package_manager)" "detect returns pacman (Arch)"
+d=$(mock_path apk);    assert_eq "apk"    "$(PATH="$d" detect_package_manager)" "detect returns apk (Alpine)"
+d=$(mock_path zypper); assert_eq "zypper" "$(PATH="$d" detect_package_manager)" "detect returns zypper (openSUSE)"
+
+# Unknown environment: no supported package manager.
+d=$(mock_path)
+assert_eq "" "$(PATH="$d" detect_package_manager)" \
+    "detect returns empty when no supported package manager exists"
+
+# --- build_dependency_packages ----------------------------------------------
+
+assert_eq "libssl-dev build-essential" "$(build_dependency_packages apt-get)" \
+    "apt-get maps to Debian dev packages (unchanged)"
+assert_eq "openssl-devel gcc gcc-c++ make" "$(build_dependency_packages dnf)" \
+    "dnf maps to openssl-devel + gcc toolchain"
+assert_eq "openssl-devel gcc gcc-c++ make" "$(build_dependency_packages yum)" \
+    "yum maps to openssl-devel + gcc toolchain"
+assert_eq "openssl base-devel" "$(build_dependency_packages pacman)" \
+    "pacman maps to openssl + base-devel"
+assert_eq "" "$(build_dependency_packages does-not-exist)" \
+    "unknown package manager maps to no packages"
+
+# --- package_install_command ------------------------------------------------
+
+assert_eq "sudo apt-get install -y libssl-dev build-essential" \
+    "$(package_install_command apt-get libssl-dev build-essential)" \
+    "apt-get install command is unchanged (Debian/Ubuntu preserved)"
+
+# End-to-end decision for the Amazon Linux 2023 / aarch64 reproduction: the
+# resolved command must use dnf and must NOT invoke apt-get.
+amzn_cmd="$(package_install_command dnf "$(build_dependency_packages dnf)")"
+assert_eq "sudo dnf install -y openssl-devel gcc gcc-c++ make" "$amzn_cmd" \
+    "Amazon Linux 2023 resolves to a dnf install command"
+assert_not_contains "$amzn_cmd" "apt-get" \
+    "Amazon Linux 2023 never falls back to apt-get"
+
+# Unsupported host: no command is produced, so bifrost errors out instead of
+# silently running the wrong package manager.
+assert_eq "" "$(package_install_command "")" \
+    "unsupported host yields no install command (no wrong package manager)"
+
+# ---------------------------------------------------------------------------
+
+echo
+if [ "$FAILURES" -eq 0 ]; then
+    echo "All bifrost detection tests passed."
+    exit 0
+else
+    echo "$FAILURES test(s) failed."
+    exit 1
+fi
