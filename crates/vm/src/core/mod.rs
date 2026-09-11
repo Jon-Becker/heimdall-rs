@@ -16,6 +16,9 @@ pub mod memory;
 /// Opcode definitions and implementations
 pub mod opcodes;
 
+/// Canonical bytecode decoding and basic-block recovery
+pub mod program;
+
 /// Stack implementation for the VM
 pub mod stack;
 
