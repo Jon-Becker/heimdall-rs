@@ -1,3 +1,6 @@
+/// Worklist-based abstract CFG analysis
+pub mod analysis;
+
 /// Known chain IDs for common networks
 pub mod chains;
 
