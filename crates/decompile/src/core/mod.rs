@@ -1,4 +1,5 @@
 pub(crate) mod analyze;
+pub(crate) mod canonical;
 pub(crate) mod control_flow;
 pub(crate) mod ir;
 pub(crate) mod out;
@@ -27,11 +28,15 @@ use heimdall_vm::{
     core::vm::VM,
     ext::selectors::{find_function_selectors, resolve_selectors},
 };
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use crate::{
     core::{
         analyze::{Analyzer, AnalyzerType},
+        canonical::{build_canonical_analysis, CanonicalAnalysis},
         out::{
             build_abi, build_abi_with_details,
             source::{build_source, StorageVariable},
@@ -56,6 +61,8 @@ pub struct DecompileResult {
     pub abi: JsonAbi,
     /// The extended ABI with selector and signature information
     pub abi_with_details: serde_json::Value,
+    /// Canonical contextual analysis retained alongside legacy-derived source and ABI output.
+    pub canonical_analysis: Arc<CanonicalAnalysis>,
 }
 
 /// Decompiles EVM bytecode into higher-level Solidity-like code
@@ -155,6 +162,11 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     let start_selectors_time = Instant::now();
     let selectors = find_function_selectors(&evm, &assembly);
     debug!("finding function selectors took {:?}", start_selectors_time.elapsed());
+
+    let start_canonical_time = Instant::now();
+    let canonical_analysis =
+        Arc::new(build_canonical_analysis(&contract_bytecode, hardfork, &selectors));
+    debug!("canonical contextual analysis took {:?}", start_canonical_time.elapsed());
 
     // resolve selectors (if enabled)
     let resolved_selectors = match args.skip_resolving {
@@ -390,5 +402,5 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     debug!("decompilation took {:?}", start_time.elapsed());
 
-    Ok(DecompileResult { source, abi, abi_with_details })
+    Ok(DecompileResult { source, abi, abi_with_details, canonical_analysis })
 }
