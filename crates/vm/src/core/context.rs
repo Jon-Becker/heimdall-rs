@@ -446,7 +446,24 @@ fn successors(
                         }
                     }
                 }
-                Some(AbstractValue::Symbolic { .. }) => {
+                Some(AbstractValue::Symbolic { constants, .. }) => {
+                    for target in constants {
+                        match valid_target(program, *target) {
+                            Some(target) => successors.push(contextual_successor(
+                                point,
+                                target,
+                                kind,
+                                true_state.clone(),
+                                hints,
+                                config.max_context_depth,
+                            )),
+                            None => {
+                                invalid_jump_points.insert(point.clone());
+                            }
+                        }
+                    }
+                    // Retained concrete alternatives are real edges, but expressions mean the
+                    // target set remains incomplete unless SMT proves otherwise.
                     let mut resolved = false;
                     #[cfg(feature = "smt")]
                     if let Some(refiner) = smt.as_mut() {
@@ -554,7 +571,8 @@ fn successors(
 
 fn valid_target(program: &Program, target: U256) -> Option<BlockId> {
     let pc = usize::try_from(target).ok()?;
-    program.is_valid_jumpdest(pc).then(|| program.block_at(pc).expect("validated block").id)
+    let block = program.block_at(pc)?;
+    program.is_valid_jumpdest(pc).then_some(block.id)
 }
 
 fn contextual_successor(
@@ -762,6 +780,48 @@ mod tests {
         assert_eq!(cfg.analysis_iterations, 0);
         assert_eq!(cfg.budget_exhausted_points.len(), 1);
         assert!(cfg.entry_states.contains_key(cfg.budget_exhausted_points.first().unwrap()));
+    }
+
+    #[test]
+    fn contextual_cfg_retains_concrete_symbolic_jump_alternatives() {
+        let program = program(&[
+            opcodes::CALLVALUE,
+            opcodes::PUSH1,
+            9,
+            opcodes::JUMPI,
+            opcodes::PUSH1,
+            18,
+            opcodes::PUSH1,
+            15,
+            opcodes::JUMP,
+            opcodes::JUMPDEST,
+            opcodes::PUSH0,
+            opcodes::CALLDATALOAD,
+            opcodes::PUSH1,
+            15,
+            opcodes::JUMP,
+            opcodes::JUMPDEST,
+            opcodes::JUMP,
+            opcodes::STOP,
+            opcodes::JUMPDEST,
+            opcodes::STOP,
+        ]);
+        #[allow(unused_mut)]
+        let mut config = ContextualAnalysisConfig::default();
+        #[cfg(feature = "smt")]
+        {
+            config.values.smt = None;
+        }
+        let cfg = analyze_contextual_with_config(&program, config);
+        let dynamic = program.block_at(15).unwrap().id;
+        let concrete = program.block_at(18).unwrap().id;
+
+        assert!(cfg.edges.iter().any(|edge| {
+            edge.source.block == dynamic &&
+                edge.target.block == concrete &&
+                edge.kind == ContextualEdgeKind::Jump
+        }));
+        assert!(cfg.unresolved_jumps.iter().any(|point| point.block == dynamic));
     }
 
     #[test]
