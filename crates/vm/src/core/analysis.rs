@@ -106,7 +106,7 @@ impl AbstractStack {
 }
 
 /// Abstract state recorded at a basic-block entry.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AbstractState {
     /// Abstract operand stack.
     pub stack: AbstractStack,
@@ -114,6 +114,19 @@ pub struct AbstractState {
     pub facts: PathFacts,
     /// Versioned memory, storage, and transient storage.
     pub state: AbstractStateSpaces,
+    /// Size of bytes returned by the most recent external call-like operation.
+    pub returndata_size: AbstractValue,
+}
+
+impl Default for AbstractState {
+    fn default() -> Self {
+        Self {
+            stack: AbstractStack::default(),
+            facts: PathFacts::new(),
+            state: AbstractStateSpaces::default(),
+            returndata_size: AbstractValue::constant(U256::ZERO),
+        }
+    }
 }
 
 impl AbstractState {
@@ -124,7 +137,7 @@ impl AbstractState {
 
     /// Construct a state with an explicit abstract stack.
     pub fn with_stack(stack: AbstractStack) -> Self {
-        Self { stack, facts: PathFacts::new(), state: AbstractStateSpaces::default() }
+        Self { stack, ..Self::default() }
     }
 
     pub(crate) fn join(
@@ -137,6 +150,7 @@ impl AbstractState {
             stack: self.stack.join(&other.stack, max_values),
             facts: self.facts.join(&other.facts),
             state: self.state.join(&other.state, max_values, state_versions),
+            returndata_size: self.returndata_size.join(&other.returndata_size, max_values),
         }
     }
 }
@@ -412,6 +426,8 @@ pub(crate) fn execute_block(
                 if output_size != Some(0) {
                     state.state.memory.havoc(inputs[5].clone(), output_size, state_versions);
                 }
+                state.returndata_size =
+                    operation_result(instruction, inputs.clone(), 1, expressions, max_values);
                 state.stack.push(operation_result(instruction, inputs, 0, expressions, max_values));
             }
             opcodes::DELEGATECALL | opcodes::STATICCALL => {
@@ -420,8 +436,11 @@ pub(crate) fn execute_block(
                 if output_size != Some(0) {
                     state.state.memory.havoc(inputs[4].clone(), output_size, state_versions);
                 }
+                state.returndata_size =
+                    operation_result(instruction, inputs.clone(), 1, expressions, max_values);
                 state.stack.push(operation_result(instruction, inputs, 0, expressions, max_values));
             }
+            opcodes::RETURNDATASIZE => state.stack.push(state.returndata_size.clone()),
             opcodes::CALLDATACOPY |
             opcodes::CODECOPY |
             opcodes::RETURNDATACOPY |
@@ -893,6 +912,58 @@ mod tests {
 
         assert_eq!(expression.opcode, opcodes::MLOAD);
         assert!(value.known_values().is_none());
+    }
+
+    #[test]
+    fn joins_returndata_sizes_across_control_flow() {
+        let initial = AbstractState::new();
+        let mut called = AbstractState::new();
+        called.returndata_size = AbstractValue::constant(U256::from(5));
+        let mut versions = StateVersionArena::new();
+
+        let joined = initial.join(&called, 8, &mut versions);
+
+        assert_eq!(
+            joined.returndata_size.known_values(),
+            Some(&BTreeSet::from([U256::ZERO, U256::from(5)]))
+        );
+    }
+
+    #[test]
+    fn tracks_returndata_size_from_the_latest_call() {
+        let initial = program(&[opcodes::RETURNDATASIZE, opcodes::STOP]);
+        let initial_cfg = analyze(&initial);
+        assert_eq!(
+            initial_cfg.exit_states[&initial.blocks[0].id].state.stack.values()[0].known_values(),
+            Some(&BTreeSet::from([U256::ZERO]))
+        );
+
+        let called = program(&[
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::PUSH0,
+            opcodes::CALL,
+            opcodes::RETURNDATASIZE,
+            opcodes::STOP,
+        ]);
+        let cfg = analyze(&called);
+        let exit = &cfg.exit_states[&called.blocks[0].id].state;
+        let size = &exit.stack.values()[0];
+        let success = &exit.stack.values()[1];
+        let size_id = *size.expressions().unwrap().first().unwrap();
+        let success_id = *success.expressions().unwrap().first().unwrap();
+        let size_node = cfg.expressions.get(size_id).unwrap();
+        let success_node = cfg.expressions.get(success_id).unwrap();
+
+        assert_eq!(size_node.opcode, opcodes::CALL);
+        assert_eq!(size_node.output, 1);
+        assert_eq!(success_node.output, 0);
+        assert_eq!(size_node.effect_site, success_node.effect_site);
+        assert_ne!(size_id, success_id);
     }
 
     #[test]
