@@ -34,6 +34,9 @@ pub mod program;
 /// Stack implementation for the VM
 pub mod stack;
 
+/// Context-sensitive stack SSA and effect lowering
+pub mod ssa;
+
 /// Interned symbolic expressions for abstract analysis
 pub mod symbolic;
 
