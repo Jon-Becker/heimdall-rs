@@ -5,9 +5,11 @@
 //! propagation substrate on which symbolic expressions, context sensitivity, and solver-backed
 //! jump refinement can be layered without returning to recursive path enumeration.
 
-use std::{
-    collections::{BTreeSet, HashMap, VecDeque},
-    iter,
+use std::collections::{BTreeSet, HashMap, VecDeque};
+
+pub use super::{
+    stack::{AbstractStack, AbstractValue},
+    state::AbstractState,
 };
 
 use alloy::primitives::U256;
@@ -19,146 +21,6 @@ use super::{
 
 /// Default maximum number of alternatives retained for one abstract value before widening.
 pub const DEFAULT_MAX_VALUE_SET: usize = 8;
-
-/// A stack value in the finite constant-set abstract domain.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AbstractValue {
-    /// A non-empty set of possible concrete values.
-    Known(BTreeSet<U256>),
-    /// Any 256-bit value.
-    Unknown,
-}
-
-impl AbstractValue {
-    /// Construct a singleton known value.
-    pub fn constant(value: U256) -> Self {
-        Self::Known(BTreeSet::from([value]))
-    }
-
-    /// Return the known alternatives, or `None` when the value is unknown.
-    pub fn known_values(&self) -> Option<&BTreeSet<U256>> {
-        match self {
-            Self::Known(values) => Some(values),
-            Self::Unknown => None,
-        }
-    }
-
-    fn join(&self, other: &Self, max_values: usize) -> Self {
-        match (self, other) {
-            (Self::Known(left), Self::Known(right)) => {
-                let values = left.union(right).copied().collect::<BTreeSet<_>>();
-                if values.len() <= max_values {
-                    Self::Known(values)
-                } else {
-                    Self::Unknown
-                }
-            }
-            _ => Self::Unknown,
-        }
-    }
-}
-
-/// Abstract EVM stack, stored from top to bottom.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct AbstractStack {
-    values: Vec<AbstractValue>,
-    unknown_tail: bool,
-}
-
-impl AbstractStack {
-    /// Construct an empty, exact stack.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Construct a stack from explicit values ordered from top to bottom.
-    ///
-    /// When `unknown_tail` is true, additional values may exist below the provided prefix.
-    pub fn from_values(values: Vec<AbstractValue>, unknown_tail: bool) -> Self {
-        Self { values, unknown_tail }
-    }
-
-    /// Explicit values from the top of the stack downward.
-    pub fn values(&self) -> &[AbstractValue] {
-        &self.values
-    }
-
-    /// Whether additional, untracked values may exist below the explicit values.
-    pub fn has_unknown_tail(&self) -> bool {
-        self.unknown_tail
-    }
-
-    fn push(&mut self, value: AbstractValue) {
-        self.values.insert(0, value);
-    }
-
-    fn pop(&mut self) -> Option<AbstractValue> {
-        if self.values.is_empty() {
-            self.unknown_tail.then_some(AbstractValue::Unknown)
-        } else {
-            Some(self.values.remove(0))
-        }
-    }
-
-    fn pop_n(&mut self, count: usize) -> bool {
-        (0..count).all(|_| self.pop().is_some())
-    }
-
-    fn peek(&self, index: usize) -> Option<AbstractValue> {
-        self.values
-            .get(index)
-            .cloned()
-            .or_else(|| self.unknown_tail.then_some(AbstractValue::Unknown))
-    }
-
-    fn swap(&mut self, index: usize) -> bool {
-        if index >= self.values.len() {
-            if !self.unknown_tail {
-                return false
-            }
-            self.values
-                .extend(iter::repeat_n(AbstractValue::Unknown, index + 1 - self.values.len()));
-        }
-        self.values.swap(0, index);
-        true
-    }
-
-    fn join(&self, other: &Self, max_values: usize) -> Self {
-        let common_depth = self.values.len().min(other.values.len());
-        let values = (0..common_depth)
-            .map(|index| self.values[index].join(&other.values[index], max_values))
-            .collect();
-        Self {
-            values,
-            unknown_tail: self.unknown_tail ||
-                other.unknown_tail ||
-                self.values.len() != other.values.len(),
-        }
-    }
-}
-
-/// Abstract state recorded at a basic-block entry.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct AbstractState {
-    /// Abstract operand stack.
-    pub stack: AbstractStack,
-}
-
-impl AbstractState {
-    /// Construct the empty initial EVM state.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Construct a state with an explicit abstract stack.
-    pub fn with_stack(stack: AbstractStack) -> Self {
-        Self { stack }
-    }
-
-    fn join(&self, other: &Self, max_values: usize) -> Self {
-        Self { stack: self.stack.join(&other.stack, max_values) }
-    }
-}
 
 /// Kind of edge discovered by abstract interpretation.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -550,13 +412,6 @@ mod tests {
 
         assert_eq!(cfg.entry_states.len(), 1);
         assert_eq!(cfg.entry_states[&entry], initial);
-    }
-
-    #[test]
-    fn widens_large_value_sets_to_unknown() {
-        let left = AbstractValue::Known(BTreeSet::from([U256::from(1), U256::from(2)]));
-        let right = AbstractValue::Known(BTreeSet::from([U256::from(3), U256::from(4)]));
-        assert_eq!(left.join(&right, 3), AbstractValue::Unknown);
     }
 
     #[test]

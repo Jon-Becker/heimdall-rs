@@ -1,7 +1,8 @@
 use std::{
-    collections::VecDeque,
+    collections::{BTreeSet, VecDeque},
     fmt::Display,
     hash::{BuildHasher, Hash},
+    iter,
 };
 
 use alloy::primitives::U256;
@@ -9,6 +10,123 @@ use eyre::{OptionExt, Result};
 use hashbrown::hash_map::DefaultHashBuilder;
 
 use super::opcodes::WrappedOpcode;
+
+/// A stack value in the finite constant-set abstract domain.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AbstractValue {
+    /// A non-empty set of possible concrete values.
+    Known(BTreeSet<U256>),
+    /// Any 256-bit value.
+    Unknown,
+}
+
+impl AbstractValue {
+    /// Construct a singleton known value.
+    pub fn constant(value: U256) -> Self {
+        Self::Known(BTreeSet::from([value]))
+    }
+
+    /// Return the known alternatives, or `None` when the value is unknown.
+    pub fn known_values(&self) -> Option<&BTreeSet<U256>> {
+        match self {
+            Self::Known(values) => Some(values),
+            Self::Unknown => None,
+        }
+    }
+
+    fn join(&self, other: &Self, max_values: usize) -> Self {
+        match (self, other) {
+            (Self::Known(left), Self::Known(right)) => {
+                let values = left.union(right).copied().collect::<BTreeSet<_>>();
+                if values.len() <= max_values {
+                    Self::Known(values)
+                } else {
+                    Self::Unknown
+                }
+            }
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// Abstract EVM stack, stored from top to bottom.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct AbstractStack {
+    values: Vec<AbstractValue>,
+    unknown_tail: bool,
+}
+
+impl AbstractStack {
+    /// Construct an empty, exact stack.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Construct a stack from explicit values ordered from top to bottom.
+    ///
+    /// When `unknown_tail` is true, additional values may exist below the provided prefix.
+    pub fn from_values(values: Vec<AbstractValue>, unknown_tail: bool) -> Self {
+        Self { values, unknown_tail }
+    }
+
+    /// Explicit values from the top of the stack downward.
+    pub fn values(&self) -> &[AbstractValue] {
+        &self.values
+    }
+
+    /// Whether additional, untracked values may exist below the explicit values.
+    pub fn has_unknown_tail(&self) -> bool {
+        self.unknown_tail
+    }
+
+    pub(super) fn push(&mut self, value: AbstractValue) {
+        self.values.insert(0, value);
+    }
+
+    pub(super) fn pop(&mut self) -> Option<AbstractValue> {
+        if self.values.is_empty() {
+            self.unknown_tail.then_some(AbstractValue::Unknown)
+        } else {
+            Some(self.values.remove(0))
+        }
+    }
+
+    pub(super) fn pop_n(&mut self, count: usize) -> bool {
+        (0..count).all(|_| self.pop().is_some())
+    }
+
+    pub(super) fn peek(&self, index: usize) -> Option<AbstractValue> {
+        self.values
+            .get(index)
+            .cloned()
+            .or_else(|| self.unknown_tail.then_some(AbstractValue::Unknown))
+    }
+
+    pub(super) fn swap(&mut self, index: usize) -> bool {
+        if index >= self.values.len() {
+            if !self.unknown_tail {
+                return false
+            }
+            self.values
+                .extend(iter::repeat_n(AbstractValue::Unknown, index + 1 - self.values.len()));
+        }
+        self.values.swap(0, index);
+        true
+    }
+
+    pub(super) fn join(&self, other: &Self, max_values: usize) -> Self {
+        let common_depth = self.values.len().min(other.values.len());
+        let values = (0..common_depth)
+            .map(|index| self.values[index].join(&other.values[index], max_values))
+            .collect();
+        Self {
+            values,
+            unknown_tail: self.unknown_tail ||
+                other.unknown_tail ||
+                self.values.len() != other.values.len(),
+        }
+    }
+}
 
 /// The [`Stack`] struct represents the EVM stack.
 /// It is a LIFO data structure that holds a VecDeque of [`StackFrame`]s.
@@ -289,8 +407,54 @@ impl Display for Stack {
 
 #[cfg(test)]
 mod tests {
+    use super::{AbstractStack, AbstractValue};
+    use std::collections::BTreeSet;
 
     use alloy::primitives::U256;
+
+    #[test]
+    fn widens_large_value_sets_to_unknown() {
+        let left = AbstractValue::Known(BTreeSet::from([U256::from(1), U256::from(2)]));
+        let right = AbstractValue::Known(BTreeSet::from([U256::from(3), U256::from(4)]));
+        assert_eq!(left.join(&right, 3), AbstractValue::Unknown);
+    }
+
+    #[test]
+    fn abstract_stack_preserves_top_to_bottom_order() {
+        let mut stack = AbstractStack::new();
+        let one = AbstractValue::constant(U256::from(1));
+        let two = AbstractValue::constant(U256::from(2));
+        stack.push(one.clone());
+        stack.push(two.clone());
+        assert_eq!(stack.peek(0), Some(two.clone()));
+        assert!(stack.swap(1));
+        assert_eq!(stack.pop(), Some(one));
+        assert_eq!(stack.pop(), Some(two));
+        assert_eq!(stack.pop(), None);
+        assert!(!stack.swap(1));
+    }
+
+    #[test]
+    fn abstract_stack_unknown_tail_supplies_untracked_values() {
+        let mut stack = AbstractStack::from_values(Vec::new(), true);
+        assert_eq!(stack.peek(2), Some(AbstractValue::Unknown));
+        assert!(stack.swap(2));
+        assert_eq!(stack.values(), vec![AbstractValue::Unknown; 3].as_slice());
+        assert!(stack.pop_n(4));
+        assert!(stack.has_unknown_tail());
+    }
+
+    #[test]
+    fn abstract_stack_join_widens_values_and_unequal_depths() {
+        let one = AbstractValue::constant(U256::from(1));
+        let two = AbstractValue::constant(U256::from(2));
+        let left = AbstractStack::from_values(vec![one.clone(), two.clone()], false);
+        let right = AbstractStack::from_values(vec![two], false);
+        let joined = left.join(&right, 1);
+        assert_eq!(joined.values(), &[AbstractValue::Unknown]);
+        assert!(joined.has_unknown_tail());
+        assert_eq!(left.join(&left, 1), left);
+    }
 
     use crate::core::{opcodes::WrappedOpcode, stack::Stack};
 

@@ -25,6 +25,9 @@ pub mod program;
 /// Stack implementation for the VM
 pub mod stack;
 
+/// Abstract execution state for basic-block analysis
+pub mod state;
+
 /// Storage implementation for contract storage
 pub mod storage;
 
