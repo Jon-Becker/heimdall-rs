@@ -27,6 +27,9 @@ pub const DEFAULT_CONTEXT_DEPTH: usize = 20;
 /// Default number of distinct contexts retained for one block before they are collapsed.
 pub const DEFAULT_CONTEXTS_PER_BLOCK: usize = 64;
 
+/// Default maximum block-state executions in one contextual analysis.
+pub const DEFAULT_MAX_ANALYSIS_ITERATIONS: usize = 250_000;
+
 /// A likely internal call and the blocks to which it may return.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CallFrame {
@@ -210,6 +213,8 @@ pub struct ContextualAnalysisConfig {
     pub max_context_depth: usize,
     /// Maximum distinct contexts retained for one block before collapsing excess contexts.
     pub max_contexts_per_block: usize,
+    /// Maximum block-state executions before returning a conservative partial result.
+    pub max_iterations: usize,
 }
 
 impl Default for ContextualAnalysisConfig {
@@ -218,6 +223,7 @@ impl Default for ContextualAnalysisConfig {
             values: AnalysisConfig::default(),
             max_context_depth: DEFAULT_CONTEXT_DEPTH,
             max_contexts_per_block: DEFAULT_CONTEXTS_PER_BLOCK,
+            max_iterations: DEFAULT_MAX_ANALYSIS_ITERATIONS,
         }
     }
 }
@@ -243,6 +249,10 @@ pub struct ContextualCfg {
     pub collapsed_contexts: BTreeSet<ContextualPoint>,
     /// Contextual conditional edge directions proven infeasible.
     pub pruned_branches: BTreeSet<(ContextualPoint, bool)>,
+    /// Number of block-state executions completed by the worklist.
+    pub analysis_iterations: usize,
+    /// Queued points not executed because the iteration budget was exhausted.
+    pub budget_exhausted_points: BTreeSet<ContextualPoint>,
     #[cfg(feature = "smt")]
     /// Aggregate demand-driven SMT activity.
     pub smt_stats: SmtStats,
@@ -250,6 +260,14 @@ pub struct ContextualCfg {
 
 /// Analyze from bytecode entry with inferred continuation hints and default bounds.
 pub fn analyze_contextual(program: &Program) -> ContextualCfg {
+    analyze_contextual_with_config(program, ContextualAnalysisConfig::default())
+}
+
+/// Analyze from bytecode entry with inferred continuations and explicit resource bounds.
+pub fn analyze_contextual_with_config(
+    program: &Program,
+    config: ContextualAnalysisConfig,
+) -> ContextualCfg {
     let Some(entry) = program.blocks.first().map(|block| block.id) else {
         return ContextualCfg::default()
     };
@@ -258,7 +276,7 @@ pub fn analyze_contextual(program: &Program) -> ContextualCfg {
         entry,
         AbstractState::new(),
         &infer_continuations(program),
-        ContextualAnalysisConfig::default(),
+        config,
     )
 }
 
@@ -282,6 +300,12 @@ pub fn analyze_contextual_from(
     let mut worklist = VecDeque::from([entry_point]);
 
     while let Some(point) = worklist.pop_front() {
+        if result.analysis_iterations >= config.max_iterations {
+            result.budget_exhausted_points.insert(point);
+            result.budget_exhausted_points.extend(worklist);
+            break
+        }
+        result.analysis_iterations += 1;
         let entry_state = result.entry_states[&point].clone();
         let Some(exit) = execute_block(
             program,
@@ -717,6 +741,23 @@ mod tests {
         let contexts = cfg.entry_states.keys().filter(|point| point.block == callee).count();
 
         assert_eq!(contexts, 2);
+    }
+
+    #[test]
+    fn reports_points_left_by_iteration_budget() {
+        let program = program(&[opcodes::JUMPDEST, opcodes::STOP]);
+        let entry = program.blocks[0].id;
+        let cfg = analyze_contextual_from(
+            &program,
+            entry,
+            AbstractState::new(),
+            &ContinuationHints::default(),
+            ContextualAnalysisConfig { max_iterations: 0, ..Default::default() },
+        );
+
+        assert_eq!(cfg.analysis_iterations, 0);
+        assert_eq!(cfg.budget_exhausted_points.len(), 1);
+        assert!(cfg.entry_states.contains_key(cfg.budget_exhausted_points.first().unwrap()));
     }
 
     #[test]

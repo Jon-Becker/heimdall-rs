@@ -9,7 +9,10 @@ use alloy::primitives::Address;
 use eyre::eyre;
 use heimdall_common::{ether::compiler::detect_compiler, utils::strings::StringExt};
 use heimdall_vm::core::{
-    context::analyze_contextual, hardfork::HardFork, program::Program, vm::VM,
+    context::{analyze_contextual_with_config, ContextualAnalysisConfig},
+    hardfork::HardFork,
+    program::Program,
+    vm::VM,
 };
 use petgraph::{dot::Dot, Graph};
 use tracing::{debug, info, warn};
@@ -52,6 +55,10 @@ pub struct CfgDiagnostics {
     pub collapsed_contexts: usize,
     /// Number of conditional directions proven infeasible.
     pub pruned_branches: usize,
+    /// Number of block-state executions completed by contextual analysis.
+    pub analysis_iterations: usize,
+    /// Number of queued points omitted when the analysis budget was exhausted.
+    pub budget_exhausted_points: usize,
 }
 
 impl CfgResult {
@@ -115,7 +122,10 @@ fn build_canonical_result(
     info!("building canonical cfg for '{}'", args.target.truncate(64));
     let start_analysis = Instant::now();
     let program = Program::decode(contract_bytecode, hardfork);
-    let analysis = analyze_contextual(&program);
+    let analysis = analyze_contextual_with_config(
+        &program,
+        ContextualAnalysisConfig { max_iterations: args.max_iterations, ..Default::default() },
+    );
     let graph = build_canonical_cfg(&program, &analysis);
     let diagnostics = CfgDiagnostics {
         canonical: true,
@@ -128,11 +138,17 @@ fn build_canonical_result(
         invalid_jump_points: analysis.invalid_jump_points.len(),
         collapsed_contexts: analysis.collapsed_contexts.len(),
         pruned_branches: analysis.pruned_branches.len(),
+        analysis_iterations: analysis.analysis_iterations,
+        budget_exhausted_points: analysis.budget_exhausted_points.len(),
     };
-    if diagnostics.unresolved_jumps > 0 || diagnostics.collapsed_contexts > 0 {
+    if diagnostics.unresolved_jumps > 0 ||
+        diagnostics.collapsed_contexts > 0 ||
+        diagnostics.budget_exhausted_points > 0
+    {
         warn!(
             unresolved_jumps = diagnostics.unresolved_jumps,
             collapsed_contexts = diagnostics.collapsed_contexts,
+            budget_exhausted_points = diagnostics.budget_exhausted_points,
             "canonical cfg has bounded or unresolved analysis points"
         );
     }

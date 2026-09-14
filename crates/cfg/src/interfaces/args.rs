@@ -48,6 +48,10 @@ pub struct CfgArgs {
     #[clap(long)]
     pub legacy: bool,
 
+    /// Maximum block-state executions for canonical abstract analysis.
+    #[clap(long, default_value = "250000", hide_default_value = true)]
+    pub max_iterations: usize,
+
     /// The hardfork to use for opcode recognition. Opcodes introduced after this hardfork
     /// will be treated as unknown. Defaults to 'latest'.
     #[clap(long, short = 'f', default_value = "latest")]
@@ -125,6 +129,7 @@ impl CfgArgsBuilder {
             name: Some(String::new()),
             timeout: Some(10000),
             legacy: Some(false),
+            max_iterations: Some(250_000),
             hardfork: Some(HardFork::Latest),
             etherscan_api_key: Some(String::new()),
         }
