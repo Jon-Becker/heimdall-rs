@@ -448,7 +448,7 @@ mod tests {
     fn abstract_stack_join_widens_values_and_unequal_depths() {
         let one = AbstractValue::constant(U256::from(1));
         let two = AbstractValue::constant(U256::from(2));
-        let left = AbstractStack::from_values(vec![one.clone(), two.clone()], false);
+        let left = AbstractStack::from_values(vec![one, two.clone()], false);
         let right = AbstractStack::from_values(vec![two], false);
         let joined = left.join(&right, 1);
         assert_eq!(joined.values(), &[AbstractValue::Unknown]);

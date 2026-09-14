@@ -12,12 +12,13 @@ pub use super::{
     state::AbstractState,
 };
 
-use alloy::primitives::U256;
+use super::program::{BlockId, Program};
 
-use super::{
-    opcodes::{self, OpCodeInfo},
-    program::{BlockId, BlockTerminator, EdgeKind, Program},
-};
+mod control_flow;
+mod transfer;
+
+use control_flow::successors;
+use transfer::execute_block;
 
 /// Default maximum number of alternatives retained for one abstract value before widening.
 pub const DEFAULT_MAX_VALUE_SET: usize = 8;
@@ -140,177 +141,11 @@ pub fn analyze_from(
     result
 }
 
-#[derive(Clone, Debug)]
-struct BlockExit {
-    state: AbstractState,
-    jump_target: Option<AbstractValue>,
-    condition: Option<AbstractValue>,
-}
-
-#[derive(Clone, Debug)]
-struct Successor {
-    target: BlockId,
-    kind: AbstractEdgeKind,
-    state: AbstractState,
-}
-
-fn execute_block(
-    program: &Program,
-    block_id: BlockId,
-    mut state: AbstractState,
-) -> Option<BlockExit> {
-    let block = &program.blocks[block_id.index()];
-    let instructions = program.block_instructions(block_id);
-    let mut jump_target = None;
-    let mut condition = None;
-
-    for instruction in instructions {
-        match instruction.opcode {
-            opcodes::JUMP => jump_target = state.stack.pop(),
-            opcodes::JUMPI => {
-                jump_target = state.stack.pop();
-                condition = state.stack.pop();
-                if jump_target.is_none() || condition.is_none() {
-                    return None
-                }
-            }
-            opcodes::PUSH0 => state.stack.push(AbstractValue::constant(U256::ZERO)),
-            opcodes::PUSH1..=opcodes::PUSH32 => {
-                state.stack.push(AbstractValue::constant(instruction.push_value()?));
-            }
-            opcodes::POP => {
-                state.stack.pop()?;
-            }
-            opcodes::DUP1..=opcodes::DUP16 => {
-                let index = (instruction.opcode - opcodes::DUP1) as usize;
-                state.stack.push(state.stack.peek(index)?);
-            }
-            opcodes::SWAP1..=opcodes::SWAP16 => {
-                let index = (instruction.opcode - opcodes::SWAP1 + 1) as usize;
-                if !state.stack.swap(index) {
-                    return None
-                }
-            }
-            opcodes::PC => state.stack.push(AbstractValue::constant(U256::from(instruction.pc))),
-            opcodes::CODESIZE => {
-                state.stack.push(AbstractValue::constant(U256::from(program.bytecode.len())));
-            }
-            opcodes::JUMPDEST => {}
-            opcode => {
-                let info = OpCodeInfo::from(opcode);
-                if !state.stack.pop_n(info.inputs() as usize) {
-                    return None
-                }
-                for _ in 0..info.outputs() {
-                    state.stack.push(AbstractValue::Unknown);
-                }
-            }
-        }
-    }
-
-    if matches!(block.terminator, BlockTerminator::Jump | BlockTerminator::ConditionalJump) &&
-        jump_target.is_none()
-    {
-        return None
-    }
-
-    Some(BlockExit { state, jump_target, condition })
-}
-
-fn successors(
-    program: &Program,
-    block_id: BlockId,
-    exit: &BlockExit,
-    result: &mut AbstractCfg,
-) -> Vec<Successor> {
-    let block = &program.blocks[block_id.index()];
-    let (take_true, take_false) = branch_feasibility(exit.condition.as_ref());
-    let mut successors = Vec::new();
-
-    if take_true &&
-        matches!(block.terminator, BlockTerminator::Jump | BlockTerminator::ConditionalJump)
-    {
-        let kind = if block.terminator == BlockTerminator::ConditionalJump {
-            AbstractEdgeKind::ConditionalTrue
-        } else {
-            AbstractEdgeKind::Jump
-        };
-        match exit.jump_target.as_ref() {
-            Some(AbstractValue::Known(targets)) => {
-                for target in targets {
-                    match usize::try_from(*target).ok().and_then(|pc| program.block_at(pc)) {
-                        Some(target_block) if program.is_valid_jumpdest(target_block.start_pc) => {
-                            successors.push(Successor {
-                                target: target_block.id,
-                                kind,
-                                state: exit.state.clone(),
-                            });
-                        }
-                        _ => {
-                            result.invalid_jump_blocks.insert(block_id);
-                        }
-                    }
-                }
-            }
-            Some(AbstractValue::Unknown) | None => {
-                // Retain locally-known direct edges from the structural frontend as a fallback.
-                let mut resolved = false;
-                for edge in &block.static_edges {
-                    if edge.kind == EdgeKind::Jump {
-                        resolved = true;
-                        successors.push(Successor {
-                            target: edge.target,
-                            kind,
-                            state: exit.state.clone(),
-                        });
-                    }
-                }
-                if !resolved {
-                    result.unresolved_jumps.insert(block_id);
-                }
-            }
-        }
-    }
-
-    if take_false && block.terminator == BlockTerminator::ConditionalJump {
-        if let Some(edge) =
-            block.static_edges.iter().find(|edge| edge.kind == EdgeKind::ConditionalFalse)
-        {
-            successors.push(Successor {
-                target: edge.target,
-                kind: AbstractEdgeKind::ConditionalFalse,
-                state: exit.state.clone(),
-            });
-        }
-    } else if block.terminator == BlockTerminator::Fallthrough {
-        if let Some(edge) =
-            block.static_edges.iter().find(|edge| edge.kind == EdgeKind::Fallthrough)
-        {
-            successors.push(Successor {
-                target: edge.target,
-                kind: AbstractEdgeKind::Fallthrough,
-                state: exit.state.clone(),
-            });
-        }
-    }
-
-    successors
-}
-
-fn branch_feasibility(condition: Option<&AbstractValue>) -> (bool, bool) {
-    match condition {
-        None => (true, false),
-        Some(AbstractValue::Unknown) => (true, true),
-        Some(AbstractValue::Known(values)) => {
-            (values.iter().any(|value| !value.is_zero()), values.contains(&U256::ZERO))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::hardfork::HardFork;
+    use alloy::primitives::U256;
+    use crate::core::{hardfork::HardFork, opcodes};
 
     fn program(bytecode: &[u8]) -> Program {
         Program::decode(bytecode, HardFork::Latest)
