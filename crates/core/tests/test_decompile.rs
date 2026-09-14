@@ -513,6 +513,10 @@ mod integration_tests {
 
         let result = decompile(args).await.expect("failed to decompile");
 
+        assert!(!result.canonical_analysis.program.blocks.is_empty());
+        assert!(!result.canonical_analysis.cfg.entry_states.is_empty());
+        assert!(!result.canonical_analysis.function_entries.is_empty());
+
         // Check that the standard ABI is valid
         let abi_serialized = serde_json::to_string(&result.abi).unwrap();
         let abi_deserialized = JsonAbi::from_json_str(&abi_serialized);
