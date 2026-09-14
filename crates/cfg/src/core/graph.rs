@@ -2,15 +2,77 @@ use alloy::primitives::U256;
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::{
-    core::opcodes::{opcode_name, JUMPDEST},
+    core::{
+        context::{ContextualCfg, ContextualEdgeKind},
+        opcodes::{opcode_name, JUMPDEST},
+        program::{BlockId, Program},
+    },
     ext::exec::VMTrace,
 };
 use petgraph::{matrix_graph::NodeIndex, Graph};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-/// convert a symbolic execution [`VMTrace`] into a [`Graph`] of blocks, illustrating the
-/// control-flow graph found by the symbolic execution engine.
-pub(crate) fn build_cfg(
+/// Convert canonical contextual analysis into a block-level control-flow graph.
+///
+/// Multiple calling contexts are intentionally projected onto one canonical basic-block node.
+/// Context-distinct duplicate edges are collapsed while retaining distinct true/false edge kinds.
+pub(crate) fn build_canonical_cfg(
+    program: &Program,
+    analysis: &ContextualCfg,
+) -> Graph<String, String> {
+    let reachable = analysis.entry_states.keys().map(|point| point.block).collect::<BTreeSet<_>>();
+    let mut graph = Graph::new();
+    let nodes = program
+        .blocks
+        .iter()
+        .filter(|block| reachable.contains(&block.id))
+        .map(|block| {
+            let label = program
+                .block_instructions(block.id)
+                .iter()
+                .map(format_instruction)
+                .collect::<Vec<_>>()
+                .join("\n") +
+                "\n";
+            (block.id, graph.add_node(label))
+        })
+        .collect::<BTreeMap<BlockId, _>>();
+
+    let edges = analysis
+        .edges
+        .iter()
+        .map(|edge| (edge.source.block, edge.target.block, edge.kind))
+        .collect::<BTreeSet<_>>();
+    for (source, target, kind) in edges {
+        let (Some(&source), Some(&target)) = (nodes.get(&source), nodes.get(&target)) else {
+            continue
+        };
+        let label = match kind {
+            ContextualEdgeKind::ConditionalFalse => "false",
+            ContextualEdgeKind::ConditionalTrue => "true",
+            ContextualEdgeKind::Fallthrough | ContextualEdgeKind::Jump => "",
+        };
+        graph.add_edge(source, target, label.to_owned());
+    }
+
+    graph
+}
+
+fn format_instruction(instruction: &heimdall_vm::core::program::DecodedInstruction) -> String {
+    let operand = instruction
+        .push_value()
+        .map(|value| format!(" {}", encode_hex_reduced(value)))
+        .unwrap_or_default();
+    format!(
+        "{} {}{}",
+        encode_hex_reduced(U256::from(instruction.pc)),
+        opcode_name(instruction.opcode),
+        operand
+    )
+}
+
+/// Convert a legacy recursive symbolic execution [`VMTrace`] into a graph.
+pub(crate) fn build_legacy_cfg(
     vm_trace: &VMTrace,
     contract_cfg: &mut Graph<String, String>,
     parent_node: Option<NodeIndex<u32>>,
@@ -66,7 +128,7 @@ pub(crate) fn build_cfg(
 
     // recurse into the children of the VMTrace map
     for child in vm_trace.children.iter() {
-        build_cfg(
+        build_legacy_cfg(
             child,
             contract_cfg,
             parent_node,
@@ -88,6 +150,7 @@ pub(crate) fn build_cfg(
 mod tests {
     use super::*;
     use crate::{cfg, CfgArgsBuilder};
+    use heimdall_vm::core::{context::analyze_contextual, hardfork::HardFork, opcodes};
     use tokio::test;
 
     #[test]
@@ -98,8 +161,50 @@ mod tests {
 
         let result = cfg(args).await?;
 
-        println!("Contract Cfg: {:#?}", result);
+        assert!(result.diagnostics.canonical);
+        assert_eq!(result.diagnostics.reachable_blocks, result.graph.node_count());
+        assert_eq!(result.diagnostics.graph_edges, result.graph.edge_count());
 
         Ok(())
+    }
+
+    #[test]
+    async fn legacy_graph_remains_available_explicitly() {
+        let result = cfg(CfgArgsBuilder::new()
+            .target("0x60006000fd".to_owned())
+            .legacy(true)
+            .build()
+            .expect("valid arguments"))
+        .await
+        .expect("legacy cfg");
+
+        assert!(!result.diagnostics.canonical);
+        assert_eq!(result.diagnostics.reachable_blocks, result.graph.node_count());
+    }
+
+    #[test]
+    async fn canonical_graph_projects_contextual_edges_onto_blocks() {
+        let program = Program::decode(
+            &[
+                opcodes::CALLVALUE,
+                opcodes::PUSH1,
+                6,
+                opcodes::JUMPI,
+                opcodes::STOP,
+                opcodes::INVALID,
+                opcodes::JUMPDEST,
+                opcodes::STOP,
+            ],
+            HardFork::Latest,
+        );
+        let analysis = analyze_contextual(&program);
+        let graph = build_canonical_cfg(&program, &analysis);
+        let labels =
+            graph.edge_references().map(|edge| edge.weight().as_str()).collect::<BTreeSet<_>>();
+
+        assert_eq!(graph.node_count(), 3);
+        assert_eq!(graph.edge_count(), 2);
+        assert_eq!(labels, BTreeSet::from(["false", "true"]));
+        assert!(graph.node_weights().any(|label| label.starts_with("0x06 JUMPDEST")));
     }
 }

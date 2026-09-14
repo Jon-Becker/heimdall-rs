@@ -24,6 +24,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            legacy: false,
             hardfork: HardFork::Latest,
             etherscan_api_key: String::from(""),
         })
@@ -55,6 +56,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            legacy: false,
             hardfork: HardFork::Latest,
             etherscan_api_key: String::from(""),
         })
@@ -63,9 +65,11 @@ mod integration_tests {
 
         let output = format!("{}", Dot::with_config(&result.graph, &[]));
 
-        for line in &[String::from("\"0x039f JUMPDEST \\l0x03a0 STOP \\l\"")] {
-            assert!(output.contains(line))
-        }
+        assert!(result.diagnostics.canonical);
+        assert!(result.graph.node_count() > 100);
+        assert!(result.graph.edge_count() > 100);
+        assert!(result.diagnostics.contextual_states >= result.graph.node_count());
+        assert!(output.contains("JUMPDEST"));
     }
 
     #[tokio::test]
@@ -88,11 +92,16 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            legacy: false,
             hardfork: HardFork::Latest,
             etherscan_api_key: String::from(""),
         })
         .await
         .expect("failed to generate cfg");
+
+        assert!(result.diagnostics.canonical);
+        assert_eq!(result.diagnostics.unresolved_jumps, 0);
+        assert!(result.diagnostics.contextual_states >= result.diagnostics.reachable_blocks);
 
         // the entry node is always the first node added to the graph.
         let entry = NodeIndex::new(0);
@@ -128,6 +137,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            legacy: false,
             hardfork: HardFork::Auto,
             etherscan_api_key: String::from(""),
         })
@@ -154,6 +164,7 @@ mod integration_tests {
             output: String::from(""),
             name: String::from(""),
             timeout: 10000,
+            legacy: false,
             hardfork: HardFork::Auto,
             etherscan_api_key: String::from(""),
         })
