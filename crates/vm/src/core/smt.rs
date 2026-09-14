@@ -411,6 +411,7 @@ mod tests {
             inputs,
             output: 0,
             state_version: None,
+            effect_site: None,
         }))
     }
 

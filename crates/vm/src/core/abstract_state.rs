@@ -415,6 +415,7 @@ mod tests {
             inputs: vec![],
             output: 0,
             state_version: None,
+            effect_site: None,
         }));
         let value = AbstractValue::constant(U256::from(7));
         storage.store(
