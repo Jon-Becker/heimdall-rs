@@ -16,10 +16,11 @@ use alloy::primitives::U256;
 use super::smt::{SmtConfig, SmtRefiner, SmtStats};
 pub use super::symbolic::{AbstractValue, ExprId, ExpressionArena, ExpressionNode};
 use super::{
+    abstract_state::{AbstractStateSpaces, StateVersionArena},
     facts::{condition_may_be, PathFacts},
     opcodes::{self, OpCodeInfo},
     program::{BlockId, BlockTerminator, EdgeKind, Program},
-    symbolic::operation_result,
+    symbolic::{operation_result, stateful_operation_result},
 };
 
 /// Default maximum number of alternatives retained for one abstract value before widening.
@@ -111,6 +112,8 @@ pub struct AbstractState {
     pub stack: AbstractStack,
     /// Predicates known to hold on this path.
     pub facts: PathFacts,
+    /// Versioned memory, storage, and transient storage.
+    pub state: AbstractStateSpaces,
 }
 
 impl AbstractState {
@@ -121,13 +124,19 @@ impl AbstractState {
 
     /// Construct a state with an explicit abstract stack.
     pub fn with_stack(stack: AbstractStack) -> Self {
-        Self { stack, facts: PathFacts::new() }
+        Self { stack, facts: PathFacts::new(), state: AbstractStateSpaces::default() }
     }
 
-    pub(crate) fn join(&self, other: &Self, max_values: usize) -> Self {
+    pub(crate) fn join(
+        &self,
+        other: &Self,
+        max_values: usize,
+        state_versions: &mut StateVersionArena,
+    ) -> Self {
         Self {
             stack: self.stack.join(&other.stack, max_values),
             facts: self.facts.join(&other.facts),
+            state: self.state.join(&other.state, max_values, state_versions),
         }
     }
 }
@@ -181,6 +190,8 @@ impl Default for AnalysisConfig {
 pub struct AbstractCfg {
     /// Hash-consed symbolic expressions referenced by abstract states.
     pub expressions: ExpressionArena,
+    /// Persistent versions referenced by memory and storage expressions.
+    pub state_versions: StateVersionArena,
     /// Joined abstract state at every reachable block entry.
     pub entry_states: HashMap<BlockId, AbstractState>,
     /// Reachable, resolved control-flow edges.
@@ -238,6 +249,7 @@ pub fn analyze_from(
             block_id,
             entry_state,
             &mut result.expressions,
+            &mut result.state_versions,
             config.max_value_set,
         ) else {
             result.invalid_stack_blocks.insert(block_id);
@@ -261,7 +273,11 @@ pub fn analyze_from(
             result.edges.insert(edge);
             let changed = match result.entry_states.get(&successor.target) {
                 Some(previous) => {
-                    let joined = previous.join(&successor.state, config.max_value_set);
+                    let joined = previous.join(
+                        &successor.state,
+                        config.max_value_set,
+                        &mut result.state_versions,
+                    );
                     if &joined == previous {
                         false
                     } else {
@@ -306,6 +322,7 @@ pub(crate) fn execute_block(
     block_id: BlockId,
     mut state: AbstractState,
     expressions: &mut ExpressionArena,
+    state_versions: &mut StateVersionArena,
     max_values: usize,
 ) -> Option<BlockExit> {
     let block = &program.blocks[block_id.index()];
@@ -315,6 +332,91 @@ pub(crate) fn execute_block(
 
     for instruction in instructions {
         match instruction.opcode {
+            opcodes::MLOAD => {
+                let key = state.stack.pop()?;
+                let value = state.state.memory.load(&key).cloned().unwrap_or_else(|| {
+                    stateful_operation_result(
+                        instruction,
+                        vec![key],
+                        state.state.memory.version,
+                        expressions,
+                    )
+                });
+                state.stack.push(value);
+            }
+            opcodes::MSTORE | opcodes::MSTORE8 => {
+                let key = state.stack.pop()?;
+                let value = state.stack.pop()?;
+                state.state.memory.store(
+                    key,
+                    Some(value),
+                    Some(if instruction.opcode == opcodes::MSTORE { 32 } else { 1 }),
+                    state_versions,
+                );
+            }
+            opcodes::SLOAD => {
+                let key = state.stack.pop()?;
+                let value = state.state.storage.load(&key).cloned().unwrap_or_else(|| {
+                    stateful_operation_result(
+                        instruction,
+                        vec![key],
+                        state.state.storage.version,
+                        expressions,
+                    )
+                });
+                state.stack.push(value);
+            }
+            opcodes::SSTORE => {
+                let key = state.stack.pop()?;
+                let value = state.stack.pop()?;
+                state.state.storage.store(key, Some(value), Some(32), state_versions);
+            }
+            opcodes::TLOAD => {
+                let key = state.stack.pop()?;
+                let value =
+                    state.state.transient_storage.load(&key).cloned().unwrap_or_else(|| {
+                        stateful_operation_result(
+                            instruction,
+                            vec![key],
+                            state.state.transient_storage.version,
+                            expressions,
+                        )
+                    });
+                state.stack.push(value);
+            }
+            opcodes::TSTORE => {
+                let key = state.stack.pop()?;
+                let value = state.stack.pop()?;
+                state.state.transient_storage.store(key, Some(value), Some(32), state_versions);
+            }
+            opcodes::SHA3 => {
+                let inputs = state.stack.pop_n(2)?;
+                state.stack.push(stateful_operation_result(
+                    instruction,
+                    inputs,
+                    state.state.memory.version,
+                    expressions,
+                ));
+            }
+            opcodes::CALLDATACOPY |
+            opcodes::CODECOPY |
+            opcodes::RETURNDATACOPY |
+            opcodes::MCOPY => {
+                let inputs = state.stack.pop_n(3)?;
+                state.state.memory.havoc(
+                    inputs[0].clone(),
+                    exact_usize(&inputs[2]),
+                    state_versions,
+                );
+            }
+            opcodes::EXTCODECOPY => {
+                let inputs = state.stack.pop_n(4)?;
+                state.state.memory.havoc(
+                    inputs[1].clone(),
+                    exact_usize(&inputs[3]),
+                    state_versions,
+                );
+            }
             opcodes::JUMP => jump_target = state.stack.pop(),
             opcodes::JUMPI => {
                 jump_target = state.stack.pop();
@@ -368,6 +470,14 @@ pub(crate) fn execute_block(
     }
 
     Some(BlockExit { state, jump_target, condition })
+}
+
+fn exact_usize(value: &AbstractValue) -> Option<usize> {
+    value
+        .known_values()
+        .filter(|values| values.len() == 1)
+        .and_then(|values| values.first())
+        .and_then(|value| usize::try_from(*value).ok())
 }
 
 fn successors(
@@ -666,6 +776,89 @@ mod tests {
         let left = AbstractValue::Known(BTreeSet::from([U256::from(1), U256::from(2)]));
         let right = AbstractValue::Known(BTreeSet::from([U256::from(3), U256::from(4)]));
         assert_eq!(left.join(&right, 3), AbstractValue::Unknown);
+    }
+
+    #[test]
+    fn forwards_memory_words_through_versioned_state() {
+        let program = program(&[
+            opcodes::PUSH1,
+            42,
+            opcodes::PUSH1,
+            0,
+            opcodes::MSTORE,
+            opcodes::PUSH1,
+            0,
+            opcodes::MLOAD,
+            opcodes::PUSH1,
+            12,
+            opcodes::JUMP,
+            opcodes::STOP,
+            opcodes::JUMPDEST,
+            opcodes::STOP,
+        ]);
+        let cfg = analyze(&program);
+        let target = program.block_at(12).expect("jump target").id;
+
+        assert_eq!(
+            cfg.entry_states[&target].stack.values()[0].known_values(),
+            Some(&BTreeSet::from([U256::from(42)]))
+        );
+    }
+
+    #[test]
+    fn storage_reads_reference_the_current_version() {
+        let program = program(&[
+            opcodes::PUSH0,
+            opcodes::SLOAD,
+            opcodes::POP,
+            opcodes::PUSH1,
+            1,
+            opcodes::PUSH0,
+            opcodes::SSTORE,
+            opcodes::PUSH1,
+            1,
+            opcodes::SLOAD,
+            opcodes::PUSH1,
+            14,
+            opcodes::JUMP,
+            opcodes::STOP,
+            opcodes::JUMPDEST,
+            opcodes::STOP,
+        ]);
+        let cfg = analyze(&program);
+        let target = program.block_at(14).expect("jump target").id;
+        let expression = *cfg.entry_states[&target].stack.values()[0]
+            .expressions()
+            .expect("versioned storage read")
+            .first()
+            .expect("one expression");
+        let node = cfg.expressions.get(expression).expect("expression node");
+
+        assert_eq!(node.opcode, opcodes::SLOAD);
+        assert_ne!(
+            node.state_version,
+            Some(cfg.state_versions.initial(crate::core::abstract_state::StateDomain::Storage))
+        );
+    }
+
+    #[test]
+    fn storage_writing_loop_reaches_a_version_fixpoint() {
+        let program = program(&[
+            opcodes::JUMPDEST,
+            opcodes::PUSH1,
+            1,
+            opcodes::PUSH1,
+            0,
+            opcodes::SSTORE,
+            opcodes::PUSH1,
+            0,
+            opcodes::JUMP,
+        ]);
+        let cfg = analyze(&program);
+
+        assert_eq!(cfg.entry_states.len(), 1);
+        assert_eq!(cfg.edges.len(), 1);
+        assert!(cfg.state_versions.version_count() < 32);
     }
 
     #[test]
