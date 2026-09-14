@@ -144,8 +144,8 @@ pub fn analyze_from(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy::primitives::U256;
     use crate::core::{hardfork::HardFork, opcodes};
+    use alloy::primitives::U256;
 
     fn program(bytecode: &[u8]) -> Program {
         Program::decode(bytecode, HardFork::Latest)
