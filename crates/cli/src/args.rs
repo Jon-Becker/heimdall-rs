@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
 
+use crate::strings::StringsArgs;
+
 use clap::{ArgAction, Args, ValueEnum};
 use heimdall_cache::CacheArgs;
 use heimdall_config::ConfigArgs;
@@ -37,6 +39,9 @@ pub(crate) struct Arguments {
 pub(crate) enum Subcommands {
     #[clap(name = "disassemble", about = "Disassemble EVM bytecode to assembly")]
     Disassemble(DisassemblerArgs),
+
+    #[clap(name = "strings", about = "Extract printable ASCII strings from bytecode")]
+    Strings(StringsArgs),
 
     #[clap(name = "decompile", about = "Decompile EVM bytecode to Solidity")]
     Decompile(DecompilerArgs),

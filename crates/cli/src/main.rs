@@ -2,6 +2,7 @@
 
 pub(crate) mod args;
 pub(crate) mod output;
+mod strings;
 
 use args::{Arguments, Subcommands};
 use clap::Parser;
@@ -29,6 +30,11 @@ async fn main() -> Result<()> {
     // setup logging
     let _ = args.logs.init_tracing();
 
+    // Local string extraction should not require configuration or a version-check request.
+    if let Subcommands::Strings(cmd) = &args.sub {
+        return strings::run(cmd).await;
+    }
+
     // spawn a new tokio runtime to get remote version while the main runtime is running
     let current_version = current_version();
     let remote_ver = if current_version.is_nightly() {
@@ -40,6 +46,7 @@ async fn main() -> Result<()> {
     let configuration =
         Configuration::load().map_err(|e| eyre!("failed to load configuration: {}", e))?;
     match args.sub {
+        Subcommands::Strings(_) => unreachable!("strings is handled before the version check"),
         Subcommands::Disassemble(mut cmd) => {
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {
