@@ -70,3 +70,7 @@ harness = false
 [[bench]]
 name = "bench_inspect"
 harness = false
+
+[[bench]]
+name = "bench_strings"
+harness = false
