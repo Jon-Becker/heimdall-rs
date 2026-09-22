@@ -12,7 +12,7 @@ fn strings(args: &[&str]) -> std::process::Output {
 
 #[test]
 fn extracts_hex_with_and_without_prefix() {
-    for target in ["0x48656c6c6f00776f726c64", "48656c6c6f00776f726c64"] {
+    for target in ["0x6448656c6c6f0064776f726c64", "6448656c6c6f0064776f726c64"] {
         let output = strings(&[target]);
         assert!(output.status.success(), "{:?}", output);
         assert_eq!(output.stdout, b"Hello\nworld\n");
@@ -23,7 +23,7 @@ fn extracts_hex_with_and_without_prefix() {
 #[test]
 fn extracts_hex_file() {
     let path = std::env::temp_dir().join(format!("heimdall-strings-{}.hex", std::process::id()));
-    fs::write(&path, "0x48656c6c6f00\n776f726c64\n").unwrap();
+    fs::write(&path, "0x6448656c6c6f00\n64776f726c64\n").unwrap();
     let output = strings(&[path.to_str().unwrap()]);
     fs::remove_file(path).unwrap();
     assert!(output.status.success(), "{:?}", output);
@@ -32,7 +32,7 @@ fn extracts_hex_file() {
 
 #[test]
 fn supports_custom_minimum_length() {
-    let output = strings(&["0x616200616263640078797a", "-n", "3"]);
+    let output = strings(&["0x61616263616263646278797a", "-n", "3"]);
     assert!(output.status.success(), "{:?}", output);
     assert_eq!(output.stdout, b"abcd\nxyz\n");
 }
@@ -64,6 +64,7 @@ fn documents_strings_in_cli_help() {
     let help = String::from_utf8(output.stdout).unwrap();
     assert!(help.contains("--min-length"));
     assert!(help.contains("--rpc-url"));
+    assert!(help.contains("--full-scan"));
 }
 
 #[test]
@@ -93,5 +94,35 @@ fn extracts_real_contract_bytecode() {
         let expected: Vec<String> = serde_json::from_str(expected).unwrap();
         assert_eq!(output.stdout, format!("{}\n", expected.join("\n")).as_bytes(), "{name}");
         assert!(output.stderr.is_empty(), "{name}: {output:?}");
+    }
+}
+
+#[test]
+fn full_scan_includes_bytes_outside_push_payloads() {
+    let target = "0x4142434400";
+    let output = strings(&[target]);
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty());
+    let output = strings(&[target, "--full-scan"]);
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"ABCD\n");
+}
+
+#[test]
+fn full_scan_matches_real_contract_snapshots() {
+    for (name, expected) in [
+        (
+            "uniswap_v2_usdc_weth",
+            include_str!("../../core/tests/testdata/strings/uniswap_v2_usdc_weth.full_scan.json"),
+        ),
+        ("dai", include_str!("../../core/tests/testdata/strings/dai.full_scan.json")),
+    ] {
+        let target =
+            format!("{}/../core/tests/testdata/strings/{name}.hex", env!("CARGO_MANIFEST_DIR"));
+        let output = strings(&[&target, "--full-scan"]);
+        assert!(output.status.success(), "{name}: {output:?}");
+        let expected: Vec<String> = serde_json::from_str(expected).unwrap();
+        assert_eq!(output.stdout, format!("{}\n", expected.join("\n")).as_bytes(), "{name}");
+        assert!(output.stderr.is_empty());
     }
 }

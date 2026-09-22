@@ -2,18 +2,19 @@
 
 use heimdall_common::ether::bytecode::{get_bytecode_from_target, write_strings};
 
-async fn extract_fixture(name: &str, min_length: usize) -> Vec<u8> {
+async fn extract_fixture(name: &str, min_length: usize, full_scan: bool) -> Vec<u8> {
     let target = format!("{}/tests/testdata/strings/{name}.hex", env!("CARGO_MANIFEST_DIR"));
     let bytecode =
         get_bytecode_from_target(&target, "", "").await.expect("failed to load bytecode");
     let mut output = Vec::new();
-    write_strings(&bytecode, min_length, &mut output).expect("failed to extract strings");
+    write_strings(&bytecode, min_length, full_scan, &mut output)
+        .expect("failed to extract strings");
     output
 }
 
 #[tokio::test]
 async fn test_strings_uniswap_v2() {
-    let output = extract_fixture("uniswap_v2_usdc_weth", 4).await;
+    let output = extract_fixture("uniswap_v2_usdc_weth", 4, false).await;
     let expected: Vec<String> =
         serde_json::from_str(include_str!("testdata/strings/uniswap_v2_usdc_weth.json")).unwrap();
     assert_eq!(output, format!("{}\n", expected.join("\n")).as_bytes());
@@ -24,7 +25,7 @@ async fn test_strings_uniswap_v2() {
 
 #[tokio::test]
 async fn test_strings_dai() {
-    let output = extract_fixture("dai", 4).await;
+    let output = extract_fixture("dai", 4, false).await;
     let expected: Vec<String> =
         serde_json::from_str(include_str!("testdata/strings/dai.json")).unwrap();
     assert_eq!(output, format!("{}\n", expected.join("\n")).as_bytes());
@@ -45,6 +46,24 @@ async fn test_strings_real_contracts_minimum_length() {
             .filter(|line| line.len() >= 16)
             .map(|line| format!("{line}\n"))
             .collect();
-        assert_eq!(extract_fixture(name, 16).await, expected.as_bytes(), "{name}");
+        assert_eq!(extract_fixture(name, 16, false).await, expected.as_bytes(), "{name}");
+    }
+}
+
+#[tokio::test]
+async fn test_strings_real_contracts_full_scan() {
+    for (name, expected) in [
+        (
+            "uniswap_v2_usdc_weth",
+            include_str!("testdata/strings/uniswap_v2_usdc_weth.full_scan.json"),
+        ),
+        ("dai", include_str!("testdata/strings/dai.full_scan.json")),
+    ] {
+        let expected: Vec<String> = serde_json::from_str(expected).unwrap();
+        assert_eq!(
+            extract_fixture(name, 4, true).await,
+            format!("{}\n", expected.join("\n")).as_bytes(),
+            "{name}"
+        );
     }
 }
