@@ -6,7 +6,10 @@ use std::{
 use alloy::primitives::Address;
 use clap::Args;
 use eyre::{Result, WrapErr};
-use heimdall_common::ether::{bytecode::get_bytecode_from_target, rpc::get_code};
+use heimdall_common::ether::{
+    bytecode::{get_bytecode_from_target, write_strings},
+    rpc::get_code,
+};
 use heimdall_config::{parse_url_arg, Configuration};
 
 #[derive(Debug, Args)]
@@ -41,16 +44,6 @@ pub(crate) async fn run(args: &StringsArgs) -> Result<()> {
         Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
         result => result.wrap_err("failed to write strings"),
     }
-}
-
-fn write_strings(bytecode: &[u8], min_length: usize, output: &mut impl Write) -> io::Result<()> {
-    for string in bytecode.split(|byte| !(b' '..=b'~').contains(byte)) {
-        if string.len() >= min_length {
-            output.write_all(string)?;
-            output.write_all(b"\n")?;
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]

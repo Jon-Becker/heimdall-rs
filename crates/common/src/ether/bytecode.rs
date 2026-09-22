@@ -5,7 +5,10 @@ use crate::utils::strings::decode_hex;
 use super::{etherscan::get_creation_bytecode, rpc::get_code};
 use alloy::primitives::{bytes::Bytes, Address};
 use eyre::{eyre, Result};
-use std::fs;
+use std::{
+    fs,
+    io::{self, Write},
+};
 use tracing::{debug, info, warn};
 
 /// Given a target, return bytecode of the target.
@@ -82,6 +85,25 @@ pub async fn get_bytecode_from_target(
         }
         Err(_) => Err(eyre!("invalid target")),
     }
+}
+
+/// Writes printable ASCII runs from bytecode, one per line, in their original order.
+///
+/// Scans all bytes, including instructions and metadata. Runs shorter than `min_length`
+/// and empty runs are omitted. Matching slices are written directly without allocation.
+/// Output errors are propagated to the caller.
+pub fn write_strings(
+    bytecode: &[u8],
+    min_length: usize,
+    output: &mut impl Write,
+) -> io::Result<()> {
+    for string in bytecode.split(|byte| !(b' '..=b'~').contains(byte)) {
+        if !string.is_empty() && string.len() >= min_length {
+            output.write_all(string)?;
+            output.write_all(b"\n")?;
+        }
+    }
+    Ok(())
 }
 
 /// Removes pushed bytes from the bytecode, leaving only the instructions

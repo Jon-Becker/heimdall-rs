@@ -76,3 +76,22 @@ fn reports_rpc_connection_errors() {
     assert!(error.contains("failed to load bytecode"), "{error}");
     assert!(!error.contains("panicked"), "{error}");
 }
+
+#[test]
+fn extracts_real_contract_bytecode() {
+    for (name, expected) in [
+        (
+            "uniswap_v2_usdc_weth",
+            include_str!("../../core/tests/testdata/strings/uniswap_v2_usdc_weth.json"),
+        ),
+        ("dai", include_str!("../../core/tests/testdata/strings/dai.json")),
+    ] {
+        let target =
+            format!("{}/../core/tests/testdata/strings/{name}.hex", env!("CARGO_MANIFEST_DIR"));
+        let output = strings(&[&target]);
+        assert!(output.status.success(), "{name}: {output:?}");
+        let expected: Vec<String> = serde_json::from_str(expected).unwrap();
+        assert_eq!(output.stdout, format!("{}\n", expected.join("\n")).as_bytes(), "{name}");
+        assert!(output.stderr.is_empty(), "{name}: {output:?}");
+    }
+}
