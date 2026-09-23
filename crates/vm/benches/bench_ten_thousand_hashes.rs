@@ -16,7 +16,7 @@ fn test_ten_thousand_hashes(c: &mut Criterion) {
         b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
             // build the evm
             let mut evm = VM::new(
-                &decode_hex(include_str!("./testdata/ten_thousand_hashes.hex"))
+                &decode_hex(include_str!("../../core/tests/testdata/vm/ten_thousand_hashes.hex"))
                     .expect("invalid bytecode"),
                 &[],
                 Address::default(),

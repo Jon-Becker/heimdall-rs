@@ -159,7 +159,7 @@ mod tests {
         });
 
         let bytecode = get_bytecode_from_target(
-            "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+            include_str!("../../../core/tests/testdata/common/zero_bytecode.hex"),
             &rpc_url,
             "",
         )
@@ -177,7 +177,7 @@ mod tests {
         });
 
         let file_path = "./mock-file.txt";
-        let mock_bytecode = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001";
+        let mock_bytecode = include_str!("../../../core/tests/testdata/common/zero_bytecode.hex");
 
         fs::write(file_path, mock_bytecode).expect("failed to write mock bytecode to file");
 

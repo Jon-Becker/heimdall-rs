@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Assembly snapshots preserve the disassembler's spaces before line breaks.
+crates/core/tests/testdata/disassemble/*.asm whitespace=-blank-at-eol

@@ -16,8 +16,12 @@ fn test_erc20_transfer(c: &mut Criterion) {
         b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
             // build the evm
             let mut evm = VM::new(
-                &decode_hex(include_str!("./testdata/weth9.hex")).expect("invalid bytecode"),
-                &decode_hex("0xa9059cbb0000000000000000000000006666666b0B46056247E7D6cbdb78287F4D12574d0000000000000000000000000000000000000000000000000000000000000000").expect("invalid calldata"),
+                &decode_hex(include_str!("../../core/tests/testdata/vm/weth9.hex"))
+                    .expect("invalid bytecode"),
+                &decode_hex(include_str!(
+                    "../../core/tests/testdata/vm/erc20_transfer_calldata.hex"
+                ))
+                .expect("invalid calldata"),
                 Address::default(),
                 Address::default(),
                 Address::default(),

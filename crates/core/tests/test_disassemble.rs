@@ -9,8 +9,8 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_disassemble_nominal() {
-        let bytecode = "366000600037611000600036600073";
-        let expected = String::from("000000 CALLDATASIZE \n000001 PUSH1 00\n000003 PUSH1 00\n000005 CALLDATACOPY \n000006 PUSH2 1000\n000009 PUSH1 00\n00000b CALLDATASIZE \n00000c PUSH1 00\n");
+        let bytecode = include_str!("testdata/disassemble/nominal.hex");
+        let expected = String::from(include_str!("testdata/disassemble/nominal.asm"));
 
         let assembly = disassemble(DisassemblerArgs {
             target: bytecode.to_owned(),
@@ -29,8 +29,9 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_disassemble_decimal_counter_nominal() {
-        let bytecode = "366000600037611000600036600073";
-        let expected = String::from("0 CALLDATASIZE \n1 PUSH1 00\n3 PUSH1 00\n5 CALLDATACOPY \n6 PUSH2 1000\n9 PUSH1 00\n11 CALLDATASIZE \n12 PUSH1 00\n");
+        let bytecode = include_str!("testdata/disassemble/nominal.hex");
+        let expected =
+            String::from(include_str!("testdata/disassemble/decimal_counter_nominal.asm"));
 
         let assembly = disassemble(DisassemblerArgs {
             target: bytecode.to_owned(),
@@ -49,8 +50,8 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_disassemble_20_byte_non_address() {
-        let bytecode = "608060405234801561000f575f5ffd5b50600400";
-        let expected = String::from("000000 PUSH1 80\n000002 PUSH1 40\n000004 MSTORE \n000005 CALLVALUE \n000006 DUP1 \n000007 ISZERO \n000008 PUSH2 000f\n00000b JUMPI \n00000c PUSH0 \n00000d PUSH0 \n00000e REVERT \n00000f JUMPDEST \n000010 POP \n000011 PUSH1 04\n000013 STOP \n");
+        let bytecode = include_str!("testdata/disassemble/20_byte_non_address.hex");
+        let expected = String::from(include_str!("testdata/disassemble/20_byte_non_address.asm"));
 
         let assembly = disassemble(DisassemblerArgs {
             target: bytecode.to_owned(),
@@ -69,8 +70,9 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_disassemble_with_custom_output() {
-        let bytecode = "366000600037611000600036600073";
-        let expected = String::from("0 CALLDATASIZE \n1 PUSH1 00\n3 PUSH1 00\n5 CALLDATACOPY \n6 PUSH2 1000\n9 PUSH1 00\n11 CALLDATASIZE \n12 PUSH1 00\n");
+        let bytecode = include_str!("testdata/disassemble/nominal.hex");
+        let expected =
+            String::from(include_str!("testdata/disassemble/decimal_counter_nominal.asm"));
 
         let assembly = disassemble(DisassemblerArgs {
             target: bytecode.to_owned(),
@@ -89,8 +91,9 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_disassemble_silent() {
-        let bytecode = "366000600037611000600036600073";
-        let expected = String::from("0 CALLDATASIZE \n1 PUSH1 00\n3 PUSH1 00\n5 CALLDATACOPY \n6 PUSH2 1000\n9 PUSH1 00\n11 CALLDATASIZE \n12 PUSH1 00\n");
+        let bytecode = include_str!("testdata/disassemble/nominal.hex");
+        let expected =
+            String::from(include_str!("testdata/disassemble/decimal_counter_nominal.asm"));
 
         let assembly = disassemble(DisassemblerArgs {
             target: bytecode.to_owned(),
@@ -109,8 +112,9 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_disassemble_from_file() {
-        let bytecode = "366000600037611000600036600073";
-        let expected = String::from("0 CALLDATASIZE \n1 PUSH1 00\n3 PUSH1 00\n5 CALLDATACOPY \n6 PUSH2 1000\n9 PUSH1 00\n11 CALLDATASIZE \n12 PUSH1 00\n");
+        let bytecode = include_str!("testdata/disassemble/nominal.hex");
+        let expected =
+            String::from(include_str!("testdata/disassemble/decimal_counter_nominal.asm"));
 
         // write bytecode to file at the cwd
         let mut file =
@@ -143,7 +147,7 @@ mod integration_tests {
 
         // This contract was deployed before Fusaka, so use Pectra hardfork
         // to show CLZ (0x1e) as unknown (it's part of the contract metadata)
-        let expected = String::from("0 PUSH1 80\n2 PUSH1 40\n4 MSTORE \n5 PUSH20 ffffffffffffffffffffffffffffffffffffffff\n26 PUSH1 00\n28 SLOAD \n29 AND \n30 CALLDATASIZE \n31 PUSH1 00\n33 DUP1 \n34 CALLDATACOPY \n35 PUSH1 00\n37 DUP1 \n38 CALLDATASIZE \n39 PUSH1 00\n41 DUP5 \n42 GAS \n43 DELEGATECALL \n44 RETURNDATASIZE \n45 PUSH1 00\n47 DUP1 \n48 RETURNDATACOPY \n49 PUSH1 00\n51 DUP2 \n52 EQ \n53 ISZERO \n54 PUSH1 3d\n56 JUMPI \n57 RETURNDATASIZE \n58 PUSH1 00\n60 REVERT \n61 JUMPDEST \n62 RETURNDATASIZE \n63 PUSH1 00\n65 RETURN \n66 INVALID \n67 LOG1 \n68 PUSH6 627a7a723058\n75 SHA3 \n76 unknown \n77 PUSH30 648b83cfac072cbccefc2ffc62a6999d4a050ee87a721942de1da9670db8\n108 STOP \n109 unknown \n");
+        let expected = String::from(include_str!("testdata/disassemble/from_rpc.asm"));
 
         let assembly = disassemble(DisassemblerArgs {
             target: String::from("0xafc2f2d803479a2af3a72022d54cc0901a0ec0d6"),
@@ -189,8 +193,9 @@ mod integration_tests {
     #[tokio::test]
     async fn test_disassemble_auto_hardfork_fallback() {
         // When no RPC URL is provided, auto hardfork should fall back to Latest
-        let bytecode = "366000600037611000600036600073";
-        let expected = String::from("0 CALLDATASIZE \n1 PUSH1 00\n3 PUSH1 00\n5 CALLDATACOPY \n6 PUSH2 1000\n9 PUSH1 00\n11 CALLDATASIZE \n12 PUSH1 00\n");
+        let bytecode = include_str!("testdata/disassemble/nominal.hex");
+        let expected =
+            String::from(include_str!("testdata/disassemble/decimal_counter_nominal.asm"));
 
         let assembly = disassemble(DisassemblerArgs {
             target: bytecode.to_owned(),
