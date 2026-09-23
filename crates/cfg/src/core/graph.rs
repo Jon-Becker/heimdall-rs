@@ -93,7 +93,7 @@ mod tests {
     #[test]
     async fn test_build_cfg() -> Result<(), Box<dyn std::error::Error>> {
         let args = CfgArgsBuilder::new()
-            .target("0x6080604052348015600e575f80fd5b50600436106030575f3560e01c80632125b65b146034578063b69ef8a8146044575b5f80fd5b6044603f3660046046565b505050565b005b5f805f606084860312156057575f80fd5b833563ffffffff811681146069575f80fd5b925060208401356001600160a01b03811681146083575f80fd5b915060408401356001600160e01b0381168114609d575f80fd5b80915050925092509256".to_string())
+            .target(include_str!("../../../core/tests/testdata/cfg/build_cfg.hex").to_string())
             .build()?;
 
         let result = cfg(args).await?;

@@ -439,7 +439,9 @@ mod tests {
 
     #[test]
     fn test_seaport_fulfill_advanced_order() {
-        let solidity_type = "fulfillAdvancedOrder(((address,address,(uint8,address,uint256,uint256,uint256)[],(uint8,address,uint256,uint256,uint256,address)[],uint8,uint256,uint256,bytes32,uint256,bytes32,uint256),uint120,uint120,bytes,bytes),(uint256,uint8,uint256,uint256,bytes32[])[],bytes32,address)";
+        let solidity_type = include_str!(
+            "../../../core/tests/testdata/abi/seaport_fulfill_advanced_order.signature"
+        );
         let param_type =
             parse_function_parameters(solidity_type).expect("failed to parse function parameters");
         assert_eq!(

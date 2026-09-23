@@ -16,7 +16,8 @@ fn test_fib(c: &mut Criterion) {
         b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
             // build the evm
             let mut evm = VM::new(
-                &decode_hex(include_str!("./testdata/fib.hex")).expect("invalid bytecode"),
+                &decode_hex(include_str!("../../core/tests/testdata/vm/fib.hex"))
+                    .expect("invalid bytecode"),
                 &decode_hex("0x0000000000000000000000000000000000000000000000000000000000000064")
                     .expect("invalid calldata"),
                 Address::default(),

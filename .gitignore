@@ -22,6 +22,7 @@ output/*
 */output
 *.evm
 *.asm
+!/crates/core/tests/testdata/**/*.asm
 
 heimdall/scripts/update
 heimdall/scripts/git
