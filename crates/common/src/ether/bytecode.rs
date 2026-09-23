@@ -5,10 +5,7 @@ use crate::utils::strings::decode_hex;
 use super::{etherscan::get_creation_bytecode, rpc::get_code};
 use alloy::primitives::{bytes::Bytes, Address};
 use eyre::{eyre, Result};
-use std::{
-    fs,
-    io::{self, Write},
-};
+use std::fs;
 use tracing::{debug, info, warn};
 
 /// Given a target, return bytecode of the target.
@@ -85,46 +82,6 @@ pub async fn get_bytecode_from_target(
         }
         Err(_) => Err(eyre!("invalid target")),
     }
-}
-
-/// Writes printable ASCII runs from PUSH data, one per line, in bytecode order.
-///
-/// Walks instructions linearly and scans each PUSH1–PUSH32 payload independently.
-/// Truncated payloads use only the available bytes. Set `full_scan` to scan all bytes,
-/// including opcodes and data outside PUSH payloads. Runs shorter than `min_length`
-/// and empty runs are omitted. Matching slices are written directly without allocation.
-/// Output errors are propagated to the caller.
-pub fn write_strings(
-    bytecode: &[u8],
-    min_length: usize,
-    full_scan: bool,
-    output: &mut impl Write,
-) -> io::Result<()> {
-    if full_scan {
-        return write_ascii_runs(bytecode, min_length, output);
-    }
-
-    let mut remaining = bytecode;
-    while let Some((&opcode, rest)) = remaining.split_first() {
-        remaining = rest;
-        if (0x60..=0x7f).contains(&opcode) {
-            let size = usize::from(opcode - 0x5f).min(remaining.len());
-            let (payload, rest) = remaining.split_at(size);
-            write_ascii_runs(payload, min_length, output)?;
-            remaining = rest;
-        }
-    }
-    Ok(())
-}
-
-fn write_ascii_runs(bytes: &[u8], min_length: usize, output: &mut impl Write) -> io::Result<()> {
-    for string in bytes.split(|byte| !(b' '..=b'~').contains(byte)) {
-        if !string.is_empty() && string.len() >= min_length {
-            output.write_all(string)?;
-            output.write_all(b"\n")?;
-        }
-    }
-    Ok(())
 }
 
 /// Removes pushed bytes from the bytecode, leaving only the instructions

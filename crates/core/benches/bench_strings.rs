@@ -5,7 +5,8 @@
 use std::hint::black_box;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use heimdall_common::{ether::bytecode::write_strings, utils::strings::decode_hex};
+use heimdall_common::utils::strings::decode_hex;
+use heimdall_core::heimdall_strings::write_strings;
 
 fn bench_strings(c: &mut Criterion) {
     let mut group = c.benchmark_group("heimdall_strings");

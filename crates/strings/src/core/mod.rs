@@ -1,54 +1,56 @@
-use std::{
-    io::{self, BufWriter, Write},
-    num::NonZeroUsize,
-};
+use std::io::{self, Write};
 
-use alloy::primitives::Address;
-use clap::Args;
-use eyre::{Result, WrapErr};
-use heimdall_common::ether::{
-    bytecode::{get_bytecode_from_target, write_strings},
-    rpc::get_code,
-};
-use heimdall_config::{parse_url_arg, Configuration};
+use crate::{Error, StringsArgs};
 
-#[derive(Debug, Args)]
-pub(crate) struct StringsArgs {
-    /// Hex bytecode, a file containing hex bytecode, or a contract address.
-    target: String,
-
-    /// The RPC provider to use for fetching contract bytecode (URL or MESC endpoint).
-    #[clap(long, short, value_parser = parse_url_arg, default_value = "", hide_default_value = true)]
-    rpc_url: String,
-
-    /// Minimum number of consecutive printable ASCII characters.
-    #[clap(long, short = 'n', default_value = "4")]
-    min_length: NonZeroUsize,
-
-    /// Scan all bytecode instead of only PUSH instruction data.
-    #[clap(long)]
-    full_scan: bool,
+/// Extracts printable strings from a hex target, bytecode file, or contract address.
+///
+/// Writes one string per line into the caller's writer. The caller controls buffering
+/// and flushing; this function never writes to stdout or loads CLI configuration.
+/// Address targets use the RPC URL supplied in `args`.
+pub async fn strings(args: &StringsArgs, output: &mut impl Write) -> Result<(), Error> {
+    let bytecode = args.get_bytecode().await?;
+    write_strings(&bytecode, args.min_length.get(), args.full_scan, output)?;
+    Ok(())
 }
 
-pub(crate) async fn run(args: &StringsArgs) -> Result<()> {
-    let bytecode = if let Ok(address) = args.target.parse::<Address>() {
-        let rpc_url = if args.rpc_url.is_empty() {
-            Configuration::load().wrap_err("failed to load configuration")?.rpc_url
-        } else {
-            args.rpc_url.clone()
-        };
-        get_code(address, &rpc_url).await
-    } else {
-        get_bytecode_from_target(&args.target, "", "").await
+/// Writes printable ASCII runs from PUSH data, one per line, in bytecode order.
+///
+/// Walks instructions linearly and scans each PUSH1–PUSH32 payload independently.
+/// Truncated payloads use only the available bytes. Set `full_scan` to scan all bytes,
+/// including opcodes and data outside PUSH payloads. Runs shorter than `min_length`
+/// and empty runs are omitted. Matching slices are written directly without allocation.
+/// Output errors are propagated to the caller.
+pub fn write_strings(
+    bytecode: &[u8],
+    min_length: usize,
+    full_scan: bool,
+    output: &mut impl Write,
+) -> io::Result<()> {
+    if full_scan {
+        return write_ascii_runs(bytecode, min_length, output);
     }
-    .wrap_err("failed to load bytecode")?;
-    let mut output = BufWriter::new(io::stdout().lock());
-    match write_strings(&bytecode, args.min_length.get(), args.full_scan, &mut output)
-        .and_then(|()| output.flush())
-    {
-        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
-        result => result.wrap_err("failed to write strings"),
+
+    let mut remaining = bytecode;
+    while let Some((&opcode, rest)) = remaining.split_first() {
+        remaining = rest;
+        if (0x60..=0x7f).contains(&opcode) {
+            let size = usize::from(opcode - 0x5f).min(remaining.len());
+            let (payload, rest) = remaining.split_at(size);
+            write_ascii_runs(payload, min_length, output)?;
+            remaining = rest;
+        }
     }
+    Ok(())
+}
+
+fn write_ascii_runs(bytes: &[u8], min_length: usize, output: &mut impl Write) -> io::Result<()> {
+    for string in bytes.split(|byte| !(b' '..=b'~').contains(byte)) {
+        if !string.is_empty() && string.len() >= min_length {
+            output.write_all(string)?;
+            output.write_all(b"\n")?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

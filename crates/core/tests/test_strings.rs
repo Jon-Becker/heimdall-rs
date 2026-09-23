@@ -1,14 +1,19 @@
 //! Integration tests for string extraction from deployed Ethereum contract bytecode.
 
-use heimdall_common::ether::bytecode::{get_bytecode_from_target, write_strings};
+use std::num::NonZeroUsize;
+
+use heimdall_core::heimdall_strings::{strings, StringsArgsBuilder};
 
 async fn extract_fixture(name: &str, min_length: usize, full_scan: bool) -> Vec<u8> {
     let target = format!("{}/tests/testdata/strings/{name}.hex", env!("CARGO_MANIFEST_DIR"));
-    let bytecode =
-        get_bytecode_from_target(&target, "", "").await.expect("failed to load bytecode");
+    let args = StringsArgsBuilder::new()
+        .target(target)
+        .min_length(NonZeroUsize::new(min_length).unwrap())
+        .full_scan(full_scan)
+        .build()
+        .unwrap();
     let mut output = Vec::new();
-    write_strings(&bytecode, min_length, full_scan, &mut output)
-        .expect("failed to extract strings");
+    strings(&args, &mut output).await.expect("failed to extract strings");
     output
 }
 
@@ -65,5 +70,38 @@ async fn test_strings_real_contracts_full_scan() {
             format!("{}\n", expected.join("\n")).as_bytes(),
             "{name}"
         );
+    }
+}
+
+#[tokio::test]
+async fn test_strings_library_defaults() {
+    let args = StringsArgsBuilder::new()
+        .target("0x41424344006468656c6c6f0062616263".to_string())
+        .build()
+        .unwrap();
+    let mut output = Vec::new();
+    strings(&args, &mut output).await.unwrap();
+    assert_eq!(output, b"hello\n");
+}
+
+#[tokio::test]
+async fn test_strings_library_fetch_error() {
+    let args = StringsArgsBuilder::new().target("0xzz".to_string()).build().unwrap();
+    let mut output = Vec::new();
+    let error = strings(&args, &mut output).await.unwrap_err();
+    assert!(matches!(error, heimdall_core::heimdall_strings::Error::FetchError(_)));
+    assert!(output.is_empty());
+}
+
+#[tokio::test]
+async fn test_strings_library_write_error() {
+    let args = StringsArgsBuilder::new().target("0x6468656c6c6f".to_string()).build().unwrap();
+    let mut output = [0; 2];
+    let error = strings(&args, &mut output.as_mut_slice()).await.unwrap_err();
+    match error {
+        heimdall_core::heimdall_strings::Error::WriteError(error) => {
+            assert_eq!(error.kind(), std::io::ErrorKind::WriteZero);
+        }
+        error => panic!("expected a write error, got {error}"),
     }
 }

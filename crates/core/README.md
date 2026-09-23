@@ -2,6 +2,9 @@
 
 This crate is the core of the Heimdall library. It contains all module implementations, such as decompilation, disassembly, decoding, etc.
 
+The string extraction API is re-exported as `heimdall_core::heimdall_strings`.
+See [`heimdall-strings`](../strings/README.md) for library usage.
+
 ## String extraction benchmarks
 
 ```sh

@@ -1,14 +1,12 @@
 use clap::{Parser, Subcommand};
 
-use crate::strings::StringsArgs;
-
 use clap::{ArgAction, Args, ValueEnum};
 use heimdall_cache::CacheArgs;
 use heimdall_config::ConfigArgs;
 use heimdall_core::{
     heimdall_cfg::CfgArgs, heimdall_decoder::DecodeArgs, heimdall_decompiler::DecompilerArgs,
     heimdall_disassembler::DisassemblerArgs, heimdall_dump::DumpArgs,
-    heimdall_inspect::InspectArgs,
+    heimdall_inspect::InspectArgs, heimdall_strings::StringsArgs,
 };
 use heimdall_tracing::{
     tracing_subscriber::filter::Directive, FileWorkerGuard, HeimdallTracer, LayerInfo, LogFormat,

@@ -45,6 +45,7 @@ heimdall-decoder = { workspace = true }
 heimdall-inspect = { workspace = true }
 heimdall-decompiler = { workspace = true }
 heimdall-disassembler = { workspace = true }
+heimdall-strings = { workspace = true }
 
 
 [dev-dependencies]
