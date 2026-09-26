@@ -105,3 +105,25 @@ async fn test_strings_library_write_error() {
         error => panic!("expected a write error, got {error}"),
     }
 }
+
+#[tokio::test]
+async fn test_strings_recognized_selectors_and_packed_text() {
+    // Ethereum mainnet block 26,063,763. The router builds four Panic(uint256)
+    // reverts; Seaport uses a PUSH8 containing a length byte followed by its name.
+    // Router: 0x66a9893cc07d91d95644aedd05d03f95e1dba8af
+    // Seaport: 0x0000000000000068f116a894984e2db1123eb395
+    let router = extract_fixture("universal_router", 4, false).await;
+    let router = std::str::from_utf8(&router).unwrap();
+    assert!(!router.lines().any(|line| line == "NH{q"));
+    assert!(router.lines().any(|line| line == "ETH_TRANSFER_FAILED"));
+    assert!(router.lines().any(|line| line == "TRANSFER_FAILED"));
+    // Unclassified binary constants must remain; we favor recall over noise removal.
+    assert!(router.lines().any(|line| line == "UR}$Ox"));
+    let full = extract_fixture("universal_router", 4, true).await;
+    assert_eq!(std::str::from_utf8(&full).unwrap().matches("NH{q").count(), 4);
+
+    for full_scan in [false, true] {
+        let seaport = extract_fixture("seaport_1_6", 4, full_scan).await;
+        assert!(std::str::from_utf8(&seaport).unwrap().contains("Seaport"));
+    }
+}

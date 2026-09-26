@@ -27,7 +27,7 @@ pub struct StringsArgs {
     #[clap(long, short = 'n', default_value = "4")]
     pub min_length: NonZeroUsize,
 
-    /// Scan all bytecode instead of only PUSH instruction data.
+    /// Scan all bytecode, including selectors, instead of filtering PUSH instruction data.
     #[clap(long)]
     pub full_scan: bool,
 }
