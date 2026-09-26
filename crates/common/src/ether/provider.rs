@@ -28,7 +28,7 @@ impl MultiTransportProvider {
             return Err(eyre::eyre!("No RPC URL provided"));
         }
 
-        let provider = ProviderBuilder::new().connect(rpc_url).await.unwrap().root().clone();
+        let provider = ProviderBuilder::new().connect(rpc_url).await?.root().clone();
         Ok(Self { provider })
     }
 
