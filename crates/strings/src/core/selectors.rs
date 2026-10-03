@@ -1,10 +1,7 @@
-use std::collections::BTreeSet;
-
-/// Tracks the selector-preserving branches of a conventional calldata dispatcher.
+/// Tracks a calldata selector only through uninterrupted dispatcher instructions.
 #[derive(Default)]
 pub(super) struct Selectors {
     dispatch: bool,
-    branch_targets: BTreeSet<usize>,
     resume_at: usize,
     selector_at: usize,
 }
@@ -16,11 +13,6 @@ impl Selectors {
         }
 
         let tail = &code[pc..];
-        if tail[0] == 0x5b {
-            self.dispatch = self.branch_targets.remove(&pc);
-            return false;
-        }
-
         // CALLDATALOAD(0) >> 224 puts the function selector on top of the stack.
         let load_length = if tail.starts_with(&[0x5f, 0x35, 0x60, 0xe0, 0x1c]) {
             5
@@ -39,11 +31,8 @@ impl Selectors {
         if self.dispatch {
             // DUP1 PUSH4 selector EQ/LT/GT PUSHn destination JUMPI leaves the
             // original calldata selector on the stack along both outgoing edges.
-            if let [0x80, 0x63, _, _, _, _, comparison @ (0x10 | 0x11 | 0x14), ..] = tail {
-                if let Some((target, end)) = branch(code, pc + 7) {
-                    if *comparison != 0x14 {
-                        self.branch_targets.insert(target);
-                    }
+            if let [0x80, 0x63, _, _, _, _, 0x10 | 0x11 | 0x14, ..] = tail {
+                if let Some(end) = branch(code, pc + 7) {
                     self.selector_at = pc + 1;
                     self.resume_at = end;
                     return false;
@@ -51,23 +40,24 @@ impl Selectors {
             }
             // A zero-selector check also preserves the original selector.
             if tail.starts_with(&[0x80, 0x15]) {
-                if let Some((_, end)) = branch(code, pc + 2) {
+                if let Some(end) = branch(code, pc + 2) {
                     self.selector_at = usize::MAX;
                     self.resume_at = end;
                     return false;
                 }
             }
-            // Never carry inferred stack contents through unrecognized instructions.
+            // JUMPDEST may have other incoming paths with a different stack value.
+            // Discard provenance at joins and all other unrecognized instructions.
             self.dispatch = false;
         }
         false
     }
 }
 
-fn branch(code: &[u8], pc: usize) -> Option<(usize, usize)> {
+fn branch(code: &[u8], pc: usize) -> Option<usize> {
     let (target, end) = push(code, pc)?;
     (target > end && code.get(end) == Some(&0x57) && code.get(target) == Some(&0x5b))
-        .then_some((target, end + 1))
+        .then_some(end + 1)
 }
 
 /// Recognizes a complete, constant Panic(uint256) revert buffer. Matching the

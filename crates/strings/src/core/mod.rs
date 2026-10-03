@@ -142,13 +142,13 @@ mod tests {
     }
 
     #[test]
-    fn filters_dispatch_comparisons_and_preserves_identical_literal() {
+    fn filters_dispatch_comparisons_without_following_jump_targets() {
         for comparison in [0x10, 0x11] {
             let mut code = vec![0x60, 0, 0x35, 0x60, 0xe0, 0x1c];
             code.extend_from_slice(b"\x80\x63jbxB");
             code.extend_from_slice(&[comparison, 0x60, 17, 0x57, 0, 0x5b]);
             code.extend_from_slice(b"\x80\x63jbxB\x14\x60\x1d\x57\x00\x5b\x63jbxB");
-            assert_eq!(extract(&code, false), b"jbxB\n");
+            assert_eq!(extract(&code, false), b"jbxB\njbxB\n");
             assert_eq!(extract(&code, true).windows(4).filter(|s| *s == b"jbxB").count(), 3);
         }
     }
@@ -169,6 +169,14 @@ mod tests {
             code.extend_from_slice(b"\x80\x63jbxB\x14\x60\x12\x57\x00\x5b");
             assert_eq!(extract(&code, false), b"jbxB\n");
         }
+    }
+
+    #[test]
+    fn preserves_text_comparisons_at_shared_jump_targets() {
+        let mut code = b"\x5f\x35\x60\xe0\x1c\x80\x63aaaa\x11\x60\x15\x57".to_vec();
+        // The taken branch carries a selector; fallthrough replaces it with text.
+        code.extend_from_slice(b"\x50\x63text\x5b\x80\x63text\x14\x60\x21\x57\x00\x5b\x00");
+        assert_eq!(extract(&code, false), b"text\ntext\n");
     }
 
     #[test]

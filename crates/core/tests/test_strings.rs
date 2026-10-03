@@ -1,6 +1,8 @@
 //! Integration tests for string extraction from deployed Ethereum contract bytecode.
 
-use std::num::NonZeroUsize;
+use std::{collections::BTreeMap, num::NonZeroUsize};
+
+use serde::Deserialize;
 
 use heimdall_core::heimdall_strings::{strings, StringsArgsBuilder};
 
@@ -18,58 +20,30 @@ async fn extract_fixture(name: &str, min_length: usize, full_scan: bool) -> Vec<
 }
 
 #[tokio::test]
-async fn test_strings_uniswap_v2() {
-    let output = extract_fixture("uniswap_v2_usdc_weth", 4, false).await;
-    let expected: Vec<String> =
-        serde_json::from_str(include_str!("testdata/strings/uniswap_v2_usdc_weth.json")).unwrap();
-    assert_eq!(output, format!("{}\n", expected.join("\n")).as_bytes());
-    let strings = std::str::from_utf8(&output).unwrap();
-    assert!(strings.lines().any(|line| line == "UniswapV2: INVALID_SIGNATURE"));
-    assert_eq!(strings.lines().filter(|line| *line == "UniswapV2: LOCKED").count(), 5);
-}
-
-#[tokio::test]
-async fn test_strings_dai() {
-    let output = extract_fixture("dai", 4, false).await;
-    let expected: Vec<String> =
-        serde_json::from_str(include_str!("testdata/strings/dai.json")).unwrap();
-    assert_eq!(output, format!("{}\n", expected.join("\n")).as_bytes());
-    let strings = std::str::from_utf8(&output).unwrap();
-    assert!(strings.lines().any(|line| line == "Dai/insufficient-balance"));
-    assert!(strings.lines().any(|line| line == "Dai/invalid-permit"));
-}
-
-#[tokio::test]
-async fn test_strings_real_contracts_minimum_length() {
-    for (name, expected) in [
-        ("uniswap_v2_usdc_weth", include_str!("testdata/strings/uniswap_v2_usdc_weth.json")),
-        ("dai", include_str!("testdata/strings/dai.json")),
-    ] {
-        let expected: Vec<String> = serde_json::from_str(expected).unwrap();
-        let expected: String = expected
-            .iter()
-            .filter(|line| line.len() >= 16)
-            .map(|line| format!("{line}\n"))
-            .collect();
-        assert_eq!(extract_fixture(name, 16, false).await, expected.as_bytes(), "{name}");
+async fn test_strings_contract_snapshots() {
+    #[derive(Deserialize)]
+    struct Expected {
+        push: Vec<String>,
+        full_scan: Vec<String>,
     }
-}
 
-#[tokio::test]
-async fn test_strings_real_contracts_full_scan() {
-    for (name, expected) in [
-        (
-            "uniswap_v2_usdc_weth",
-            include_str!("testdata/strings/uniswap_v2_usdc_weth.full_scan.json"),
-        ),
-        ("dai", include_str!("testdata/strings/dai.full_scan.json")),
-    ] {
-        let expected: Vec<String> = serde_json::from_str(expected).unwrap();
-        assert_eq!(
-            extract_fixture(name, 4, true).await,
-            format!("{}\n", expected.join("\n")).as_bytes(),
-            "{name}"
-        );
+    let contracts: BTreeMap<String, Expected> =
+        serde_json::from_str(include_str!("testdata/strings/expected.json")).unwrap();
+    for (name, expected) in contracts {
+        for (full_scan, lines) in [(false, expected.push), (true, expected.full_scan)] {
+            for min_length in [4, 16] {
+                let expected: String = lines
+                    .iter()
+                    .filter(|line| line.len() >= min_length)
+                    .map(|line| format!("{line}\n"))
+                    .collect();
+                assert_eq!(
+                    extract_fixture(&name, min_length, full_scan).await,
+                    expected.as_bytes(),
+                    "{name}, full_scan={full_scan}, min_length={min_length}"
+                );
+            }
+        }
     }
 }
 
