@@ -45,6 +45,7 @@ heimdall-decoder = { workspace = true }
 heimdall-inspect = { workspace = true }
 heimdall-decompiler = { workspace = true }
 heimdall-disassembler = { workspace = true }
+heimdall-strings = { workspace = true }
 
 
 [dev-dependencies]
@@ -69,4 +70,8 @@ harness = false
 
 [[bench]]
 name = "bench_inspect"
+harness = false
+
+[[bench]]
+name = "bench_strings"
 harness = false

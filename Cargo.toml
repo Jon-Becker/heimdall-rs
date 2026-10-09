@@ -12,6 +12,7 @@ members = [
     "crates/dump",
     "crates/cli",
     "crates/cfg",
+    "crates/strings",
     "crates/vm",
 ]
 
@@ -116,6 +117,7 @@ heimdall-tracing = { path = "crates/tracing" }
 
 # core mods
 heimdall-cfg = { path = "crates/cfg" }
+heimdall-strings = { path = "crates/strings" }
 heimdall-dump = { path = "crates/dump" }
 heimdall-inspect = { path = "crates/inspect" }
 heimdall-decoder = { path = "crates/decode" }
