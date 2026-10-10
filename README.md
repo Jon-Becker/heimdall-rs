@@ -40,7 +40,7 @@ Once you have installed `bifrost`, you can use it to install Heimdall using the 
 bifrost
 ```
 
-After compilation, the `heimdall` command will be available to use from a new terminal. For advanced options, see the [bifrost documentation](https://jbecker.dev/r/heimdall-rs/wiki/installation).
+After compilation, the `heimdall` command will be available to use from a new terminal. `bifrost` supports both x86_64 and ARM64 Linux (Debian/Ubuntu, Amazon Linux, Fedora/RHEL, Arch, openSUSE, and Alpine) as well as macOS; see [supported platforms](./bifrost/README.md#supported-platforms) for details. For advanced options, see the [bifrost documentation](https://jbecker.dev/r/heimdall-rs/wiki/installation).
 
 _Having trouble? Check out the [Troubleshooting](https://jbecker.dev/r/heimdall-rs/wiki/troubleshooting) section in the wiki._
 
