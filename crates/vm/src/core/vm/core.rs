@@ -1396,8 +1396,10 @@ mod tests {
 
     #[test]
     fn test_jump() {
-        let mut vm = new_test_vm("0x60fe56");
-        vm.execute().expect("execution failed!");
+        let mut vm = new_test_vm(&format!("0x60fe56{}5b00", "00".repeat(251)));
+        vm.step().expect("push failed");
+        vm.step().expect("jump failed");
+        assert_eq!(vm.exitcode, 255);
 
         assert_eq!(
             U256::from(vm.instruction),
@@ -1407,8 +1409,11 @@ mod tests {
 
     #[test]
     fn test_jumpi() {
-        let mut vm = new_test_vm("0x600160fe57");
-        vm.execute().expect("execution failed!");
+        let mut vm = new_test_vm(&format!("0x600160fe57{}5b00", "00".repeat(249)));
+        vm.step().expect("condition push failed");
+        vm.step().expect("destination push failed");
+        vm.step().expect("conditional jump failed");
+        assert_eq!(vm.exitcode, 255);
 
         assert_eq!(
             U256::from(vm.instruction),

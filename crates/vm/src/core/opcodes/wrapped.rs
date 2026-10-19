@@ -3,7 +3,7 @@ use std::sync::Arc;
 use alloy::primitives::U256;
 use once_cell::sync::OnceCell;
 
-use crate::core::opcodes::opcode_name;
+use crate::core::opcodes::{opcode_name, PUSH0, PUSH1, PUSH32};
 
 /// A [`WrappedInput`] can contain either a raw [`U256`] value or a [`WrappedOpcode`].
 ///
@@ -118,6 +118,18 @@ impl std::fmt::Display for WrappedOpcode {
 }
 
 impl WrappedInput {
+    /// Return a literal PUSH value without evaluating symbolic operations.
+    pub fn pushed_value(&self) -> Option<U256> {
+        match self {
+            Self::Raw(value) => Some(*value),
+            Self::Opcode(operation) if operation.opcode == PUSH0 => Some(U256::ZERO),
+            Self::Opcode(operation) if (PUSH1..=PUSH32).contains(&operation.opcode) => {
+                operation.inputs.first().and_then(Self::pushed_value)
+            }
+            _ => None,
+        }
+    }
+
     /// Returns the depth of the input.
     ///
     /// - 0 for a raw [`U256`] value

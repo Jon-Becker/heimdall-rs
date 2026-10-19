@@ -1,0 +1,1006 @@
+[
+  {
+    "chain": "base",
+    "address": "0x0039ef7aca47d14090518bc91b22fe822cefa912",
+    "runtime": "base-0x0039ef7aca47d14090518bc91b22fe822cefa912.hex",
+    "expected_selectors": [
+      "ea1a4545"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x68d5c286df1c6d638259c5983dd7546a785b6262e29e77f8595c2cac50d16cc1"
+  },
+  {
+    "chain": "base",
+    "address": "0x039aa58a8394b0ea7c53f0f4283e241d2608e2d6",
+    "runtime": "base-0x039aa58a8394b0ea7c53f0f4283e241d2608e2d6.hex",
+    "expected_selectors": [
+      "f05df5a0"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x375459e9d2fa4009bef2144660c5f256b08432f8cfab446d6a33e0a1abd5c246"
+  },
+  {
+    "chain": "base",
+    "address": "0x054e2da15f52a4317265c6f39c19b68d0e29f4ca",
+    "runtime": "base-0x054e2da15f52a4317265c6f39c19b68d0e29f4ca.hex",
+    "expected_selectors": [
+      "f4acd36b"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xf205e623b31f24d8837ba1dd80a570ff375ad30c4da3dacca1898a934c9c0090"
+  },
+  {
+    "chain": "base",
+    "address": "0x0c7558f634b3465ff7637500d5a710731393c8f2",
+    "runtime": "base-0x0c7558f634b3465ff7637500d5a710731393c8f2.hex",
+    "expected_selectors": [
+      "f2fde38b"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x2f6c5a848e2ccb3a87df8589420cb4aa4f3f51b3cf115484440ecf19997957e8"
+  },
+  {
+    "chain": "base",
+    "address": "0x108315c4447de7a166fb3c892ff810afad80363b",
+    "runtime": "base-0x108315c4447de7a166fb3c892ff810afad80363b.hex",
+    "expected_selectors": [
+      "8f51e175"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x8082a07be90cefa908a12c5a42577dc656fe6a0a1a9887a4abf1518750c192ee"
+  },
+  {
+    "chain": "base",
+    "address": "0x13262cdd9004d6cb905c156a4a1647510eeda9b1",
+    "runtime": "base-0x13262cdd9004d6cb905c156a4a1647510eeda9b1.hex",
+    "expected_selectors": [
+      "f1fe6cd9"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x6cf4b48ae41d36e76965086e7b14c9f6078f868be2a2c6bbe0114a54f8892c67"
+  },
+  {
+    "chain": "base",
+    "address": "0x14f36be359b87e5842a097a10de2c3ade4256891",
+    "runtime": "base-0x14f36be359b87e5842a097a10de2c3ade4256891.hex",
+    "expected_selectors": [
+      "08d6122d"
+    ],
+    "observations": [
+      "same_name_overload_replaced"
+    ],
+    "observed_source_overloads": [
+      "function setTargetFunctionRole(address arg0, bytes4 arg1, uint8 arg2)",
+      "function setTargetFunctionRole(address arg0, bytes4[] arg1, uint64 arg2)"
+    ],
+    "runtime_keccak256": "0x42b61ec250a303dc4acc852dbfd8b635be8b4c92f9957ac07b49dad74d31fdc7"
+  },
+  {
+    "chain": "base",
+    "address": "0x169709875f8adbd72d23fb03c45bb6af29087196",
+    "runtime": "base-0x169709875f8adbd72d23fb03c45bb6af29087196.hex",
+    "expected_selectors": [
+      "daeca092"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x8941dfd26a5de926230c16ebd2940ce47d05593a4ec56d80d0c103b2ab60df86"
+  },
+  {
+    "chain": "base",
+    "address": "0x195eb3f5d3e7cb7d35051f6ea37c5f6470647cb6",
+    "runtime": "base-0x195eb3f5d3e7cb7d35051f6ea37c5f6470647cb6.hex",
+    "expected_selectors": [
+      "fffbd845"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xe21f92b66d7316c8f3cb069876a0f80a7b47b7fda479033fcbae8c6fa5c185be"
+  },
+  {
+    "chain": "base",
+    "address": "0x1a5a52831b49fdedf9de7ead38642aa497f7c05e",
+    "runtime": "base-0x1a5a52831b49fdedf9de7ead38642aa497f7c05e.hex",
+    "expected_selectors": [
+      "fdf0decc"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xe19c45dabd25b34ed8f4d60e20b2828c09a4b19a63d8ab97f418b840d754d459"
+  },
+  {
+    "chain": "base",
+    "address": "0x20e838dec4c8a5809ca350a5026bc6b000f2b17d",
+    "runtime": "base-0x20e838dec4c8a5809ca350a5026bc6b000f2b17d.hex",
+    "expected_selectors": [
+      "0044eff4"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xd584df4b37c791f25d7f103ac22a7e8bbde20ac01246262e363bc50b9601f80a"
+  },
+  {
+    "chain": "base",
+    "address": "0x2452b04dfe96270b7de90c84519da7f3a132e73e",
+    "runtime": "base-0x2452b04dfe96270b7de90c84519da7f3a132e73e.hex",
+    "expected_selectors": [
+      "d948fd2e"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x6dad00fe1351e5704cb71b419d4800d10a6fa0a00c9be3383e9f8ca16ecf3d62"
+  },
+  {
+    "chain": "base",
+    "address": "0x26074fdb30f30c030a6fd0d88551585939a14b22",
+    "runtime": "base-0x26074fdb30f30c030a6fd0d88551585939a14b22.hex",
+    "expected_selectors": [
+      "002b4b11"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xaf157608998e93604545218220d6ad0a14edbbb8d72af6eb37e9ad415009a7a9"
+  },
+  {
+    "chain": "base",
+    "address": "0x2e0e05342443f9138372f82265108c8cc6ce2b7a",
+    "runtime": "base-0x2e0e05342443f9138372f82265108c8cc6ce2b7a.hex",
+    "expected_selectors": [
+      "095ea7b3"
+    ],
+    "observations": [
+      "independent_approve_name_resolution"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xdc7c9e881461897c2ed84feb8e53dbd33d073028461caa827bc009e7aac9f841"
+  },
+  {
+    "chain": "base",
+    "address": "0x318c11a1ab1ff8f290723b3b3f3dc417c1bbeba3",
+    "runtime": "base-0x318c11a1ab1ff8f290723b3b3f3dc417c1bbeba3.hex",
+    "expected_selectors": [
+      "f8190b00"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xbb27bb5b4be15946c6fc295f55dd6b4284c3df74f7f3f6d6c7d57f43ea0b4e34"
+  },
+  {
+    "chain": "base",
+    "address": "0x34216b25255ffbc121b9b23c730af1467e0c26a7",
+    "runtime": "base-0x34216b25255ffbc121b9b23c730af1467e0c26a7.hex",
+    "expected_selectors": [
+      "ff519a14"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x2d0d5fb426810eac8cbdd6d781a0c9ef6a17ce733580c30b326bdc8dfcb375c0"
+  },
+  {
+    "chain": "base",
+    "address": "0x35251169363ddccfe1ebdaef91a5f237ca4004e9",
+    "runtime": "base-0x35251169363ddccfe1ebdaef91a5f237ca4004e9.hex",
+    "expected_selectors": [
+      "1f931c1c"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xc7a1d9da74f11a942af62ba6edf00bcf7634bdaa6993e79ba7b9aa1b3faf2e06"
+  },
+  {
+    "chain": "base",
+    "address": "0x3be6de9e5ad7222550c49fb4ebed0a8defad9528",
+    "runtime": "base-0x3be6de9e5ad7222550c49fb4ebed0a8defad9528.hex",
+    "expected_selectors": [
+      "d97fa560"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xd0cdfe126f8538a5c936c704afdad7d10f460624e32c31998ad00ea8f8e325d4"
+  },
+  {
+    "chain": "base",
+    "address": "0x3f7ef4c10ddd9b77fcc795258853294b8417e2eb",
+    "runtime": "base-0x3f7ef4c10ddd9b77fcc795258853294b8417e2eb.hex",
+    "expected_selectors": [
+      "a0a8e460"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x0a7e58a685655cd82591ae69730e281c09b6c64efb8a8d46cd83c1bc73f8cfa1"
+  },
+  {
+    "chain": "base",
+    "address": "0x434ec1685630d347c85327d8aab97ad69e7aa050",
+    "runtime": "base-0x434ec1685630d347c85327d8aab97ad69e7aa050.hex",
+    "expected_selectors": [
+      "00735c98"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x3e96c8dcce4cb94293c667b64284f5d71c4a90e6b3c0509c41f4fabf5a6656d6"
+  },
+  {
+    "chain": "base",
+    "address": "0x46eb37efff620159fe394347069cb930bb63f7d0",
+    "runtime": "base-0x46eb37efff620159fe394347069cb930bb63f7d0.hex",
+    "expected_selectors": [
+      "e136fc5a"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xbc0bb2d986ba4837cf181fe25aa30340bc807e4820705194cc231862bbd0528b"
+  },
+  {
+    "chain": "base",
+    "address": "0x50d802a2ae34832f7096db140c5d976cbc7ffec8",
+    "runtime": "base-0x50d802a2ae34832f7096db140c5d976cbc7ffec8.hex",
+    "expected_selectors": [
+      "095ea7b3"
+    ],
+    "observations": [
+      "independent_approve_name_resolution"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x58b83baa17e25ed5ef03bbeeb99a8377bdaf83c90cfd543470e88de5bfc305fd"
+  },
+  {
+    "chain": "base",
+    "address": "0x51d5314052ab906d197d64f6c14e171b0d5fe6b5",
+    "runtime": "base-0x51d5314052ab906d197d64f6c14e171b0d5fe6b5.hex",
+    "expected_selectors": [
+      "cdffacc6"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x9f4865627b79f74381c12d1838351a10481de6d9691f0ecd84dd6235114cc269"
+  },
+  {
+    "chain": "base",
+    "address": "0x5d0d5cbbfa2ff20c7669618d4642074b4151a565",
+    "runtime": "base-0x5d0d5cbbfa2ff20c7669618d4642074b4151a565.hex",
+    "expected_selectors": [
+      "f2fde38b"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x855383b874b3373f6948ac69adca1214bae5ce9478a57cb9ec2a24df86c07b64"
+  },
+  {
+    "chain": "base",
+    "address": "0x5ea8a5b4a854402eca8a7ad35a14932a6dbfa736",
+    "runtime": "base-0x5ea8a5b4a854402eca8a7ad35a14932a6dbfa736.hex",
+    "expected_selectors": [
+      "095ea7b3"
+    ],
+    "observations": [
+      "independent_approve_name_resolution"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x27c91f1655af37ff70424d3d00449cf9758f71d914748f3d69e978af7e4f6103"
+  },
+  {
+    "chain": "base",
+    "address": "0x6103f652a4c4d6f13bc1d78a7103e54d8ed13b48",
+    "runtime": "base-0x6103f652a4c4d6f13bc1d78a7103e54d8ed13b48.hex",
+    "expected_selectors": [
+      "000c8df0",
+      "009c11b3",
+      "e54f54a9"
+    ],
+    "observations": [
+      "same_name_overload_replaced",
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [
+      "function isClassificationValid(address arg0)",
+      "function isClassificationValid(address arg0, bytes32 arg1)"
+    ],
+    "runtime_keccak256": "0x8956d725eb4b34bd9366a102d7324cc1be3f6bc2ea577ed578eb2452f25efaef"
+  },
+  {
+    "chain": "base",
+    "address": "0x620244706ba6c771ec417662a0bfb6fe6d1c5ae2",
+    "runtime": "base-0x620244706ba6c771ec417662a0bfb6fe6d1c5ae2.hex",
+    "expected_selectors": [
+      "095ea7b3",
+      "4f1ef286"
+    ],
+    "observations": [
+      "verified_reference_for_dynamic_bytes"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x54482cb3d57245f9725926e25aaa5f9f6ab3890a739c9df6d313bc27e8c19647"
+  },
+  {
+    "chain": "base",
+    "address": "0x66b20db3e80de14bbec32e8e01a8cc31a370d327",
+    "runtime": "base-0x66b20db3e80de14bbec32e8e01a8cc31a370d327.hex",
+    "expected_selectors": [
+      "0065efc8"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xb1bcd34086bf9ee290595bb9354c99f5c3160a9f4bba5d3b87973b13c1e0ad8f"
+  },
+  {
+    "chain": "base",
+    "address": "0x66eb029597a7e48696ce3a860169403b6bc40266",
+    "runtime": "base-0x66eb029597a7e48696ce3a860169403b6bc40266.hex",
+    "expected_selectors": [
+      "00fdd58e",
+      "095ea7b3"
+    ],
+    "observations": [
+      "independent_approve_name_resolution",
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x241054c7c5773399d1725239b9fd003011ace4f0ade9785aff9819958f101bb4"
+  },
+  {
+    "chain": "base",
+    "address": "0x6998be5fea8d8725a739e9941953ee9a1461332c",
+    "runtime": "base-0x6998be5fea8d8725a739e9941953ee9a1461332c.hex",
+    "expected_selectors": [
+      "09b65e66",
+      "136439dd"
+    ],
+    "observations": [
+      "same_name_overload_replaced"
+    ],
+    "observed_source_overloads": [
+      "function isPaused()",
+      "function isPaused(bytes4 arg0)",
+      "function pause(bytes4 arg0, uint256 arg1)",
+      "function pause(uint256 arg0)"
+    ],
+    "runtime_keccak256": "0x30ded440d8c56517a08d8ca9596f5352a90ebc5fbfe6e8045b055ddf1f0c81d6"
+  },
+  {
+    "chain": "base",
+    "address": "0x6f56e561c1089bd4c480ee56907e6588357f74db",
+    "runtime": "base-0x6f56e561c1089bd4c480ee56907e6588357f74db.hex",
+    "expected_selectors": [
+      "ff6b1581"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x9b2de7e73910243d00554aa98e0f70b67e707dee7ca72a6040618f692e4410c4"
+  },
+  {
+    "chain": "base",
+    "address": "0x783fc71b68f48c8f28e72e7011f0188f8d3e6822",
+    "runtime": "base-0x783fc71b68f48c8f28e72e7011f0188f8d3e6822.hex",
+    "expected_selectors": [
+      "fe805b45"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x63be4a496aae446fee7694bbee0991c46bbfbb4fa5a706b0f8d1591ba2200761"
+  },
+  {
+    "chain": "base",
+    "address": "0x82fbf93b400e75d76e46e1fb84b55fd8e6f45f90",
+    "runtime": "base-0x82fbf93b400e75d76e46e1fb84b55fd8e6f45f90.hex",
+    "expected_selectors": [
+      "f516c72f"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xd99672acc88fc8e47b420b44aa2b075e36440c6206d668b6230fcd370a0611c2"
+  },
+  {
+    "chain": "base",
+    "address": "0x83f3504c3ec33d7c46914656a1e79cce636fb399",
+    "runtime": "base-0x83f3504c3ec33d7c46914656a1e79cce636fb399.hex",
+    "expected_selectors": [
+      "ff92ab86"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xd6632af249605a5392e72397aa17a85c7c254cb130197ae8a0ca46e34cf8c7a7"
+  },
+  {
+    "chain": "base",
+    "address": "0x864ef309c30dc03f5b218401383e7475cdeb960d",
+    "runtime": "base-0x864ef309c30dc03f5b218401383e7475cdeb960d.hex",
+    "expected_selectors": [
+      "a91c17b2"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x859f59539fbbdb2ba00f4c2d875096644d428eb0d2485ec8341ed3ed922ac507"
+  },
+  {
+    "chain": "base",
+    "address": "0x888a7e5d0a6feb1ad856404b276e965ef8a99491",
+    "runtime": "base-0x888a7e5d0a6feb1ad856404b276e965ef8a99491.hex",
+    "expected_selectors": [
+      "008cc262"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x509e13ba1e69afea9ca4279d5ece16931487dd485addbf68257a839a784e9bd5"
+  },
+  {
+    "chain": "base",
+    "address": "0x91a805f2ad9325504199f49bc33023b04c9cfeda",
+    "runtime": "base-0x91a805f2ad9325504199f49bc33023b04c9cfeda.hex",
+    "expected_selectors": [
+      "095ea7b3"
+    ],
+    "observations": [
+      "independent_approve_name_resolution"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xa99b252acf9baf81b69e3c5a1b731be6dce94d4964bde6e83963456dc9a99765"
+  },
+  {
+    "chain": "base",
+    "address": "0x92a4930a5b6d22748c40eee82bb4c5bd31362d5a",
+    "runtime": "base-0x92a4930a5b6d22748c40eee82bb4c5bd31362d5a.hex",
+    "expected_selectors": [
+      "f5d469ff"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x56dd70b0221cdf42d7dab1ceb7b3871fd3be77ac38395f89e7d4fa2e6e91b3fc"
+  },
+  {
+    "chain": "base",
+    "address": "0x93ca322589751b5ad3854b9331b584cc68e037aa",
+    "runtime": "base-0x93ca322589751b5ad3854b9331b584cc68e037aa.hex",
+    "expected_selectors": [
+      "f4b9cbc8"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xe8f40c6b0d695ab0156d6f31a81a06f591bae2f1f189242a23a288e4955f2740"
+  },
+  {
+    "chain": "base",
+    "address": "0x93e44a0dd96add2e1b9e224ca2e1ab87b3723a0b",
+    "runtime": "base-0x93e44a0dd96add2e1b9e224ca2e1ab87b3723a0b.hex",
+    "expected_selectors": [
+      "0077b57e"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x057d6b68b0cf74c89cd5d36746549c11d27cb7b540debf8221bcd1fdf4b42627"
+  },
+  {
+    "chain": "base",
+    "address": "0x95af7c7654cb2b7da81982cded0cd88e56bfa21a",
+    "runtime": "base-0x95af7c7654cb2b7da81982cded0cd88e56bfa21a.hex",
+    "expected_selectors": [
+      "ed17fb87"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x977c440a4d5b32b5ed81fa6e5a603c0c93f430b64990cb7a20b06a84fa38973d"
+  },
+  {
+    "chain": "base",
+    "address": "0xb0db1e21422def60cd9922955cdb9e2a7dc93aa8",
+    "runtime": "base-0xb0db1e21422def60cd9922955cdb9e2a7dc93aa8.hex",
+    "expected_selectors": [
+      "f45d0f32"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x714e0b9708924d4b5771954c7a42741d05b068f5ce9e3a9237838f2c9e3cc660"
+  },
+  {
+    "chain": "base",
+    "address": "0xb4963732f02bd659d6e4751d4baa4d18613ff15e",
+    "runtime": "base-0xb4963732f02bd659d6e4751d4baa4d18613ff15e.hex",
+    "expected_selectors": [
+      "e46bf834"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xb8a34f8a61296c8533e82999244e079efcc9c496980e5b3c84283b04af046e16"
+  },
+  {
+    "chain": "base",
+    "address": "0xb96d385d29e9209fdae8f1e5c1af344661ea1178",
+    "runtime": "base-0xb96d385d29e9209fdae8f1e5c1af344661ea1178.hex",
+    "expected_selectors": [
+      "9cf06c66"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xa788b37c753d8bf10458d2176f4f641deda85ef912e1d2e624b7cb39ff54a53e"
+  },
+  {
+    "chain": "base",
+    "address": "0xcbfacf64179602ea8929a4a3913bb181eff48b29",
+    "runtime": "base-0xcbfacf64179602ea8929a4a3913bb181eff48b29.hex",
+    "expected_selectors": [
+      "1ddf1e23"
+    ],
+    "observations": [
+      "same_name_overload_replaced"
+    ],
+    "observed_source_overloads": [
+      "function deactivatePoints()",
+      "function deactivatePoints(address arg0)"
+    ],
+    "runtime_keccak256": "0x9946e9439d4cd218acd78bf37473935210b87b5ca01ff44034f83207630f08cf"
+  },
+  {
+    "chain": "base",
+    "address": "0xd93e888d408b0f6f8216fab06f22cd0453bcca76",
+    "runtime": "base-0xd93e888d408b0f6f8216fab06f22cd0453bcca76.hex",
+    "expected_selectors": [
+      "3427fe63"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xc1dc87879e79defb0dffbd4b2d7bb4b3a9938bfc1a75547683725f90fa6c4214"
+  },
+  {
+    "chain": "base",
+    "address": "0xda4efc48e339a11fcc057959375ecc8d78aea860",
+    "runtime": "base-0xda4efc48e339a11fcc057959375ecc8d78aea860.hex",
+    "expected_selectors": [
+      "00009e71"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x36c8aa186b653996c352af0cad5fcdc04ce719c207d329429576bcb7e159a3fe"
+  },
+  {
+    "chain": "base",
+    "address": "0xdd90a13501458c1aeab187cbf66d5119afcfe11b",
+    "runtime": "base-0xdd90a13501458c1aeab187cbf66d5119afcfe11b.hex",
+    "expected_selectors": [
+      "fd0f6df4"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x12fda0222e4276498f6bb3d0385d3cf69de62b36a940f9efff27a55a5e10b093"
+  },
+  {
+    "chain": "base",
+    "address": "0xdd9e1bccee29ed8b6d72ab505b5b5527c8baf58b",
+    "runtime": "base-0xdd9e1bccee29ed8b6d72ab505b5b5527c8baf58b.hex",
+    "expected_selectors": [
+      "00ac0232"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xb3c29d143108539dd36df3544f10f6c50b8f78be503a09cc03337676404a1fb1"
+  },
+  {
+    "chain": "base",
+    "address": "0xe068e83e2fb9b8d35f48814c3cb00906a3b79e36",
+    "runtime": "base-0xe068e83e2fb9b8d35f48814c3cb00906a3b79e36.hex",
+    "expected_selectors": [
+      "891e656c"
+    ],
+    "observations": [
+      "same_name_overload_replaced"
+    ],
+    "observed_source_overloads": [
+      "function getGnsPriceUsd(uint8 arg0)",
+      "function getGnsPriceUsd(uint8 arg0, uint256 arg1)"
+    ],
+    "runtime_keccak256": "0x0cae7aef1a832cd98e5f349b660dbcb0c05985d7744a51123855b1bafc1623be"
+  },
+  {
+    "chain": "base",
+    "address": "0xe1977938f43ff236116c4718e6b5b8e6436d798b",
+    "runtime": "base-0xe1977938f43ff236116c4718e6b5b8e6436d798b.hex",
+    "expected_selectors": [
+      "002c68df"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x433ffdbded62da091ff6b32ca62471065293a524438e39b5f297394d28ef82f4"
+  },
+  {
+    "chain": "base",
+    "address": "0xe819c3445f505d2b8f47b8cc91d4a40b29ea4994",
+    "runtime": "base-0xe819c3445f505d2b8f47b8cc91d4a40b29ea4994.hex",
+    "expected_selectors": [
+      "00761111"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x62980693a2c65f16eb9accf57c7d87218b78e91b039a90a0535771bf0adae264"
+  },
+  {
+    "chain": "base",
+    "address": "0xf32e12a21fb8fcc1f2e012b52308d7d6998fd93e",
+    "runtime": "base-0xf32e12a21fb8fcc1f2e012b52308d7d6998fd93e.hex",
+    "expected_selectors": [
+      "fdb959bc"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x40f31cbf3a509c51666ea7a731f92804e80889e1ca1f4137acd0b0fefeab4834"
+  },
+  {
+    "chain": "base",
+    "address": "0xf528340d8c2e0e9a5e90e8db86b3d783793c449b",
+    "runtime": "base-0xf528340d8c2e0e9a5e90e8db86b3d783793c449b.hex",
+    "expected_selectors": [
+      "d7800d83"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x8cfd703348655a8f3862edb96ad1debe4f2405f1226d27c4e10890ac1496ab27"
+  },
+  {
+    "chain": "base",
+    "address": "0xfb52b4dec98d25a3d433982f3f10a0dee306b4b9",
+    "runtime": "base-0xfb52b4dec98d25a3d433982f3f10a0dee306b4b9.hex",
+    "expected_selectors": [
+      "e39c08fc"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x0aadd3e36a160563a02f08a94b22abb1f8fd0a230cc0aec9f2afaf6a12f088bd"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x015e29f1a7dc97ea069d8fcd4e7a5753dd5a80c5",
+    "runtime": "ethereum-0x015e29f1a7dc97ea069d8fcd4e7a5753dd5a80c5.hex",
+    "expected_selectors": [
+      "1f931c1c"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x91a251cb9c73b6611048e049827c9c0d9a71c020027f1ab3bbc20dc15746933a"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x06e0c6ea7a0287cfd1bd84adaa6062225166eeaa",
+    "runtime": "ethereum-0x06e0c6ea7a0287cfd1bd84adaa6062225166eeaa.hex",
+    "expected_selectors": [
+      "000000d1"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x07bca511e73aad9220a70776fbb341c39ab9d63597a1657571e263ae8d9e4728"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x390eae68465090e8a1e4b202b5ccb6ae3142583f",
+    "runtime": "ethereum-0x390eae68465090e8a1e4b202b5ccb6ae3142583f.hex",
+    "expected_selectors": [
+      "095ea7b3",
+      "4f1ef286"
+    ],
+    "observations": [
+      "dynamic_bytes_argument_inferred_as_uint256"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xbb262a074298aceb9903211cd6c28cd1fb794eec3acf583b3b4a6d0eed58a48d"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x50a15277aa8bcb0c6e3837eb4c6836134c89d4a3",
+    "runtime": "ethereum-0x50a15277aa8bcb0c6e3837eb4c6836134c89d4a3.hex",
+    "expected_selectors": [
+      "fff3a01b"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xd613f4a3532af2a1edd990978d66df4e3caf728ed342e9137abed15346302273"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x53302aa9c82464e489e7cdf2025388e68d021554",
+    "runtime": "ethereum-0x53302aa9c82464e489e7cdf2025388e68d021554.hex",
+    "expected_selectors": [
+      "00000000",
+      "00000005"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x04e416bb74f5c7dd37e1e10550929ddae1ef364833356226299e9517be88e981"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x6a33dbefa2502bee9fae77f78039a855d445f71d",
+    "runtime": "ethereum-0x6a33dbefa2502bee9fae77f78039a855d445f71d.hex",
+    "expected_selectors": [
+      "095ea7b3"
+    ],
+    "observations": [
+      "independent_approve_name_resolution"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x6f46980be1a3a7854ee819e10c704daaf8eed9876cf1e65d4d1e02d1bdad3f9a"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x6b712120e610c572eb4ff1c4745ea796fd94f20a",
+    "runtime": "ethereum-0x6b712120e610c572eb4ff1c4745ea796fd94f20a.hex",
+    "expected_selectors": [
+      "0b03bf2b",
+      "1b5ad801",
+      "1c52b77a",
+      "20ec5ef7",
+      "24a69051",
+      "40fc8c80",
+      "564be385",
+      "5d5ee3ae",
+      "70326ab6",
+      "7621d760",
+      "7a226252",
+      "8b5c6263",
+      "e0f7eeba",
+      "fedc4016"
+    ],
+    "observations": [
+      "memory_offset_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x70f5c806623b8f3181f227b301c288d739dd45cb3c549a71f5df505844ea9c2d"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x6bfc971ff46934817ebe5b218da5d9b0bf1ed077",
+    "runtime": "ethereum-0x6bfc971ff46934817ebe5b218da5d9b0bf1ed077.hex",
+    "expected_selectors": [
+      "095ea7b3"
+    ],
+    "observations": [
+      "independent_approve_name_resolution"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xc0e864c287f4e65527a4a0763d95897cce6859fcbdcabee0f4500555051b1d4d"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x7117b8558251476140ee193fec361654af9be67e",
+    "runtime": "ethereum-0x7117b8558251476140ee193fec361654af9be67e.hex",
+    "expected_selectors": [
+      "001d3567"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xf8a0ebe992bcfaf910f78cd32fcb2f652cbac40ccb735844307f4cf1da0e005a"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x7721bcb1c2e5307cbcea6eb2a359b7f0781a8725",
+    "runtime": "ethereum-0x7721bcb1c2e5307cbcea6eb2a359b7f0781a8725.hex",
+    "expected_selectors": [
+      "cdffacc6"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x6deb7349b15c5f47c227fca1008c85fa95aa2601748b2b53bc4bd7757e93695f"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0x7ad90330f3518c32362583072de24af3d9df7b91",
+    "runtime": "ethereum-0x7ad90330f3518c32362583072de24af3d9df7b91.hex",
+    "expected_selectors": [
+      "00d9246b"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x0548da74cc1259cb438311ac10d49a8fc501caa833c23842ad21438ea174b986"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0xa341c5da8db25924edcbf00698784b5d801d88a2",
+    "runtime": "ethereum-0xa341c5da8db25924edcbf00698784b5d801d88a2.hex",
+    "expected_selectors": [
+      "f2fde38b"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xda1762c26dee46d901df2675050126ae5600236b21ea233ebf87a533e37434a8"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0xb5d1eea7c0d57a6643830db8dea1062e16b2daf3",
+    "runtime": "ethereum-0xb5d1eea7c0d57a6643830db8dea1062e16b2daf3.hex",
+    "expected_selectors": [
+      "095ea7b3"
+    ],
+    "observations": [
+      "independent_approve_name_resolution"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x152b33cf2873ac8750666958523cd69dfd0e014bfb70c2e62db120f7e298ede5"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0xc9968d9bbaba9462a5d228be6617c870a2118082",
+    "runtime": "ethereum-0xc9968d9bbaba9462a5d228be6617c870a2118082.hex",
+    "expected_selectors": [
+      "00816c97"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xe3b0e42e542fc6198db3fa278a8aed7012544e94c93a9524c2076ecd0b43f55f"
+  },
+  {
+    "chain": "ethereum",
+    "address": "0xe1046fcb1057ef82b68f3a6b8ebb0e411cf334e0",
+    "runtime": "ethereum-0xe1046fcb1057ef82b68f3a6b8ebb0e411cf334e0.hex",
+    "expected_selectors": [
+      "f2fde38b"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x9511e09d8ab0e424db2a82950352737f8dea77b1ec187c8d0b3e39c22b135e0f"
+  },
+  {
+    "chain": "monad",
+    "address": "0x31ed51e2f5be99db9b12ccc62a8f6f612985aa37",
+    "runtime": "monad-0x31ed51e2f5be99db9b12ccc62a8f6f612985aa37.hex",
+    "expected_selectors": [
+      "f1fe6cd9"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x6cf4b48ae41d36e76965086e7b14c9f6078f868be2a2c6bbe0114a54f8892c67"
+  },
+  {
+    "chain": "monad",
+    "address": "0x331e73e661c2d7097781e00b4bf57b3dcbcd7415",
+    "runtime": "monad-0x331e73e661c2d7097781e00b4bf57b3dcbcd7415.hex",
+    "expected_selectors": [
+      "359604da"
+    ],
+    "observations": [
+      "same_name_overload_replaced"
+    ],
+    "observed_source_overloads": [
+      "function lpUnrealizedPnlUsd()",
+      "function lpUnrealizedPnlUsd(address arg0)"
+    ],
+    "runtime_keccak256": "0xa86ddc58a5c370507b9ce03f4394be66a54da10f4382d2dac3cc7fde3a838cc7"
+  },
+  {
+    "chain": "monad",
+    "address": "0x65d49ccc99b65291079d442812be7b7921ccf3e3",
+    "runtime": "monad-0x65d49ccc99b65291079d442812be7b7921ccf3e3.hex",
+    "expected_selectors": [
+      "00c2f817"
+    ],
+    "observations": [
+      "short_or_zero_selector_not_discovered"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0xa5bec8f7ee949ddb32e5cbcd601c30528ef79f3ed51f48283757f945c154632c"
+  },
+  {
+    "chain": "monad",
+    "address": "0xcd3d92676aae4335b90452365b99b306a25cd2d6",
+    "runtime": "monad-0xcd3d92676aae4335b90452365b99b306a25cd2d6.hex",
+    "expected_selectors": [
+      "8f51e175"
+    ],
+    "observations": [
+      "subtraction_dispatch_not_recognized"
+    ],
+    "observed_source_overloads": [],
+    "runtime_keccak256": "0x0b435fb47f08ca489fbeab77a6067e48c964bdb7e228d5211680475599864a3c"
+  }
+]

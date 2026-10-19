@@ -4,6 +4,7 @@ use std::{
     time::Instant,
 };
 
+use alloy::primitives::U256;
 use eyre::Result;
 use heimdall_common::{
     ether::signatures::{ResolveSelector, ResolvedFunction},
@@ -12,7 +13,10 @@ use heimdall_common::{
 use tokio::task;
 use tracing::{debug, error, info, trace, warn};
 
-use crate::core::vm::VM;
+use crate::core::{
+    opcodes::{self, WrappedInput, WrappedOpcode},
+    vm::VM,
+};
 
 /// Finds and resolves function selectors from disassembled bytecode
 ///
@@ -52,102 +56,124 @@ pub async fn get_resolved_selectors(
     Ok((selectors, resolved_selectors))
 }
 
-/// find all function selectors in the given EVM assembly.
-// TODO: update get_resolved_selectors logic to support vyper, huff
+/// Find selectors whose calldata projection controls a dispatcher branch.
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
-    let mut function_selectors = HashMap::new();
-    let mut handled_selectors = HashSet::new();
-
-    // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
-    // they are function selectors
-    let assembly: Vec<String> = assembly.split('\n').map(|line| line.trim().to_string()).collect();
-    for line in assembly.iter() {
-        let instruction_args: Vec<String> = line.split(' ').map(|arg| arg.to_string()).collect();
-
-        if instruction_args.len() >= 2 {
-            let instruction = instruction_args[1].clone();
-
-            if &instruction == "PUSH4" {
-                let function_selector = instruction_args[2].clone();
-
-                // check if this function selector has already been handled
-                if handled_selectors.contains(&function_selector) {
-                    continue;
-                }
-
-                trace!(
-                    "optimistically assuming instruction {} {} {} is a function selector",
-                    instruction_args[0],
-                    instruction_args[1],
-                    instruction_args[2]
-                );
-
-                // add the function selector to the handled selectors
-                handled_selectors.insert(function_selector.clone());
-
-                // get the function's entry point
-                let function_entry_point =
-                    match resolve_entry_point(&mut evm.clone(), &function_selector) {
-                        0 => continue,
-                        x => x,
-                    };
-
-                trace!(
-                    "found function selector {} at entry point {}",
-                    function_selector,
-                    function_entry_point
-                );
-
-                function_selectors.insert(function_selector, function_entry_point);
+    let instructions: Vec<Vec<&str>> =
+        assembly.lines().map(|line| line.split_whitespace().collect()).collect();
+    let mut candidates: HashSet<String> = HashSet::from(["00000000".to_string()]);
+    for (index, instruction) in instructions.iter().enumerate() {
+        let Some(opcode) = instruction.get(1) else { continue };
+        let short_comparison = matches!(*opcode, "PUSH1" | "PUSH2" | "PUSH3") &&
+            instructions
+                .get(index + 1)
+                .and_then(|next| next.get(1))
+                .is_some_and(|next| matches!(*next, "EQ" | "SUB" | "XOR"));
+        if *opcode == "PUSH4" || short_comparison {
+            if let Some(value) = instruction
+                .get(2)
+                .and_then(|value| u32::from_str_radix(value.trim_start_matches("0x"), 16).ok())
+            {
+                candidates.insert(format!("{value:08x}"));
             }
         }
     }
-
-    info!("discovered {} function selectors in assembly", function_selectors.len());
-    function_selectors
+    let mut candidates: Vec<_> = candidates.into_iter().collect();
+    candidates.sort();
+    let mut selectors = HashMap::new();
+    for selector in candidates {
+        let entry = resolve_entry_point(&mut evm.clone(), &selector);
+        if entry != 0 {
+            selectors.insert(selector, entry);
+        }
+    }
+    info!("discovered {} function selectors in assembly", selectors.len());
+    selectors
 }
 
-/// resolve a selector's function entry point from the EVM bytecode
-// TODO: update resolve_entry_point logic to support vyper
+fn is_selector_projection(input: &WrappedInput, calldata_words: &HashSet<WrappedOpcode>) -> bool {
+    let WrappedInput::Opcode(operation) = input else { return false };
+    match (operation.opcode, operation.inputs.as_slice()) {
+        (opcodes::SHR, [shift, WrappedInput::Opcode(word)]) => {
+            shift.pushed_value() == Some(U256::from(224)) && calldata_words.contains(word.as_ref())
+        }
+        (opcodes::DIV, [WrappedInput::Opcode(word), divisor]) => {
+            divisor.pushed_value() == Some(U256::from(1) << 224) &&
+                calldata_words.contains(word.as_ref())
+        }
+        (opcodes::AND, [left, right]) => {
+            (left.pushed_value() == Some(U256::from(u32::MAX)) &&
+                is_selector_projection(right, calldata_words)) ||
+                (right.pushed_value() == Some(U256::from(u32::MAX)) &&
+                    is_selector_projection(left, calldata_words))
+        }
+        _ => false,
+    }
+}
+
+fn selector_branch_condition(
+    operation: &WrappedOpcode,
+    selector: U256,
+    calldata_words: &HashSet<WrappedOpcode>,
+) -> Option<bool> {
+    if operation.depth() > 64 {
+        return None;
+    }
+    match (operation.opcode, operation.inputs.as_slice()) {
+        (opcodes::EQ | opcodes::SUB | opcodes::XOR, [left, right]) => {
+            let matches = (left.pushed_value() == Some(selector) &&
+                is_selector_projection(right, calldata_words)) ||
+                (right.pushed_value() == Some(selector) &&
+                    is_selector_projection(left, calldata_words));
+            matches.then_some(operation.opcode == opcodes::EQ)
+        }
+        (opcodes::ISZERO, [input])
+            if selector.is_zero() && is_selector_projection(input, calldata_words) =>
+        {
+            Some(true)
+        }
+        (opcodes::ISZERO, [WrappedInput::Opcode(inner)]) => {
+            selector_branch_condition(inner, selector, calldata_words).map(|condition| !condition)
+        }
+        _ => None,
+    }
+}
+
+/// Resolve both taken and fallthrough selector branches without matching rendered source text.
 pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
+    let Ok(calldata) = decode_hex(selector) else { return 0 };
+    if calldata.len() != 4 {
+        return 0;
+    }
+    let selector = U256::from_be_slice(&calldata);
+    vm.calldata = calldata;
+    let mut calldata_words = HashSet::new();
     let mut handled_jumps = HashSet::new();
-
-    // execute the EVM call to find the entry point for the given selector
-    vm.calldata = decode_hex(selector).expect("Failed to decode selector.");
-    while vm.bytecode.len() >= vm.instruction as usize {
-        let call = match vm.step() {
-            Ok(call) => call,
-            Err(_) => break, // the call failed, so we can't resolve the selector
-        };
-
-        // if the opcode is an JUMPI and it matched the selector, the next jumpi is the entry point
-        if call.last_instruction.opcode == 0x57 {
-            let jump_condition = call.last_instruction.input_operations[1].solidify();
-            let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
-
-            if jump_condition.contains(selector) &&
-                jump_condition.contains("msg.data[0]") &&
-                jump_condition.contains(" == ") &&
-                jump_taken == 1
-            {
-                return call.last_instruction.inputs[0].try_into().unwrap_or(0);
-            } else if jump_taken == 1 {
-                // if handled_jumps contains the jumpi, we have already handled this jump.
-                // loops aren't supported in the dispatcher, so we can just return 0
-                if handled_jumps.contains(&call.last_instruction.inputs[0].try_into().unwrap_or(0))
+    for _ in 0..vm.bytecode.len().saturating_mul(4).min(100_000) {
+        let Ok(state) = vm.step() else { break };
+        let instruction = state.last_instruction;
+        if instruction.opcode == opcodes::CALLDATALOAD &&
+            instruction.inputs.first() == Some(&U256::ZERO)
+        {
+            calldata_words.extend(instruction.output_operations.iter().cloned());
+        }
+        if instruction.opcode == opcodes::JUMPI {
+            if !handled_jumps.insert(instruction.instruction) {
+                break;
+            }
+            if let Some(condition) = instruction.input_operations.get(1).and_then(|operation| {
+                selector_branch_condition(operation, selector, &calldata_words)
+            }) {
+                if instruction.inputs.get(1).is_some_and(|value| value.is_zero() != condition) &&
+                    vm.exitcode == 255
                 {
-                    return 0;
-                } else {
-                    handled_jumps.insert(call.last_instruction.inputs[0].try_into().unwrap_or(0));
+                    return vm.instruction.saturating_sub(1);
                 }
             }
         }
-
         if vm.exitcode != 255 || !vm.returndata.is_empty() {
             break;
         }
     }
-
     0
 }
 

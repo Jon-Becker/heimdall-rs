@@ -35,14 +35,7 @@ pub fn jump(
     // Safely convert U256 to u128
     let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
-    // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-    if (pc <=
-        vm.bytecode
-            .len()
-            .try_into()
-            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-        (vm.bytecode[pc as usize] != opcodes::JUMPDEST)
-    {
+    if vm.bytecode.get(usize::try_from(pc).unwrap_or(usize::MAX)) != Some(&opcodes::JUMPDEST) {
         vm.exit(790, Vec::new());
         return Some(Instruction {
             instruction: last_instruction,
@@ -72,15 +65,7 @@ pub fn jumpi(
     let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
 
     if !condition.is_zero() {
-        // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
-        // destination)
-        if (pc <
-            vm.bytecode
-                .len()
-                .try_into()
-                .expect("impossible case: bytecode is larger than u128::MAX")) &&
-            (vm.bytecode[pc as usize] != opcodes::JUMPDEST)
-        {
+        if vm.bytecode.get(usize::try_from(pc).unwrap_or(usize::MAX)) != Some(&opcodes::JUMPDEST) {
             vm.exit(790, Vec::new());
             return Some(Instruction {
                 instruction: last_instruction,
@@ -112,4 +97,35 @@ pub fn pc(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 pub fn gas(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     vm.stack.push(U256::from(vm.gas_remaining), operation);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::Address;
+    use heimdall_common::utils::strings::decode_hex;
+
+    fn exitcode(bytecode: &str) -> u128 {
+        let bytecode = decode_hex(bytecode).unwrap();
+        let mut vm =
+            VM::new(&bytecode, &[], Address::ZERO, Address::ZERO, Address::ZERO, 0, u128::MAX);
+        for _ in 0..8 {
+            vm.step().unwrap();
+            if vm.exitcode != 255 {
+                return vm.exitcode;
+            }
+        }
+        panic!("fixture did not terminate");
+    }
+
+    #[test]
+    fn rejects_invalid_jump_destinations_without_overflow_or_index_panics() {
+        for bytecode in
+            ["600356".to_string(), "600056".to_string(), format!("7f{}56", "ff".repeat(32))]
+        {
+            assert_eq!(exitcode(&bytecode), 790);
+        }
+        assert_eq!(exitcode(&format!("60017f{}57", "ff".repeat(32))), 790);
+        assert_eq!(exitcode(&format!("60007f{}5700", "ff".repeat(32))), 10);
+    }
 }

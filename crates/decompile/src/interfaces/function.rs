@@ -83,13 +83,23 @@ pub(crate) struct CalldataFrame {
 impl CalldataFrame {
     /// Get the potential types for the given argument
     pub(crate) fn potential_types(&self) -> Vec<SolidityType> {
+        if self.heuristics.contains(&TypeHeuristic::DynamicBytes) {
+            return vec![SolidityType::Bytes, SolidityType::String];
+        }
         // get all potential types that can fit in self.mask_size
-        byte_size_to_type(self.mask_size).1.iter().map(|ty| SolidityType::parse(ty)).collect()
+        let mut types: Vec<_> =
+            byte_size_to_type(self.mask_size).1.iter().map(|ty| SolidityType::parse(ty)).collect();
+        if self.heuristics.contains(&TypeHeuristic::DynamicLength) {
+            types.extend([SolidityType::Bytes, SolidityType::String]);
+        }
+        types
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Eq)]
 pub(crate) enum TypeHeuristic {
+    DynamicBytes,
+    DynamicLength,
     Numeric,
     Bytes,
     Boolean,
