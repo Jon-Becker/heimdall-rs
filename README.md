@@ -44,6 +44,33 @@ After compilation, the `heimdall` command will be available to use from a new te
 
 _Having trouble? Check out the [Troubleshooting](https://jbecker.dev/r/heimdall-rs/wiki/troubleshooting) section in the wiki._
 
+### Check indexed event parameters against logs
+
+Event signature lookups do not include `indexed` modifiers. Decompilation can optionally check
+emitted logs and correct these modifiers in the ABI, detailed ABI, and Solidity event declarations:
+
+```bash
+heimdall decompile 0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d \
+  --rpc-url "$RPC_URL" --include-sol --indexed-log-check
+```
+
+`--indexed-log-check` defaults to **false**, including in `DecompilerArgsBuilder::new()`.
+When enabled, it checks the last 10,000 blocks in 200-block requests. Use
+`--indexed-log-from-block` and `--indexed-log-to-block` for an explicit range of at most
+10,000 blocks. The upper bound defaults to the latest block. Supply `--indexed-log-address`
+when the emitter differs from the target, such as a proxy when decompiling implementation bytecode,
+or when the target is a bytecode string, file, or ENS name.
+
+The check requires a resolved event signature and accepts only one layout that fits every matching
+log in the range. It validates topic count, primitive padding, and the complete ABI encoding of the
+data. Indexed strings, bytes, arrays, and tuples remain opaque hashes. Events with more than 16
+inputs, anonymous events, absent logs, invalid encodings, and ambiguous or conflicting layouts stay
+unchanged. An RPC failure leaves every event unchanged and does not fail decompilation.
+`--skip-resolving` leaves events unresolved, so the check cannot recover their parameter layouts.
+Choose a range that represents the implementation under analysis; logs from earlier proxy
+implementations can be incompatible. No bytecode-only inference, parameter names, or values of
+hashed indexed parameters are recovered by this check.
+
 ## Documentation
 
 Documentation for all of heimdall-rs is available in the [wiki](https://jbecker.dev/r/heimdall-rs/wiki).

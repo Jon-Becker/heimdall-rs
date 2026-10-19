@@ -1,0 +1,26 @@
+{
+  "chainId": 1,
+  "address": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+  "signature": "NameUnwrapped(bytes32,address)",
+  "expectedIndexed": [
+    true,
+    false
+  ],
+  "logs": [
+    {
+      "address": "0xd4416b13d2b3a9abae7acd5d6c2bbdbe25686401",
+      "topics": [
+        "0xee2ba1195c65bcf218a83d874335c6bf9d9067b4c672f3c3bf16cf40de7586c4",
+        "0x9b735b7c9c9c1d5e4261b17c72b1c1d29876404e9ce94c23a2487a287a65f024"
+      ],
+      "data": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "blockNumber": "0x19035ee",
+      "transactionHash": "0x0e8bf6a49b89c8202fec75fede8ab3de1271d2cce502387e1d3c4ad9779f32a3",
+      "transactionIndex": "0xd2",
+      "blockHash": "0x4fe9b333dffa63b677088f46cd25afd939e0d0b6ddeab1fcd245eaa58030f2a4",
+      "blockTimestamp": "0x6ad65757",
+      "logIndex": "0x255",
+      "removed": false
+    }
+  ]
+}
