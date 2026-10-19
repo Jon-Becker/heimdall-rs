@@ -121,3 +121,32 @@ async fn decompiles_short_selector_runtime_with_an_invalid_fallback_jump() {
     let result = heimdall_decompiler::decompile(args).await.unwrap();
     assert!(result.abi.functions().any(|function| function.name == "Unresolved_00735c98"));
 }
+
+#[tokio::test]
+async fn infers_dynamic_signature_payload_in_existing_ecrecover_fixture() {
+    let args = heimdall_decompiler::DecompilerArgsBuilder::new()
+        .target(include_str!("../../core/tests/testdata/bytecode/ecrecover.hex").trim().to_string())
+        .skip_resolving(true)
+        .include_solidity(true)
+        .timeout(10000)
+        .build()
+        .unwrap();
+    let result = heimdall_decompiler::decompile(args).await.unwrap();
+    let functions: Vec<_> = result.abi.functions().collect();
+    assert_eq!(functions.len(), 1);
+    let function = functions[0];
+    assert_eq!(function.name, "Unresolved_19045a25");
+    assert_eq!(
+        function.inputs.iter().map(|input| input.ty.as_str()).collect::<Vec<_>>(),
+        vec!["uint256", "bytes"]
+    );
+    assert_eq!(
+        function.outputs.iter().map(|output| output.ty.as_str()).collect::<Vec<_>>(),
+        vec!["address"]
+    );
+    let source = result.source.unwrap();
+    assert!(source.contains(
+        "function Unresolved_19045a25(uint256 arg0, bytes arg1) public payable returns (address) {"
+    ));
+    assert!(source.contains(" = ecrecover("));
+}

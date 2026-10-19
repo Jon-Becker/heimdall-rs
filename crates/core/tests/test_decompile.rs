@@ -36,7 +36,7 @@ mod integration_tests {
         .expect("failed to decompile");
 
         // assert that the output is correct
-        for line in &["function Unresolved_19045a25(uint256 arg0, uint256 arg1) public payable returns (address) {",
+        for line in &["function Unresolved_19045a25(uint256 arg0, bytes arg1) public payable returns (address) {",
             " = ecrecover("] {
             println!("{line}");
             assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
