@@ -1,0 +1,299 @@
+name: Maintainer CI
+run-name: Maintainer CI for PR #${{ inputs.pr_number }} at ${{ inputs.head_sha }}
+
+# Never run fork code with secrets automatically. Dispatching this workflow is
+# an explicit decision to trust one reviewed commit (including its build code).
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number
+        required: true
+        type: string
+      head_sha:
+        description: Exact reviewed PR head SHA (40 hexadecimal characters)
+        required: true
+        type: string
+      trust_reviewed_code:
+        description: I trust this SHA with RPC credentials, private eval access, and the OpenRouter key; AI evaluation incurs charges
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  authorize:
+    name: Validate reviewed commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+      statuses: write
+    outputs:
+      head_sha: ${{ steps.authorize.outputs.head_sha }}
+      head_repository: ${{ steps.authorize.outputs.head_repository }}
+      base_sha: ${{ steps.authorize.outputs.base_sha }}
+    steps:
+      # Repeat this metadata-only check before every code-execution job. A
+      # failed-job rerun can otherwise reuse an old successful authorization.
+      - &authorize
+        name: Authorize maintainer and reviewed SHA
+        id: authorize
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REVIEWED_SHA: ${{ inputs.head_sha }}
+          TRUST_REVIEWED_CODE: ${{ inputs.trust_reviewed_code }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        with:
+          script: |
+            // BEGIN MAINTAINER AUTHORIZATION
+            if (context.eventName !== 'workflow_dispatch' || context.ref !== 'refs/heads/main') {
+              throw new Error('Run this workflow manually from main.');
+            }
+            if (process.env.TRUST_REVIEWED_CODE !== 'true') {
+              throw new Error('Explicit trust of the reviewed code and evaluation charges is required.');
+            }
+            const number = process.env.PR_NUMBER;
+            const sha = process.env.REVIEWED_SHA;
+            if (!/^[1-9][0-9]*$/.test(number) || !Number.isSafeInteger(Number(number))) {
+              throw new Error('A valid pull request number is required.');
+            }
+            if (!/^[0-9a-f]{40}$/i.test(sha || '')) {
+              throw new Error('Provide the full reviewed 40-character head SHA.');
+            }
+            const reviewedSha = sha.toLowerCase();
+            const repository = `${context.repo.owner}/${context.repo.repo}`;
+            if (repository !== 'Jon-Becker/heimdall-rs') {
+              throw new Error('This workflow must run in Jon-Becker/heimdall-rs.');
+            }
+            const actors = new Set([context.actor, process.env.TRIGGERING_ACTOR]);
+            for (const username of actors) {
+              if (!username) throw new Error('The requesting and rerunning actors must be known.');
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                ...context.repo,
+                username,
+              });
+              if (!['write', 'maintain', 'admin'].includes(data.permission)) {
+                throw new Error(`${username} needs write, maintain, or admin repository access.`);
+              }
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: Number(number),
+            });
+            if (pr.state !== 'open' || pr.base.repo?.full_name !== repository || !pr.head.repo) {
+              throw new Error('The PR must be open in this repository with an available head repository.');
+            }
+            if (pr.head.sha !== reviewedSha) {
+              throw new Error('The PR head changed. Review the new commit and dispatch again with its SHA.');
+            }
+            core.setOutput('head_sha', reviewedSha);
+            core.setOutput('head_repository', pr.head.repo.full_name);
+            core.setOutput('base_sha', pr.base.sha);
+            core.notice(`Approved PR #${number} at ${reviewedSha}; base ${pr.base.sha}.`);
+            // END MAINTAINER AUTHORIZATION
+      - name: Mark reviewed commit pending
+        uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ steps.authorize.outputs.head_sha }}
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha: process.env.REVIEWED_SHA,
+              context: 'Maintainer CI',
+              state: 'pending',
+              description: 'Running reviewed-commit tests, coverage, and AI evaluation',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+  test:
+    name: Tests (${{ matrix.os }})
+    needs: authorize
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - *authorize
+      - &checkout-candidate
+        name: Checkout reviewed candidate
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ needs.authorize.outputs.head_repository }}
+          ref: ${{ needs.authorize.outputs.head_sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - name: Run release tests
+        env: &rpc
+          RPC_URL: ${{ secrets.RPC_URL }}
+          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
+        run: |
+          test -n "$RPC_URL" && test -n "$WS_RPC_URL" || {
+            echo "::error::RPC_URL and WS_RPC_URL must both be configured."
+            exit 1
+          }
+          make test
+      - run: make test-doc
+
+  coverage:
+    name: Coverage
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - *authorize
+      - *checkout-candidate
+      - name: Checkout pinned base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.base_sha }}
+          path: ci-base
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Measure base and candidate coverage
+        env: *rpc
+        run: |
+          set -euo pipefail
+          test -n "$RPC_URL" && test -n "$WS_RPC_URL" || {
+            echo "::error::RPC_URL and WS_RPC_URL must both be configured."
+            exit 1
+          }
+          (cd ci-base && make test-cov-json)
+          base=$(jq -er '.data[0].totals.lines.percent | numbers' ci-base/coverage.json)
+          make test-cov-json
+          candidate=$(jq -er '.data[0].totals.lines.percent | numbers' coverage.json)
+          diff=$(awk -v candidate="$candidate" -v base="$base" 'BEGIN { print candidate - base }')
+          {
+            echo "### Coverage for ${{ needs.authorize.outputs.head_sha }}"
+            echo "Base (${{ needs.authorize.outputs.base_sha }}): $base%"
+            echo "Candidate: $candidate%"
+            echo "Difference: $diff percentage points"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if awk -v diff="$diff" 'BEGIN { exit !(diff < -2) }'; then
+            echo "::error::Coverage dropped by more than 2 percentage points."
+            exit 1
+          fi
+      - name: Upload coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintainer-coverage
+          path: |
+            coverage.json
+            ci-base/coverage.json
+          if-no-files-found: warn
+
+  eval:
+    name: AI evaluation
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - *authorize
+      - *checkout-candidate
+      - name: Checkout pinned base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.base_sha }}
+          path: heimdall-main
+          persist-credentials: false
+      - name: Checkout evaluation harness
+        uses: actions/checkout@v4
+        with:
+          repository: Jon-Becker/heimdall-eval
+          ref: main
+          path: heimdall-eval
+          token: ${{ secrets.EVAL_REPO_TOKEN }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Build candidate and base
+        run: |
+          cargo build --release --bin heimdall
+          cargo build --release --bin heimdall --manifest-path heimdall-main/Cargo.toml
+      - name: Run base and candidate AI evaluations
+        working-directory: heimdall-eval
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OPENROUTER_API_KEY" || {
+            echo "::error::OPENROUTER_API_KEY must be configured."
+            exit 1
+          }
+          PATH="${GITHUB_WORKSPACE}/heimdall-main/target/release:${PATH}" make eval-all
+          mv heimdall baseline
+          mkdir heimdall
+          mv baseline heimdall/baseline
+          export PATH="${GITHUB_WORKSPACE}/target/release:${PATH}"
+          make run-all
+          make eval-all
+          make report
+      # Do not publish fork-controlled reports to S3 or give this job OIDC.
+      # Artifacts and model-generated evaluation text remain untrusted data.
+      - name: Upload evaluation reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintainer-eval-results
+          path: |
+            heimdall-eval/heimdall/*/eval.json
+            heimdall-eval/heimdall/*/cfg_eval.json
+            heimdall-eval/heimdall/baseline/*/eval.json
+            heimdall-eval/heimdall/baseline/*/cfg_eval.json
+            heimdall-eval/heimdall/baseline/evals.json
+            heimdall-eval/heimdall/evals.json
+            heimdall-eval/heimdall/report.html
+            heimdall-eval/heimdall/report/
+          if-no-files-found: warn
+
+  report:
+    name: Report reviewed-commit result
+    if: ${{ always() && needs.authorize.result == 'success' }}
+    needs: [authorize, test, coverage, eval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+      statuses: write
+    steps:
+      - *authorize
+      # Fresh runner, no checkout, no artifacts, and no evaluation text. Only
+      # GitHub's job results enter this privileged status publisher.
+      - name: Publish separate Maintainer CI status
+        uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ needs.authorize.outputs.head_sha }}
+          TEST_RESULT: ${{ needs.test.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          EVAL_RESULT: ${{ needs.eval.result }}
+        with:
+          script: |
+            const results = [
+              process.env.TEST_RESULT,
+              process.env.COVERAGE_RESULT,
+              process.env.EVAL_RESULT,
+            ];
+            const success = results.every(result => result === 'success');
+            await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha: process.env.REVIEWED_SHA,
+              context: 'Maintainer CI',
+              state: success ? 'success' : 'failure',
+              description: success ? 'Reviewed-commit tests, coverage, and AI eval passed' : 'Tests, coverage, or AI eval did not pass',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
