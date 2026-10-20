@@ -12,6 +12,8 @@ env:
 
 jobs:
   coverage:
+    # Forks cannot receive RPC secrets; full comparison runs after /ok-to-test.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
     name: coverage check
     runs-on: ubuntu-latest
     timeout-minutes: 45

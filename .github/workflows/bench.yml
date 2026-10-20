@@ -21,7 +21,26 @@ jobs:
       REPORT_PREFIX: pull/${{ github.event.pull_request.number }}/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install Rust for secretless benchmarks
+        if: ${{ github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]' }}
+        uses: dtolnay/rust-toolchain@stable
+      - name: Checkout base for secretless benchmarks
+        if: ${{ github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: ci-base
+          persist-credentials: false
+      - name: Run secretless benchmark comparison
+        if: ${{ github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]' }}
+        run: |
+          set -euo pipefail
+          (cd ci-base && cargo bench -p heimdall-core)
+          mkdir -p target
+          cp -R ci-base/target/criterion target/criterion
+          cargo bench -p heimdall-core
       - id: bench
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
         uses: boa-dev/criterion-compare-action@v3
         with:
           package: "heimdall-core"
@@ -42,7 +61,7 @@ jobs:
         id: target
         if: ${{ !cancelled() }}
         env:
-          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]' }}
           BUCKET: ${{ vars.BENCH_REPORT_S3_BUCKET }}
           REGION: ${{ vars.BENCH_REPORT_AWS_REGION }}
           ROLE_ARN: ${{ vars.BENCH_REPORT_AWS_ROLE_ARN }}
@@ -111,7 +130,7 @@ jobs:
       # Forks hold a read-only token and cannot comment at all, so this only runs
       # for same-repository pull requests.
       - name: Link the full report from the benchmark comment
-        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
         uses: actions/github-script@v7
         env:
           BENCH_COMMENT_ID: ${{ steps.bench.outputs.comment-id }}
@@ -177,7 +196,7 @@ jobs:
             }
 
       - name: Delete old benchmark comments
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
         uses: actions/github-script@v7
         with:
           script: |
