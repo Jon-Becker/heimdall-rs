@@ -170,13 +170,29 @@ fn layout_matches(types: &[DynSolType], layout: &[bool], log: &Log) -> bool {
                 }
             }
         } else {
-            body.push(ty.clone());
+            body.push(lossless_decode_type(ty));
         }
     }
     let data = &log.data().data;
     let Ok(value) = DynSolType::Tuple(body).abi_decode_sequence(data) else { return false };
     canonical_value(&value) &&
         value.abi_encode_sequence().is_some_and(|encoded| encoded == data.as_ref())
+}
+
+// Solidity strings can contain arbitrary bytes. Decode them as ABI-equivalent bytes to avoid
+// Alloy's lossy UTF-8 conversion changing the payload used for canonical re-encoding checks.
+fn lossless_decode_type(ty: &DynSolType) -> DynSolType {
+    match ty {
+        DynSolType::String => DynSolType::Bytes,
+        DynSolType::Array(inner) => DynSolType::Array(Box::new(lossless_decode_type(inner))),
+        DynSolType::FixedArray(inner, size) => {
+            DynSolType::FixedArray(Box::new(lossless_decode_type(inner)), *size)
+        }
+        DynSolType::Tuple(types) => {
+            DynSolType::Tuple(types.iter().map(lossless_decode_type).collect())
+        }
+        _ => ty.clone(),
+    }
 }
 
 fn canonical_value(value: &DynSolValue) -> bool {
@@ -276,6 +292,57 @@ mod tests {
             ));
             assert_eq!(candidates.unique(), Some([true, false].as_slice()), "{signature}");
         }
+    }
+
+    #[test]
+    fn non_utf8_strings_preserve_ambiguous_layouts() {
+        let raw = DynSolValue::Bytes(vec![0xff]);
+        for (signature, body) in [
+            ("Changed(string,bytes)", raw.clone()),
+            ("Changed(string[],bytes[])", DynSolValue::Array(vec![raw.clone()])),
+            ("Changed(string[1],bytes[1])", DynSolValue::FixedArray(vec![raw.clone()])),
+            (
+                "Changed((string,bool),(bytes,bool))",
+                DynSolValue::Tuple(vec![raw.clone(), DynSolValue::Bool(true)]),
+            ),
+            (
+                "Changed((string[1],bool)[],(bytes[1],bool)[])",
+                DynSolValue::Array(vec![DynSolValue::Tuple(vec![
+                    DynSolValue::FixedArray(vec![raw]),
+                    DynSolValue::Bool(true),
+                ])]),
+            ),
+        ] {
+            let event = Event::parse(signature).unwrap();
+            let mut candidates = IndexedLayouts::new(&event).unwrap();
+            // bytes and string have the same ABI encoding, even for non-UTF-8 payloads.
+            candidates.observe(&log(&event, vec![keccak256("opaque hash")], vec![body]));
+            assert!(candidates.layouts.contains(&vec![false, true]), "{signature}");
+            assert!(candidates.layouts.contains(&vec![true, false]), "{signature}");
+            assert!(candidates.unique().is_none(), "{signature}");
+        }
+    }
+
+    #[tokio::test]
+    async fn lookup_keeps_non_utf8_string_layout_ambiguous() {
+        let event = Event::parse("Changed(string value, bytes indexed tag)").unwrap();
+        let mut sample = log(&event, vec![keccak256([1u8])], vec![DynSolValue::Bytes(vec![0xff])]);
+        sample.block_number = Some(1);
+        let (url, server) = rpc_server(vec![serde_json::json!({"result": [sample]})]).await;
+        let args = crate::interfaces::DecompilerArgsBuilder::new()
+            .target(Address::ZERO.to_string())
+            .rpc_url(url)
+            .indexed_log_check(true)
+            .indexed_log_from_block(Some(1))
+            .indexed_log_to_block(Some(1))
+            .build()
+            .unwrap();
+        let mut abi = JsonAbi::new();
+        abi.events.insert(event.name.clone(), vec![event]);
+        let original = abi.clone();
+        recover_event_indexing(&mut abi, &args).await.unwrap();
+        assert_eq!(abi, original);
+        assert_eq!(server.await.unwrap().len(), 1);
     }
 
     #[test]
