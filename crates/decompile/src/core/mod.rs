@@ -20,6 +20,10 @@ use heimdall_common::{
         },
         types::to_type,
     },
+    resources::{
+        llm::LlmSettings,
+        orcarouter::{LlmProvider, OrcaRouterBases},
+    },
     utils::strings::{decode_hex, encode_hex, encode_hex_reduced, StringExt},
 };
 use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
@@ -83,10 +87,30 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
             "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
         )));
     }
-    if args.llm_postprocess && args.openrouter_api_key.is_empty() {
+
+    // resolve the LLM provider and the credential that belongs to it
+    let provider = LlmProvider::parse(&args.provider).ok_or_else(|| {
+        Error::Eyre(eyre!(
+            "unknown provider '{}'. use '--provider openrouter' or '--provider orcarouter'.",
+            args.provider
+        ))
+    })?;
+    let provider_key = match provider {
+        LlmProvider::OpenRouter => args.openrouter_api_key.clone(),
+        LlmProvider::OrcaRouter => args.orcarouter_api_key.clone(),
+    };
+    if args.llm_postprocess && provider_key.is_empty() {
         return Err(Error::Eyre(eyre!(
-                "llm postprocessing requires an OpenRouter API key. please provide one using the '--openrouter-api-key' flag."
-            )));
+            "llm postprocessing requires an {} API key. provide one with '{}', or run 'heimdall orcarouter login'.",
+            match provider {
+                LlmProvider::OpenRouter => "OpenRouter",
+                LlmProvider::OrcaRouter => "OrcaRouter",
+            },
+            match provider {
+                LlmProvider::OpenRouter => "--openrouter-api-key",
+                LlmProvider::OrcaRouter => "--orcarouter-api-key",
+            }
+        )));
     }
     if !args.include_solidity && args.llm_postprocess {
         return Err(Error::Eyre(eyre!(
@@ -377,14 +401,38 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     // construct the abi for the given analyzed functions
     let abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
     let abi_with_details = build_abi_with_details(&abi, &analyzed_functions)?;
+
+    let mut llm =
+        LlmSettings::new(provider, provider_key, args.model.clone(), OrcaRouterBases::from_env());
+    if args.llm_postprocess {
+        match llm.resolve_model_async().await {
+            Ok(selected) => {
+                if provider == LlmProvider::OrcaRouter {
+                    debug!(
+                        "selected OrcaRouter model '{}' ({})",
+                        selected.model.id,
+                        selected.status.describe()
+                    );
+                    if selected.status.is_degraded() {
+                        warn!("OrcaRouter model catalog unavailable: {}", selected.status.describe());
+                    }
+                }
+                llm.model = selected.model.id;
+            }
+            // OpenRouter keeps its existing free-form model behaviour, so a resolution miss there
+            // is not fatal. OrcaRouter fails closed: an incompatible model is never sent.
+            Err(_) if provider == LlmProvider::OpenRouter => {}
+            Err(e) => return Err(Error::Eyre(eyre!("{e}"))),
+        }
+    }
+
     let source = build_source(
         &analyzed_functions,
         &all_resolved_errors,
         &all_resolved_events,
         &storage_variables,
         args.llm_postprocess,
-        args.openrouter_api_key,
-        args.model,
+        &llm,
     )
     .await?;
 

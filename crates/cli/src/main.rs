@@ -1,6 +1,7 @@
 //! The Heimdall CLI is a command line interface for interacting with Heimdall modules.
 
 pub(crate) mod args;
+pub(crate) mod orcarouter;
 pub(crate) mod output;
 
 use args::{Arguments, Subcommands};
@@ -81,12 +82,21 @@ async fn main() -> Result<()> {
 
             // if the user has not specified an openrouter api key, use the default
             if cmd.openrouter_api_key.as_str() == "" {
-                cmd.openrouter_api_key = configuration.openrouter_api_key;
+                cmd.openrouter_api_key = configuration.openrouter_api_key.clone();
             }
 
-            // if the user has not specified a model, use the default
+            // if the user has not specified an orcarouter api key, use the default
+            if cmd.orcarouter_api_key.as_str() == "" {
+                cmd.orcarouter_api_key = configuration.orcarouter_api_key.clone();
+            }
+
+            // if the user has not specified a model, use the default for the selected provider
             if cmd.model.as_str() == "" {
-                cmd.model = configuration.openrouter_model;
+                cmd.model = if cmd.provider.eq_ignore_ascii_case("orcarouter") {
+                    configuration.orcarouter_model.clone()
+                } else {
+                    configuration.openrouter_model.clone()
+                };
             }
 
             // if the user has not specified an etherscan api key, use the default
@@ -166,7 +176,7 @@ async fn main() -> Result<()> {
 
             // if the user has not specified an openrouter api key, use the default
             if cmd.openrouter_api_key.as_str() == "" {
-                cmd.openrouter_api_key = configuration.openrouter_api_key;
+                cmd.openrouter_api_key = configuration.openrouter_api_key.clone();
             }
 
             // if the user has not specified a model, use the default
@@ -312,6 +322,10 @@ async fn main() -> Result<()> {
 
         Subcommands::Config(cmd) => {
             config(cmd).map_err(|e| eyre!("failed to configure: {}", e))?;
+        }
+
+        Subcommands::Orcarouter(cmd) => {
+            orcarouter::orcarouter(cmd).await?;
         }
 
         Subcommands::Cache(cmd) => {

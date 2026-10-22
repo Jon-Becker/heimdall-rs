@@ -61,6 +61,99 @@ pub(crate) enum Subcommands {
         about = "Detailed inspection of Ethereum transactions, including calldata & trace decoding, log visualization, and more"
     )]
     Inspect(InspectArgs),
+
+    #[clap(
+        name = "orcarouter",
+        about = "Connect to OrcaRouter and inspect its live model catalog"
+    )]
+    Orcarouter(OrcaRouterArgs),
+}
+
+/// Arguments for the `orcarouter` command group.
+#[derive(Debug, Args)]
+pub(crate) struct OrcaRouterArgs {
+    #[clap(subcommand)]
+    pub action: OrcaRouterAction,
+}
+
+/// The OrcaRouter subcommands.
+#[derive(Debug, Subcommand)]
+pub(crate) enum OrcaRouterAction {
+    /// Authorize this machine with an OrcaRouter account (OAuth 2.0 + PKCE) and store the key.
+    Login(OrcaRouterLoginArgs),
+
+    /// Show the configured OrcaRouter key and its provenance.
+    Status,
+
+    /// Remove the stored OrcaRouter key.
+    Logout,
+
+    /// List the models the live OrcaRouter catalog offers for a capability.
+    Models(OrcaRouterModelsArgs),
+}
+
+/// Arguments for `heimdall orcarouter login`.
+#[derive(Debug, Args)]
+pub(crate) struct OrcaRouterLoginArgs {
+    /// Print the authorization URL instead of opening a browser. Use this on headless machines.
+    #[clap(long)]
+    pub no_browser: bool,
+
+    /// How long to wait for the browser callback, in seconds.
+    #[clap(long, default_value = "300", hide_default_value = true)]
+    pub timeout: u64,
+
+    /// Override the OrcaRouter authentication origin.
+    #[clap(long, default_value = "", hide_default_value = true)]
+    pub auth_base: String,
+
+    /// Override the OrcaRouter inference origin.
+    #[clap(long, default_value = "", hide_default_value = true)]
+    pub api_base: String,
+}
+
+/// Arguments for `heimdall orcarouter models`.
+#[derive(Debug, Args)]
+pub(crate) struct OrcaRouterModelsArgs {
+    /// The capability to list models for.
+    #[clap(long, value_enum, default_value_t = OrcaRouterCapability::Chat)]
+    pub capability: OrcaRouterCapability,
+
+    /// Print the catalog as JSON.
+    #[clap(long)]
+    pub json: bool,
+
+    /// Override the OrcaRouter inference origin.
+    #[clap(long, default_value = "", hide_default_value = true)]
+    pub api_base: String,
+}
+
+/// The capabilities a command can select models for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum OrcaRouterCapability {
+    /// Text chat and agent completions.
+    Chat,
+    /// Vector embeddings.
+    Embedding,
+    /// Image generation.
+    Image,
+    /// Video generation.
+    Video,
+    /// Reranking.
+    Rerank,
+}
+
+impl From<OrcaRouterCapability> for heimdall_common::resources::orcarouter::Capability {
+    fn from(value: OrcaRouterCapability) -> Self {
+        use heimdall_common::resources::orcarouter::Capability;
+        match value {
+            OrcaRouterCapability::Chat => Capability::Chat,
+            OrcaRouterCapability::Embedding => Capability::Embedding,
+            OrcaRouterCapability::Image => Capability::Image,
+            OrcaRouterCapability::Video => Capability::Video,
+            OrcaRouterCapability::Rerank => Capability::Rerank,
+        }
+    }
 }
 
 #[derive(Debug, Args)]

@@ -4,10 +4,10 @@ use std::{collections::BTreeSet, str::FromStr, time::Instant};
 use alloy::primitives::U256;
 use alloy_json_abi::StateMutability;
 
-use eyre::{OptionExt, Result};
+use eyre::Result;
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    resources::openrouter::{complete_chat_structured, AnnotatedContractResponse},
+    resources::{llm::LlmSettings, openrouter::AnnotatedContractResponse},
     utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
 
@@ -21,16 +21,32 @@ use crate::{
     },
 };
 
+/// The structured-output schema for an annotated contract.
+fn annotated_contract_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "properties": {
+            "source": {
+                "type": "string",
+                "description": "The annotated and cleaned up Solidity source code"
+            }
+        },
+        "required": ["source"],
+        "additionalProperties": false
+    })
+}
+
 /// Annotates the entire contract source code using an LLM with structured output.
-async fn annotate_contract(source: &str, openrouter_api_key: &str, model: &str) -> Result<String> {
-    let response: AnnotatedContractResponse = complete_chat_structured(
-        &LLM_POSTPROCESSING_PROMPT.replace("{source}", source),
-        openrouter_api_key,
-        model,
-        "annotated_contract",
-    )
-    .await
-    .ok_or_eyre("failed to llm postprocess contract")?;
+async fn annotate_contract(source: &str, llm: &LlmSettings, model: &str) -> Result<String> {
+    let response: AnnotatedContractResponse = llm
+        .complete_structured(
+            LLM_POSTPROCESSING_PROMPT.replace("{source}", source),
+            model.to_string(),
+            "annotated_contract".to_string(),
+            annotated_contract_schema(),
+        )
+        .await
+        .map_err(|e| eyre::eyre!("{e}"))?;
 
     Ok(response.source)
 }
@@ -47,8 +63,7 @@ pub(crate) async fn build_source(
     all_resolved_logs: &HashMap<String, ResolvedLog>,
     storage_variables: &HashMap<String, StorageVariable>,
     llm_postprocess: bool,
-    openrouter_api_key: String,
-    model: String,
+    llm: &LlmSettings,
 ) -> Result<Option<String>> {
     // we can get the AnalyzerType from the first function, since they are all the same
     let analyzer_type = functions.first().map(|f| f.analyzer_type).unwrap_or(AnalyzerType::Yul);
@@ -151,7 +166,7 @@ pub(crate) async fn build_source(
         let postprocess_start = Instant::now();
         debug!("llm postprocessing entire contract source");
 
-        match annotate_contract(&source, &openrouter_api_key, &model).await {
+        match annotate_contract(&source, llm, &llm.model).await {
             Ok(annotated_source) => {
                 debug!("llm postprocessing contract took {:?}", postprocess_start.elapsed());
                 source = annotated_source;
@@ -571,14 +586,19 @@ mod tests {
     }
 
     async fn build(functions: &[AnalyzedFunction]) -> String {
+        let llm = LlmSettings::new(
+            heimdall_common::resources::orcarouter::LlmProvider::OpenRouter,
+            String::new(),
+            String::new(),
+            heimdall_common::resources::orcarouter::OrcaRouterBases::default(),
+        );
         build_source(
             functions,
             &HashMap::new(),
             &HashMap::new(),
             &HashMap::new(),
             false,
-            String::new(),
-            String::new(),
+            &llm,
         )
         .await
         .expect("failed to build source")

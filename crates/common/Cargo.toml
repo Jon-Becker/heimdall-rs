@@ -29,6 +29,7 @@ rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio.workspace = true
 strsim.workspace = true
 async-recursion.workspace = true

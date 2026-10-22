@@ -62,12 +62,22 @@ pub struct DecompilerArgs {
     #[clap(long, short)]
     pub llm_postprocess: bool,
 
+    /// The LLM provider to post-process with: 'openrouter' or 'orcarouter'.
+    #[clap(long, default_value = "openrouter", hide_default_value = true)]
+    pub provider: String,
+
     /// Your OpenRouter API key, used for LLM post-processing.
     #[clap(long, default_value = "", hide_default_value = true)]
     pub openrouter_api_key: String,
 
+    /// Your OrcaRouter API key, used for LLM post-processing when '--provider orcarouter' is set.
+    /// Run 'heimdall orcarouter login' to obtain one with your browser instead of pasting a key.
+    #[clap(long, default_value = "", hide_default_value = true)]
+    pub orcarouter_api_key: String,
+
     /// The model to use for LLM post-processing (e.g., "openai/gpt-4o-mini",
-    /// "anthropic/claude-3-haiku").
+    /// "anthropic/claude-3-haiku"). With '--provider orcarouter', the value must be one of the
+    /// models in the live OrcaRouter catalog.
     #[clap(long, short = 'm', default_value = "", hide_default_value = true)]
     pub model: String,
 
@@ -160,7 +170,9 @@ impl DecompilerArgsBuilder {
             timeout: Some(10000),
             abi: Some(None),
             llm_postprocess: Some(false),
+            provider: Some("openrouter".to_string()),
             openrouter_api_key: Some(String::new()),
+            orcarouter_api_key: Some(String::new()),
             model: Some(String::new()),
             etherscan_api_key: Some(String::new()),
             hardfork: Some(HardFork::Latest),

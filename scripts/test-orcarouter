@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""Run the OrcaRouter provider test suites.
+
+The suites themselves are ordinary `cargo test` targets. This wrapper exists so they
+also run in minimal CI images, where the Rust toolchain is installed for the account
+but rustup's shims are not on PATH. It locates `cargo`, keeps the account's cargo and
+rustup homes, and runs the same commands a developer would type by hand.
+
+    scripts/test-orcarouter            # every suite
+    scripts/test-orcarouter provider   # one suite: provider, auth, catalog, regression
+"""
+
+from __future__ import annotations
+
+import os
+import pwd
+import shutil
+import subprocess
+import sys
+
+#: Suite name -> (package, integration test target). `regression` runs whole packages.
+SUITES = {
+    "provider": ("heimdall-common", "orcarouter_provider"),
+    "auth": ("heimdall-common", "orcarouter_auth"),
+    "catalog": ("heimdall-common", "orcarouter_catalog"),
+    "regression": None,
+}
+
+
+def find_cargo() -> str:
+    """Return the cargo binary, preferring PATH and falling back to the account home."""
+    candidates = [shutil.which("cargo")]
+    try:
+        home = pwd.getpwuid(os.getuid()).pw_dir
+    except KeyError:
+        home = ""
+    if home:
+        candidates.append(os.path.join(home, ".cargo", "bin", "cargo"))
+    candidates.append("/usr/local/cargo/bin/cargo")
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    sys.exit("cargo was not found; install the Rust toolchain or put it on PATH")
+
+
+def toolchain_environment(cargo: str) -> dict[str, str]:
+    """Build an environment in which a rustup shim can find its toolchain."""
+    env = dict(os.environ)
+    cargo_home = os.path.dirname(os.path.dirname(os.path.realpath(cargo)))
+    env["CARGO_HOME"] = cargo_home
+    env.setdefault("RUSTUP_HOME", os.path.join(os.path.dirname(cargo_home), ".rustup"))
+    env["PATH"] = os.path.join(cargo_home, "bin") + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def commands(cargo: str, suite: str) -> list[list[str]]:
+    if SUITES[suite] is None:
+        return [
+            [cargo, "test", "--locked", "--package", package]
+            for package in ("heimdall-config", "heimdall-decompiler", "heimdall-decoder")
+        ]
+    package, target = SUITES[suite]
+    return [[cargo, "test", "--locked", "--package", package, "--test", target]]
+
+
+def main(argv: list[str]) -> int:
+    suite = argv[1] if len(argv) > 1 else "all"
+    if suite != "all" and suite not in SUITES:
+        sys.exit("unknown suite '{0}'; use one of: {1}, all".format(suite, ", ".join(SUITES)))
+
+    cargo = find_cargo()
+    env = toolchain_environment(cargo)
+    for name in SUITES if suite == "all" else [suite]:
+        for command in commands(cargo, name):
+            print("+ " + " ".join(command), flush=True)
+            if subprocess.run(command, env=env).returncode:
+                return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

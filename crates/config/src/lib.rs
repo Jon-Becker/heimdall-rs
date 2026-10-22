@@ -8,7 +8,10 @@ pub mod error;
 
 use crate::error::Error;
 use clap::Parser;
-use heimdall_common::utils::io::file::{delete_path, read_file, write_file};
+use heimdall_common::{
+    resources::orcarouter::{mask_key, CredentialKind, OrcaCredential},
+    utils::io::file::{delete_path, read_file, write_file},
+};
 use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
@@ -33,7 +36,10 @@ pub struct ConfigArgs {
 
 /// The [`Configuration`] struct represents the configuration of the CLI. All heimdall core modules
 /// will attempt to read from this configuration when possible.
-#[derive(Deserialize, Serialize, Debug)]
+///
+/// [`Debug`] is implemented by hand so that `heimdall config` can print the configuration without
+/// echoing any stored credential.
+#[derive(Deserialize, Serialize)]
 pub struct Configuration {
     /// The URL for the Ethereum RPC endpoint
     pub rpc_url: String,
@@ -53,6 +59,38 @@ pub struct Configuration {
     /// The default model to use for OpenRouter LLM calls (e.g., "openai/gpt-4o-mini")
     #[serde(default)]
     pub openrouter_model: String,
+
+    /// The API key for OrcaRouter services. Holds a key the user pasted, or one issued by the
+    /// OAuth 2.0 + PKCE connect flow; both are ordinary `sk-orca-…` keys.
+    #[serde(default)]
+    pub orcarouter_api_key: String,
+
+    /// The default model to use for OrcaRouter LLM calls (e.g., "orcacyber-zero"). Leave empty to
+    /// let the live model catalog choose.
+    #[serde(default)]
+    pub orcarouter_model: String,
+
+    /// How the stored OrcaRouter key was obtained: "api-key" or "pkce". This is provenance
+    /// metadata for status output; it never changes how the key is used.
+    #[serde(default)]
+    pub orcarouter_auth_method: String,
+}
+
+impl std::fmt::Debug for Configuration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Never let a stored credential reach stdout, a log, or a crash report.
+        f.debug_struct("Configuration")
+            .field("rpc_url", &self.rpc_url)
+            .field("local_rpc_url", &self.local_rpc_url)
+            .field("etherscan_api_key", &mask_key(&self.etherscan_api_key))
+            .field("transpose_api_key", &mask_key(&self.transpose_api_key))
+            .field("openrouter_api_key", &mask_key(&self.openrouter_api_key))
+            .field("openrouter_model", &self.openrouter_model)
+            .field("orcarouter_api_key", &mask_key(&self.orcarouter_api_key))
+            .field("orcarouter_model", &self.orcarouter_model)
+            .field("orcarouter_auth_method", &self.orcarouter_auth_method)
+            .finish()
+    }
 }
 
 impl Default for Configuration {
@@ -64,6 +102,9 @@ impl Default for Configuration {
             transpose_api_key: "".to_string(),
             openrouter_api_key: "".to_string(),
             openrouter_model: "".to_string(),
+            orcarouter_api_key: "".to_string(),
+            orcarouter_model: "".to_string(),
+            orcarouter_auth_method: "".to_string(),
         }
     }
 }
@@ -126,6 +167,12 @@ impl Configuration {
         {
             debug!("overriding openrouter_api_key with mesc key");
             config.openrouter_api_key = key;
+        }
+        if let Some(key) = mesc::metadata::get_api_key("orcarouter", Some("heimdall"))
+            .map_err(|e| Error::Generic(format!("MESC error: {e}")))?
+        {
+            debug!("overriding orcarouter_api_key with mesc key");
+            config.orcarouter_api_key = key;
         }
 
         Ok(config)
@@ -194,6 +241,16 @@ impl Configuration {
             "openrouter_model" => {
                 self.openrouter_model = value.to_string();
             }
+            "orcarouter_api_key" => {
+                self.orcarouter_api_key = value.to_string();
+                self.orcarouter_auth_method = "api-key".to_string();
+            }
+            "orcarouter_model" => {
+                self.orcarouter_model = value.to_string();
+            }
+            "orcarouter_auth_method" => {
+                self.orcarouter_auth_method = value.to_string();
+            }
             _ => {
                 return Err(Error::Generic(format!(
                     "invalid key: \'{key}\' is not a valid configuration key."
@@ -206,6 +263,40 @@ impl Configuration {
 
         Ok(())
     }
+
+    /// Persists an OrcaRouter credential in the configuration store the project already uses.
+    ///
+    /// Both credential sources land here as the same kind of value: an ordinary API key. The
+    /// method that produced it is recorded for status output only.
+    pub fn store_orcarouter_credential(
+        &mut self,
+        credential: &OrcaCredential,
+    ) -> Result<(), Error> {
+        self.orcarouter_api_key = credential.key().to_string();
+        self.orcarouter_auth_method = match credential.source {
+            CredentialKind::ApiKey => "api-key",
+            CredentialKind::Pkce => "pkce",
+        }
+        .to_string();
+        self.save()
+    }
+
+    /// Removes the stored OrcaRouter key. The configured model is intentionally kept.
+    pub fn clear_orcarouter_credential(&mut self) -> Result<(), Error> {
+        self.orcarouter_api_key = String::new();
+        self.orcarouter_auth_method = String::new();
+        self.save()
+    }
+
+    /// The masked OrcaRouter key, safe to print.
+    pub fn masked_orcarouter_key(&self) -> String {
+        mask_key(&self.orcarouter_api_key)
+    }
+
+    /// Whether an OrcaRouter key is configured.
+    pub fn has_orcarouter_key(&self) -> bool {
+        !self.orcarouter_api_key.trim().is_empty()
+    }
 }
 
 /// The `config` command is used to display and edit the current configuration.
@@ -215,7 +306,12 @@ pub fn config(args: ConfigArgs) -> Result<(), Error> {
             // read the config file and update the key/value pair
             let mut config = Configuration::load()?;
             config.update(&args.key, &args.value)?;
-            info!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value);
+            // Never echo a credential back to the terminal.
+            if args.key.contains("api_key") {
+                info!("updated configuration! Set \'{}\' to the provided value.", &args.key);
+            } else {
+                info!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value);
+            }
         } else {
             // key is set, but no value is set
             error!("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
