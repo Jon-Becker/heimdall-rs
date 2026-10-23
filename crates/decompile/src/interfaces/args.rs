@@ -34,6 +34,27 @@ pub struct DecompilerArgs {
     #[clap(long = "skip-resolving")]
     pub skip_resolving: bool,
 
+    /// Check emitted logs for an unambiguous indexed event layout (disabled by default).
+    #[clap(long)]
+    #[builder(default)]
+    pub indexed_log_check: bool,
+
+    /// The emitting address to check, e.g. a proxy when decompiling its implementation.
+    /// Defaults to the target address. Required for bytecode/file targets.
+    #[clap(long, requires = "indexed_log_check")]
+    #[builder(default)]
+    pub indexed_log_address: Option<Address>,
+
+    /// First block to check. Defaults to the last 10,000 blocks ending at the upper bound.
+    #[clap(long, requires = "indexed_log_check")]
+    #[builder(default)]
+    pub indexed_log_from_block: Option<u64>,
+
+    /// Last block to check. Defaults to the latest block. At most 10,000 blocks are checked.
+    #[clap(long, requires = "indexed_log_check")]
+    #[builder(default)]
+    pub indexed_log_to_block: Option<u64>,
+
     /// Whether to include solidity source code in the output (in beta).
     #[clap(long = "include-sol")]
     pub include_solidity: bool,
@@ -153,6 +174,10 @@ impl DecompilerArgsBuilder {
             rpc_url: Some(String::new()),
             default: Some(true),
             skip_resolving: Some(false),
+            indexed_log_check: Some(false),
+            indexed_log_address: Some(None),
+            indexed_log_from_block: Some(None),
+            indexed_log_to_block: Some(None),
             include_solidity: Some(false),
             include_yul: Some(false),
             output: Some(String::new()),
@@ -165,5 +190,42 @@ impl DecompilerArgsBuilder {
             etherscan_api_key: Some(String::new()),
             hardfork: Some(HardFork::Latest),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn indexed_log_lookup_is_opt_in_for_cli_and_library() {
+        let cli = DecompilerArgs::try_parse_from(["decompile", "0x00"]).unwrap();
+        let library = DecompilerArgsBuilder::new().target("0x00".to_string()).build().unwrap();
+        assert!(!cli.indexed_log_check);
+        assert!(!library.indexed_log_check);
+        assert!(cli.indexed_log_from_block.is_none());
+        assert!(library.indexed_log_address.is_none());
+        assert!(DecompilerArgs::try_parse_from([
+            "decompile",
+            "0x00",
+            "--indexed-log-from-block",
+            "10"
+        ])
+        .is_err());
+        let enabled = DecompilerArgs::try_parse_from([
+            "decompile",
+            "0x00",
+            "--indexed-log-check",
+            "--indexed-log-address",
+            "0x0000000000000000000000000000000000000001",
+            "--indexed-log-from-block",
+            "10",
+            "--indexed-log-to-block",
+            "20",
+        ])
+        .unwrap();
+        assert!(enabled.indexed_log_check);
+        assert_eq!(enabled.indexed_log_from_block, Some(10));
+        assert_eq!(enabled.indexed_log_to_block, Some(20));
     }
 }
