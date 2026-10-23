@@ -1,4 +1,4 @@
-name: Maintainer CI
+name: Admin-approved CI
 run-name: Admin-approved CI for PR #${{ github.event.issue.number }}
 
 # An admin's new /ok-to-test comment explicitly trusts this commit and its
@@ -146,7 +146,7 @@ jobs:
             await github.rest.repos.createCommitStatus({
               ...context.repo,
               sha: process.env.REVIEWED_SHA,
-              context: 'Maintainer CI',
+              context: 'Admin-approved CI',
               state: 'pending',
               description: 'Running the admin-approved full CI suite, including AI eval',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
@@ -357,7 +357,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: maintainer-coverage
+          name: admin-coverage-${{ github.run_attempt }}
           path: |
             coverage.json
             ci-base/coverage.json
@@ -415,7 +415,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: maintainer-eval-results
+          name: admin-eval-results-${{ github.run_attempt }}
           path: |
             heimdall-eval/heimdall/*/eval.json
             heimdall-eval/heimdall/*/cfg_eval.json
@@ -455,7 +455,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: maintainer-criterion-report
+          name: admin-criterion-report-${{ github.run_attempt }}
           path: target/criterion
           if-no-files-found: warn
 
@@ -482,7 +482,7 @@ jobs:
       # GitHub's job results enter this privileged status publisher. An expired
       # approval can only publish failure to the original SHA, never leave its
       # pending status stranded or grant execution on a newer commit.
-      - name: Publish separate Maintainer CI status
+      - name: Publish separate Admin-approved CI status
         if: ${{ always() }}
         uses: actions/github-script@v7
         env:
@@ -509,8 +509,91 @@ jobs:
             await github.rest.repos.createCommitStatus({
               ...context.repo,
               sha: process.env.REVIEWED_SHA,
-              context: 'Maintainer CI',
+              context: 'Admin-approved CI',
               state: success ? 'success' : 'failure',
               description: success ? 'Admin-approved full CI suite passed' : 'Approval is stale or one or more CI jobs did not pass',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
+
+
+  prepare-reports:
+    name: Prepare untrusted report data
+    if: ${{ always() && needs.authorize.result == 'success' }}
+    needs: [authorize, coverage, bench, eval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      data: ${{ steps.prepare.outputs.data }}
+    steps:
+      # This checkout is the trusted workflow commit, never candidate code.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted-reporter
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Download coverage data
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: admin-coverage-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-reports/coverage
+      - name: Download evaluation data
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: admin-eval-results-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-reports/eval
+      - name: Download benchmark data
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: admin-criterion-report-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-reports/benchmark
+      - name: Validate and normalize report data
+        id: prepare
+        env:
+          REPORT_ROOT: ${{ runner.temp }}/ci-reports
+        run: node trusted-reporter/.github/scripts/prepare-ci-reports.cjs "$REPORT_ROOT"
+
+  comment-reports:
+    name: Publish PR reports
+    if: ${{ always() && needs.authorize.result == 'success' }}
+    needs: [authorize, coverage, bench, eval, prepare-reports]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: admin-ci-report-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - *revalidate
+      # Fresh privileged runner: checkout trusted helpers only; no downloaded
+      # artifacts, candidate checkout, model text, external URLs, or execution.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted-reporter
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Publish bounded coverage, evaluation, and benchmark comments
+        uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ needs.authorize.outputs.head_sha }}
+          BASE_SHA: ${{ needs.authorize.outputs.base_sha }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          EVAL_RESULT: ${{ needs.eval.result }}
+          BENCH_RESULT: ${{ needs.bench.result }}
+          REPORT_DATA: ${{ needs.prepare-reports.outputs.data }}
+        with:
+          script: |
+            const { publishReports } = require('./trusted-reporter/.github/scripts/ci-reports.cjs');
+            await publishReports({ github, context, core, env: process.env });
