@@ -15,14 +15,51 @@ use crate::{
     },
 };
 use eyre::{OptionExt, Result};
-use heimdall_cache::{store_cache, with_cache};
+use heimdall_cache::{read_cache, store_cache};
 use serde::{
-    ser::{SerializeMap, Serializer},
+    ser::{SerializeStruct, Serializer},
     Deserialize, Serialize,
 };
 use tracing::{debug, trace};
 
 use super::types::DynSolValueExt;
+
+fn serialize_signature<S>(
+    serializer: S,
+    name: &str,
+    signature: &str,
+    inputs: &[String],
+) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer, {
+    let human_readable = serializer.is_human_readable();
+    let mut value = serializer.serialize_struct("ResolvedSignature", 3)?;
+    value.serialize_field("name", name)?;
+    value.serialize_field("signature", signature)?;
+    if human_readable {
+        value.serialize_field("inputs", &inputs_to_abi_format(inputs))?;
+    } else {
+        value.serialize_field("inputs", inputs)?;
+    }
+    value.end()
+}
+
+async fn with_signature_cache<T, F, Fut>(key: &str, lookup: F) -> Result<Option<Vec<T>>>
+where
+    T: Serialize + serde::de::DeserializeOwned + 'static,
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<Option<Vec<T>>>>, {
+    if let Ok(Some(Some(candidates))) = read_cache::<Option<Vec<T>>>(key) {
+        if !candidates.is_empty() {
+            return Ok(Some(candidates));
+        }
+    }
+    let candidates = lookup().await?;
+    if candidates.as_ref().is_some_and(|values| !values.is_empty()) {
+        store_cache(key, &candidates, None)?;
+    }
+    Ok(candidates)
+}
 
 /// A resolved function signature. May contain decoded inputs.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -75,12 +112,7 @@ impl Serialize for ResolvedFunction {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer, {
-        let mut map = serializer.serialize_map(Some(3))?;
-        map.serialize_entry("name", &self.name)?;
-        map.serialize_entry("signature", &self.signature)?;
-        map.serialize_entry("inputs", &inputs_to_abi_format(&self.inputs))?;
-        // Skip decoded_inputs since it's marked with #[serde(skip)]
-        map.end()
+        serialize_signature(serializer, &self.name, &self.signature, &self.inputs)
     }
 }
 
@@ -106,11 +138,7 @@ impl Serialize for ResolvedError {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer, {
-        let mut map = serializer.serialize_map(Some(3))?;
-        map.serialize_entry("name", &self.name)?;
-        map.serialize_entry("signature", &self.signature)?;
-        map.serialize_entry("inputs", &inputs_to_abi_format(&self.inputs))?;
-        map.end()
+        serialize_signature(serializer, &self.name, &self.signature, &self.inputs)
     }
 }
 /// A resolved log signature.
@@ -135,11 +163,7 @@ impl Serialize for ResolvedLog {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer, {
-        let mut map = serializer.serialize_map(Some(3))?;
-        map.serialize_entry("name", &self.name)?;
-        map.serialize_entry("signature", &self.signature)?;
-        map.serialize_entry("inputs", &inputs_to_abi_format(&self.inputs))?;
-        map.end()
+        serialize_signature(serializer, &self.name, &self.signature, &self.inputs)
     }
 }
 /// A trait for resolving a selector into a vector of [`ResolvedFunction`]s, [`ResolvedError`]s, or
@@ -155,7 +179,7 @@ pub trait ResolveSelector {
 #[async_trait]
 impl ResolveSelector for ResolvedError {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
-        with_cache(&format!("selector.{selector}"), || async {
+        with_signature_cache(&format!("selector.{selector}"), || async {
             // normalize selector
             let selector = match selector.strip_prefix("0x") {
                 Some(selector) => selector,
@@ -229,7 +253,7 @@ impl ResolveSelector for ResolvedError {
 #[async_trait]
 impl ResolveSelector for ResolvedLog {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
-        with_cache(&format!("selector.{selector}"), || async {
+        with_signature_cache(&format!("selector.{selector}"), || async {
             // normalize selector
             let selector = match selector.strip_prefix("0x") {
                 Some(selector) => selector,
@@ -303,7 +327,7 @@ impl ResolveSelector for ResolvedLog {
 #[async_trait]
 impl ResolveSelector for ResolvedFunction {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
-        with_cache(&format!("selector.{selector}"), || async {
+        with_signature_cache(&format!("selector.{selector}"), || async {
             // normalize selector
             let selector = match selector.strip_prefix("0x") {
                 Some(selector) => selector,
@@ -746,5 +770,97 @@ mod tests {
         // Should not panic and should return a valid score
         // The score should be positive since we add 10 per param
         assert!(score > 0);
+    }
+}
+
+#[cfg(test)]
+mod signature_cache_regressions {
+    #[test]
+    fn binary_cache_round_trips_actual_signature_records() {
+        use super::*;
+        let key = format!("test.signature-record-codec.{}", std::process::id());
+        let function = ResolvedFunction {
+            name: "upgradeToAndCall".into(),
+            signature: "upgradeToAndCall(address,bytes)".into(),
+            inputs: vec!["address".into(), "bytes".into()],
+            decoded_inputs: None,
+        };
+        store_cache(&key, Some(vec![function.clone()]), None).unwrap();
+        assert_eq!(
+            read_cache::<Option<Vec<ResolvedFunction>>>(&key).unwrap(),
+            Some(Some(vec![function]))
+        );
+        let error = ResolvedError {
+            name: "Denied".into(),
+            signature: "Denied(address)".into(),
+            inputs: vec!["address".into()],
+        };
+        store_cache(&key, Some(vec![error.clone()]), None).unwrap();
+        assert_eq!(
+            read_cache::<Option<Vec<ResolvedError>>>(&key).unwrap(),
+            Some(Some(vec![error]))
+        );
+        let event = ResolvedLog {
+            name: "Changed".into(),
+            signature: "Changed(address)".into(),
+            inputs: vec!["address".into()],
+        };
+        store_cache(&key, Some(vec![event.clone()]), None).unwrap();
+        assert_eq!(read_cache::<Option<Vec<ResolvedLog>>>(&key).unwrap(), Some(Some(vec![event])));
+        heimdall_cache::delete_cache(&key).unwrap();
+    }
+
+    #[test]
+    fn retains_human_readable_abi_input_objects() {
+        let function = ResolvedFunction {
+            name: "approve".into(),
+            signature: "approve(address,uint256)".into(),
+            inputs: vec!["address".into(), "uint256".into()],
+            decoded_inputs: None,
+        };
+        assert_eq!(
+            serde_json::to_value(function).unwrap()["inputs"],
+            serde_json::json!([
+                {"name":"arg0","type":"address"}, {"name":"arg1","type":"uint256"}
+            ])
+        );
+    }
+
+    use super::*;
+    use heimdall_cache::delete_cache;
+
+    #[tokio::test]
+    async fn retries_a_cached_negative_lookup_and_retains_positive_candidates() {
+        let key = format!("test.negative-signature-recovery.{}", std::process::id());
+        store_cache(&key, None::<Vec<String>>, None).unwrap();
+        let expected = vec!["upgradeToAndCall(address,bytes)".to_string()];
+        let result =
+            with_signature_cache(&key, || async { Ok(Some(expected.clone())) }).await.unwrap();
+        assert_eq!(result, Some(expected.clone()));
+        let cached = with_signature_cache::<String, _, _>(&key, || async {
+            eyre::bail!("positive cache must bypass lookup")
+        })
+        .await
+        .unwrap();
+        assert_eq!(cached, Some(expected));
+        delete_cache(&key).unwrap();
+    }
+
+    #[tokio::test]
+    async fn does_not_cache_absence_or_transport_failures() {
+        let key = format!("test.empty-signature-recovery.{}", std::process::id());
+        delete_cache(&key).ok();
+        for _ in 0..2 {
+            let result =
+                with_signature_cache::<String, _, _>(&key, || async { Ok(None) }).await.unwrap();
+            assert!(result.is_none());
+            assert!(read_cache::<Option<Vec<String>>>(&key).unwrap().is_none());
+        }
+        let result = with_signature_cache::<String, _, _>(&key, || async {
+            eyre::bail!("transport unavailable")
+        })
+        .await;
+        assert!(result.is_err());
+        assert!(read_cache::<Option<Vec<String>>>(&key).unwrap().is_none());
     }
 }

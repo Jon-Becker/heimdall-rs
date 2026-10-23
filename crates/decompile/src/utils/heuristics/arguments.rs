@@ -3,11 +3,11 @@ use hashbrown::HashSet;
 
 use alloy::primitives::U256;
 use heimdall_vm::core::{
-    opcodes::{opcode_name, CALLDATALOAD, ISZERO},
+    opcodes::{opcode_name, WrappedInput, WrappedOpcode, ADD, CALLDATALOAD, ISZERO, SUB},
     types::{byte_size_to_type, convert_bitmask},
     vm::State,
 };
-use tracing::{debug, trace};
+use tracing::debug;
 
 use crate::{
     core::{
@@ -20,6 +20,55 @@ use crate::{
     Error,
 };
 
+fn calldata_offset(operation: &WrappedOpcode) -> Option<(usize, U256)> {
+    if operation.depth() > 32 {
+        return None;
+    }
+    if operation.opcode == CALLDATALOAD {
+        let offset = operation.inputs.first()?.pushed_value()?;
+        if offset < U256::from(4) || (offset - U256::from(4)) % U256::from(32) != U256::ZERO {
+            return None;
+        }
+        return Some((((offset - U256::from(4)) / U256::from(32)).try_into().ok()?, U256::ZERO));
+    }
+    let [left, right] = operation.inputs.as_slice() else {
+        return None;
+    };
+    if let WrappedInput::Opcode(pointer) = left {
+        if let (Some((index, bias)), Some(value)) = (calldata_offset(pointer), right.pushed_value())
+        {
+            return match operation.opcode {
+                ADD => Some((index, bias.checked_add(value)?)),
+                SUB => Some((index, bias.checked_sub(value)?)),
+                _ => None,
+            };
+        }
+    }
+    if operation.opcode == ADD {
+        if let WrappedInput::Opcode(pointer) = right {
+            let (index, bias) = calldata_offset(pointer)?;
+            return Some((index, bias.checked_add(left.pushed_value()?)?));
+        }
+    }
+    None
+}
+
+fn copied_dynamic_argument(operations: &[WrappedOpcode]) -> Option<usize> {
+    let [_, source, length] = operations else {
+        return None;
+    };
+    if length.opcode != CALLDATALOAD {
+        return None;
+    }
+    let WrappedInput::Opcode(length_pointer) = length.inputs.first()? else {
+        return None;
+    };
+    let (source_index, source_bias) = calldata_offset(source)?;
+    let (length_index, length_bias) = calldata_offset(length_pointer)?;
+    (source_index == length_index && length_bias == U256::from(4) && source_bias == U256::from(36))
+        .then_some(source_index)
+}
+
 pub(crate) fn argument_heuristic<'a>(
     function: &'a mut AnalyzedFunction,
     state: &'a State,
@@ -29,6 +78,16 @@ pub(crate) fn argument_heuristic<'a>(
         match state.last_instruction.opcode {
             // CALLDATALOAD
             0x35 => {
+                if let Some((index, bias)) =
+                    calldata_offset(&state.last_instruction.input_operations[0])
+                {
+                    if bias == U256::from(4) {
+                        if let Some(argument) = function.arguments.get_mut(&index) {
+                            argument.heuristics.insert(TypeHeuristic::DynamicLength);
+                        }
+                    }
+                    return Ok(());
+                }
                 // calculate the argument index, with the 4byte signature padding removed
                 // for example, CALLDATALOAD(4) -> (4-4)/32 = 0
                 //              CALLDATALOAD(36) -> (36-4)/32 = 1
@@ -53,8 +112,13 @@ pub(crate) fn argument_heuristic<'a>(
 
             // CALLDATACOPY
             0x37 => {
-                // TODO: implement CALLDATACOPY support
-                trace!("CALLDATACOPY detected; not implemented");
+                if let Some(index) =
+                    copied_dynamic_argument(&state.last_instruction.input_operations)
+                {
+                    if let Some(argument) = function.arguments.get_mut(&index) {
+                        argument.heuristics.insert(TypeHeuristic::DynamicBytes);
+                    }
+                }
             }
 
             // AND | OR
@@ -291,4 +355,55 @@ pub(crate) fn argument_heuristic<'a>(
 
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+    use heimdall_vm::core::opcodes::{MUL, PUSH1};
+
+    fn literal(value: u64) -> WrappedOpcode {
+        WrappedOpcode::new(PUSH1, vec![WrappedInput::Raw(U256::from(value))])
+    }
+
+    fn load_head(offset: u64) -> WrappedOpcode {
+        WrappedOpcode::new(CALLDATALOAD, vec![literal(offset).into()])
+    }
+
+    fn pointer(head: u64, bias: u64) -> WrappedOpcode {
+        WrappedOpcode::new(ADD, vec![load_head(head).into(), literal(bias).into()])
+    }
+
+    #[test]
+    fn distinguishes_byte_lengths_from_array_lengths_and_unrelated_offsets() {
+        let source = pointer(36, 36);
+        let length = WrappedOpcode::new(CALLDATALOAD, vec![pointer(36, 4).into()]);
+        assert_eq!(copied_dynamic_argument(&[literal(0), source.clone(), length.clone()]), Some(1));
+        let array_size = WrappedOpcode::new(MUL, vec![length.into(), literal(32).into()]);
+        assert_eq!(copied_dynamic_argument(&[literal(0), source.clone(), array_size]), None);
+        let other_length = WrappedOpcode::new(CALLDATALOAD, vec![pointer(4, 4).into()]);
+        assert_eq!(copied_dynamic_argument(&[literal(0), source.clone(), other_length]), None);
+        assert_eq!(copied_dynamic_argument(&[literal(0), source, literal(32)]), None);
+        assert_eq!(calldata_offset(&load_head(5)), None);
+        assert_eq!(calldata_offset(&load_head(0)), None);
+        let scalar = CalldataFrame {
+            arg_op: "36".to_string(),
+            mask_size: 32,
+            heuristics: Default::default(),
+        };
+        assert!(!scalar.potential_types().contains(&SolidityType::Bytes));
+    }
+
+    #[tokio::test]
+    async fn recovers_dynamic_bytes_from_captured_upgrade_runtime() {
+        let args = crate::DecompilerArgsBuilder::new()
+            .target(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/testdata/interface-recovery/ethereum-0x390eae68465090e8a1e4b202b5ccb6ae3142583f.hex")).trim().to_string())
+            .skip_resolving(true).include_solidity(true).timeout(10000).build().unwrap();
+        let result = crate::decompile(args).await.unwrap();
+        let function = result.abi.functions().find(|f| f.name == "Unresolved_4f1ef286").unwrap();
+        assert_eq!(
+            function.inputs.iter().map(|input| input.ty.as_str()).collect::<Vec<_>>(),
+            vec!["address", "bytes"]
+        );
+    }
 }
