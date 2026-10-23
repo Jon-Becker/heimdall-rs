@@ -1,0 +1,516 @@
+name: Maintainer CI
+run-name: Admin-approved CI for PR #${{ github.event.issue.number }}
+
+# An admin's new /ok-to-test comment explicitly trusts this commit and its
+# dependencies with RPC credentials, private evaluation access, and the
+# OpenRouter key. AI evaluations incur charges. This is not a sandbox.
+# Only this default-branch workflow runs; never load workflows from the PR.
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  CARGO_TERM_COLOR: always
+  TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+
+jobs:
+  authorize:
+    name: Validate admin approval
+    if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/ok-to-test') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    outputs:
+      head_sha: ${{ steps.authorize.outputs.head_sha }}
+      head_repository: ${{ steps.authorize.outputs.head_repository }}
+      base_sha: ${{ steps.authorize.outputs.base_sha }}
+    steps:
+      - name: Authorize admin and pin approved SHA
+        id: authorize
+        uses: actions/github-script@v7
+        with:
+          script: &authorization |
+            // BEGIN MAINTAINER AUTHORIZATION
+            const repository = `${context.repo.owner}/${context.repo.repo}`;
+            const event = context.payload;
+            const command = event.comment;
+            if (repository !== 'Jon-Becker/heimdall-rs' || context.eventName !== 'issue_comment' ||
+                event.action !== 'created' || !event.issue?.pull_request ||
+                command?.body?.trim() !== '/ok-to-test') {
+              throw new Error('A new /ok-to-test comment on this repository PR is required.');
+            }
+            const number = event.issue.number;
+            if (!Number.isSafeInteger(number) || number < 1 ||
+                !Number.isSafeInteger(command.id) || command.id < 1 ||
+                !Number.isSafeInteger(command.user?.id) || command.user.id < 1 ||
+                !command.user.login || context.actor !== command.user.login) {
+              throw new Error('Invalid PR, comment, or requesting actor.');
+            }
+            const actors = new Set([command.user.login, process.env.TRIGGERING_ACTOR]);
+            for (const username of actors) {
+              if (!username) throw new Error('The requesting and rerunning actors must be known.');
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                ...context.repo, username,
+              });
+              if (data.permission !== 'admin') {
+                throw new Error(`${username} needs current admin repository access.`);
+              }
+            }
+            const { data: liveComment } = await github.rest.issues.getComment({
+              ...context.repo, comment_id: command.id,
+            });
+            if (liveComment.user?.id !== command.user.id || liveComment.body !== command.body ||
+                liveComment.created_at !== command.created_at ||
+                liveComment.updated_at !== command.created_at) {
+              throw new Error('Approval was edited or revoked. Add a new /ok-to-test comment.');
+            }
+            const { data: target } = await github.rest.repos.get(context.repo);
+            if (context.ref !== `refs/heads/${target.default_branch}`) {
+              throw new Error('Only the trusted default-branch workflow may run.');
+            }
+            const getPr = async () => (await github.rest.pulls.get({
+              ...context.repo, pull_number: number,
+            })).data;
+            const pr = await getPr();
+            if (pr.state !== 'open' || pr.base.repo?.full_name !== repository || !pr.head.repo) {
+              throw new Error('The PR must be open in this repository with an available head repository.');
+            }
+            const sha = pr.head.sha;
+            if (!/^[0-9a-f]{40}$/.test(sha || '') || !/^[0-9a-f]{40}$/.test(pr.base.sha || '')) {
+              throw new Error('The PR must have complete immutable head and base SHAs.');
+            }
+            // A failed-job rerun must not replace the original successful job's
+            // snapshot with a newly resolved head, even if other checks change.
+            if (context.job !== 'authorize' && process.env.REVIEWED_SHA !== sha) {
+              throw new Error('The PR head changed. Add a fresh /ok-to-test approval.');
+            }
+            const head = { owner: pr.head.repo.owner.login, repo: pr.head.repo.name };
+            const ref = `refs/heads/${pr.head.ref}`;
+            const { data: activity } = await github.request('GET /repos/{owner}/{repo}/activity', {
+              ...head, ref, direction: 'desc', per_page: 1,
+              headers: { 'X-GitHub-Api-Version': '2022-11-28', 'Cache-Control': 'no-cache' },
+            });
+            // Use only the newest server-recorded change, never an older matching
+            // SHA or attacker-controlled commit dates. Include every activity type
+            // so force-pushes and branch deletion/recreation cannot be overlooked.
+            // In API version 2022-11-28 this field is named "timestamp".
+            const latest = activity[0];
+            const date = value => {
+              if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value)) return NaN;
+              const parsed = Date.parse(value);
+              return Number.isFinite(parsed) && new Date(parsed).toISOString() === value.replace('Z', '.000Z') ? parsed : NaN;
+            };
+            const approvedAt = date(command.created_at);
+            const changedAt = date(latest?.timestamp);
+            if (!Number.isFinite(approvedAt) || !Number.isFinite(changedAt) ||
+                latest.ref !== ref || latest.after !== sha ||
+                !['push', 'force_push', 'branch_creation', 'pr_merge', 'merge_queue_merge'].includes(latest.activity_type) ||
+                changedAt >= approvedAt) {
+              throw new Error('Cannot establish the PR head before this command. Add a fresh /ok-to-test.');
+            }
+            const { data: headRepository } = await github.rest.repos.get(head);
+            const pushedAt = date(headRepository.pushed_at);
+            // Reject ties because GitHub timestamps have second precision. This
+            // deliberately also rejects unrelated later pushes to the head repo.
+            // Missing/inaccessible history fails closed instead of guessing.
+            if (headRepository.id !== pr.head.repo.id || !Number.isFinite(pushedAt) || pushedAt >= approvedAt) {
+              throw new Error('The head repository was pushed after or during approval. Add a fresh /ok-to-test.');
+            }
+            const current = await getPr();
+            const { data: currentRef } = await github.rest.git.getRef({
+              ...head, ref: `heads/${pr.head.ref}`,
+            });
+            if (current.state !== 'open' || current.head.repo?.id !== pr.head.repo.id ||
+                current.head.ref !== pr.head.ref || current.head.sha !== sha ||
+                currentRef.object?.sha !== sha) {
+              throw new Error('The head changed while approval was checked. Add a fresh /ok-to-test.');
+            }
+            core.setOutput('head_sha', sha);
+            core.setOutput('head_repository', pr.head.repo.full_name);
+            core.setOutput('base_sha', pr.base.sha);
+            core.notice(`Admin approved PR #${number} at ${sha}; base ${pr.base.sha}.`);
+            // END MAINTAINER AUTHORIZATION
+      - name: Mark approved commit pending
+        uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ steps.authorize.outputs.head_sha }}
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha: process.env.REVIEWED_SHA,
+              context: 'Maintainer CI',
+              state: 'pending',
+              description: 'Running the admin-approved full CI suite, including AI eval',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+  quality:
+    name: ${{ matrix.target }}
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [lint, fmt-check, check]
+    steps:
+      # Every execution job repeats the metadata-only check before checkout,
+      # including failed-job reruns and revocation of the original admin's access.
+      - &revalidate
+        name: Revalidate admin approval and pinned SHA
+        uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ needs.authorize.outputs.head_sha }}
+        with:
+          script: *authorization
+      - &checkout-candidate
+        name: Checkout approved candidate
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ needs.authorize.outputs.head_repository }}
+          ref: ${{ needs.authorize.outputs.head_sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy, rustfmt
+      - run: make ${{ matrix.target }}
+
+  validation:
+    name: PR and workspace validation
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - *revalidate
+      - *checkout-candidate
+      - name: Check workspace dependencies
+        run: |
+          echo "Checking for non-workspace dependencies in crate Cargo.toml files..."
+
+          # Find all Cargo.toml files in crates directory
+          failed=false
+
+          for toml in crates/*/Cargo.toml; do
+            echo "Checking $toml..."
+
+            # Look for dependencies with version specifications
+            # This regex matches lines like: package = "version" or package = { version = "..." }
+            # but excludes workspace dependencies
+            if grep -E '^\s*[a-zA-Z0-9_-]+\s*=\s*("[0-9]|{[^}]*version\s*=\s*"[0-9])' "$toml" | grep -v workspace | grep -v '^\s*#'; then
+              echo "❌ Found non-workspace dependencies in $toml:"
+              grep -E '^\s*[a-zA-Z0-9_-]+\s*=\s*("[0-9]|{[^}]*version\s*=\s*"[0-9])' "$toml" | grep -v workspace | grep -v '^\s*#'
+              failed=true
+            fi
+          done
+
+          if [ "$failed" = true ]; then
+            echo ""
+            echo "❌ Error: Found non-workspace dependencies!"
+            echo "All dependencies in crate Cargo.toml files should use workspace references."
+            echo "Example: dependency = { workspace = true }"
+            exit 1
+          else
+            echo "✅ All dependencies are using workspace references!"
+          fi
+      - name: Validate PR title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: context.payload.issue.number,
+            });
+            const title = pr.title;
+            const pattern = /^(feat|fix|perf|chore|refactor|deps|docs|test|ci|build|style|revert)(\(.+\))?: .+$/;
+
+            if (!pattern.test(title)) {
+              core.setFailed(`PR title "${title}" does not follow conventional commit format.\n\nExpected format: <type>(<scope>): <description> or <type>: <description>\n\nValid types: feat, fix, perf, chore, refactor, deps, docs, test, ci, build, style, revert\n\nExamples:\n  feat(decompile): add new feature\n  feat: some change\n  deps(vm): bump dependency`);
+            }
+      - name: Validate PR description
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: context.payload.issue.number,
+            });
+            const body = pr.body || '';
+            const trimmed = body.trim();
+
+            if (!trimmed || trimmed.length < 10) {
+              core.setFailed('PR description is required and must be at least 10 characters long. Please provide a meaningful description of your changes.');
+              return;
+            }
+
+            // Read the PR template
+            const templatePath = '.github/PULL_REQUEST_TEMPLATE.md';
+            let template = '';
+            try {
+              template = fs.readFileSync(templatePath, 'utf8');
+            } catch (e) {
+              // No template found, skip template validation
+              return;
+            }
+
+            // Extract section headers from template
+            const sectionPattern = /^## (.+)$/gm;
+            const sections = [...template.matchAll(sectionPattern)].map(m => m[1]);
+
+            // Check each section has content beyond the template comments
+            const errors = [];
+            for (const section of sections) {
+              const escapedSection = section.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const sectionRegex = new RegExp(`## ${escapedSection}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`, 'm');
+              const match = body.match(sectionRegex);
+
+              if (!match) {
+                errors.push(`Missing required section: "${section}"`);
+                continue;
+              }
+
+              // Remove HTML comments and whitespace to check for actual content
+              const content = match[1].replace(/<!--[\s\S]*?-->/g, '').trim();
+              if (!content || content.length < 5) {
+                errors.push(`Section "${section}" must have meaningful content (not just the template placeholder)`);
+              }
+            }
+
+            if (errors.length > 0) {
+              core.setFailed(`PR description validation failed:\n\n${errors.join('\n')}\n\nPlease fill in all sections of the PR template.`);
+            }
+
+  test:
+    name: Tests (${{ matrix.os }})
+    needs: authorize
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - *revalidate
+      - *checkout-candidate
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - name: Run release tests
+        env: &rpc
+          RPC_URL: ${{ secrets.RPC_URL }}
+          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
+        run: |
+          test -n "$RPC_URL" && test -n "$WS_RPC_URL" || {
+            echo "::error::RPC_URL and WS_RPC_URL must both be configured."
+            exit 1
+          }
+          make test
+      - run: make test-doc
+
+  coverage:
+    name: Coverage
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - *revalidate
+      - *checkout-candidate
+      - name: Checkout pinned base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.base_sha }}
+          path: ci-base
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Measure base and candidate coverage
+        env: *rpc
+        run: |
+          set -euo pipefail
+          test -n "$RPC_URL" && test -n "$WS_RPC_URL" || {
+            echo "::error::RPC_URL and WS_RPC_URL must both be configured."
+            exit 1
+          }
+          (cd ci-base && make test-cov-json)
+          base=$(jq -er '.data[0].totals.lines.percent | numbers' ci-base/coverage.json)
+          make test-cov-json
+          candidate=$(jq -er '.data[0].totals.lines.percent | numbers' coverage.json)
+          diff=$(awk -v candidate="$candidate" -v base="$base" 'BEGIN { print candidate - base }')
+          {
+            echo "### Coverage for ${{ needs.authorize.outputs.head_sha }}"
+            echo "Base (${{ needs.authorize.outputs.base_sha }}): $base%"
+            echo "Candidate: $candidate%"
+            echo "Difference: $diff percentage points"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if awk -v diff="$diff" 'BEGIN { exit !(diff < -2) }'; then
+            echo "::error::Coverage dropped by more than 2 percentage points."
+            exit 1
+          fi
+      - name: Upload coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintainer-coverage
+          path: |
+            coverage.json
+            ci-base/coverage.json
+          if-no-files-found: warn
+
+  eval:
+    name: AI evaluation
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - *revalidate
+      - *checkout-candidate
+      - name: Checkout pinned base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.base_sha }}
+          path: heimdall-main
+          persist-credentials: false
+      - name: Checkout evaluation harness
+        uses: actions/checkout@v4
+        with:
+          repository: Jon-Becker/heimdall-eval
+          ref: main
+          path: heimdall-eval
+          token: ${{ secrets.EVAL_REPO_TOKEN }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Build candidate and base
+        run: |
+          cargo build --release --bin heimdall
+          cargo build --release --bin heimdall --manifest-path heimdall-main/Cargo.toml
+      - name: Run base and candidate AI evaluations
+        working-directory: heimdall-eval
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$OPENROUTER_API_KEY" || {
+            echo "::error::OPENROUTER_API_KEY must be configured."
+            exit 1
+          }
+          PATH="${GITHUB_WORKSPACE}/heimdall-main/target/release:${PATH}" make eval-all
+          mv heimdall baseline
+          mkdir heimdall
+          mv baseline heimdall/baseline
+          export PATH="${GITHUB_WORKSPACE}/target/release:${PATH}"
+          make run-all
+          make eval-all
+          make report
+      # Do not publish fork-controlled reports to S3 or give this job OIDC.
+      # Artifacts and model-generated evaluation text remain untrusted data.
+      - name: Upload evaluation reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintainer-eval-results
+          path: |
+            heimdall-eval/heimdall/*/eval.json
+            heimdall-eval/heimdall/*/cfg_eval.json
+            heimdall-eval/heimdall/baseline/*/eval.json
+            heimdall-eval/heimdall/baseline/*/cfg_eval.json
+            heimdall-eval/heimdall/baseline/evals.json
+            heimdall-eval/heimdall/evals.json
+            heimdall-eval/heimdall/report.html
+            heimdall-eval/heimdall/report/
+          if-no-files-found: warn
+
+  bench:
+    name: Benchmarks
+    needs: authorize
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - *revalidate
+      - *checkout-candidate
+      - name: Checkout pinned base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.base_sha }}
+          path: ci-base
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Benchmark base and candidate
+        run: |
+          set -euo pipefail
+          (cd ci-base && make bench)
+          mkdir -p target
+          cp -R ci-base/target/criterion target/criterion
+          # Criterion compares against the preceding baseline when present and
+          # also supports newly added benchmarks with no baseline measurement.
+          make bench
+      - name: Upload benchmark comparison
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintainer-criterion-report
+          path: target/criterion
+          if-no-files-found: warn
+
+  report:
+    name: Report reviewed-commit result
+    if: ${{ always() && needs.authorize.result == 'success' }}
+    needs: [authorize, quality, validation, test, coverage, bench, eval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    steps:
+      - name: Revalidate final approval
+        id: revalidate
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ needs.authorize.outputs.head_sha }}
+        with:
+          script: *authorization
+      # Fresh runner, no checkout, no artifacts, and no evaluation text. Only
+      # GitHub's job results enter this privileged status publisher. An expired
+      # approval can only publish failure to the original SHA, never leave its
+      # pending status stranded or grant execution on a newer commit.
+      - name: Publish separate Maintainer CI status
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          REVIEWED_SHA: ${{ needs.authorize.outputs.head_sha }}
+          APPROVAL_RESULT: ${{ steps.revalidate.outcome }}
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          BENCH_RESULT: ${{ needs.bench.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          EVAL_RESULT: ${{ needs.eval.result }}
+        with:
+          script: |
+            const results = [
+              process.env.APPROVAL_RESULT,
+              process.env.VALIDATION_RESULT,
+              process.env.QUALITY_RESULT,
+              process.env.BENCH_RESULT,
+              process.env.TEST_RESULT,
+              process.env.COVERAGE_RESULT,
+              process.env.EVAL_RESULT,
+            ];
+            const success = results.every(result => result === 'success');
+            await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha: process.env.REVIEWED_SHA,
+              context: 'Maintainer CI',
+              state: success ? 'success' : 'failure',
+              description: success ? 'Admin-approved full CI suite passed' : 'Approval is stale or one or more CI jobs did not pass',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
