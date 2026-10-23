@@ -1,5 +1,6 @@
 pub(crate) mod analyze;
 pub(crate) mod control_flow;
+mod event_logs;
 pub(crate) mod ir;
 pub(crate) mod out;
 pub(crate) mod postprocess;
@@ -92,6 +93,10 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         return Err(Error::Eyre(eyre!(
             "llm postprocessing requires including solidity source code. please enable the '--include-sol' flag."
         )));
+    }
+
+    if args.indexed_log_check {
+        event_logs::validate_lookup(&args)?;
     }
 
     let analyzer_type = AnalyzerType::from_args(args.include_solidity, args.include_yul);
@@ -375,12 +380,18 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         .collect::<HashMap<_, _>>();
 
     // construct the abi for the given analyzed functions
-    let abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
+    let mut abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
+    if args.indexed_log_check && event_logs::recover_event_indexing(&mut abi, &args).await.is_err()
+    {
+        // Provider errors can contain credentials from the RPC URL.
+        warn!("indexed log lookup failed; retaining inferred event layouts");
+    }
     let abi_with_details = build_abi_with_details(&abi, &analyzed_functions)?;
     let source = build_source(
         &analyzed_functions,
         &all_resolved_errors,
         &all_resolved_events,
+        &abi,
         &storage_variables,
         args.llm_postprocess,
         args.openrouter_api_key,

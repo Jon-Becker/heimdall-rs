@@ -2,7 +2,7 @@ use hashbrown::HashMap;
 use std::{collections::BTreeSet, str::FromStr, time::Instant};
 
 use alloy::primitives::U256;
-use alloy_json_abi::StateMutability;
+use alloy_json_abi::{JsonAbi, StateMutability};
 
 use eyre::{OptionExt, Result};
 use heimdall_common::{
@@ -45,6 +45,7 @@ pub(crate) async fn build_source(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
+    abi: &JsonAbi,
     storage_variables: &HashMap<String, StorageVariable>,
     llm_postprocess: bool,
     openrouter_api_key: String,
@@ -76,7 +77,7 @@ pub(crate) async fn build_source(
 
     // add event and error declarations
     let declarations =
-        get_event_and_error_declarations(functions, all_resolved_errors, all_resolved_logs);
+        get_event_and_error_declarations(functions, all_resolved_errors, all_resolved_logs, abi);
     if analyzer_type == AnalyzerType::Solidity {
         source.extend(declarations.iter().map(|declaration| declaration.line.clone()));
 
@@ -405,6 +406,7 @@ fn get_event_and_error_declarations(
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
+    abi: &JsonAbi,
 ) -> Vec<Declaration> {
     let mut declarations = HashMap::new();
 
@@ -422,7 +424,22 @@ fn get_event_and_error_declarations(
             .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
         {
             Some(event) => {
-                (event.name.clone(), event.inputs().iter().map(|i| i.to_string()).collect())
+                let indexed = abi.events.get(&event.name).and_then(|events| {
+                    events.iter().find(|candidate| candidate.signature() == event.signature)
+                });
+                let inputs = event
+                    .inputs()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, ty)| {
+                        if indexed.is_some_and(|event| event.inputs[index].indexed) {
+                            format!("{ty} indexed")
+                        } else {
+                            ty.to_string()
+                        }
+                    })
+                    .collect();
+                (event.name.clone(), inputs)
             }
             None => (unresolved_name.clone(), vec![]),
         };
@@ -575,6 +592,7 @@ mod tests {
             functions,
             &HashMap::new(),
             &HashMap::new(),
+            &JsonAbi::new(),
             &HashMap::new(),
             false,
             String::new(),
@@ -738,8 +756,12 @@ mod tests {
         function.events = BTreeSet::from([U256::from(0xbb) << 248, U256::from(0xaa) << 248]);
         function.errors = BTreeSet::from([U256::from(0xdd) << 248, U256::from(0xcc) << 248]);
 
-        let declarations =
-            get_event_and_error_declarations(&[function], &HashMap::new(), &HashMap::new());
+        let declarations = get_event_and_error_declarations(
+            &[function],
+            &HashMap::new(),
+            &HashMap::new(),
+            &JsonAbi::new(),
+        );
         assert_eq!(
             declarations.iter().map(|d| d.line.clone()).collect::<Vec<_>>(),
             vec![
@@ -758,8 +780,12 @@ mod tests {
         let mut function = AnalyzedFunction::new("a9059cbb", false);
         function.errors = BTreeSet::from([U256::from(0x11), U256::from(0x22)]);
 
-        let declarations =
-            get_event_and_error_declarations(&[function], &HashMap::new(), &HashMap::new());
+        let declarations = get_event_and_error_declarations(
+            &[function],
+            &HashMap::new(),
+            &HashMap::new(),
+            &JsonAbi::new(),
+        );
         assert_eq!(
             declarations.iter().map(|d| d.line.clone()).collect::<Vec<_>>(),
             vec!["error CustomError_00000000();"]
