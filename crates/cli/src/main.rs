@@ -3,6 +3,9 @@
 pub(crate) mod args;
 pub(crate) mod output;
 
+use std::io::{self, BufWriter, Write};
+
+use alloy::primitives::Address;
 use args::{Arguments, Subcommands};
 use clap::Parser;
 use eyre::{eyre, Result};
@@ -17,17 +20,41 @@ use heimdall_common::utils::{
 };
 use heimdall_config::{config, Configuration};
 use heimdall_core::{
-    heimdall_cfg::cfg, heimdall_decoder::decode, heimdall_decompiler::decompile,
-    heimdall_disassembler::disassemble, heimdall_dump::dump, heimdall_inspect::inspect,
+    heimdall_cfg::cfg,
+    heimdall_decoder::decode,
+    heimdall_decompiler::decompile,
+    heimdall_disassembler::disassemble,
+    heimdall_dump::dump,
+    heimdall_inspect::inspect,
+    heimdall_strings::{strings, Error as StringsError},
 };
 
 #[allow(clippy::large_stack_frames)]
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Arguments::parse();
+    let mut args = Arguments::parse();
 
     // setup logging
     let _ = args.logs.init_tracing();
+
+    // Local string extraction should not require configuration or a version-check request.
+    if let Subcommands::Strings(cmd) = &mut args.sub {
+        if cmd.rpc_url.is_empty() && cmd.target.parse::<Address>().is_ok() {
+            cmd.rpc_url = Configuration::load()
+                .map_err(|e| eyre!("failed to load configuration: {e}"))?
+                .rpc_url;
+        }
+        let mut output = BufWriter::new(io::stdout().lock());
+        let result = strings(cmd, &mut output)
+            .await
+            .and_then(|()| output.flush().map_err(StringsError::from));
+        return match result {
+            Err(StringsError::WriteError(error)) if error.kind() == io::ErrorKind::BrokenPipe => {
+                Ok(())
+            }
+            result => result.map_err(Into::into),
+        };
+    }
 
     // spawn a new tokio runtime to get remote version while the main runtime is running
     let current_version = current_version();
@@ -40,6 +67,7 @@ async fn main() -> Result<()> {
     let configuration =
         Configuration::load().map_err(|e| eyre!("failed to load configuration: {}", e))?;
     match args.sub {
+        Subcommands::Strings(_) => unreachable!("strings is handled before the version check"),
         Subcommands::Disassemble(mut cmd) => {
             // if the user has not specified a rpc url, use the default
             if cmd.rpc_url.as_str() == "" {

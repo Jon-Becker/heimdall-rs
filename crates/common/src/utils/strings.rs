@@ -25,11 +25,7 @@ pub fn decode_hex(mut s: &str) -> Result<Vec<u8>> {
         return Ok(vec![]);
     }
 
-    (0..s.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
-        .collect::<Result<Vec<u8>, _>>()
-        .map_err(|_| eyre!("invalid hex string: {}", s))
+    alloy::hex::decode(s).map_err(|_| eyre!("invalid hex string: {}", s))
 }
 
 /// Encodes a vector of bytes into a hex string
@@ -441,6 +437,13 @@ mod tests {
         let unsigned = U256::from(1000);
         let signed = sign_uint(unsigned);
         assert_eq!(signed, I256::try_from(1000).expect("invalid"));
+    }
+
+    #[test]
+    fn test_decode_hex_rejects_malformed_input() {
+        for input in ["0x123", "0xz", "€", "aé", "0xgg"] {
+            assert!(decode_hex(input).is_err(), "accepted {input:?}");
+        }
     }
 
     #[test]
