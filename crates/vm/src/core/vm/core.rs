@@ -173,7 +173,10 @@ impl VM {
         self.returndata = returndata;
     }
 
-    /// Consume gas units, halting execution if out of gas
+    /// Consume estimated gas units and set the exit code if the estimate is exhausted.
+    ///
+    /// Gas schedules and transaction state are approximations for analysis. A handler may complete
+    /// effects after this sets the exit code, and prior effects are not rolled back.
     ///
     /// ```
     /// use heimdall_vm::core::vm::VM;
@@ -197,7 +200,6 @@ impl VM {
     /// assert_eq!(vm.exitcode, 9);
     /// ```
     pub fn consume_gas(&mut self, amount: u128) -> bool {
-        // REVERT if out of gas
         if amount > self.gas_remaining {
             self.gas_used += self.gas_remaining;
             self.gas_remaining = 0;
@@ -208,6 +210,15 @@ impl VM {
         self.gas_remaining = self.gas_remaining.saturating_sub(amount);
         self.gas_used = self.gas_used.saturating_add(amount);
         true
+    }
+
+    pub(crate) fn charge_address_access(&mut self, address: U256) {
+        if self.address_access_set.contains(&address) {
+            self.consume_gas(100);
+        } else {
+            self.consume_gas(2600);
+            self.address_access_set.insert(address);
+        }
     }
 
     /// Push a boolean value onto the stack
@@ -290,7 +301,6 @@ impl VM {
     /// Executes the next instruction in the bytecode. Returns information about the instruction
     /// executed.
     fn _step(&mut self) -> Result<Instruction> {
-        // sanity check
         if self.bytecode.len() < self.instruction as usize {
             self.exit(2, Vec::new());
             return Ok(Instruction {
@@ -303,7 +313,6 @@ impl VM {
             });
         }
 
-        // get the opcode at the current instruction
         let opcode = self
             .bytecode
             .get((self.instruction - 1) as usize)
@@ -318,11 +327,9 @@ impl VM {
         #[cfg(feature = "step-tracing")]
         let start_time = Instant::now();
 
-        // add the opcode to the trace
         let opcode_info = match OpCodeInfo::for_fork(opcode, self.hardfork) {
             Some(info) => info,
             None => {
-                // Opcode not active at this hardfork - treat as invalid
                 self.exit(1, Vec::new());
                 return Ok(Instruction {
                     instruction: last_instruction,
@@ -339,18 +346,15 @@ impl VM {
             input_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
         let inputs = input_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
 
-        // Consume the minimum gas for the opcode
         let gas_cost = opcode_info.min_gas();
         self.consume_gas(gas_cost.into());
 
-        // convert inputs to WrappedInputs
         let wrapped_inputs = input_operations
             .iter()
             .map(|x| WrappedInput::Opcode(Arc::new(x.to_owned())))
             .collect::<Vec<WrappedInput>>();
         let operation = WrappedOpcode::new(opcode, wrapped_inputs);
 
-        // if step-tracing feature is enabled, print the current operation
         #[cfg(feature = "step-tracing")]
         trace!(
             pc = self.instruction - 1,
@@ -362,7 +366,6 @@ impl VM {
             "executing opcode"
         );
 
-        // execute the operation
         match opcode {
             opcodes::STOP => {
                 return Ok(handlers::control::stop(
@@ -509,13 +512,11 @@ impl VM {
             }
         }
 
-        // get outputs
         let output_frames = self.stack.peek_n(opcode_info.outputs() as usize);
         let output_operations =
             output_frames.iter().map(|x| x.operation.clone()).collect::<Vec<WrappedOpcode>>();
         let outputs = output_frames.iter().map(|x| x.value).collect::<Vec<U256>>();
 
-        // if step-tracing feature is enabled, print the current operation
         #[cfg(feature = "step-tracing")]
         trace!(
             pc = self.instruction - 1,
@@ -644,6 +645,8 @@ impl VM {
     pub fn reset(&mut self) {
         self.stack = Stack::new();
         self.memory = Memory::new();
+        self.storage.reset_transaction();
+        self.address_access_set.clear();
         self.instruction = 1;
         self.gas_remaining = (self.gas_used + self.gas_remaining).max(21000) - 21000;
         self.gas_used = 21000;
@@ -710,7 +713,6 @@ impl VM {
     /// assert_eq!(vm.exitcode, 10);
     /// ```
     pub fn call(&mut self, calldata: &[u8], value: u128) -> Result<ExecutionResult> {
-        // reset the VM temp state
         self.reset();
         calldata.clone_into(&mut self.calldata);
         self.value = value;
@@ -1395,36 +1397,95 @@ mod tests {
     }
 
     #[test]
-    fn test_jump() {
-        let mut vm = new_test_vm("0x60fe56");
-        vm.execute().expect("execution failed!");
+    fn jumps_require_a_decoded_jump_destination() {
+        // Targets at the end of the bytecode, beyond it, or inside PUSH data are invalid.
+        for code in [
+            "0x600356",
+            "0x60fe56",
+            "0x605b600156",
+            "0x6001600557",
+            "0x600160fe57",
+            "0x605b6001600157",
+        ] {
+            let mut vm = new_test_vm(code);
+            vm.execute().expect("execution failed");
+            assert_eq!(vm.exitcode, 790, "{code}");
+        }
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
-        );
+        for code in ["0x600456005b00", "0x6001600657005b00"] {
+            let mut vm = new_test_vm(code);
+            vm.execute().expect("execution failed");
+            assert_eq!(vm.exitcode, 10, "{code}");
+        }
+
+        let mut vm = new_test_vm("0x00");
+        vm.bytecode = vec![0x7f];
+        vm.bytecode.extend([0xff; 32]);
+        vm.bytecode.push(0x56);
+        vm.execute().expect("execution failed");
+        assert_eq!(vm.exitcode, 790);
+
+        // A false condition does not validate or take its destination.
+        let mut vm = new_test_vm("0x600060fe5758");
+        vm.execute().expect("execution failed");
+        assert_eq!(vm.stack.peek(0).value, U256::from(7));
     }
 
     #[test]
-    fn test_jumpi() {
-        let mut vm = new_test_vm("0x600160fe57");
-        vm.execute().expect("execution failed!");
+    fn truncated_push_operands_are_right_padded() {
+        for (bytecode, expected) in [
+            ("0x61", U256::ZERO),
+            ("0x6112", U256::from(0x1200)),
+            ("0x631234", U256::from(0x12340000u64)),
+            ("0x7f12", U256::from(0x12) << 248),
+        ] {
+            let mut vm = new_test_vm(bytecode);
+            let trace = vm.step().expect("PUSH should execute");
+            assert_eq!(vm.stack.peek(0).value, expected, "{bytecode}");
+            assert_eq!(trace.last_instruction.outputs, vec![expected], "{bytecode}");
+            assert_eq!(
+                vm.stack.peek(0).operation.inputs,
+                vec![crate::core::opcodes::WrappedInput::Raw(expected)],
+                "{bytecode}"
+            );
+        }
+    }
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0xff").expect("failed to parse hex")
-        );
+    #[test]
+    fn call_family_charges_the_target_address_after_the_gas_operand() {
+        use crate::core::opcodes::WrappedOpcode;
+        for (opcode, arguments) in [(0xf1, 7), (0xf2, 7), (0xf4, 6), (0xfa, 6)] {
+            let mut vm = new_test_vm("0x00");
+            vm.bytecode = vec![opcode];
+            for _ in 0..arguments - 2 {
+                vm.stack.push(U256::ZERO, WrappedOpcode::default());
+            }
+            let target = U256::from(0xab);
+            let gas_argument = U256::from(0xfe);
+            vm.stack.push(target, WrappedOpcode::default());
+            vm.stack.push(gas_argument, WrappedOpcode::default());
+            let state = vm.step().expect("call should execute");
+            assert_eq!(&state.last_instruction.inputs[..2], &[gas_argument, target]);
+            assert!(vm.address_access_set.contains(&target));
+            assert!(!vm.address_access_set.contains(&gas_argument));
+        }
+    }
 
-        let mut vm = new_test_vm("0x600060fe5758");
-        vm.execute().expect("execution failed!");
+    #[test]
+    fn reset_clears_transaction_state_but_preserves_persistent_storage() {
+        let mut vm = new_test_vm("0x00");
+        let key = U256::from(1);
+        vm.storage.store(key, U256::from(2));
+        vm.storage.tstore(key, U256::from(3));
+        vm.address_access_set.insert(key);
+        assert_eq!(vm.storage.access_cost(key), 100);
 
-        assert_eq!(
-            U256::from(vm.instruction),
-            U256::from_str("0x07").expect("failed to parse hex")
-        );
+        vm.reset();
 
-        // PC test
-        assert_eq!(vm.stack.peek(0).value, U256::from_str("0x07").expect("failed to parse hex"));
+        assert!(vm.address_access_set.is_empty());
+        assert!(vm.storage.transient.is_empty());
+        assert_eq!(vm.storage.access_cost(key), 2100);
+        assert_eq!(vm.storage.load(key), U256::from(2));
     }
 
     #[test]

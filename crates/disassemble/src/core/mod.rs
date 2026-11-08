@@ -20,16 +20,13 @@ use tracing::{debug, info};
 ///
 /// A string containing the disassembled bytecode in assembly format
 pub async fn disassemble(args: DisassemblerArgs) -> Result<String, Error> {
-    // init
     let start_time = Instant::now();
     let mut asm = String::new();
 
-    // Resolve hardfork (handles Auto detection if needed)
     let start_hardfork_resolve = Instant::now();
     let hardfork = args.get_hardfork().await;
     debug!("resolved hardfork: {} (took {:?})", hardfork, start_hardfork_resolve.elapsed());
 
-    // get the bytecode from the target
     let start_fetch_time = Instant::now();
     let contract_bytecode =
         args.get_bytecode().await.map_err(|e| eyre!("fetching target bytecode failed: {}", e))?;

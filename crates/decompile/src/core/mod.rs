@@ -2,6 +2,7 @@ pub(crate) mod analyze;
 pub(crate) mod control_flow;
 mod event_logs;
 pub(crate) mod ir;
+pub(crate) mod memory;
 pub(crate) mod out;
 pub(crate) mod postprocess;
 pub(crate) mod resolve;
@@ -14,7 +15,6 @@ use eyre::eyre;
 use hashbrown::HashMap;
 use heimdall_common::{
     ether::{
-        compiler::detect_compiler,
         signatures::{
             cache_signatures_from_abi, score_signature, ResolvedError, ResolvedFunction,
             ResolvedLog,
@@ -23,10 +23,9 @@ use heimdall_common::{
     },
     utils::strings::{decode_hex, encode_hex, encode_hex_reduced, StringExt},
 };
-use heimdall_disassembler::{disassemble, DisassemblerArgsBuilder};
 use heimdall_vm::{
     core::vm::VM,
-    ext::selectors::{find_function_selectors, resolve_selectors},
+    ext::selectors::{find_function_selectors_in_bytecode, resolve_selectors},
 };
 use std::time::{Duration, Instant};
 
@@ -73,12 +72,10 @@ pub struct DecompileResult {
 ///
 /// A DecompileResult containing the decompiled source (if requested) and the ABI
 pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
-    // init
     let start_time = Instant::now();
     let mut all_resolved_events: HashMap<String, ResolvedLog> = HashMap::new();
     let mut all_resolved_errors: HashMap<String, ResolvedError> = HashMap::new();
 
-    // validate arguments
     if args.include_solidity && args.include_yul {
         return Err(Error::Eyre(eyre!(
             "arguments '--include-sol' and '--include-yul' are mutually exclusive.".to_string(),
@@ -101,18 +98,15 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     let analyzer_type = AnalyzerType::from_args(args.include_solidity, args.include_yul);
 
-    // parse and cache signatures from the ABI, if provided
     if let Some(abi_path) = args.abi.as_ref() {
         cache_signatures_from_abi(abi_path.into())
             .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
     }
 
-    // Resolve hardfork (handles Auto detection if needed)
     let start_hardfork_resolve = Instant::now();
     let hardfork = args.get_hardfork().await;
     debug!("resolved hardfork: {} (took {:?})", hardfork, start_hardfork_resolve.elapsed());
 
-    // get the bytecode from the target
     let start_fetch_time = Instant::now();
     let contract_bytecode = args
         .get_bytecode()
@@ -129,11 +123,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         )));
     }
 
-    // perform versioning and compiler heuristics
-    let (_compiler, _version) = detect_compiler(&contract_bytecode);
-
-    // create a new EVM instance. we will use this for finding function selectors,
-    // performing symbolic execution, and more.
     let mut evm = VM::new(
         &contract_bytecode,
         &[],
@@ -145,23 +134,10 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     )
     .with_hardfork(hardfork);
 
-    // disassemble the contract's bytecode
-    let assembly = disassemble(
-        DisassemblerArgsBuilder::new()
-            .target(encode_hex(&contract_bytecode))
-            .hardfork(hardfork)
-            .build()
-            .expect("impossible case: failed to build disassembly arguments"),
-    )
-    .await
-    .map_err(|e| Error::Eyre(eyre!("disassembling contract bytecode failed: {}", e)))?;
-
-    // find all the function selectors in the bytecode
     let start_selectors_time = Instant::now();
-    let selectors = find_function_selectors(&evm, &assembly);
+    let selectors = find_function_selectors_in_bytecode(&evm);
     debug!("finding function selectors took {:?}", start_selectors_time.elapsed());
 
-    // resolve selectors (if enabled)
     let resolved_selectors = match args.skip_resolving {
         true => HashMap::new(),
         false => resolve_selectors::<ResolvedFunction>(selectors.keys().cloned().collect()).await,
@@ -173,15 +149,15 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     if selectors.is_empty() {
         warn!("discovered no function selectors in the bytecode.");
         let start_sym_exec_time = Instant::now();
-        let (map, jumpdest_count) = evm
-            .symbolic_exec(
+        let (map, details, jumpdest_count) = evm
+            .symbolic_exec_detailed(
                 Instant::now()
                     .checked_add(Duration::from_millis(args.timeout))
                     .expect("invalid timeout"),
             )
             .map_err(|e| Error::Eyre(eyre!("symbolic execution failed: {}", e)))?;
 
-        symbolic_execution_maps.insert("fallback".to_string(), map);
+        symbolic_execution_maps.insert("fallback".to_string(), (map, details));
         debug!("symbolic execution (fallback) took {:?}", start_sym_exec_time.elapsed());
         debug!("'fallback' has {} unique branches", jumpdest_count);
     }
@@ -190,7 +166,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     for (selector, entry_point) in selectors {
         let start_sym_exec_time = Instant::now();
         evm.reset();
-        let (map, jumpdest_count) = match evm.symbolic_exec_selector(
+        let (map, details, jumpdest_count) = match evm.symbolic_exec_selector_detailed(
             &selector,
             entry_point,
             Instant::now()
@@ -203,7 +179,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                 continue;
             }
         };
-        symbolic_execution_maps.insert(selector.clone(), map);
+        symbolic_execution_maps.insert(selector.clone(), (map, details));
         debug!("symbolically executed '{}' in {:?}", selector, start_sym_exec_time.elapsed());
         debug!("'{}' has {} unique branches", selector, jumpdest_count);
     }
@@ -211,53 +187,50 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     info!("symbolically executed {} selectors", symbolic_execution_maps.len());
 
     let start_analysis_time = Instant::now();
-    let handles = symbolic_execution_maps.into_iter().map(|(selector, trace_root)| {
-        let mut evm_clone = evm.clone();
-        async move {
-            let mut analyzer = Analyzer::new(
-                analyzer_type,
-                args.skip_resolving,
-                AnalyzedFunction::new(&selector, selector == "fallback"),
-            );
+    let handles =
+        symbolic_execution_maps.into_iter().map(|(selector, (trace_root, trace_details))| {
+            let mut evm_clone = evm.clone();
+            async move {
+                let mut analyzer = Analyzer::new(
+                    analyzer_type,
+                    args.skip_resolving,
+                    AnalyzedFunction::new(&selector, selector == "fallback"),
+                );
 
-            // analyze the symbolic execution trace
-            let mut analyzed_function = analyzer.analyze(trace_root).await?;
+                let mut analyzed_function = analyzer.analyze(trace_root, trace_details).await?;
 
-            // if the function is constant, we can get the exact val
-            if analyzed_function.is_constant() && !analyzed_function.fallback {
-                evm_clone.reset();
-                let x = evm_clone.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
+                if analyzed_function.is_constant() && !analyzed_function.fallback {
+                    evm_clone.reset();
+                    let x = evm_clone.call(&decode_hex(&selector).expect("invalid selector"), 0)?;
 
-                let returns_param_type = analyzed_function
-                    .returns
-                    .as_ref()
-                    .map(|ret_type| to_type(&ret_type.without_location().to_string()))
-                    .unwrap_or(DynSolType::Bytes);
+                    let returns_param_type = analyzed_function
+                        .returns
+                        .as_ref()
+                        .map(|ret_type| to_type(&ret_type.without_location().to_string()))
+                        .unwrap_or(DynSolType::Bytes);
 
-                let decoded = returns_param_type
-                    .abi_decode(&x.returndata)
-                    .map(|decoded| match decoded {
-                        DynSolValue::String(s) => format!("\"{s}\""),
-                        DynSolValue::Uint(x, _) => x.to_string(),
-                        DynSolValue::Int(x, _) => x.to_string(),
-                        token => format!("0x{token:?}"),
-                    })
-                    .unwrap_or_else(|_| encode_hex(&x.returndata));
+                    let decoded = returns_param_type
+                        .abi_decode(&x.returndata)
+                        .map(|decoded| match decoded {
+                            DynSolValue::String(s) => format!("\"{s}\""),
+                            DynSolValue::Uint(x, _) => x.to_string(),
+                            DynSolValue::Int(x, _) => x.to_string(),
+                            token => format!("0x{token:?}"),
+                        })
+                        .unwrap_or_else(|_| encode_hex(&x.returndata));
 
-                analyzed_function.constant_value = Some(decoded);
+                    analyzed_function.constant_value = Some(decoded);
+                }
+
+                Ok::<_, Error>(analyzed_function)
             }
-
-            Ok::<_, Error>(analyzed_function)
-        }
-    });
+        });
     let mut analyzed_functions = futures::future::try_join_all(handles).await?;
 
     debug!("analyzing symbolic execution results took {:?}", start_analysis_time.elapsed());
     info!("analyzed {} symbolic execution traces", analyzed_functions.len());
 
-    // resolve event and error selectors
     if !args.skip_resolving {
-        // resolve error selectors
         let start_error_resolving_time = Instant::now();
         let mut error_selectors: Vec<String> = analyzed_functions
             .iter()
@@ -270,7 +243,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                 .await
                 .into_iter()
                 .map(|(k, mut potential_values)| {
-                    // sort by score, take the highest
                     potential_values.sort_by(|a: &ResolvedError, b: &ResolvedError| {
                         let a_score = score_signature(&a.signature, None);
                         let b_score = score_signature(&b.signature, None);
@@ -288,7 +260,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         );
         all_resolved_errors.extend(resolved_errors);
 
-        // resolve event selectors
         let start_event_resolving_time = Instant::now();
         let mut event_selectors: Vec<String> = analyzed_functions
             .iter()
@@ -301,7 +272,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
                 .await
                 .into_iter()
                 .map(|(k, mut potential_values)| {
-                    // sort by score, take the highest
                     potential_values.sort_by(|a: &ResolvedLog, b: &ResolvedLog| {
                         let a_score = score_signature(&a.signature, None);
                         let b_score = score_signature(&b.signature, None);
@@ -320,7 +290,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         all_resolved_events.extend(resolved_events);
     }
 
-    // match analyzed parameters with resolved signatures for each function
     analyzed_functions.iter_mut().for_each(|f| {
         let resolve_function_signatures =
             resolved_selectors.get(&f.selector).unwrap_or(&Vec::new()).to_owned();
@@ -345,12 +314,8 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         );
     });
 
-    // sort the analyzed functions into a deterministic order, so that repeated decompilation of
-    // the same bytecode always produces identical output
     sort_analyzed_functions(&mut analyzed_functions);
 
-    // get a new PostprocessorOrchestrator
-    // note: this will do nothing if the include_solidity and include_yul flags are false
     let mut postprocessor = PostprocessOrchestrator::new(analyzer_type)?;
     let states = analyzed_functions
         .iter_mut()
@@ -379,7 +344,6 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
         })
         .collect::<HashMap<_, _>>();
 
-    // construct the abi for the given analyzed functions
     let mut abi = build_abi(&analyzed_functions, &all_resolved_errors, &all_resolved_events)?;
     if args.indexed_log_check && event_logs::recover_event_indexing(&mut abi, &args).await.is_err()
     {
@@ -388,6 +352,7 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
     }
     let abi_with_details = build_abi_with_details(&abi, &analyzed_functions)?;
     let source = build_source(
+        analyzer_type,
         &analyzed_functions,
         &all_resolved_errors,
         &all_resolved_events,

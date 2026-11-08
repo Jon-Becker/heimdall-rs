@@ -4,7 +4,6 @@ use crate::{
     Error,
 };
 
-// import postprocessors
 mod arithmetic;
 mod bitwise;
 mod control_flow;
@@ -18,7 +17,6 @@ mod transient;
 mod types;
 mod variable;
 
-// re-export postprocessors
 pub(crate) use arithmetic::arithmetic_postprocessor;
 pub(crate) use bitwise::bitwise_mask_postprocessor;
 pub(crate) use control_flow::structure_control_flow;

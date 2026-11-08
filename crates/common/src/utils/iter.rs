@@ -29,7 +29,6 @@ impl ByteSliceExt for [u8] {
             return vec![];
         }
 
-        // if the delimiter is empty, return each byte as a separate slice
         if delimiter.is_empty() {
             let mut parts = Vec::with_capacity(self.len());
             for i in 0..self.len() {

@@ -12,7 +12,6 @@ pub fn mload(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
     let result = U256::from_be_slice(vm.memory.read(i, 32).as_slice());
 
-    // consume dynamic gas
     let gas_cost = vm.memory.expansion_cost(i, 32);
     vm.consume_gas(gas_cost);
 
@@ -28,10 +27,8 @@ pub fn mstore(
     let offset = vm.stack.pop()?.value;
     let value = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let offset: usize = offset.try_into().unwrap_or(usize::MAX);
 
-    // consume dynamic gas
     let gas_cost = vm.memory.expansion_cost(offset, 32);
     vm.consume_gas(gas_cost);
 
@@ -53,10 +50,8 @@ pub fn mstore8(
     let offset = vm.stack.pop()?.value;
     let value = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let offset: usize = offset.try_into().unwrap_or(usize::MAX);
 
-    // consume dynamic gas
     let gas_cost = vm.memory.expansion_cost(offset, 1);
     vm.consume_gas(gas_cost);
 
@@ -89,7 +84,6 @@ pub fn mcopy(vm: &mut VM, #[cfg(feature = "experimental")] operation: WrappedOpc
 
     let value = VM::safe_copy_data(&vm.memory.memory, offset, size);
 
-    // consume dynamic gas
     let minimum_word_size = size.div_ceil(32) as u128;
     let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(offset, size);
     vm.consume_gas(gas_cost);

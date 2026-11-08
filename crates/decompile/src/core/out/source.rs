@@ -7,7 +7,7 @@ use alloy_json_abi::{JsonAbi, StateMutability};
 use eyre::{OptionExt, Result};
 use heimdall_common::{
     ether::signatures::{ResolvedError, ResolvedLog},
-    resources::openrouter::{complete_chat_structured, AnnotatedContractResponse},
+    resources::openrouter::{complete_chat_structured_with_schema, AnnotatedContractResponse},
     utils::{hex::ToLowerHex, strings::encode_hex_reduced},
 };
 
@@ -23,11 +23,13 @@ use crate::{
 
 /// Annotates the entire contract source code using an LLM with structured output.
 async fn annotate_contract(source: &str, openrouter_api_key: &str, model: &str) -> Result<String> {
-    let response: AnnotatedContractResponse = complete_chat_structured(
+    let response: AnnotatedContractResponse = complete_chat_structured_with_schema(
         &LLM_POSTPROCESSING_PROMPT.replace("{source}", source),
         openrouter_api_key,
         model,
         "annotated_contract",
+        AnnotatedContractResponse::json_schema(),
+        Some("Annotated contract source code"),
     )
     .await
     .ok_or_eyre("failed to llm postprocess contract")?;
@@ -42,6 +44,7 @@ pub(crate) struct StorageVariable {
 }
 
 pub(crate) async fn build_source(
+    analyzer_type: AnalyzerType,
     functions: &[AnalyzedFunction],
     all_resolved_errors: &HashMap<String, ResolvedError>,
     all_resolved_logs: &HashMap<String, ResolvedLog>,
@@ -51,8 +54,6 @@ pub(crate) async fn build_source(
     openrouter_api_key: String,
     model: String,
 ) -> Result<Option<String>> {
-    // we can get the AnalyzerType from the first function, since they are all the same
-    let analyzer_type = functions.first().map(|f| f.analyzer_type).unwrap_or(AnalyzerType::Yul);
     if analyzer_type == AnalyzerType::Abi {
         debug!("skipping source construction for due to {} analyzer type", analyzer_type);
         return Ok(None);
@@ -62,26 +63,21 @@ pub(crate) async fn build_source(
     let mut source = Vec::new();
     let start_time = Instant::now();
 
-    // write the header to the output file
     source.extend(get_source_header(&analyzer_type));
 
-    // add storage variables
     if analyzer_type == AnalyzerType::Solidity {
         source.extend(get_constants(functions));
     }
 
-    // add storage variables
     if analyzer_type == AnalyzerType::Solidity {
         source.extend(get_storage_variables(storage_variables, functions));
     }
 
-    // add event and error declarations
     let declarations =
         get_event_and_error_declarations(functions, all_resolved_errors, all_resolved_logs, abi);
     if analyzer_type == AnalyzerType::Solidity {
         source.extend(declarations.iter().map(|declaration| declaration.line.clone()));
 
-        // add the fallback function, if it exists
         if let Some(fallback) = functions.iter().find(|f| f.fallback) {
             source.push(String::from("fallback() external payable {"));
             source.extend(fallback.logic.clone());
@@ -89,7 +85,6 @@ pub(crate) async fn build_source(
         }
     }
 
-    // add functions
     for f in functions.iter().filter(|f| {
         let collapsible_getter = is_collapsible_getter(f, functions, storage_variables);
         let standalone_constant = f.is_constant() && f.maybe_getter_for.is_none();
@@ -98,7 +93,6 @@ pub(crate) async fn build_source(
     }) {
         let mut function_source = Vec::new();
 
-        // get the function header
         function_source.extend(get_function_header(f));
         function_source.extend(f.logic.clone());
         function_source.push("}".to_string());
@@ -110,7 +104,6 @@ pub(crate) async fn build_source(
     }
 
     if analyzer_type == AnalyzerType::Yul {
-        // add the fallback function, if it exists
         if let Some(fallback) = functions.iter().find(|f| f.fallback) {
             source.push("default {".to_string());
             source.extend(fallback.logic.clone());
@@ -120,20 +113,16 @@ pub(crate) async fn build_source(
         }
     }
 
-    // add missing closing brackets
     let imbalance = get_indentation_imbalance(&source);
     source.extend(vec!["}".to_string(); imbalance as usize]);
 
-    // indent and combine source
     indent_source(&mut source);
     let mut source = source.join("\n");
 
-    // replace all custom event and error declarations with their resolved names
     declarations.iter().for_each(|declaration| {
         source = source.replace(&declaration.unresolved_name, &declaration.name);
     });
 
-    // replace all storage variables w/ getters w/ their resolved names
     functions
         .iter()
         .filter(|function| is_collapsible_getter(function, functions, storage_variables))
@@ -147,7 +136,6 @@ pub(crate) async fn build_source(
             source = source.replace(getter_for_storage_variable, &resolved_name);
         });
 
-    // apply LLM postprocessing to the entire contract source
     if llm_postprocess {
         let postprocess_start = Instant::now();
         debug!("llm postprocessing entire contract source");
@@ -187,7 +175,6 @@ fn get_source_header(analyzer_type: &AnalyzerType) -> Vec<String> {
 
 /// Helper function which will get the function header/signature for a given [`AnalyzedFunction`].
 fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
-    // determine the state mutability of the function
     let state_mutability = match f.pure {
         true => StateMutability::Pure,
         false => match f.view {
@@ -199,7 +186,6 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
         },
     };
 
-    // build function modifiers
     let mut function_modifiers = vec!["public".to_string()];
     if let Some(state_mutability) = state_mutability.as_str() {
         function_modifiers.push(state_mutability.to_owned());
@@ -208,7 +194,6 @@ fn get_function_header(f: &AnalyzedFunction) -> Vec<String> {
         function_modifiers.push(format!("returns ({returns})"));
     }
 
-    // determine the name of the function
     let function_name = f.emitted_name();
 
     let function_signature = match f.resolved_function {
@@ -410,7 +395,6 @@ fn get_event_and_error_declarations(
 ) -> Vec<Declaration> {
     let mut declarations = HashMap::new();
 
-    // add event declarations
     let all_events =
         functions.iter().flat_map(|f| f.events.iter().copied()).collect::<BTreeSet<_>>();
     all_events.iter().for_each(|event_selector| {
@@ -419,7 +403,6 @@ fn get_event_and_error_declarations(
             event_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
         );
 
-        // determine the name of the event
         let (name, inputs) = match all_resolved_logs
             .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
         {
@@ -454,7 +437,6 @@ fn get_event_and_error_declarations(
         );
     });
 
-    // add error declarations
     let all_errors =
         functions.iter().flat_map(|f| f.errors.iter().copied()).collect::<BTreeSet<_>>();
     all_errors.iter().for_each(|error_selector| {
@@ -463,7 +445,6 @@ fn get_event_and_error_declarations(
             error_selector.to_lower_hex().replacen("0x", "", 1).get(0..8).unwrap_or("00000000")
         );
 
-        // determine the name of the error
         let (name, inputs) = match all_resolved_errors
             .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
         {
@@ -483,7 +464,6 @@ fn get_event_and_error_declarations(
         );
     });
 
-    // sort the declarations, so that the generated output is deterministic
     let mut declarations = declarations.into_values().collect::<Vec<_>>();
     declarations.sort_unstable_by(|a, b| a.line.cmp(&b.line));
     declarations
@@ -589,6 +569,7 @@ mod tests {
 
     async fn build(functions: &[AnalyzedFunction]) -> String {
         build_source(
+            functions.first().expect("test requires at least one function").analyzer_type,
             functions,
             &HashMap::new(),
             &HashMap::new(),
@@ -616,6 +597,30 @@ mod tests {
                 signature.split('(').next().expect("signature is empty").trim().to_string()
             })
             .collect()
+    }
+
+    #[tokio::test]
+    async fn empty_function_list_respects_requested_output_language() {
+        for analyzer_type in [AnalyzerType::Solidity, AnalyzerType::Yul, AnalyzerType::Abi] {
+            let source = build_source(
+                analyzer_type,
+                &[],
+                &HashMap::new(),
+                &HashMap::new(),
+                &JsonAbi::new(),
+                &HashMap::new(),
+                false,
+                String::new(),
+                String::new(),
+            )
+            .await
+            .unwrap();
+            match analyzer_type {
+                AnalyzerType::Solidity => assert!(source.unwrap().contains("contract ")),
+                AnalyzerType::Yul => assert!(source.unwrap().contains("object ")),
+                AnalyzerType::Abi => assert!(source.is_none()),
+            }
+        }
     }
 
     #[tokio::test]

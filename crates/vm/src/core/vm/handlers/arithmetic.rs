@@ -111,7 +111,6 @@ pub fn exp(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let exponent = vm.stack.pop()?;
     let result = a.value.overflowing_pow(exponent.value).0;
 
-    // consume dynamic gas
     let exponent_byte_size = exponent.value.bit_len() / 8;
     let gas_cost = 50 * exponent_byte_size;
     vm.consume_gas(gas_cost as u128);
@@ -128,7 +127,6 @@ pub fn signextend(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let t = x * U256::from(8u32) + U256::from(7u32);
     let sign_bit = U256::from(1u32) << t;
 
-    // (b & sign_bit - 1) - (b & sign_bit)
     let result =
         (b & (sign_bit.overflowing_sub(U256::from(1u32)).0)).overflowing_sub(b & sign_bit).0;
 

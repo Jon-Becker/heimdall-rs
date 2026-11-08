@@ -1,9 +1,4 @@
-use alloy::{
-    consensus::Transaction,
-    network::TransactionResponse,
-    primitives::TxHash,
-    rpc::types::{trace::parity::TransactionTrace, Log},
-};
+use alloy::{consensus::Transaction, network::TransactionResponse, primitives::TxHash};
 use eyre::eyre;
 use futures::future::try_join_all;
 use std::{collections::VecDeque, time::Instant};
@@ -14,7 +9,7 @@ use heimdall_common::{
         rpc::{get_block_logs, get_trace, get_transaction},
         signatures::cache_signatures_from_abi,
     },
-    utils::{env::set_env, hex::ToLowerHex, io::logging::TraceFactory},
+    utils::{hex::ToLowerHex, io::logging::TraceFactory},
 };
 
 use crate::{
@@ -55,17 +50,13 @@ impl InspectResult {
 ///
 /// An InspectResult containing the decoded transaction trace
 pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
-    // init
     let start_time = Instant::now();
-    set_env("SKIP_RESOLVING", &args.skip_resolving.to_string());
 
-    // parse and cache signatures from the ABI, if provided
     if let Some(abi_path) = args.abi.as_ref() {
         cache_signatures_from_abi(abi_path.into())
             .map_err(|e| Error::Eyre(eyre!("caching signatures from ABI failed: {}", e)))?;
     }
 
-    // get calldata from RPC
     let start_fetch_time = Instant::now();
     let transaction = get_transaction(
         args.target
@@ -79,14 +70,12 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
 
     let block_number = transaction.block_number.unwrap_or(0);
 
-    // get block traces
     let start_fetch_time = Instant::now();
     let block_trace = get_trace(&args.target, &args.rpc_url)
         .await
         .map_err(|e| Error::Eyre(eyre!("fetching block trace failed: {}", e)))?;
     debug!("fetching block trace took {:?}", start_fetch_time.elapsed());
 
-    // get transaction logs
     let start_fetch_time = Instant::now();
     let transaction_logs = get_block_logs(block_number, &args.rpc_url)
         .await
@@ -96,10 +85,10 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
         .collect::<Vec<_>>();
     debug!("fetching transaction logs took {:?}", start_fetch_time.elapsed());
 
-    // convert Vec<Log> to Vec<DecodedLog>
     let decode_log_time = Instant::now();
-    let handles =
-        transaction_logs.into_iter().map(<DecodedLog as async_convert::TryFrom<Log>>::try_from);
+    let handles = transaction_logs
+        .into_iter()
+        .map(|log| DecodedLog::decode_with_options(log, args.skip_resolving));
     let mut decoded_logs = try_join_all(handles).await?;
     decoded_logs
         .sort_by(|a, b| a.log_index.unwrap_or_default().cmp(&b.log_index.unwrap_or_default()));
@@ -107,23 +96,19 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     info!("decoded {} logs successfully", decoded_logs.len());
     debug!("decoding logs took {:?}", decode_log_time.elapsed());
 
-    // convert Vec<TransactionTrace> to DecodedTransactionTrace
     let _start_decode_time = Instant::now();
-    let mut decoded_trace = <DecodedTransactionTrace as async_convert::TryFrom<
-        Vec<TransactionTrace>,
-    >>::try_from(block_trace.trace)
-    .await?;
+    let mut decoded_trace =
+        DecodedTransactionTrace::decode_with_options(block_trace.trace, args.skip_resolving)
+            .await?;
 
     trace!("resolving address contract labels");
 
-    // get contracts client
     let mut contracts = Contracts::new(&args);
     contracts
         .extend(decoded_trace.addresses(true, true).into_iter().collect())
         .await
         .map_err(|e| Error::Eyre(eyre!("fetching contracts failed: {}", e)))?;
 
-    // extend with addresses from state diff
     if let Some(state_diff) = block_trace.state_diff {
         contracts
             .extend(state_diff.0.keys().cloned().collect())
@@ -136,15 +121,17 @@ pub async fn inspect(args: InspectArgs) -> Result<InspectResult, Error> {
     trace!("joining {} decoded logs to trace", decoded_logs.len());
 
     if let Some(vm_trace) = block_trace.vm_trace {
-        // join logs to trace
-        let _ = decoded_trace.join_logs(&mut decoded_logs, &vm_trace, Vec::new()).await;
-        // build state diffs within trace
-        let _ = decoded_trace.build_state_diffs(vm_trace, Vec::new()).await;
+        if let Err(error) = decoded_trace.join_logs(&mut decoded_logs, &vm_trace, Vec::new()).await
+        {
+            warn!("failed to join all logs to the trace: {error}");
+        }
+        if let Err(error) = decoded_trace.build_state_diffs(vm_trace, Vec::new()).await {
+            warn!("failed to attach all state diffs to the trace: {error}");
+        }
     } else {
         warn!("no vm trace found for transaction. skipping joining logs");
     }
 
-    // build trace
     let mut trace = TraceFactory::default();
     let inspect_call = trace.add_call(
         0,

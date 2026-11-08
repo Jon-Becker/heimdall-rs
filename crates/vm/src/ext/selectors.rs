@@ -1,26 +1,20 @@
 use hashbrown::{HashMap, HashSet};
-use std::{
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::time::Instant;
 
 use eyre::Result;
 use heimdall_common::{
     ether::signatures::{ResolveSelector, ResolvedFunction},
-    utils::strings::decode_hex,
+    utils::strings::{decode_hex, encode_hex},
 };
 use tokio::task;
 use tracing::{debug, error, info, trace, warn};
 
-use crate::core::vm::VM;
+use crate::core::{opcodes, program::Program, vm::VM};
 
-/// Finds and resolves function selectors from disassembled bytecode
-///
-/// This function analyzes disassembled EVM bytecode to extract function selectors
-/// and optionally resolves them to human-readable function signatures.
+/// Finds selectors in disassembled bytecode and optionally resolves their signatures.
 ///
 /// # Arguments
-/// * `disassembled_bytecode` - The disassembled EVM bytecode to analyze
+/// * `disassembled_bytecode` - The disassembled bytecode to analyze
 /// * `skip_resolving` - If true, skip the process of resolving selectors to function signatures
 /// * `evm` - The VM instance to use for analysis
 ///
@@ -52,69 +46,60 @@ pub async fn get_resolved_selectors(
     Ok((selectors, resolved_selectors))
 }
 
-/// find all function selectors in the given EVM assembly.
-// TODO: update get_resolved_selectors logic to support vyper, huff
+/// Find function selectors from the supplied EVM assembly.
+///
+/// This compatibility entry point honors the provided assembly. For analysis of the entire
+/// bytecode without a formatting dependency, use [`find_function_selectors_in_bytecode`].
 pub fn find_function_selectors(evm: &VM, assembly: &str) -> HashMap<String, u128> {
+    let candidates = assembly.lines().filter_map(|line| {
+        let mut parts = line.split_whitespace();
+        parts.next()?;
+        (parts.next()? == "PUSH4").then(|| parts.next()).flatten().map(str::to_owned)
+    });
+    resolve_candidates(evm, candidates)
+}
+
+/// Find function selectors using the VM's decoded bytecode.
+pub fn find_function_selectors_in_bytecode(evm: &VM) -> HashMap<String, u128> {
+    let program = Program::decode(&evm.bytecode, evm.hardfork);
+    let candidates = program
+        .instructions
+        .iter()
+        .filter(|instruction| instruction.opcode == opcodes::PUSH4 && !instruction.truncated)
+        .map(|instruction| encode_hex(&instruction.immediate));
+    resolve_candidates(evm, candidates)
+}
+
+fn resolve_candidates(evm: &VM, candidates: impl Iterator<Item = String>) -> HashMap<String, u128> {
     let mut function_selectors = HashMap::new();
     let mut handled_selectors = HashSet::new();
-
-    // search through assembly for PUSHN (where N <= 4) instructions, optimistically assuming that
-    // they are function selectors
-    let assembly: Vec<String> = assembly.split('\n').map(|line| line.trim().to_string()).collect();
-    for line in assembly.iter() {
-        let instruction_args: Vec<String> = line.split(' ').map(|arg| arg.to_string()).collect();
-
-        if instruction_args.len() >= 2 {
-            let instruction = instruction_args[1].clone();
-
-            if &instruction == "PUSH4" {
-                let function_selector = instruction_args[2].clone();
-
-                // check if this function selector has already been handled
-                if handled_selectors.contains(&function_selector) {
-                    continue;
-                }
-
-                trace!(
-                    "optimistically assuming instruction {} {} {} is a function selector",
-                    instruction_args[0],
-                    instruction_args[1],
-                    instruction_args[2]
-                );
-
-                // add the function selector to the handled selectors
-                handled_selectors.insert(function_selector.clone());
-
-                // get the function's entry point
-                let function_entry_point =
-                    match resolve_entry_point(&mut evm.clone(), &function_selector) {
-                        0 => continue,
-                        x => x,
-                    };
-
-                trace!(
-                    "found function selector {} at entry point {}",
-                    function_selector,
-                    function_entry_point
-                );
-
-                function_selectors.insert(function_selector, function_entry_point);
-            }
+    for selector in candidates {
+        if !handled_selectors.insert(selector.clone()) {
+            continue;
+        }
+        let entry_point = resolve_entry_point(&mut evm.clone(), &selector);
+        if entry_point != 0 {
+            trace!("found function selector {} at entry point {}", selector, entry_point);
+            function_selectors.insert(selector, entry_point);
         }
     }
-
-    info!("discovered {} function selectors in assembly", function_selectors.len());
+    info!("discovered {} function selectors", function_selectors.len());
     function_selectors
 }
 
-/// resolve a selector's function entry point from the EVM bytecode
+/// Resolve a selector's function entry point, or return zero if it cannot be found.
+///
+/// Dispatch execution is limited to 100,000 instructions to bound looping bytecode.
 // TODO: update resolve_entry_point logic to support vyper
 pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
-    let mut handled_jumps = HashSet::new();
+    resolve_entry_point_with_limit(vm, selector, 100_000)
+}
 
-    // execute the EVM call to find the entry point for the given selector
+fn resolve_entry_point_with_limit(vm: &mut VM, selector: &str, step_limit: usize) -> u128 {
     vm.calldata = decode_hex(selector).expect("Failed to decode selector.");
-    while vm.bytecode.len() >= vm.instruction as usize {
+    let mut steps = 0;
+    while vm.bytecode.len() >= vm.instruction as usize && steps < step_limit {
+        steps += 1;
         let call = match vm.step() {
             Ok(call) => call,
             Err(_) => break, // the call failed, so we can't resolve the selector
@@ -131,21 +116,16 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
                 jump_taken == 1
             {
                 return call.last_instruction.inputs[0].try_into().unwrap_or(0);
-            } else if jump_taken == 1 {
-                // if handled_jumps contains the jumpi, we have already handled this jump.
-                // loops aren't supported in the dispatcher, so we can just return 0
-                if handled_jumps.contains(&call.last_instruction.inputs[0].try_into().unwrap_or(0))
-                {
-                    return 0;
-                } else {
-                    handled_jumps.insert(call.last_instruction.inputs[0].try_into().unwrap_or(0));
-                }
             }
         }
 
         if vm.exitcode != 255 || !vm.returndata.is_empty() {
             break;
         }
+    }
+
+    if steps == step_limit && vm.bytecode.len() >= vm.instruction as usize && vm.exitcode == 255 {
+        warn!("selector dispatcher exceeded the {} instruction limit", step_limit);
     }
 
     0
@@ -155,44 +135,90 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
 pub async fn resolve_selectors<T>(selectors: Vec<String>) -> HashMap<String, Vec<T>>
 where
     T: ResolveSelector + Send + Clone + 'static, {
-    // short-circuit if there are no selectors
     if selectors.is_empty() {
         return HashMap::new();
     }
 
-    let resolved_functions: Arc<Mutex<HashMap<String, Vec<T>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    let mut threads = Vec::new();
     let start_time = Instant::now();
     let selector_count = selectors.len();
+    let tasks = selectors
+        .into_iter()
+        .map(|selector| {
+            task::spawn(async move {
+                T::resolve(&selector).await.ok().flatten().map(|functions| (selector, functions))
+            })
+        })
+        .collect::<Vec<_>>();
 
-    for selector in selectors {
-        let function_clone = resolved_functions.clone();
-
-        // create a new thread for each selector
-        threads.push(task::spawn(async move {
-            if let Ok(Some(function)) = T::resolve(&selector).await {
-                let mut _resolved_functions =
-                    function_clone.lock().expect("Could not obtain lock on function_clone.");
-                _resolved_functions.insert(selector, function);
+    let mut signatures = HashMap::new();
+    for task in tasks {
+        match task.await {
+            Ok(Some((selector, functions))) => {
+                signatures.insert(selector, functions);
             }
-        }));
-    }
-
-    // wait for all threads to finish
-    for thread in threads {
-        if let Err(e) = thread.await {
-            // Handle error
-            error!("failed to resolve selector: {:?}", e);
+            Ok(None) => {}
+            Err(error) => error!("failed to resolve selector: {:?}", error),
         }
     }
-
-    let signatures =
-        resolved_functions.lock().expect("failed to obtain lock on resolved_functions.").clone();
     if signatures.is_empty() {
         warn!("failed to resolve any signatures from {} selectors", selector_count);
     }
     info!("resolved {} signatures from {} selectors", signatures.len(), selector_count);
     debug!("signature resolution took {:?}", start_time.elapsed());
     signatures
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{sync::mpsc, time::Duration};
+
+    use alloy::primitives::Address;
+
+    use super::{
+        find_function_selectors, find_function_selectors_in_bytecode, resolve_entry_point,
+        resolve_entry_point_with_limit, VM,
+    };
+
+    #[test]
+    fn assembly_api_honors_filtered_input() {
+        let bytecode = heimdall_common::utils::strings::decode_hex(include_str!(
+            "../../../core/tests/testdata/decompile/multi_selector.hex"
+        ))
+        .unwrap();
+        let vm = VM::new(&bytecode, &[], Address::ZERO, Address::ZERO, Address::ZERO, 0, u128::MAX);
+        let all = find_function_selectors_in_bytecode(&vm);
+        let filtered = find_function_selectors(&vm, "0 PUSH4 11111101\n");
+        assert_eq!(all.len(), 3);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered.get("11111101"), all.get("11111101"));
+        assert!(find_function_selectors(&vm, "0 PUSH4").is_empty());
+    }
+
+    #[test]
+    fn selector_resolution_allows_finite_dispatch_loops() {
+        let code = [
+            0x60, 3, 0x5b, 0x60, 1, 0x90, 0x03, 0x80, 0x60, 2, 0x57, 0x50, 0x60, 0, 0x35, 0x60,
+            0xe0, 0x1c, 0x63, 0xde, 0xad, 0xbe, 0xef, 0x14, 0x60, 0x1c, 0x57, 0, 0x5b, 0,
+        ];
+        let mut vm = VM::new(&code, &[], Address::ZERO, Address::ZERO, Address::ZERO, 0, u128::MAX);
+        assert_eq!(resolve_entry_point(&mut vm, "deadbeef"), 0x1c);
+    }
+
+    #[test]
+    fn selector_resolution_terminates_on_unconditional_dispatch_loop() {
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut vm = VM::new(
+                &[0x5b, 0x60, 0, 0x56],
+                &[],
+                Address::ZERO,
+                Address::ZERO,
+                Address::ZERO,
+                0,
+                u128::MAX,
+            );
+            let _ = sender.send(resolve_entry_point_with_limit(&mut vm, "deadbeef", 32));
+        });
+        assert_eq!(receiver.recv_timeout(Duration::from_secs(1)).unwrap(), 0);
+    }
 }

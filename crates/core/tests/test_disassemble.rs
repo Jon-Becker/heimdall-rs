@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod integration_tests {
-    use std::{io::Write, path::PathBuf};
+    use std::path::PathBuf;
 
     use heimdall_disassembler::{disassemble, DisassemblerArgs, DisassemblerArgsBuilder, HardFork};
     use serde_json::Value;
@@ -116,12 +116,11 @@ mod integration_tests {
         let expected =
             String::from(include_str!("testdata/disassemble/decimal_counter_nominal.asm"));
 
-        // write bytecode to file at the cwd
-        let mut file =
-            std::fs::File::create("test_disassemble_from_file").expect("failed to create file");
-        file.write_all(bytecode.as_bytes()).expect("failed to write file");
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("bytecode.hex");
+        std::fs::write(&path, bytecode).expect("failed to write file");
         let assembly = disassemble(DisassemblerArgs {
-            target: String::from("test_disassemble_from_file"),
+            target: path.to_str().unwrap().to_owned(),
             rpc_url: String::from(""),
             decimal_counter: true,
             name: String::from(""),
@@ -133,17 +132,12 @@ mod integration_tests {
         .expect("failed to disassemble");
 
         assert_eq!(expected, assembly);
-
-        // delete the file
-        std::fs::remove_file("test_disassemble_from_file").expect("failed to delete file");
     }
 
     #[tokio::test]
+    #[ignore = "requires a live RPC_URL"]
     async fn test_disassemble_from_rpc() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         // This contract was deployed before Fusaka, so use Pectra hardfork
         // to show CLZ (0x1e) as unknown (it's part of the contract metadata)
@@ -165,11 +159,9 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires a live RPC_URL"]
     async fn test_disassemble_auto_hardfork() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         // WETH contract deployed at block 4719568 (Byzantium era)
         // Auto hardfork detection should correctly identify this
@@ -213,7 +205,7 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires the external largest1k dataset"]
     async fn heavy_integration_test() {
         let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -224,10 +216,7 @@ mod integration_tests {
 
         // if the ./largest1k directory does not exist, download it from https://jbecker.dev/data/largest1k.tar.gz
         let dataset_dir = root_dir.join("largest1k");
-        if !dataset_dir.exists() {
-            eprintln!("dataset not found in root, skipping test");
-            std::process::exit(0);
-        }
+        assert!(dataset_dir.exists(), "largest1k dataset is required for this test");
 
         // list files in root_dir
         let contracts = std::fs::read_dir(dataset_dir)

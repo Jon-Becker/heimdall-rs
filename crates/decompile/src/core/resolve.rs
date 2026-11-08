@@ -27,14 +27,12 @@ pub(crate) fn match_parameters(
                 .collect::<Vec<String>>()
                 .join(",")
         );
-        // skip checking if length of parameters list is less than the resolved functions inputs
         resolved_function.inputs.retain(|x| !x.is_empty());
         if resolved_function.inputs.len() < function.arguments.len() {
             continue;
         }
         let mut matched = true;
 
-        // check each parameter type against a list of potential types
         for (index, input) in resolved_function.inputs.iter().enumerate() {
             trace!("    checking for parameter {} with type {}", &index.to_string(), &input);
             match function.arguments.get(&index) {
@@ -65,7 +63,6 @@ pub(crate) fn match_parameters(
                     }
                 }
                 None => {
-                    // parameter not found
                     matched = false;
                     trace!(
                         "        parameter {} not found for function {}({})",

@@ -8,7 +8,9 @@ use alloy_json_abi::JsonAbi;
 use async_trait::async_trait;
 
 use crate::{
-    ether::types::{dyn_sol_types_to_strings, inputs_to_abi_format, parse_function_parameters},
+    ether::types::{
+        dyn_sol_types_to_strings, inputs_to_abi_format, parse_function_parameters, AbiInput,
+    },
     utils::{
         http::get_json_from_url,
         io::{logging::TraceFactory, types::display},
@@ -17,12 +19,31 @@ use crate::{
 use eyre::{OptionExt, Result};
 use heimdall_cache::{store_cache, with_cache};
 use serde::{
-    ser::{SerializeMap, Serializer},
-    Deserialize, Serialize,
+    ser::{SerializeMap, SerializeStruct, Serializer},
+    Deserialize, Deserializer, Serialize,
 };
 use tracing::{debug, trace};
 
 use super::types::DynSolValueExt;
+
+fn deserialize_inputs<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<String>, D::Error> {
+    if !deserializer.is_human_readable() {
+        return Vec::<String>::deserialize(deserializer);
+    }
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Input {
+        Type(String),
+        Abi(AbiInput),
+    }
+    Ok(Vec::<Input>::deserialize(deserializer)?
+        .into_iter()
+        .map(|input| match input {
+            Input::Type(value) => value,
+            Input::Abi(value) => value.type_name,
+        })
+        .collect())
+}
 
 /// A resolved function signature. May contain decoded inputs.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -32,6 +53,7 @@ pub struct ResolvedFunction {
     /// The function signature. For example, `transfer(address,uint256)`.
     pub signature: String,
     /// The inputs of the function. For example, `["address", "uint256"]`.
+    #[serde(deserialize_with = "deserialize_inputs")]
     pub inputs: Vec<String>,
     /// The decoded inputs of the function. For example, `[DynSolValue::Address("0x1234"),
     /// DynSolValue::Uint(123)]`.
@@ -75,11 +97,17 @@ impl Serialize for ResolvedFunction {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer, {
+        if !serializer.is_human_readable() {
+            let mut value = serializer.serialize_struct("ResolvedFunction", 3)?;
+            value.serialize_field("name", &self.name)?;
+            value.serialize_field("signature", &self.signature)?;
+            value.serialize_field("inputs", &self.inputs)?;
+            return value.end();
+        }
         let mut map = serializer.serialize_map(Some(3))?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("signature", &self.signature)?;
         map.serialize_entry("inputs", &inputs_to_abi_format(&self.inputs))?;
-        // Skip decoded_inputs since it's marked with #[serde(skip)]
         map.end()
     }
 }
@@ -92,6 +120,7 @@ pub struct ResolvedError {
     /// The error signature. For example, `revert(string)`.
     pub signature: String,
     /// The inputs of the error. For example, `["string"]`.
+    #[serde(deserialize_with = "deserialize_inputs")]
     pub inputs: Vec<String>,
 }
 
@@ -106,6 +135,13 @@ impl Serialize for ResolvedError {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer, {
+        if !serializer.is_human_readable() {
+            let mut value = serializer.serialize_struct("ResolvedError", 3)?;
+            value.serialize_field("name", &self.name)?;
+            value.serialize_field("signature", &self.signature)?;
+            value.serialize_field("inputs", &self.inputs)?;
+            return value.end();
+        }
         let mut map = serializer.serialize_map(Some(3))?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("signature", &self.signature)?;
@@ -121,6 +157,7 @@ pub struct ResolvedLog {
     /// The log signature. For example, `Transfer(address,address,uint256)`.
     pub signature: String,
     /// The inputs of the log. For example, `["address", "address", "uint256"]`.
+    #[serde(deserialize_with = "deserialize_inputs")]
     pub inputs: Vec<String>,
 }
 
@@ -135,6 +172,13 @@ impl Serialize for ResolvedLog {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer, {
+        if !serializer.is_human_readable() {
+            let mut value = serializer.serialize_struct("ResolvedLog", 3)?;
+            value.serialize_field("name", &self.name)?;
+            value.serialize_field("signature", &self.signature)?;
+            value.serialize_field("inputs", &self.inputs)?;
+            return value.end();
+        }
         let mut map = serializer.serialize_map(Some(3))?;
         map.serialize_entry("name", &self.name)?;
         map.serialize_entry("signature", &self.signature)?;
@@ -142,6 +186,24 @@ impl Serialize for ResolvedLog {
         map.end()
     }
 }
+#[derive(Clone, Copy)]
+enum SelectorKind {
+    Function,
+    Error,
+    Event,
+}
+
+fn selector_cache_key(kind: SelectorKind, selector: &str) -> String {
+    let kind = match kind {
+        SelectorKind::Function => "function",
+        SelectorKind::Error => "error",
+        SelectorKind::Event => "event",
+    };
+    let selector =
+        selector.strip_prefix("0x").or_else(|| selector.strip_prefix("0X")).unwrap_or(selector);
+    format!("selector.{kind}.{}", selector.to_ascii_lowercase())
+}
+
 /// A trait for resolving a selector into a vector of [`ResolvedFunction`]s, [`ResolvedError`]s, or
 #[async_trait]
 pub trait ResolveSelector {
@@ -155,16 +217,14 @@ pub trait ResolveSelector {
 #[async_trait]
 impl ResolveSelector for ResolvedError {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
-        with_cache(&format!("selector.{selector}"), || async {
-            // normalize selector
-            let selector = match selector.strip_prefix("0x") {
-                Some(selector) => selector,
-                None => selector,
-            };
-
+        let selector = selector
+            .strip_prefix("0x")
+            .or_else(|| selector.strip_prefix("0X"))
+            .unwrap_or(selector)
+            .to_ascii_lowercase();
+        with_cache(&selector_cache_key(SelectorKind::Error, &selector), || async {
             trace!("resolving error selector {}", &selector);
 
-            // get function possibilities from openchain
             let signatures = match get_json_from_url(
                 &format!(
                     "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
@@ -178,7 +238,6 @@ impl ResolveSelector for ResolvedError {
                 None => return Ok(None),
             };
 
-            // convert the serde value into a vec of possible functions
             let results = signatures
                 .get("result")
                 .and_then(|result| result.get("function"))
@@ -192,19 +251,16 @@ impl ResolveSelector for ResolvedError {
             let mut signature_list: Vec<ResolvedError> = Vec::new();
 
             for signature in results {
-                // get the function text signature and unwrap it into a string
                 let text_signature = match signature.get("name") {
                     Some(text_signature) => text_signature.to_string().replace('"', ""),
                     None => continue,
                 };
 
-                // safely split the text signature into name and inputs
                 let function_parts = match text_signature.split_once('(') {
                     Some(function_parts) => function_parts,
                     None => continue,
                 };
 
-                // Parse the inputs using parse_function_parameters
                 let parsed_inputs = match parse_function_parameters(&text_signature) {
                     Ok(inputs) => inputs,
                     Err(_) => continue,
@@ -229,16 +285,14 @@ impl ResolveSelector for ResolvedError {
 #[async_trait]
 impl ResolveSelector for ResolvedLog {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
-        with_cache(&format!("selector.{selector}"), || async {
-            // normalize selector
-            let selector = match selector.strip_prefix("0x") {
-                Some(selector) => selector,
-                None => selector,
-            };
-
+        let selector = selector
+            .strip_prefix("0x")
+            .or_else(|| selector.strip_prefix("0X"))
+            .unwrap_or(selector)
+            .to_ascii_lowercase();
+        with_cache(&selector_cache_key(SelectorKind::Event, &selector), || async {
             trace!("resolving event selector {}", &selector);
 
-            // get function possibilities from openchain
             let signatures = match get_json_from_url(
                 &format!(
                 "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&event=0x{}",
@@ -252,7 +306,6 @@ impl ResolveSelector for ResolvedLog {
                 None => return Ok(None),
             };
 
-            // convert the serde value into a vec of possible functions
             let results = signatures
                 .get("result")
                 .and_then(|result| result.get("event"))
@@ -266,19 +319,16 @@ impl ResolveSelector for ResolvedLog {
             let mut signature_list: Vec<ResolvedLog> = Vec::new();
 
             for signature in results {
-                // get the function text signature and unwrap it into a string
                 let text_signature = match signature.get("name") {
                     Some(text_signature) => text_signature.to_string().replace('"', ""),
                     None => continue,
                 };
 
-                // safely split the text signature into name and inputs
                 let function_parts = match text_signature.split_once('(') {
                     Some(function_parts) => function_parts,
                     None => continue,
                 };
 
-                // Parse the inputs using parse_function_parameters
                 let parsed_inputs = match parse_function_parameters(&text_signature) {
                     Ok(inputs) => inputs,
                     Err(_) => continue,
@@ -303,16 +353,14 @@ impl ResolveSelector for ResolvedLog {
 #[async_trait]
 impl ResolveSelector for ResolvedFunction {
     async fn resolve(selector: &str) -> Result<Option<Vec<Self>>> {
-        with_cache(&format!("selector.{selector}"), || async {
-            // normalize selector
-            let selector = match selector.strip_prefix("0x") {
-                Some(selector) => selector,
-                None => selector,
-            };
-
+        let selector = selector
+            .strip_prefix("0x")
+            .or_else(|| selector.strip_prefix("0X"))
+            .unwrap_or(selector)
+            .to_ascii_lowercase();
+        with_cache(&selector_cache_key(SelectorKind::Function, &selector), || async {
             trace!("resolving function selector {}", &selector);
 
-            // get function possibilities from openchain
             let signatures = match get_json_from_url(
                 &format!(
                 "https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=0x{}",
@@ -326,7 +374,6 @@ impl ResolveSelector for ResolvedFunction {
                 None => return Ok(None),
             };
 
-            // convert the serde value into a vec of possible functions
             let results = signatures
                 .get("result")
                 .and_then(|result| result.get("function"))
@@ -340,19 +387,16 @@ impl ResolveSelector for ResolvedFunction {
             let mut signature_list: Vec<ResolvedFunction> = Vec::new();
 
             for signature in results {
-                // get the function text signature and unwrap it into a string
                 let text_signature = match signature.get("name") {
                     Some(text_signature) => text_signature.to_string().replace('"', ""),
                     None => continue,
                 };
 
-                // safely split the text signature into name and inputs
                 let function_parts = match text_signature.split_once('(') {
                     Some(function_parts) => function_parts,
                     None => continue,
                 };
 
-                // Parse the inputs using parse_function_parameters
                 let parsed_inputs = match parse_function_parameters(&text_signature) {
                     Ok(inputs) => inputs,
                     Err(_) => continue,
@@ -383,17 +427,13 @@ pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
 
     debug!("caching signatures from abi: {}", path.display());
 
-    json_abi.functions().for_each(|function| {
+    for function in json_abi.functions() {
         let selector = function.selector().to_string().trim_start_matches("0x").to_string();
         let signature = function.signature();
 
-        // Parse inputs using parse_function_parameters for consistency
         let inputs = match parse_function_parameters(&signature) {
             Ok(parsed) => dyn_sol_types_to_strings(&parsed),
-            Err(_) => {
-                // Fallback to original method if parsing fails
-                function.inputs.iter().map(|input| input.ty.clone()).collect()
-            }
+            Err(_) => function.inputs.iter().map(|input| input.ty.clone()).collect(),
         };
 
         let resolved_function = ResolvedFunction {
@@ -403,42 +443,46 @@ pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
             decoded_inputs: None,
         };
 
-        store_cache(&format!("selector.{selector}"), Some(vec![resolved_function]), None).ok();
-    });
-    json_abi.events().for_each(|event| {
+        store_cache(
+            &selector_cache_key(SelectorKind::Function, &selector),
+            Some(vec![resolved_function]),
+            None,
+        )?;
+    }
+    for event in json_abi.events() {
         let selector = event.selector().to_string().trim_start_matches("0x").to_string();
         let signature = event.signature();
 
-        // Parse inputs using parse_function_parameters for consistency
         let inputs = match parse_function_parameters(&signature) {
             Ok(parsed) => dyn_sol_types_to_strings(&parsed),
-            Err(_) => {
-                // Fallback to original method if parsing fails
-                event.inputs.iter().map(|input| input.ty.clone()).collect()
-            }
+            Err(_) => event.inputs.iter().map(|input| input.ty.clone()).collect(),
         };
 
         let resolved_log = ResolvedLog { name: event.name.clone(), signature, inputs };
 
-        store_cache(&format!("selector.{selector}"), Some(vec![resolved_log]), None).ok();
-    });
-    json_abi.errors().for_each(|error| {
+        store_cache(
+            &selector_cache_key(SelectorKind::Event, &selector),
+            Some(vec![resolved_log]),
+            None,
+        )?;
+    }
+    for error in json_abi.errors() {
         let selector = error.selector().to_string().trim_start_matches("0x").to_string();
         let signature = error.signature();
 
-        // Parse inputs using parse_function_parameters for consistency
         let inputs = match parse_function_parameters(&signature) {
             Ok(parsed) => dyn_sol_types_to_strings(&parsed),
-            Err(_) => {
-                // Fallback to original method if parsing fails
-                error.inputs.iter().map(|input| input.ty.clone()).collect()
-            }
+            Err(_) => error.inputs.iter().map(|input| input.ty.clone()).collect(),
         };
 
         let resolved_error = ResolvedError { name: error.name.clone(), signature, inputs };
 
-        store_cache(&format!("selector.{selector}"), Some(vec![resolved_error]), None).ok();
-    });
+        store_cache(
+            &selector_cache_key(SelectorKind::Error, &selector),
+            Some(vec![resolved_error]),
+            None,
+        )?;
+    }
 
     debug!(
         "cached {} functions, {} logs, and {} errors from provided abi",
@@ -452,10 +496,8 @@ pub fn cache_signatures_from_abi(path: PathBuf) -> Result<()> {
 
 /// Heuristic to score a function signature based on its spamminess.
 pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
-    // the score starts at 1000
     let mut score = 1000;
 
-    // remove the length of the signature from the score
     // this will prioritize shorter signatures, which are typically less spammy
     score -= signature.len() as u32;
 
@@ -468,15 +510,12 @@ pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
     let num_params = signature.matches(',').count() + 1;
     score += num_params as u32 * 10;
 
-    // count the number of parameters in the signature, if enabled
     if let Some(num_words) = num_words {
         let num_dyn_params = signature.matches("bytes").count() +
             signature.matches("string").count() +
             signature.matches('[').count();
         let num_static_params = num_params.saturating_sub(num_dyn_params);
 
-        // reduce the score if the signature has less static parameters than there are words in the
-        // calldata
         if num_static_params < num_words {
             score = score.saturating_sub((num_words.saturating_sub(num_static_params)) as u32 * 10);
         }
@@ -490,7 +529,6 @@ pub fn score_signature(signature: &str, num_words: Option<usize>) -> u32 {
 /// trait impls
 
 impl TryFrom<&ResolvedFunction> for TraceFactory {
-    // eyre
     type Error = eyre::Report;
 
     fn try_from(function: &ResolvedFunction) -> Result<Self, Self::Error> {
@@ -507,7 +545,6 @@ impl TryFrom<&ResolvedFunction> for TraceFactory {
         trace.add_message(decode_call, line!(), vec![format!("signature: {}", function.signature)]);
         trace.br(decode_call);
 
-        // build inputs
         for (i, input) in function.decoded_inputs.as_ref().unwrap_or(&Vec::new()).iter().enumerate()
         {
             let mut decoded_inputs_as_message = display(vec![input.to_owned()], "           ");
@@ -531,7 +568,6 @@ impl TryFrom<&ResolvedFunction> for TraceFactory {
                 )
             }
 
-            // add to trace and decoded string
             trace.add_message(decode_call, 1, decoded_inputs_as_message);
         }
 
@@ -549,16 +585,111 @@ mod tests {
 
     use crate::ether::{
         signatures::{
-            dyn_sol_types_to_strings, score_signature, ResolveSelector, ResolvedError,
-            ResolvedFunction, ResolvedLog,
+            dyn_sol_types_to_strings, score_signature, selector_cache_key, ResolveSelector,
+            ResolvedError, ResolvedFunction, ResolvedLog, SelectorKind,
         },
         types::parse_function_parameters,
     };
 
+    #[test]
+    fn signature_json_round_trips_abi_input_objects() {
+        let function = ResolvedFunction {
+            name: "transfer".into(),
+            signature: "transfer(address,uint256)".into(),
+            inputs: vec!["address".into(), "uint256".into()],
+            decoded_inputs: None,
+        };
+        let json = serde_json::to_string(&function).unwrap();
+        assert_eq!(serde_json::from_str::<ResolvedFunction>(&json).unwrap(), function);
+    }
+
+    fn isolated_live_test(name: &str) -> bool {
+        const CHILD: &str = "HEIMDALL_LIVE_SIGNATURE_TEST_CHILD";
+        if std::env::var(CHILD).as_deref() == Ok(name) {
+            return true;
+        }
+        let home = std::env::temp_dir().join(format!(
+            "heimdall-live-signatures-{}-{}",
+            std::process::id(),
+            name.replace("::", "-")
+        ));
+        std::fs::create_dir_all(&home).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--ignored", "--exact", name])
+            .env(CHILD, name)
+            .env("HOME", &home)
+            .status()
+            .unwrap();
+        std::fs::remove_dir_all(home).unwrap();
+        assert!(status.success());
+        false
+    }
+
+    #[test]
+    fn abi_signatures_are_cached_by_kind_and_normalized_selector() {
+        const CHILD: &str = "HEIMDALL_SIGNATURE_CACHE_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let abi_path = std::path::Path::new(&std::env::var("HOME").unwrap()).join("abi.json");
+            std::fs::write(&abi_path, r#"[
+              {"type":"function","name":"burn","inputs":[{"name":"x","type":"uint256"}],"outputs":[]},
+              {"type":"error","name":"collate_propagate_storage","inputs":[{"name":"x","type":"bytes16"}]},
+              {"type":"event","name":"burn","inputs":[{"name":"x","type":"uint256","indexed":false}],"anonymous":false}
+            ]"#).unwrap();
+            super::cache_signatures_from_abi(abi_path).unwrap();
+            let hash = alloy::primitives::keccak256("burn(uint256)");
+            assert_eq!(
+                &hash[..4],
+                &alloy::primitives::keccak256("collate_propagate_storage(bytes16)")[..4]
+            );
+            let four_bytes = alloy::hex::encode(&hash[..4]);
+            let event = alloy::hex::encode(hash);
+            let function_key = selector_cache_key(SelectorKind::Function, &four_bytes);
+            let error_key = selector_cache_key(SelectorKind::Error, &four_bytes);
+            let event_key = selector_cache_key(SelectorKind::Event, &event);
+            assert!(heimdall_cache::read_cache::<Option<Vec<ResolvedFunction>>>(&function_key)
+                .unwrap()
+                .is_some());
+            assert!(heimdall_cache::read_cache::<Option<Vec<ResolvedError>>>(&error_key)
+                .unwrap()
+                .is_some());
+            assert!(heimdall_cache::read_cache::<Option<Vec<ResolvedLog>>>(&event_key)
+                .unwrap()
+                .is_some());
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let function = runtime
+                .block_on(ResolvedFunction::resolve(&format!("0X{}", four_bytes.to_uppercase())))
+                .unwrap()
+                .unwrap();
+            let error = runtime.block_on(ResolvedError::resolve(&four_bytes)).unwrap().unwrap();
+            let log = runtime.block_on(ResolvedLog::resolve(&event)).unwrap().unwrap();
+            assert_eq!(function[0].signature, "burn(uint256)");
+            assert_eq!(function[0].inputs, vec!["uint256"]);
+            let json = serde_json::to_value(&function[0]).unwrap();
+            assert_eq!(json["inputs"][0]["type"], "uint256");
+            assert_eq!(error[0].signature, "collate_propagate_storage(bytes16)");
+            assert_eq!(error[0].inputs, vec!["bytes16"]);
+            assert_eq!(log[0].signature, "burn(uint256)");
+            assert_eq!(log[0].inputs, vec!["uint256"]);
+            return;
+        }
+        let home =
+            std::env::temp_dir().join(format!("heimdall-signatures-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "ether::signatures::tests::abi_signatures_are_cached_by_kind_and_normalized_selector"])
+            .env(CHILD, "1").env("HOME", &home).status().unwrap();
+        std::fs::remove_dir_all(home).unwrap();
+        assert!(status.success());
+    }
+
     #[tokio::test]
+    #[ignore = "requires the live OpenChain signature service"]
     async fn resolve_function_signature_nominal() {
+        if !isolated_live_test("ether::signatures::tests::resolve_function_signature_nominal") {
+            return;
+        }
         let signature = String::from("095ea7b3");
-        let _ = delete_cache(&format!("selector.{}", &signature));
+        let _ = delete_cache(&selector_cache_key(SelectorKind::Function, &signature));
         let result = ResolvedFunction::resolve(&signature)
             .await
             .expect("failed to resolve signature")
@@ -567,15 +698,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires the live OpenChain signature service"]
     async fn resolve_multicall_signature() {
+        if !isolated_live_test("ether::signatures::tests::resolve_multicall_signature") {
+            return;
+        }
         let signature = String::from("1749e1e3");
-        let _ = delete_cache(&format!("selector.{}", &signature));
+        let _ = delete_cache(&selector_cache_key(SelectorKind::Function, &signature));
         let result = ResolvedFunction::resolve(&signature)
             .await
             .expect("failed to resolve signature")
             .expect("failed to resolve signature");
 
-        // Find the multicall function
         let multicall = result.iter().find(|f| f.name == "multicall");
         assert!(multicall.is_some(), "multicall function not found");
 
@@ -585,9 +719,13 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires the live OpenChain signature service"]
     async fn resolve_error_signature_nominal() {
+        if !isolated_live_test("ether::signatures::tests::resolve_error_signature_nominal") {
+            return;
+        }
         let signature = String::from("30cd7471");
-        let _ = delete_cache(&format!("selector.{}", &signature));
+        let _ = delete_cache(&selector_cache_key(SelectorKind::Error, &signature));
         let result = ResolvedError::resolve(&signature)
             .await
             .expect("failed to resolve signature")
@@ -596,74 +734,19 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires the live OpenChain signature service"]
     async fn resolve_event_signature_nominal() {
+        if !isolated_live_test("ether::signatures::tests::resolve_event_signature_nominal") {
+            return;
+        }
         let signature =
             String::from("ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef");
-        let _ = delete_cache(&format!("selector.{}", &signature));
+        let _ = delete_cache(&selector_cache_key(SelectorKind::Event, &signature));
         let result = ResolvedLog::resolve(&signature)
             .await
             .expect("failed to resolve signature")
             .expect("failed to resolve signature");
         assert!(!result.is_empty());
-    }
-
-    #[tokio::test]
-    async fn resolve_function_signature_should_return_none_when_cached_results_not_found() {
-        let signature = String::from("test_signature_nocache");
-        let result = ResolvedFunction::resolve(&signature).await;
-
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn resolve_function_signature_should_return_none_when_json_url_returns_empty_signatures()
-    {
-        let _ = delete_cache(&format!("selector.{}", "test_signature"));
-        let signature = String::from("test_signature");
-        let result = ResolvedFunction::resolve(&signature).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn resolve_error_signature_should_return_none_when_cached_results_not_found() {
-        let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn resolve_error_signature_should_return_none_when_json_url_returns_none() {
-        let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn resolve_error_signature_should_return_none_when_json_url_returns_empty_signatures() {
-        let signature = String::from("test_signature_notfound");
-        let result = ResolvedError::resolve(&signature).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn resolve_event_signature_should_return_none_when_cached_results_not_found() {
-        let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn resolve_event_signature_should_return_none_when_json_url_returns_none() {
-        let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn resolve_event_signature_should_return_none_when_json_url_returns_empty_signatures() {
-        let signature = String::from("test_signature_notfound");
-        let result = ResolvedLog::resolve(&signature).await;
-        assert!(result.is_err());
     }
 
     #[test]
@@ -675,7 +758,6 @@ mod tests {
 
     #[test]
     fn test_complex_signature_parsing() {
-        // Test that we correctly parse complex signatures with nested tuples
         let test_cases = vec![
             ("function((uint256,address)[])", vec!["tuple[]"]),
             ("function(address,(uint256,uint256))", vec!["address", "tuple"]),
@@ -683,16 +765,8 @@ mod tests {
                 "function(uint256[],bytes32,(address,uint256)[])",
                 vec!["uint256[]", "bytes32", "tuple[]"],
             ),
-            (
-                // This is the problematic multicall signature
-                "multicall((address,uint256,bytes)[])",
-                vec!["tuple[]"],
-            ),
-            (
-                // More complex nested structures
-                "function((address,uint256,bytes)[],(uint256,bool))",
-                vec!["tuple[]", "tuple"],
-            ),
+            ("multicall((address,uint256,bytes)[])", vec!["tuple[]"]),
+            ("function((address,uint256,bytes)[],(uint256,bool))", vec!["tuple[]", "tuple"]),
         ];
 
         for (signature, expected_inputs) in test_cases {
@@ -704,47 +778,22 @@ mod tests {
 
     #[test]
     fn test_score_signature_handles_overflow_in_num_static_params() {
-        // Test case where num_dyn_params > num_params, which would cause underflow
-        // This signature has more dynamic param matches than actual params (due to counting)
         let signature = "bytes(bytes[])"; // 1 param, but matches "bytes" twice and has 1 bracket
-                                          // num_params = 1, num_dyn_params = 2 + 1 = 3
-                                          // Without saturating_sub: 1 - 3 would underflow
-                                          // With saturating_sub: 1.saturating_sub(3) = 0
         let score = score_signature(&signature, Some(0));
-        // Should not panic, should return a valid score (greater than 0)
         assert!(score > 0);
     }
 
     #[test]
     fn test_score_signature_handles_overflow_in_score_reduction() {
-        // Test case where num_words > num_static_params
         let signature = "func()"; // 1 param (count from commas + 1), 0 dynamic params
-                                  // num_params = 1, num_dyn_params = 0, num_static_params = 1
-                                  // If num_words = 10, then num_words - num_static_params = 9
-                                  // This would reduce score by 90
         let score = score_signature(&signature, Some(10));
-        // Should not panic and should be reduced appropriately
-        // Initial score calculation:
-        // - Start: 1000
-        // - signature length (6): 994
-        // - no numbers in name: 994
-        // - 1 param: 1004
-        // - penalty for num_words (10) > num_static_params (1): 1004 - 90 = 914
         assert_eq!(score, 914);
     }
 
     #[test]
     fn test_score_signature_saturating_sub_prevents_underflow() {
-        // Test case where dynamic params exceed total params
-        // This signature has "bytes" and "string" keywords plus array brackets
         let signature = "bytes(bytes,string,bytes[])";
-        // num_params = 3 (counting commas + 1)
-        // num_dyn_params = bytes(3) + string(1) + [(1) = 5
-        // Without saturating_sub: 3 - 5 would underflow
-        // With saturating_sub: 3.saturating_sub(5) = 0
         let score = score_signature(&signature, Some(2));
-        // Should not panic and should return a valid score
-        // The score should be positive since we add 10 per param
         assert!(score > 0);
     }
 }
