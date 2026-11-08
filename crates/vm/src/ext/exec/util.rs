@@ -112,58 +112,33 @@ pub(super) fn jump_condition_appears_recursive(
     false
 }
 
-/// Check if the jump condition contains a memory access that is modified within the stack diff.
+fn condition_uses_changed_access(
+    regex: &fancy_regex::Regex,
+    condition: &str,
+    changed: &[String],
+) -> bool {
+    regex.find_iter(condition).filter_map(Result::ok).any(|access| {
+        let access = &condition[access.start()..access.end()];
+        changed.iter().any(|source| source.contains(access))
+    })
+}
+
+/// Check if the jump condition contains a memory access modified within the stack diff.
 pub(super) fn jump_condition_contains_mutated_memory_access(
     stack_diff: &[StackFrame],
     jump_condition: &str,
 ) -> bool {
-    let mut memory_accesses = MEMORY_REGEX.find_iter(jump_condition);
-    if stack_diff.iter().any(|frame| {
-        memory_accesses.any(|_match| {
-            if _match.is_err() {
-                return false;
-            }
-
-            let memory_access = match _match {
-                Ok(access) => access,
-                Err(_) => return false,
-            };
-
-            let slice = &jump_condition[memory_access.start()..memory_access.end()];
-            frame.operation.solidify().contains(slice)
-        })
-    }) {
-        trace!("jump matches loop-detection heuristic: 'jump_condition_contains_mutated_memory_access'");
-        return true;
-    }
-
-    false
+    let changed = stack_diff.iter().map(|frame| frame.operation.solidify()).collect::<Vec<_>>();
+    condition_uses_changed_access(&MEMORY_REGEX, jump_condition, &changed)
 }
 
-/// Check if the jump condition contains a storage access that is modified within the stack diff.
+/// Check if the jump condition contains a storage access modified within the stack diff.
 pub(super) fn jump_condition_contains_mutated_storage_access(
     stack_diff: &[StackFrame],
     jump_condition: &str,
 ) -> bool {
-    let mut storage_accesses = STORAGE_REGEX.find_iter(jump_condition);
-    if stack_diff.iter().any(|frame| {
-        storage_accesses.any(|_match| {
-            if _match.is_err() {
-                return false;
-            }
-            let storage_access = match _match {
-                Ok(access) => access,
-                Err(_) => return false,
-            };
-            let slice = &jump_condition[storage_access.start()..storage_access.end()];
-            frame.operation.solidify().contains(slice)
-        })
-    }) {
-        trace!("jump matches loop-detection heuristic: 'jump_condition_contains_mutated_storage_access'");
-        return true;
-    }
-
-    false
+    let changed = stack_diff.iter().map(|frame| frame.operation.solidify()).collect::<Vec<_>>();
+    condition_uses_changed_access(&STORAGE_REGEX, jump_condition, &changed)
 }
 
 /// check if all stack diffs for all historical stacks are exactly length 1, and the same
@@ -318,4 +293,22 @@ fn is_consistently_alternating(values: &[U256]) -> bool {
 
     // Require at least 60% of triples to alternate
     alternating_triples as f64 / total_triples as f64 >= 0.6
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compares_each_changed_source_to_all_condition_accesses() {
+        let changed = vec!["unrelated".to_string(), "memory[0x20] + 1".to_string()];
+        assert!(condition_uses_changed_access(
+            &MEMORY_REGEX,
+            "memory[0x00] == memory[0x20]",
+            &changed
+        ));
+        assert!(!condition_uses_changed_access(&STORAGE_REGEX, "storage[0x01]", &changed));
+        let storage = vec!["unrelated".to_string(), "storage[0x01]".to_string()];
+        assert!(condition_uses_changed_access(&STORAGE_REGEX, "storage[0x01]", &storage));
+    }
 }

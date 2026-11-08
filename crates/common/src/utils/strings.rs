@@ -18,7 +18,6 @@ pub fn sign_uint(unsigned: U256) -> I256 {
 /// assert_eq!(result, vec![72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]);
 /// ```
 pub fn decode_hex(mut s: &str) -> Result<Vec<u8>> {
-    // normalize
     s = s.trim_start_matches("0x").trim();
 
     if s.is_empty() {
@@ -92,7 +91,6 @@ pub fn hex_to_ascii(s: &str) -> Result<String> {
         result.push(byte as char);
     }
 
-    // remove newlines
     result = result.replace('\r', "");
     result = result.replace('\n', "");
 
@@ -213,10 +211,8 @@ pub fn base26_encode(n: usize) -> String {
 
 /// Splits a string by a regular expression
 pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
-    // Find all matches of the pattern in the input string
     let matches = pattern.find_iter(input);
 
-    // Use the matches to split the input string into substrings
     let mut substrings = vec![];
     let mut last_end = 0;
     for m in matches {
@@ -235,7 +231,6 @@ pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
         substrings.push(input[last_end..].to_string());
     }
 
-    // Return the resulting vector of substrings
     substrings
 }
 
@@ -249,15 +244,11 @@ pub fn split_string_by_regex(input: &str, pattern: Regex) -> Vec<String> {
 /// assert_eq!(result, Some("a == b".to_string()));
 /// ```
 pub fn extract_condition(s: &str, keyword: &str) -> Option<String> {
-    // find the keyword
     if let Some(start) = s.find(keyword) {
-        // slice the string after the keyword
         let sliced = s[start + keyword.len()..].to_string();
 
-        // find the balanced encapsulator
         let encap_range = find_balanced_encapsulator(&sliced, ('(', ')')).ok()?;
 
-        // extract the condition if balanced encapsulator is found
         let mut condition = sliced[encap_range].to_string();
 
         // require() statements can include revert messages or error codes
@@ -318,34 +309,24 @@ pub fn tokenize(s: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut token = String::new();
 
-    // List of characters that should be treated as separate tokens
     let separators = ['(', ')', '+', '-', '*', '/', '=', '>', '<', '!', '&', '|', ';', '%', '^'];
 
-    // List of characters that can be part of a two-character operator
     let compound_operator_first_chars = ['=', '>', '<', '!', '&', '|'];
 
-    // Helper variable to keep track of the last character
     let mut last_char = None;
 
-    // Iterate over each character in the input string
     for c in s.chars() {
-        // If the current character is a separator or a whitespace
         if separators.contains(&c) || c.is_whitespace() {
-            // If the current token is not empty, push it to the vector
             if !token.is_empty() {
                 tokens.push(token.to_owned());
                 token.clear();
             }
 
-            // Check if current character and last character form a compound operator (like "==",
-            // ">=", "&&", "||")
             if let Some(last) = last_char {
                 if compound_operator_first_chars.contains(&last) &&
                     (c == '=' || c == '&' || c == '|')
                 {
-                    // Remove the last character as a single token
                     tokens.pop();
-                    // Add the compound operator as a single token
                     tokens.push(format!("{last}{c}"));
                 } else if separators.contains(&c) {
                     tokens.push(c.to_string());
@@ -354,11 +335,9 @@ pub fn tokenize(s: &str) -> Vec<String> {
                 tokens.push(c.to_string());
             }
         } else {
-            // Append the current character to the current token
             token.push(c);
         }
 
-        // Update last_char for the next iteration
         if !c.is_whitespace() {
             last_char = Some(c);
         } else {
@@ -366,7 +345,6 @@ pub fn tokenize(s: &str) -> Vec<String> {
         }
     }
 
-    // If there is a token at the end of the string, add it to the vector
     if !token.is_empty() {
         tokens.push(token);
     }
@@ -392,23 +370,19 @@ pub enum TokenType {
 /// Classifies a token as a variable, constant, operator, or function call, and returns its
 /// precedence
 pub fn classify_token(token: &str) -> TokenType {
-    // return if the token is a parenthesis
     if token == "(" || token == ")" {
         return TokenType::Control;
     }
 
-    // check if the token is an operator
     let operators = ['+', '-', '*', '/', '=', '>', '<', '!', '&', '|', '%', '^'];
     if token.chars().all(|c| operators.contains(&c)) {
         return TokenType::Operator;
     }
 
-    // check if the token is a constant
     if token.starts_with("0x") || token.parse::<U256>().is_ok() {
         return TokenType::Constant;
     }
 
-    // check if the token is a variable
     if [
         "memory", "storage", "var", "msg.", "block.", "this.", "tx.", "arg", "ret", "calldata",
         "abi.",
@@ -419,7 +393,6 @@ pub fn classify_token(token: &str) -> TokenType {
         return TokenType::Variable;
     }
 
-    // this token must be a function call
     TokenType::Function
 }
 
@@ -636,62 +609,62 @@ mod tests {
         assert_eq!(extract_condition(s, keyword), expected);
     }
 
-    // #[test]
-    // fn test_tokenize_basic_operators() {
-    //     let tokens = tokenize("arg0 + arg1");
-    //     assert_eq!(tokens, vec!["arg0", "+", "arg1"]);
-    // }
+    #[test]
+    fn test_tokenize_basic_operators() {
+        let tokens = tokenize("arg0 + arg1");
+        assert_eq!(tokens, vec!["arg0", "+", "arg1"]);
+    }
 
-    // #[test]
-    // fn test_tokenize_parentheses_and_operators() {
-    //     let tokens = tokenize("(arg0 + arg1) > (msg.value + 1)");
-    //     assert_eq!(
-    //         tokens,
-    //         vec!["(", "arg0", "+", "arg1", ")", ">", "(", "msg.value", "+", "1", ")"]
-    //     );
-    // }
+    #[test]
+    fn test_tokenize_parentheses_and_operators() {
+        let tokens = tokenize("(arg0 + arg1) > (msg.value + 1)");
+        assert_eq!(
+            tokens,
+            vec!["(", "arg0", "+", "arg1", ")", ">", "(", "msg.value", "+", "1", ")"]
+        );
+    }
 
-    // #[test]
-    // fn test_tokenize_multiple_operators() {
-    //     let tokens = tokenize("a >= b && c != d");
-    //     assert_eq!(tokens, vec!["a", ">=", "b", "&&", "c", "!=", "d"]);
-    // }
+    #[test]
+    fn test_tokenize_multiple_operators() {
+        let tokens = tokenize("a >= b && c != d");
+        assert_eq!(tokens, vec!["a", ">=", "b", "&&", "c", "!=", "d"]);
+    }
 
-    // #[test]
-    // fn test_tokenize_no_spaces() {
-    //     let tokens = tokenize("a+b-c*d/e");
-    //     assert_eq!(tokens, vec!["a", "+", "b", "-", "c", "*", "d", "/", "e"]);
-    // }
+    #[test]
+    fn test_tokenize_no_spaces() {
+        let tokens = tokenize("a+b-c*d/e");
+        assert_eq!(tokens, vec!["a", "+", "b", "-", "c", "*", "d", "/", "e"]);
+    }
 
-    // #[test]
-    // fn test_tokenize_whitespace_only() {
-    //     let tokens = tokenize("    ");
-    //     assert_eq!(tokens, Vec::<String>::new());
-    // }
+    #[test]
+    fn test_tokenize_whitespace_only() {
+        let tokens = tokenize("    ");
+        assert_eq!(tokens, Vec::<String>::new());
+    }
 
-    // #[test]
-    // fn test_tokenize_empty_string() {
-    //     let tokens = tokenize("");
-    //     assert_eq!(tokens, Vec::<String>::new());
-    // }
+    #[test]
+    fn test_tokenize_empty_string() {
+        let tokens = tokenize("");
+        assert_eq!(tokens, Vec::<String>::new());
+    }
 
-    // #[test]
-    // fn test_tokenize_complex_expression() {
-    //     let tokens = tokenize("if (x > 10 && y < 20) || z == 0 { a = b + c }");
-    //     assert_eq!(
-    //         tokens,
-    //         vec![
-    //             "if", "(", "x", ">", "10", "&&", "y", "<", "20", ")", "||", "z", "==", "0", "{",
-    //             "a", "=", "b", "+", "c", "}"
-    //         ]
-    //     );
-    // }
+    #[test]
+    fn test_tokenize_complex_expression() {
+        let tokens = tokenize("if (x > 10 && y < 20) || z == 0 { a = b + c }");
+        assert_eq!(
+            tokens,
+            vec![
+                "if", "(", "x", ">", "10", "&&", "y", "<", "20", ")", "||", "z", "==", "0", "{",
+                "a", "=", "b", "+", "c", "}"
+            ]
+        );
+    }
 
-    // #[test]
-    // fn test_tokenize_separators_at_start_and_end() {
-    //     let tokens = tokenize("==text==");
-    //     assert_eq!(tokens, vec!["==", "text", "=="]);
-    // }
+    #[test]
+    fn test_tokenize_separators_at_start_and_end() {
+        let tokens = tokenize("==text==");
+        assert_eq!(tokens, vec!["==", "text", "=="]);
+    }
 
     #[test]
     fn test_classify_token_parenthesis() {

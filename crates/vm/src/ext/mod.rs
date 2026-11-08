@@ -1,6 +1,9 @@
 /// Execution utilities for running and analyzing VM operations
 pub mod exec;
 
+/// Resolve the hardfork for a bytecode target.
+pub mod hardfork;
+
 /// Language lexers for translating EVM bytecode to higher-level languages
 pub mod lexers;
 

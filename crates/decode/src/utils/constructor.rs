@@ -13,7 +13,6 @@ pub(crate) struct Constructor {
 }
 
 pub(crate) fn parse_deployment_bytecode(input: Vec<u8>) -> Result<Constructor> {
-    // convert input to a hex string
     let input = encode_hex(&input);
 
     //

@@ -15,15 +15,6 @@ pub(crate) fn variable_postprocessor(
     statement: &mut Statement,
     state: &mut PostprocessorState,
 ) -> Result<(), Error> {
-    // Track conditional nesting depth so we don't record block-local variables.
-    match statement {
-        Statement::If { .. } => state.conditional_depth += 1,
-        Statement::Else | Statement::CloseBlock => {
-            state.conditional_depth = state.conditional_depth.saturating_sub(1);
-        }
-        _ => {}
-    }
-
     let assignment_target = match statement {
         Statement::Assign { target, .. } | Statement::DeclareAssign { target, .. } => {
             Some(target.clone())
@@ -62,7 +53,6 @@ pub(crate) fn variable_postprocessor(
         });
     }
 
-    // Only record the assignment for future substitution if it is at the top level.
     if state.conditional_depth == 0 {
         if let Some(target) = assignment_target {
             if let Expr::Identifier(name) = &target {

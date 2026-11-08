@@ -87,7 +87,6 @@ impl Token {
                     }
                 }
 
-                // Flatten the stack and handle unnecessary parentheses
                 while let Some(token) = stack.pop() {
                     match token {
                         Token::Expression(inner_tokens) => {
@@ -194,7 +193,6 @@ fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String 
         }
     }
 
-    // literal validation
     if literal.starts_with("0x") &&
         literal.len() > 2 &&
         literal[2..].chars().all(|c| c.is_ascii_hexdigit())
@@ -202,7 +200,6 @@ fn parse_literal(iter: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String 
         return literal;
     }
 
-    // rewind
     iter.by_ref().take(literal.len()).for_each(|_| {});
     String::from("0")
 }

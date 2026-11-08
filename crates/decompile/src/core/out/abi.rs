@@ -27,9 +27,7 @@ pub(crate) fn build_abi(
     let start_time = Instant::now();
     let mut abi = JsonAbi::new();
 
-    // add functions
     functions.iter().filter(|f| !f.fallback).for_each(|f| {
-        // determine the state mutability of the function
         let state_mutability = match f.pure {
             true => StateMutability::Pure,
             false => match f.view {
@@ -41,7 +39,6 @@ pub(crate) fn build_abi(
             },
         };
 
-        // determine the name of the function
         let name = f.emitted_name();
 
         let function = Function {
@@ -87,9 +84,7 @@ pub(crate) fn build_abi(
             state_mutability,
         };
 
-        // add functions errors
         f.errors.iter().for_each(|error_selector| {
-            // determine the name of the error
             let (name, inputs) = match all_resolved_errors
                 .get(&encode_hex_reduced(*error_selector).replacen("0x", "", 1))
             {
@@ -115,9 +110,7 @@ pub(crate) fn build_abi(
             abi.errors.insert(error.name.clone(), vec![error]);
         });
 
-        // add functions events
         f.events.iter().for_each(|event_selector| {
-            // determine the name of the event
             let (name, inputs) = match all_resolved_logs
                 .get(&encode_hex_reduced(*event_selector).replacen("0x", "", 1))
             {
@@ -159,14 +152,11 @@ pub(crate) fn build_abi_with_details(
     debug!("adding function details to abi");
     let start_time = Instant::now();
 
-    // Serialize the standard ABI to JSON
     let mut abi_array = serde_json::to_value(abi)?;
 
-    // Create a map of function selectors for quick lookup
     let function_map: HashMap<String, &AnalyzedFunction> =
         functions.iter().filter(|f| !f.fallback).map(|f| (f.emitted_name(), f)).collect();
 
-    // Add selector and signature to each function in the ABI
     if let Some(items) = abi_array.as_array_mut() {
         for item in items.iter_mut() {
             if let Some(obj) = item.as_object_mut() {
@@ -174,17 +164,14 @@ pub(crate) fn build_abi_with_details(
                     let name = obj.get("name").and_then(|n| n.as_str()).map(|s| s.to_string());
                     if let Some(name_str) = name {
                         if let Some(analyzed_func) = function_map.get(&name_str) {
-                            // Add selector
                             obj.insert(
                                 "selector".to_string(),
                                 json!(format!("0x{}", analyzed_func.selector)),
                             );
 
-                            // Add signature
                             let signature = match &analyzed_func.resolved_function {
                                 Some(sig) => sig.signature.clone(),
                                 None => {
-                                    // Build signature from the ABI inputs
                                     if let Some(inputs) =
                                         obj.get("inputs").and_then(|i| i.as_array())
                                     {

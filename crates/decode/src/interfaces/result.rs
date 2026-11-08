@@ -30,57 +30,51 @@ impl DecodeResult {
 
     /// Converts the decode result to JSON, including multicall results if present
     pub fn to_json(&self) -> Result<String, Error> {
-        // Helper to convert inputs to ABI format with components
         let inputs_to_abi_format = |signature: &str| -> Vec<serde_json::Value> {
             match parse_function_parameters(signature) {
-                Ok(types) => {
-                    types
-                        .iter()
-                        .enumerate()
-                        .map(|(i, sol_type)| {
-                            let mut param = json!({
-                                "name": format!("arg{}", i),
-                                "type": to_abi_string(sol_type)
-                            });
+                Ok(types) => types
+                    .iter()
+                    .enumerate()
+                    .map(|(i, sol_type)| {
+                        let mut param = json!({
+                            "name": format!("arg{}", i),
+                            "type": to_abi_string(sol_type)
+                        });
 
-                            // Add components if it's a tuple type
-                            let components = to_components(sol_type);
-                            if !components.is_empty() {
-                                param["components"] = json!(components
-                                    .iter()
-                                    .enumerate()
-                                    .map(|(j, comp)| {
-                                        let mut comp_json = json!({
-                                            "name": format!("arg{}", j),
-                                            "type": comp.ty.clone()
-                                        });
+                        let components = to_components(sol_type);
+                        if !components.is_empty() {
+                            param["components"] = json!(components
+                                .iter()
+                                .enumerate()
+                                .map(|(j, comp)| {
+                                    let mut comp_json = json!({
+                                        "name": format!("arg{}", j),
+                                        "type": comp.ty.clone()
+                                    });
 
-                                        // Recursively add nested components
-                                        if !comp.components.is_empty() {
-                                            comp_json["components"] = json!(comp
-                                                .components
-                                                .iter()
-                                                .enumerate()
-                                                .map(|(k, nested)| {
-                                                    json!({
-                                                        "name": format!("arg{}", k),
-                                                        "type": nested.ty.clone()
-                                                    })
+                                    if !comp.components.is_empty() {
+                                        comp_json["components"] = json!(comp
+                                            .components
+                                            .iter()
+                                            .enumerate()
+                                            .map(|(k, nested)| {
+                                                json!({
+                                                    "name": format!("arg{}", k),
+                                                    "type": nested.ty.clone()
                                                 })
-                                                .collect::<Vec<_>>());
-                                        }
+                                            })
+                                            .collect::<Vec<_>>());
+                                    }
 
-                                        comp_json
-                                    })
-                                    .collect::<Vec<_>>());
-                            }
+                                    comp_json
+                                })
+                                .collect::<Vec<_>>());
+                        }
 
-                            param
-                        })
-                        .collect()
-                }
+                        param
+                    })
+                    .collect(),
                 Err(_) => {
-                    // Fallback to simple format if parsing fails
                     vec![]
                 }
             }
@@ -100,7 +94,6 @@ impl DecodeResult {
             }
         });
 
-        // Add multicall results if present
         if let Some(multicall_results) = &self.multicall_results {
             let mut multicalls = vec![];
 
@@ -112,7 +105,6 @@ impl DecodeResult {
                     "calldata": format!("0x{}", encode_hex(&mc_result.calldata)),
                 });
 
-                // Add decoded result if available
                 if let Some(decoded) = &mc_result.decoded {
                     mc_json["decoded"] = json!({
                         "name": decoded.decoded.name,
@@ -137,5 +129,54 @@ impl DecodeResult {
 
         serde_json::to_string_pretty(&result)
             .map_err(|e| Error::Eyre(eyre::eyre!("Failed to serialize to JSON: {}", e)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::MulticallDecoded;
+
+    fn result(signature: &str) -> DecodeResult {
+        DecodeResult {
+            decoded: ResolvedFunction {
+                name: "example".into(),
+                signature: signature.into(),
+                inputs: vec![],
+                decoded_inputs: None,
+            },
+            multicall_results: None,
+            _trace: TraceFactory::default(),
+        }
+    }
+
+    #[test]
+    fn renders_nested_tuple_components_for_calls_and_multicalls() {
+        let nested = result("example((uint256,(address,uint256))[])");
+        let mut outer = result("example(address)");
+        outer.multicall_results = Some(vec![MulticallDecoded {
+            index: 0,
+            target: "0x0000000000000000000000000000000000000001".into(),
+            value: None,
+            calldata: vec![1, 2, 3, 4],
+            decoded: Some(nested.clone()),
+        }]);
+        let nested_json: serde_json::Value =
+            serde_json::from_str(&nested.to_json().unwrap()).unwrap();
+        let outer_json: serde_json::Value =
+            serde_json::from_str(&outer.to_json().unwrap()).unwrap();
+        let expected = json!([{
+            "name": "arg0",
+            "type": "tuple[]",
+            "components": [
+                { "name": "arg0", "type": "uint256" },
+                { "name": "arg1", "type": "tuple", "components": [
+                    { "name": "arg0", "type": "address" },
+                    { "name": "arg1", "type": "uint256" }
+                ] }
+            ]
+        }]);
+        assert_eq!(nested_json["inputs"], expected);
+        assert_eq!(outer_json["multicall_results"][0]["decoded"]["inputs"], expected);
     }
 }

@@ -2,8 +2,8 @@ use alloy::primitives::U256;
 use eyre::{OptionExt, Result};
 use heimdall_common::utils::strings::encode_hex_reduced;
 use heimdall_vm::{
-    core::opcodes::{opcode_name, JUMPDEST},
-    ext::exec::VMTrace,
+    core::opcodes::opcode_name,
+    ext::exec::{TraceDetails, TraceEnd, VMTrace},
 };
 use petgraph::{matrix_graph::NodeIndex, Graph};
 use std::collections::HashMap;
@@ -12,6 +12,7 @@ use std::collections::HashMap;
 /// control-flow graph found by the symbolic execution engine.
 pub(crate) fn build_cfg(
     vm_trace: &VMTrace,
+    details: &TraceDetails,
     contract_cfg: &mut Graph<String, String>,
     parent_node: Option<NodeIndex<u32>>,
     jump_taken: bool,
@@ -20,7 +21,6 @@ pub(crate) fn build_cfg(
     let mut cfg_node: String = String::new();
     let mut parent_node = parent_node;
 
-    // add the current operations to the cfg
     for operation in &vm_trace.operations {
         let opcode_name = opcode_name(operation.last_instruction.opcode);
 
@@ -51,43 +51,50 @@ pub(crate) fn build_cfg(
     // we don't recurse again, since the block's children have already been mapped.
     if let Some(&node_index) = seen_nodes.get(&cfg_node) {
         if let Some(parent_node) = parent_node {
-            contract_cfg.update_edge(parent_node, node_index, jump_taken.to_string());
+            add_branch_edge(contract_cfg, parent_node, node_index, jump_taken);
         }
         return Ok(());
     }
 
-    // add the node to the graph
     let node_index = contract_cfg.add_node(cfg_node.clone());
     seen_nodes.insert(cfg_node, node_index);
     if let Some(parent_node) = parent_node {
-        contract_cfg.update_edge(parent_node, node_index, jump_taken.to_string());
+        add_branch_edge(contract_cfg, parent_node, node_index, jump_taken);
     }
     parent_node = Some(node_index);
 
-    // recurse into the children of the VMTrace map
-    for child in vm_trace.children.iter() {
-        build_cfg(
-            child,
-            contract_cfg,
-            parent_node,
-            child
-                .operations
-                .first()
-                .ok_or_eyre("failed to get first operation")?
-                .last_instruction
-                .opcode ==
-                JUMPDEST,
-            seen_nodes,
-        )?;
+    for branch in &details.branches {
+        if let Some(index) = branch.child_index {
+            let child = &vm_trace.children[index];
+            build_cfg(child, &branch.details, contract_cfg, parent_node, branch.taken, seen_nodes)?;
+        } else if branch.details.end == TraceEnd::InvalidDestination {
+            let label = "OBSERVED INVALID JUMP DESTINATION".to_string();
+            let target =
+                *seen_nodes.entry(label.clone()).or_insert_with(|| contract_cfg.add_node(label));
+            add_branch_edge(contract_cfg, node_index, target, branch.taken);
+        }
     }
 
     Ok(())
+}
+
+fn add_branch_edge(
+    graph: &mut Graph<String, String>,
+    from: NodeIndex<u32>,
+    to: NodeIndex<u32>,
+    taken: bool,
+) {
+    let label = taken.to_string();
+    if !graph.edges_connecting(from, to).any(|edge| edge.weight() == &label) {
+        graph.add_edge(from, to, label);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{cfg, CfgArgsBuilder};
+    use petgraph::visit::EdgeRef;
     use tokio::test;
 
     #[test]
@@ -98,8 +105,38 @@ mod tests {
 
         let result = cfg(args).await?;
 
-        println!("Contract Cfg: {:#?}", result);
+        assert!(result.graph.node_weights().any(|block| block.contains("CALLDATASIZE")));
+        assert!(result.graph.node_weights().any(|block| block.contains("JUMPDEST")));
+        assert!(result.graph.edge_count() > 0);
 
         Ok(())
+    }
+
+    #[test]
+    async fn labels_fallthrough_jumpdest_as_false() {
+        let args = CfgArgsBuilder::new().target("60016007575b005b00".to_string()).build().unwrap();
+        let graph = cfg(args).await.unwrap().graph;
+        let mut labels: Vec<_> = graph.edge_weights().cloned().collect();
+        labels.sort();
+        assert_eq!(labels, vec!["false", "true"]);
+    }
+
+    #[test]
+    async fn keeps_both_outcomes_when_they_reach_the_same_block() {
+        let args = CfgArgsBuilder::new().target("60016005575b00".to_string()).build().unwrap();
+        let graph = cfg(args).await.unwrap().graph;
+        let mut labels: Vec<_> = graph.edge_weights().cloned().collect();
+        labels.sort();
+        assert_eq!(labels, vec!["false", "true"]);
+    }
+
+    #[test]
+    async fn invalid_taken_destination_is_an_exceptional_edge() {
+        let args = CfgArgsBuilder::new().target("3460045700".to_string()).build().unwrap();
+        let graph = cfg(args).await.unwrap().graph;
+        let root = petgraph::graph::NodeIndex::new(0);
+        let target = graph.edges(root).find(|edge| edge.weight() == "true").unwrap().target();
+        assert_eq!(graph[target], "OBSERVED INVALID JUMP DESTINATION");
+        assert!(graph.edges(root).any(|edge| edge.weight() == "false"));
     }
 }

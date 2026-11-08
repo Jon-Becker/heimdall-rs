@@ -1,7 +1,10 @@
 use alloy::primitives::U256;
 use eyre::Result;
 
-use crate::core::opcodes::{self, WrappedOpcode};
+use crate::core::{
+    opcodes::{self, WrappedOpcode},
+    program::Program,
+};
 
 use super::super::{core::VM, execution::Instruction};
 
@@ -30,32 +33,8 @@ pub fn jump(
     inputs: &[U256],
     input_operations: &[WrappedOpcode],
 ) -> Option<Instruction> {
-    let pc = vm.stack.pop().ok()?.value;
-
-    // Safely convert U256 to u128
-    let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
-
-    // Check if JUMPDEST is valid and throw with 790 if not (invalid jump destination)
-    if (pc <=
-        vm.bytecode
-            .len()
-            .try_into()
-            .expect("impossible case: bytecode is larger than u128::MAX")) &&
-        (vm.bytecode[pc as usize] != opcodes::JUMPDEST)
-    {
-        vm.exit(790, Vec::new());
-        return Some(Instruction {
-            instruction: last_instruction,
-            opcode: opcodes::JUMP,
-            inputs: inputs.to_vec(),
-            outputs: Vec::new(),
-            input_operations: input_operations.to_vec(),
-            output_operations: Vec::new(),
-        });
-    } else {
-        vm.instruction = pc + 1;
-    }
-    None
+    let destination = vm.stack.pop().ok()?.value;
+    jump_to(vm, destination, last_instruction, opcodes::JUMP, inputs, input_operations)
 }
 
 /// JUMPI - Conditionally alter the program counter
@@ -65,36 +44,37 @@ pub fn jumpi(
     inputs: &[U256],
     input_operations: &[WrappedOpcode],
 ) -> Option<Instruction> {
-    let pc = vm.stack.pop().ok()?.value;
+    let destination = vm.stack.pop().ok()?.value;
     let condition = vm.stack.pop().ok()?.value;
-
-    // Safely convert U256 to u128
-    let pc: u128 = pc.try_into().unwrap_or(u128::MAX);
-
     if !condition.is_zero() {
-        // Check if JUMPDEST is valid and throw with 790 if not (invalid jump
-        // destination)
-        if (pc <
-            vm.bytecode
-                .len()
-                .try_into()
-                .expect("impossible case: bytecode is larger than u128::MAX")) &&
-            (vm.bytecode[pc as usize] != opcodes::JUMPDEST)
-        {
-            vm.exit(790, Vec::new());
-            return Some(Instruction {
-                instruction: last_instruction,
-                opcode: opcodes::JUMPI,
-                inputs: inputs.to_vec(),
-                outputs: Vec::new(),
-                input_operations: input_operations.to_vec(),
-                output_operations: Vec::new(),
-            });
-        } else {
-            vm.instruction = pc + 1;
-        }
+        return jump_to(vm, destination, last_instruction, opcodes::JUMPI, inputs, input_operations);
     }
     None
+}
+
+fn jump_to(
+    vm: &mut VM,
+    destination: U256,
+    last_instruction: u128,
+    opcode: u8,
+    inputs: &[U256],
+    input_operations: &[WrappedOpcode],
+) -> Option<Instruction> {
+    if let Ok(pc) = usize::try_from(destination) {
+        if Program::is_valid_jumpdest_in(&vm.bytecode, pc) {
+            vm.instruction = pc as u128 + 1;
+            return None;
+        }
+    }
+    vm.exit(790, Vec::new());
+    Some(Instruction {
+        instruction: last_instruction,
+        opcode,
+        inputs: inputs.to_vec(),
+        outputs: Vec::new(),
+        input_operations: input_operations.to_vec(),
+        output_operations: Vec::new(),
+    })
 }
 
 /// JUMPDEST - Mark a valid destination for jumps (no-op)

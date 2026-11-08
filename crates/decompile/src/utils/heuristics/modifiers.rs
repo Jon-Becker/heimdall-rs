@@ -18,7 +18,6 @@ pub(crate) fn modifier_heuristic<'a>(
     Box::pin(async move {
         let opcode_info = OpCodeInfo::from(state.last_instruction.opcode);
 
-        // if any instruction is non-pure, the function is non-pure
         if function.pure && !opcode_info.is_pure() {
             debug!(
                 "instruction {} ({}) indicates a non-pure function",
@@ -28,7 +27,6 @@ pub(crate) fn modifier_heuristic<'a>(
             function.pure = false;
         }
 
-        // if any instruction is non-view, the function is non-view
         if function.view && !opcode_info.is_view() {
             debug!(
                 "instruction {} ({}) indicates a non-view function",

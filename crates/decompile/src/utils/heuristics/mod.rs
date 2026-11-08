@@ -3,7 +3,6 @@ use heimdall_vm::core::vm::State;
 
 use crate::{core::analyze::AnalyzerState, interfaces::AnalyzedFunction, Error};
 
-// import heuristics
 mod arguments;
 mod events;
 mod extcall;
@@ -11,7 +10,6 @@ mod modifiers;
 mod solidity;
 mod yul;
 
-// re-export heuristics
 pub(crate) use arguments::argument_heuristic;
 pub(crate) use events::event_heuristic;
 pub(crate) use extcall::extcall_heuristic;

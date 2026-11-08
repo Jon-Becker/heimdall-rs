@@ -7,11 +7,9 @@ mod integration_tests {
     use serde_json::Value;
 
     #[tokio::test]
+    #[ignore = "requires a live RPC_URL"]
     async fn test_inspect_simple() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         let args = InspectArgs {
             abi: None,
@@ -30,11 +28,9 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires a live RPC_URL"]
     async fn test_inspect_create() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         let args = InspectArgs {
             abi: None,
@@ -54,12 +50,9 @@ mod integration_tests {
 
     /// Thorough testing for inspect across a large number of transactions.
     #[test]
-    #[ignore]
+    #[ignore = "requires a live RPC_URL and transaction dataset"]
     fn heavy_integration_test() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         // load ./tests/testdata/txids.json into a vector using serde
         let txids = serde_json::from_str::<Value>(

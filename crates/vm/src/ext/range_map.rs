@@ -22,7 +22,7 @@ impl RangeMap {
 
     /// Given an offset into memory, returns the associated opcode if it exists
     pub fn get_by_offset(&self, offset: usize) -> Option<WrappedOpcode> {
-        self.0.get(self.find_range(offset).expect("RangeMap::have_range is broken")).cloned()
+        self.find_range(offset).and_then(|range| self.0.get(range)).cloned()
     }
 
     /// Given a range, returns associated opcodes if they exist
@@ -31,13 +31,15 @@ impl RangeMap {
         let mut offset: usize = offset;
         let mut size: usize = size;
 
-        // get the memory range
         while size > 0 {
             if let Some(op) = self.get_by_offset(offset) {
                 memory_range.push(op.clone());
             }
-            offset += 32;
             size = size.saturating_sub(32);
+            if size > 0 {
+                let Some(next) = offset.checked_add(32) else { break };
+                offset = next;
+            }
         }
 
         memory_range
@@ -46,59 +48,24 @@ impl RangeMap {
     /// Associates the provided opcode with the range of memory modified by writing a `size`-byte
     /// value to `offset`.
     ///
-    /// This range is exactly `[offset, offset + size - 1]`. This function ensures that any existing
-    /// ranges that our new range would collide with are dealt with accordingly, that is:
-    ///
-    ///  - deleted, if our range completely overwrites it,
-    ///  - split, if our range overwrites a subset that partitions it,
-    ///  - shortened, if our range overwrites such that only one "end" of it is overwritten
+    /// Ranges use the half-open convention `[offset, offset + size)`.
+    /// Existing entries are shortened or split where the new write overlaps them.
     pub fn write(&mut self, offset: usize, size: usize, opcode: WrappedOpcode) {
-        let range: Range<usize> =
-            Range { start: offset, end: offset.saturating_add(size).saturating_sub(1) };
-        let incumbents: Vec<Range<usize>> = self.affected_ranges(&range);
-
-        if incumbents.is_empty() {
-            self.0.insert(range, opcode);
-        } else {
-            incumbents.iter().for_each(|incumbent| {
-                if incumbent.start <= range.end && incumbent.end >= range.start {
-                    // Case 1: overlapping
-                    if range.start <= incumbent.start && range.end >= incumbent.end {
-                        // newInterval completely covers incumbent
-                        // remove the existing interval
-                        self.0.remove(incumbent);
-                    }
-                    // Case 2: shortening
-                    else if range.start <= incumbent.start && range.end < incumbent.end {
-                        let remainder: Range<usize> =
-                            Range { start: range.end + 1, end: incumbent.end };
-                        let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
-                        self.0.remove(incumbent);
-                        self.0.insert(remainder, old_opcode);
-                    } else if range.start > incumbent.start && range.end >= incumbent.end {
-                        let remainder: Range<usize> =
-                            Range { start: incumbent.start, end: range.start - 1 };
-                        let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
-                        self.0.remove(incumbent);
-                        self.0.insert(remainder, old_opcode);
-                    }
-                    // Case 3: splitting
-                    else if range.start > incumbent.start && range.end < incumbent.end {
-                        let left: Range<usize> =
-                            Range { start: incumbent.start, end: range.start.saturating_sub(1) };
-                        let right: Range<usize> =
-                            Range { start: range.end + 1, end: incumbent.end };
-                        let old_opcode: WrappedOpcode = self.0.get(incumbent).cloned().unwrap();
-                        self.0.remove(incumbent);
-                        self.0.insert(left, old_opcode.clone());
-                        self.0.insert(right, old_opcode);
-                    } else {
-                        panic!("range_map::write: impossible case");
-                    }
-                }
-                self.0.insert(range.clone(), opcode.clone());
-            });
+        let range = offset..offset.saturating_add(size);
+        if range.is_empty() {
+            return;
         }
+
+        for incumbent in self.affected_ranges(&range) {
+            let Some(old_opcode) = self.0.remove(&incumbent) else { continue };
+            if incumbent.start < range.start {
+                self.0.insert(incumbent.start..range.start, old_opcode.clone());
+            }
+            if incumbent.end > range.end {
+                self.0.insert(range.end..incumbent.end, old_opcode);
+            }
+        }
+        self.0.insert(range, opcode);
     }
 
     fn find_range(&self, offset: usize) -> Option<&Range<usize>> {
@@ -110,139 +77,128 @@ impl RangeMap {
     }
 
     fn range_collides(incoming: &Range<usize>, incumbent: &Range<usize>) -> bool {
-        !(incoming.start <= incumbent.start &&
-            incoming.end < incumbent.end &&
-            incoming.start < incumbent.start ||
-            incoming.start > incumbent.start &&
-                incoming.end >= incumbent.end &&
-                incoming.end > incumbent.end)
+        incoming.start < incumbent.end && incumbent.start < incoming.end
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use hashbrown::HashMap;
-    use std::ops::Range;
-
     use crate::{core::opcodes::WrappedOpcode, ext::range_map::RangeMap};
 
-    #[test]
-    fn test_one_incumbent_and_needs_deletion() {
-        /* the values of the mapping are irrelevant for the purposes of this test, so we
-         * construct an arbitrary one and reuse it everywhere for simplicity */
-        let some_op: WrappedOpcode = WrappedOpcode::default();
-        let initial_pairs: Vec<((usize, usize), WrappedOpcode)> =
-            vec![((8, 16), some_op.clone()), ((32, 64), some_op.clone())];
+    fn op(opcode: u8) -> WrappedOpcode {
+        WrappedOpcode::new(opcode, vec![])
+    }
 
-        let mut actual_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
-            initial_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
-        ));
-
-        let offset: usize = 7;
-        let size: usize = 11;
-        actual_byte_tracker.write(offset, size, some_op.clone());
-
-        let expected_pairs: Vec<((usize, usize), WrappedOpcode)> =
-            vec![((7, 17), some_op.clone()), ((32, 64), some_op)];
-        let expected_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
-            expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
-        ));
-
-        assert_eq!(actual_byte_tracker, expected_byte_tracker);
+    fn origins(map: &RangeMap, start: usize, end: usize) -> Vec<Option<u8>> {
+        (start..end).map(|offset| map.get_by_offset(offset).map(|op| op.opcode)).collect()
     }
 
     #[test]
-    fn test_one_incumbent_and_needs_splitting() {
-        /* the values of the mapping are irrelevant for the purposes of this test, so we
-         * construct an arbitrary one and reuse it everywhere for simplicity */
-        let some_op: WrappedOpcode = WrappedOpcode::default();
-        let initial_pairs: Vec<((usize, usize), WrappedOpcode)> =
-            vec![((7, 18), some_op.clone()), ((32, 64), some_op.clone())];
-
-        let mut actual_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
-            initial_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
-        ));
-
-        let offset: usize = 8;
-        let size: usize = 8;
-        actual_byte_tracker.write(offset, size, some_op.clone());
-
-        let expected_pairs: Vec<((usize, usize), WrappedOpcode)> = vec![
-            ((7, 7), some_op.clone()),
-            ((8, 15), some_op.clone()),
-            ((16, 18), some_op.clone()),
-            ((32, 64), some_op),
-        ];
-        let expected_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
-            expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
-        ));
-
-        assert_eq!(actual_byte_tracker, expected_byte_tracker);
+    fn writes_track_first_and_last_byte_and_leave_gaps_unmapped() {
+        let mut map = RangeMap::new();
+        map.write(2, 3, op(1));
+        map.write(7, 1, op(2));
+        assert_eq!(
+            origins(&map, 0, 9),
+            vec![None, None, Some(1), Some(1), Some(1), None, None, Some(2), None]
+        );
+        assert_eq!(map.get_by_offset(usize::MAX), None);
     }
 
     #[test]
-    fn test_one_incumbent_and_needs_right_shortening() {
-        /* the values of the mapping are irrelevant for the purposes of this test, so we
-         * construct an arbitrary one and reuse it everywhere for simplicity */
-        let some_op: WrappedOpcode = WrappedOpcode::default();
-        let initial_pairs: Vec<((usize, usize), WrappedOpcode)> =
-            vec![((7, 18), some_op.clone()), ((32, 64), some_op.clone())];
-
-        let mut actual_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
-            initial_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
-        ));
-
-        let offset: usize = 10;
-        let size: usize = 14;
-        actual_byte_tracker.write(offset, size, some_op.clone());
-
-        let expected_pairs: Vec<((usize, usize), WrappedOpcode)> =
-            vec![((7, 9), some_op.clone()), ((10, 23), some_op.clone()), ((32, 64), some_op)];
-        let expected_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
-            expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
-        ));
-
-        assert_eq!(actual_byte_tracker, expected_byte_tracker);
+    fn overlapping_writes_replace_only_their_bytes() {
+        for (offset, size, expected) in [
+            (0, 10, vec![Some(2); 10]),
+            (
+                0,
+                5,
+                vec![
+                    Some(2),
+                    Some(2),
+                    Some(2),
+                    Some(2),
+                    Some(2),
+                    Some(1),
+                    Some(1),
+                    Some(1),
+                    None,
+                    None,
+                ],
+            ),
+            (
+                5,
+                5,
+                vec![
+                    None,
+                    None,
+                    Some(1),
+                    Some(1),
+                    Some(1),
+                    Some(2),
+                    Some(2),
+                    Some(2),
+                    Some(2),
+                    Some(2),
+                ],
+            ),
+            (
+                4,
+                2,
+                vec![None, None, Some(1), Some(1), Some(2), Some(2), Some(1), Some(1), None, None],
+            ),
+        ] {
+            let mut map = RangeMap::new();
+            map.write(2, 6, op(1));
+            map.write(offset, size, op(2));
+            assert_eq!(origins(&map, 0, 10), expected);
+        }
     }
 
     #[test]
-    fn test_one_incumbent_and_needs_left_shortening() {
-        /* the values of the mapping are irrelevant for the purposes of this test, so we
-         * construct an arbitrary one and reuse it everywhere for simplicity */
-        let some_op: WrappedOpcode = WrappedOpcode::default();
-        let initial_pairs: Vec<((usize, usize), WrappedOpcode)> =
-            vec![((7, 18), some_op.clone()), ((32, 64), some_op.clone())];
-
-        let mut actual_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
-            initial_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
-        ));
-
-        let offset: usize = 2;
-        let size: usize = 8;
-        actual_byte_tracker.write(offset, size, some_op.clone());
-
-        let expected_pairs: Vec<((usize, usize), WrappedOpcode)> =
-            vec![((2, 9), some_op.clone()), ((10, 18), some_op.clone()), ((32, 64), some_op)];
-        let expected_byte_tracker: RangeMap = RangeMap(HashMap::from_iter(
-            expected_pairs.iter().cloned().map(|((a, b), v)| (Range { start: a, end: b }, v)),
-        ));
-
-        assert_eq!(actual_byte_tracker, expected_byte_tracker);
+    fn adjacent_and_empty_writes_preserve_existing_origins() {
+        let mut map = RangeMap::new();
+        map.write(0, 2, op(1));
+        map.write(2, 2, op(2));
+        map.write(1, 0, op(3));
+        assert_eq!(origins(&map, 0, 5), vec![Some(1), Some(1), Some(2), Some(2), None]);
     }
 
     #[test]
-    fn test_range_collides() {
-        let range: Range<usize> = Range { start: 0, end: 10 };
-        let incumbent: Range<usize> = Range { start: 5, end: 15 };
-
-        assert!(RangeMap::range_collides(&range, &incumbent));
+    fn one_write_can_overlap_multiple_previous_writes() {
+        let mut map = RangeMap::new();
+        map.write(0, 4, op(1));
+        map.write(6, 4, op(2));
+        map.write(2, 6, op(3));
+        assert_eq!(
+            origins(&map, 0, 10),
+            vec![
+                Some(1),
+                Some(1),
+                Some(3),
+                Some(3),
+                Some(3),
+                Some(3),
+                Some(3),
+                Some(3),
+                Some(2),
+                Some(2)
+            ]
+        );
     }
 
     #[test]
-    fn test_range_does_not_collide() {
-        let range: Range<usize> = Range { start: 0, end: 10 };
-        let incumbent: Range<usize> = Range { start: 11, end: 15 };
+    fn range_lookup_skips_unmapped_words() {
+        let mut map = RangeMap::new();
+        map.write(32, 32, op(1));
+        map.write(64, 1, op(2));
+        assert_eq!(map.get_by_range(0, 65), vec![op(1), op(2)]);
+    }
 
-        assert!(!RangeMap::range_collides(&range, &incumbent));
+    #[test]
+    fn tracked_memory_origin_matches_the_actual_write_location() {
+        let mut memory = crate::core::memory::Memory::new();
+        memory.store_with_opcode(100_000, 1, &[42], op(1));
+        assert_eq!(memory.origin(65_536), Some(op(1)));
+        assert_eq!(memory.origin(100_000), None);
     }
 }

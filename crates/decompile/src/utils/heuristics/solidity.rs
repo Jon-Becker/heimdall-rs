@@ -32,7 +32,6 @@ pub(crate) fn solidity_heuristic<'a>(
                 }));
             }
 
-            // CALLDATACOPY
             0x37 => {
                 let source_offset = Expr::from_opcode(&instruction.input_operations[1]);
                 let size = Expr::from_opcode(&instruction.input_operations[2]);
@@ -49,7 +48,6 @@ pub(crate) fn solidity_heuristic<'a>(
                 });
             }
 
-            // CODECOPY
             0x39 => {
                 let source_offset = Expr::from_opcode(&instruction.input_operations[1]);
                 let size = Expr::from_opcode(&instruction.input_operations[2]);
@@ -66,7 +64,6 @@ pub(crate) fn solidity_heuristic<'a>(
                 });
             }
 
-            // EXTCODECOPY
             0x3C => {
                 let source_offset = Expr::from_opcode(&instruction.input_operations[2]);
                 let size = Expr::from_opcode(&instruction.input_operations[3]);
@@ -91,21 +88,17 @@ pub(crate) fn solidity_heuristic<'a>(
                 });
             }
 
-            // MSTORE / MSTORE8
             0x52 | 0x53 => {
                 let key = instruction.inputs[0];
-                let value = instruction.inputs[1];
                 let operation = instruction.input_operations[1].to_owned();
 
-                // add the mstore to the function's memory map
-                function.memory.insert(key, StorageFrame { operation, value });
+                function.memory.insert(key, StorageFrame { operation });
                 function.push_statement(Statement::Assign {
                     target: Expr::index("memory", Expr::Literal(key)),
                     value: Expr::from_opcode(&instruction.input_operations[1]),
                 });
             }
 
-            // SSTORE
             0x55 => {
                 function.push_statement(Statement::Assign {
                     target: Expr::StorageAccess(Box::new(StoragePath::Slot {
@@ -118,7 +111,6 @@ pub(crate) fn solidity_heuristic<'a>(
             // JUMPI control flow is reconstructed by the analyzer from VMTrace children.
             0x57 => {}
 
-            // TSTORE
             0x5d => {
                 function.push_statement(Statement::Assign {
                     target: Expr::index(
@@ -129,7 +121,6 @@ pub(crate) fn solidity_heuristic<'a>(
                 });
             }
 
-            // CREATE / CREATE2
             0xf0 | 0xf5 => {
                 function.push_statement(Statement::AssemblyAssign {
                     target: "addr".to_string(),
@@ -142,9 +133,7 @@ pub(crate) fn solidity_heuristic<'a>(
                 });
             }
 
-            // REVERT
             0xfd => {
-                // Safely convert U256 to usize
                 let offset: usize = instruction.inputs[0].try_into().unwrap_or(0);
                 let size: usize = instruction.inputs[1].try_into().unwrap_or(0);
                 let revert_data = state.memory.read(offset, size);
@@ -188,7 +177,6 @@ pub(crate) fn solidity_heuristic<'a>(
                 function.push_statement(Statement::Revert(reason));
             }
 
-            // SELFDESTRUCT
             0xff => {
                 function.push_statement(Statement::Expression(Expr::Call {
                     callee: "selfdestruct".to_string(),

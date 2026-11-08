@@ -31,7 +31,6 @@ pub fn display(inputs: Vec<DynSolValue>, prefix: &str) -> Vec<String> {
                 output.push(format!("{prefix}{} {}", "bytes  ".blue(), val));
             }
             DynSolValue::Bytes(val) => {
-                // chunk val into 32-byte chunks
                 let bytes = val.chunks(32).map(encode_hex).collect::<Vec<String>>();
 
                 for (i, byte) in bytes.iter().enumerate() {
@@ -110,41 +109,34 @@ impl Parameterize for DynSolValue {
                 format!("bytes{}: 0x{}", size, &val.to_string()[(64 - size * 2) + 2..])
             }
             DynSolValue::Array(val) => {
-                // get type of array
                 let array_type = match val.first() {
                     Some(token) => token.to_type(),
                     None => String::new(),
                 };
 
-                // parametrize all array elements, remove their `type: ` prefix, and join them
                 let elements = val
                     .iter()
                     .map(|token| token.parameterize().replace(&format!("{array_type}: "), ""))
                     .collect::<Vec<String>>()
                     .join(", ");
 
-                // return array type and elements
                 format!("{array_type}[]: [{elements}]")
             }
             DynSolValue::FixedArray(val) => {
-                // get type of array
                 let array_type = match val.first() {
                     Some(token) => token.to_type(),
                     None => String::new(),
                 };
 
-                // parametrize all array elements, remove their `type: ` prefix, and join them
                 let elements = val
                     .iter()
                     .map(|token| token.parameterize().replace(&format!("{array_type}: "), ""))
                     .collect::<Vec<String>>()
                     .join(", ");
 
-                // return array type and elements
                 format!("{}[{}]: [{}]", array_type, val.len(), elements)
             }
             DynSolValue::Tuple(val) => {
-                // return tuple type and elements
                 format!(
                     "({})",
                     val.iter()
@@ -167,7 +159,6 @@ impl Parameterize for DynSolValue {
             DynSolValue::Bytes(_) => "bytes".to_string(),
             DynSolValue::FixedBytes(_, size) => format!("bytes{size}"),
             DynSolValue::Array(val) => {
-                // get type of array
                 let array_type = match val.first() {
                     Some(token) => token.to_type(),
                     None => String::new(),
@@ -175,7 +166,6 @@ impl Parameterize for DynSolValue {
                 format!("{array_type}[]")
             }
             DynSolValue::FixedArray(val) => {
-                // get type of array
                 let array_type = match val.first() {
                     Some(token) => token.to_type(),
                     None => String::new(),
@@ -183,11 +173,9 @@ impl Parameterize for DynSolValue {
                 format!("{}[{}]", array_type, val.len())
             }
             DynSolValue::Tuple(val) => {
-                // get all internal types
                 let types =
                     val.iter().map(|token| token.to_type()).collect::<Vec<String>>().join(", ");
 
-                // return tuple type
                 format!("({types})")
             }
             _ => unreachable!(),

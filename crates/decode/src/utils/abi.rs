@@ -25,11 +25,8 @@ pub(crate) fn try_decode(
 ) -> Result<(Vec<DynSolValue>, Vec<Param>), Error> {
     trace!("try_decode: inputs={:?}, byte_args.len()={}", inputs, byte_args.len());
 
-    // For non-standard sized calldata that isn't a multiple of 32 bytes,
-    // we need to pad it to ensure proper ABI decoding
     let padded_args = if !byte_args.is_empty() && !byte_args.len().is_multiple_of(32) {
         let mut padded = byte_args.to_vec();
-        // Pad to the next multiple of 32 bytes
         let padding_needed = 32 - (byte_args.len() % 32);
         padded.extend(vec![0u8; padding_needed]);
         trace!("padded byte_args from {} to {} bytes", byte_args.len(), padded.len());
@@ -38,14 +35,12 @@ pub(crate) fn try_decode(
         byte_args.to_vec()
     };
 
-    // convert inputs to tuple
     let ty =
         DynSolCall::new(Selector::default(), inputs.to_vec(), None, DynSolReturns::new(Vec::new()));
 
     let result = ty
         .abi_decode_input(&padded_args)
         .map_err(|e| Error::Eyre(eyre!("failed to decode calldata: {}", e)))?;
-    // convert tokens to params
     let mut params: Vec<Param> = Vec::new();
     for (i, input) in inputs.iter().enumerate() {
         params.push(Param {
@@ -69,21 +64,14 @@ pub(crate) fn try_decode_dynamic_parameter(
         calldata_words.iter().map(|w| encode_hex(w)).collect::<Vec<String>>()
     );
 
-    // initialize a [`HashSet<usize>`] called `word_coverages` with `parameter_index`
-    // this works similarly to `covered_words`, but is used to keep track of which
-    // words we've covered while attempting to ABI-decode the current word
     let mut coverages = HashSet::from([parameter_index]);
 
-    // (1) the first validation step. this checks if the current word could be a valid
-    // pointer to an ABI-encoded dynamic type. if it is not, we return None.
     let (byte_offset, word_offset) =
         match process_and_validate_word(parameter_index, calldata_words) {
             Ok((byte_offset, word_offset)) => (byte_offset, word_offset),
             Err(_) => return Ok(None),
         };
 
-    // (3) the second validation step. this checks if the pointed-to word is a valid pointer to a
-    // word in `calldata_words`. if it is not, we return an [`Error::BoundsError`].
     //
     // note: `size` is the size of the ABI-encoded item. It varies depending on the type of the
     // item. For example, the size of a `bytes` is the number of bytes in the encoded data, while
@@ -93,8 +81,6 @@ pub(crate) fn try_decode_dynamic_parameter(
         .ok_or(Error::BoundsError)?;
     let size = U256::from_be_slice(size_word).min(U256::from(usize::MAX));
 
-    // (3) add the size word index to `word_coverages`, since this word is part of the ABI-encoded
-    // type and should not be decoded again
     coverages.insert(word_offset.try_into().unwrap_or(usize::MAX));
 
     // (4) check if there are enough words left in the calldata to contain the ABI-encoded item.
@@ -141,7 +127,6 @@ fn process_and_validate_word(
         return Err(Error::BoundsError);
     }
 
-    // check if the pointer is pointing to a valid location in the calldata
     let word_offset = word / U256::from(32);
     if word_offset >= U256::from(calldata_words.len()) {
         trace!("parameter {}: '{}' is out of bounds (offset check)", parameter_index, word);
@@ -164,41 +149,29 @@ fn try_decode_dynamic_parameter_bytes(
     let mut coverages = coverages;
     trace!("parameter {}: '{}' may be bytes", parameter_index, word);
 
-    // (1) join all words from `data_start_word_offset` to the end of `calldata_words`.
-    // this is where the encoded data may be stored.
     let data_words = &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..];
 
-    // (2) perform a quick validation check to see if there are enough remaining bytes
-    // to contain the ABI-encoded item. If there aren't, return an [`Error::BoundsError`].
     if data_words.concat().len() < size.try_into().unwrap_or(usize::MAX) {
         trace!("parameter {}: '{}' is out of bounds (bytes check)", parameter_index, word);
         return Ok(None);
     }
 
-    // (3) calculate how many words are needed to store the encoded data with size `size`.
     let word_count_for_size =
         U256::from((size.try_into().unwrap_or(u32::MAX) as f32 / 32f32).ceil() as u32); // wont panic unless calldata is huge
     let data_end_word_offset = data_start_word_offset + word_count_for_size;
     trace!("with data: {:#?}", encode_hex(&data_words.concat()));
 
-    // (4) get the last word in `data_words`, so we can perform a size check. There should be
-    // `size % 32` bytes in this word, and the rest should be null bytes.
     let last_word = data_words
         .get(word_count_for_size.try_into().unwrap_or(usize::MAX) - 1)
         .ok_or(Error::BoundsError)?;
     let last_word_size = size.try_into().unwrap_or(usize::MAX) % 32;
 
-    // if the padding size of this last word is greater than `32 - last_word_size`,
-    // there are too many bytes in the last word, and this is not a valid ABI-encoded type.
-    // return an [`Error::BoundsError`].
     let padding_size = get_padding_size(last_word);
     if padding_size > 32 - last_word_size {
         trace!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (bytes)", parameter_index, word, size, padding_size);
         return Ok(None);
     }
 
-    // (5) we've covered all words from `data_start_word_offset` to `data_end_word_offset`,
-    // so add them to `word_coverages`.
     coverages.extend(
         (word_offset.try_into().unwrap_or(usize::MAX)..
             data_end_word_offset.try_into().unwrap_or(usize::MAX))
@@ -224,8 +197,6 @@ fn try_decode_dynamic_parameter_array(
     let mut coverages = coverages;
     trace!("parameter {}: '{}' may be an array", parameter_index, word);
 
-    // (1) join all words from `data_start_word_offset` to `data_end_word_offset`. This is where
-    // the encoded data may be stored.
     let data_words = &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..
         data_end_word_offset.try_into().unwrap_or(usize::MAX)];
     trace!("potential array items: {:#?}", data_words);
@@ -245,22 +216,12 @@ fn try_decode_dynamic_parameter_array(
         return Ok(Some(abi_encoded));
     }
 
-    // (3) this is not a `string` type, so we can assume that it is an array. we can extend
-    // `word_coverages` with the indices of all words from `data_start_word_offset` to
-    // `data_end_word_offset`, since we've now covered all words in the ABI-encoded type.
     coverages.extend(
         (word_offset.try_into().unwrap_or(usize::MAX)..
             data_end_word_offset.try_into().unwrap_or(usize::MAX))
             .collect::<Vec<usize>>(),
     );
 
-    // (4) get the potential type of the array elements. under the hood, this function:
-    //     - iterates over each word in `data_words`
-    //     - checks if the word is a dynamic type by recursively calling
-    //       `try_decode_dynamic_parameter`
-    //         - if it is a dynamic type, we know the type of the array elements and can return it
-    //         - if it is a static type, find the potential types that can represent each element in
-    //           the array
     let potential_type = get_potential_type(
         data_words,
         parameter_index,
@@ -304,7 +265,6 @@ fn try_decode_dynamic_parameter_string(
     }
     trace!("parameter {}: '{}' may be string", parameter_index, word);
 
-    // (3) calculate how many words are needed to store the encoded data with size `size`.
     let word_count_for_size =
         U256::from((size.try_into().unwrap_or(u32::MAX) as f32 / 32f32).ceil() as u32);
     let data_end_word_offset = data_start_word_offset + word_count_for_size;
@@ -317,24 +277,17 @@ fn try_decode_dynamic_parameter_string(
         )
     );
 
-    // (4) get the last word in `data_words`, so we can perform a size check. There should be
-    // `size % 32` bytes in this word, and the rest should be null bytes.
     let last_word = data_words
         .get(word_count_for_size.try_into().unwrap_or(usize::MAX) - 1)
         .ok_or(Error::BoundsError)?;
     let last_word_size = size.try_into().unwrap_or(usize::MAX) % 32;
 
-    // if the padding size of this last word is greater than `32 - last_word_size`,
-    // there are too many bytes in the last word, and this is not a valid ABI-encoded type.
-    // return an [`Error::BoundsError`].
     let padding_size = get_padding_size(last_word);
     if padding_size > 32 - last_word_size {
         trace!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (string)", parameter_index, word, size, padding_size);
         return Err(Error::BoundsError);
     }
 
-    // (5) we've covered all words from `data_start_word_offset` to `data_end_word_offset`,
-    // so add them to `word_coverages`.
     coverages.extend(
         (word_offset.try_into().unwrap_or(usize::MAX)..
             data_end_word_offset.try_into().unwrap_or(usize::MAX))
@@ -364,7 +317,6 @@ fn get_potential_type(
             let data_words =
                 &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..];
 
-            // first, check if this word *could* be a nested abi-encoded item
             trace!(
                 "parameter {}: '{}' checking for nested abi-encoded data",
                 parameter_index,
@@ -382,7 +334,6 @@ fn get_potential_type(
                     })
                     .collect::<HashSet<usize>>();
 
-                // merge coverages and nested_coverages
                 coverages.extend(nested_coverages);
                 return (32, vec![nested_abi_encoded_param.ty]);
             }
@@ -403,7 +354,6 @@ fn get_potential_type(
             (padding_size, potential_types)
         })
         .fold((0, String::from("")), |(max_size, mut potential_type), (size, types)| {
-            // "address" and "string" are priority types
             if types.contains(&String::from("string")) {
                 return (32, String::from("string"));
             } else if types.contains(&String::from("address")) {
