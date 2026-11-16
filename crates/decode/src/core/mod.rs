@@ -187,7 +187,12 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             // while calldata_words is not empty, iterate over itcar
             let mut i = 0;
             let mut covered_words = HashSet::new();
-            while covered_words.len() != calldata_words.len() {
+            while i < calldata_words.len() && covered_words.len() != calldata_words.len() {
+                // Words already consumed by a dynamic type are not parameters of their own.
+                if covered_words.contains(&i) {
+                    i += 1;
+                    continue;
+                }
                 let word = calldata_words[i].to_owned();
 
                 // check if the first word is abiencoded
@@ -282,4 +287,90 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     }
 
     Ok(DecodeResult { decoded: selected_match, multicall_results, _trace: trace })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::Future;
+    use std::task::{Context, Poll, Waker};
+    use std::time::{Duration, Instant};
+
+    use super::decode;
+    use crate::interfaces::{DecodeArgs, DecodeResult};
+
+    const REPEATED_OFFSET_WORDS: usize = 48;
+    const NESTING_CAP: usize = 4;
+
+    /// `decode` is async, but this fixture never waits on I/O.
+    fn block_on<F: Future>(future: F) -> F::Output {
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(&waker);
+        let mut future = std::pin::pin!(future);
+        // Hex calldata is ready without I/O. A few polls cover the async state machine.
+        for _ in 0..8 {
+            match future.as_mut().poll(&mut cx) {
+                Poll::Ready(value) => return value,
+                Poll::Pending => {}
+            }
+        }
+        panic!("decode fixture waited on I/O");
+    }
+
+    /// Build a 4-byte selector plus `REPEATED_OFFSET_WORDS` copies of one 32-byte word.
+    fn repeated_offset_calldata(last_byte: u8) -> String {
+        let mut calldata = String::with_capacity(2 + 8 + REPEATED_OFFSET_WORDS * 64);
+        calldata.push_str("0xdeadbeef");
+        let word = format!("{:064x}", last_byte);
+        for _ in 0..REPEATED_OFFSET_WORDS {
+            calldata.push_str(&word);
+        }
+        calldata
+    }
+
+    fn repeated_offset_args(last_byte: u8) -> DecodeArgs {
+        DecodeArgs {
+            target: repeated_offset_calldata(last_byte),
+            rpc_url: String::new(),
+            openrouter_api_key: String::new(),
+            model: String::new(),
+            explain: false,
+            default: true,
+            constructor: false,
+            truncate_calldata: false,
+            skip_resolving: true,
+            raw: true,
+            abi: None,
+            output: String::from("print"),
+        }
+    }
+
+    /// A word of `0x20` is an in-range offset and a length of 32. Each nested slice
+    /// starts two words later and, at ~48 words, that length still fits for several
+    /// levels. Uncapped, every level branches by 32, about `32^(n/2)` calls, and
+    /// does not return. `0x40` is the same repeated-offset shape (length 64).
+    /// Arrays wider than 8 elements are not walked, and nesting stops at 4, so
+    /// this returns. The time bound fails if those limits are removed.
+    #[test]
+    fn repeated_offsets_finish_with_capped_nesting() {
+        for last_byte in [0x20_u8, 0x40] {
+            let started = Instant::now();
+            let decoded = block_on(decode(repeated_offset_args(last_byte)))
+                .unwrap_or_else(|err| panic!("word {last_byte:#x} decode failed: {err}"));
+            assert_repeated_offset_bound(last_byte, &decoded, started.elapsed());
+        }
+    }
+
+    fn assert_repeated_offset_bound(last_byte: u8, decoded: &DecodeResult, elapsed: Duration) {
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "word {last_byte:#x} took {elapsed:?}; uncapped, a repeated offset does not return"
+        );
+        let nesting =
+            decoded.decoded.inputs.iter().map(|ty| ty.matches("[]").count()).max().unwrap_or(0);
+        assert!(
+            nesting <= NESTING_CAP,
+            "word {last_byte:#x} inferred {} with {nesting} array levels",
+            decoded.decoded.inputs.join(", ")
+        );
+    }
 }

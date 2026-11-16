@@ -59,11 +59,35 @@ pub(crate) fn try_decode(
     Ok((result, params))
 }
 
+/// Nested dynamic decoding stops after this many array levels.
+///
+/// A repeated-offset word is an in-range pointer and a plausible length at every
+/// level, so an uncapped walk is exponential in the number of words. Deeper input
+/// stays a static type (`uint256` / `bytes`).
+const MAX_DYNAMIC_DEPTH: usize = 4;
+
+/// How many leading array elements are typed. The rest of a wider array is not
+/// walked; those words stay a static type.
+const MAX_ARRAY_ELEMENTS_TYPED: usize = 8;
+
 /// Finds the offsets of all ABI-encoded items in the given calldata.
 pub(crate) fn try_decode_dynamic_parameter(
     parameter_index: usize,
     calldata_words: &[Vec<u8>],
 ) -> Result<Option<AbiEncoded>, Error> {
+    try_decode_dynamic_parameter_at(parameter_index, calldata_words, 0)
+}
+
+/// `depth` is how many dynamic arrays already enclose this word.
+fn try_decode_dynamic_parameter_at(
+    parameter_index: usize,
+    calldata_words: &[Vec<u8>],
+    depth: usize,
+) -> Result<Option<AbiEncoded>, Error> {
+    if depth >= MAX_DYNAMIC_DEPTH {
+        return Ok(None);
+    }
+
     trace!(
         "calldata_words: {:#?}",
         calldata_words.iter().map(|w| encode_hex(w)).collect::<Vec<String>>()
@@ -123,6 +147,7 @@ pub(crate) fn try_decode_dynamic_parameter(
             data_end_word_offset,
             size,
             coverages,
+            depth,
         )
     }
 }
@@ -220,6 +245,7 @@ fn try_decode_dynamic_parameter_array(
     data_end_word_offset: U256,
     size: U256,
     coverages: HashSet<usize>,
+    depth: usize,
 ) -> Result<Option<AbiEncoded>, Error> {
     let mut coverages = coverages;
     trace!("parameter {}: '{}' may be an array", parameter_index, word);
@@ -245,6 +271,19 @@ fn try_decode_dynamic_parameter_array(
         return Ok(Some(abi_encoded));
     }
 
+    // Wider than we will type. Walking every element is exponential when each
+    // element is itself an offset (a repeated `0x20` word is a length of 32).
+    // Leave the word as a static type; the caller records uint256 / bytes.
+    if size > U256::from(MAX_ARRAY_ELEMENTS_TYPED) {
+        trace!(
+            "parameter {}: '{}' has {} elements, above the typing cap",
+            parameter_index,
+            word,
+            size
+        );
+        return Ok(None);
+    }
+
     // (3) this is not a `string` type, so we can assume that it is an array. we can extend
     // `word_coverages` with the indices of all words from `data_start_word_offset` to
     // `data_end_word_offset`, since we've now covered all words in the ABI-encoded type.
@@ -268,6 +307,7 @@ fn try_decode_dynamic_parameter_array(
         word,
         data_start_word_offset,
         &mut coverages,
+        depth,
     );
     let type_str = format!("{potential_type}[]");
     trace!("parameter {}: '{}' is {}", parameter_index, word, type_str);
@@ -353,9 +393,13 @@ fn get_potential_type(
     word: U256,
     data_start_word_offset: U256,
     coverages: &mut HashSet<usize>,
+    depth: usize,
 ) -> String {
+    // Only the leading elements are typed. Arrays wider than the cap return before
+    // this and stay a static word.
     let (_, potential_type) = data_words
         .iter()
+        .take(MAX_ARRAY_ELEMENTS_TYPED)
         .enumerate()
         .map(|(i, w)| {
             // we need to get a slice of calldata_words from `data_start_word_offset` to the end
@@ -370,7 +414,8 @@ fn get_potential_type(
                 parameter_index,
                 word
             );
-            if let Ok(Some(nested_abi_encoded_param)) = try_decode_dynamic_parameter(i, data_words)
+            if let Ok(Some(nested_abi_encoded_param)) =
+                try_decode_dynamic_parameter_at(i, data_words, depth + 1)
             {
                 // we need to add data_start_word_offset to all the offsets in nested_coverages
                 // because they are relative to the start of the nested abi-encoded item.
@@ -660,6 +705,36 @@ mod tests {
                 assert!(is_abi_encoded);
                 assert_eq!(coverages, HashSet::from([2, 5, 6, 7, 8]));
             }
+        }
+    }
+
+    /// A word of `0x20` is an in-range offset and a length of 32. Each nested slice
+    /// starts two words later and, at 48 words, that length still fits for several
+    /// levels. Uncapped, every level branches by 32 (about `32^(n/2)` calls) and
+    /// does not return. `0x40` is the same repeated-offset shape (length 64).
+    /// Arrays wider than 8 elements are not walked, and nesting stops at 4, so
+    /// this stays a static word or `bytes`. The time bound fails if those limits
+    /// are removed.
+    #[test]
+    fn repeated_offsets_are_capped() {
+        for last_byte in [0x20_u8, 0x40] {
+            let mut word = vec![0_u8; 32];
+            word[31] = last_byte;
+            let words = vec![word; 48];
+            let started = std::time::Instant::now();
+            let decoded = try_decode_dynamic_parameter(0, &words)
+                .unwrap_or_else(|err| panic!("word {last_byte:#x} failed: {err}"));
+            let elapsed = started.elapsed();
+            assert!(
+                elapsed.as_millis() < 100,
+                "word {last_byte:#x} took {elapsed:?}; uncapped, a repeated offset does not return"
+            );
+            let nesting = decoded.as_ref().map(|abi| abi.ty.matches("[]").count()).unwrap_or(0);
+            assert!(
+                nesting <= MAX_DYNAMIC_DEPTH,
+                "word {last_byte:#x} inferred {} with {nesting} array levels",
+                decoded.map(|abi| abi.ty).unwrap_or_default()
+            );
         }
     }
 }
