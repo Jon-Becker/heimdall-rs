@@ -1,4 +1,3 @@
-use hashbrown::HashSet;
 use std::time::Instant;
 
 use alloy::primitives::Selector;
@@ -13,15 +12,14 @@ use heimdall_common::{
     },
     utils::{io::logging::TraceFactory, strings::encode_hex},
 };
-use heimdall_vm::core::types::{get_padding, get_potential_types_for_word, to_type, Padding};
 use tracing::{debug, info, trace, warn};
 
 use crate::{
     error::Error,
     interfaces::{DecodeArgs, DecodeResult},
     utils::{
-        decode_multicall, format_multicall_trace, is_multicall_pattern, parse_deployment_bytecode,
-        try_decode, try_decode_dynamic_parameter,
+        decode_multicall, format_multicall_trace, infer_dynamic_tail, infer_scalar_type,
+        is_multicall_pattern, offset_in_words, parse_deployment_bytecode, try_decode,
     },
 };
 
@@ -178,52 +176,8 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         if matches.is_empty() {
             info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
 
-            // we're going to build a Vec<DynSolType> of all possible types for each
-            let mut potential_inputs: Vec<DynSolType> = Vec::new();
-
-            // chunk in blocks of 32 bytes
-            let calldata_words = calldata[4..].chunks(32).map(|x| x.to_owned()).collect::<Vec<_>>();
-
-            // while calldata_words is not empty, iterate over itcar
-            let mut i = 0;
-            let mut covered_words = HashSet::new();
-            while i < calldata_words.len() && covered_words.len() != calldata_words.len() {
-                // Words already consumed by a dynamic type are not parameters of their own.
-                if covered_words.contains(&i) {
-                    i += 1;
-                    continue;
-                }
-                let word = calldata_words[i].to_owned();
-
-                // check if the first word is abiencoded
-                if let Some(abi_encoded) = try_decode_dynamic_parameter(i, &calldata_words)? {
-                    let potential_type = to_type(&abi_encoded.ty);
-                    potential_inputs.push(potential_type);
-                    covered_words.extend(abi_encoded.coverages);
-                } else {
-                    let (_, mut potential_types) = get_potential_types_for_word(&word);
-
-                    // perform heuristics
-                    // - if we use right-padding, this is probably bytesN
-                    // - if we use left-padding, this is probably uintN or intN
-                    // - if we use no padding, this is probably bytes32
-                    match get_padding(&word) {
-                        Padding::Left => potential_types
-                            .retain(|t| t.starts_with("uint") || t.starts_with("address")),
-                        _ => potential_types
-                            .retain(|t| t.starts_with("bytes") || t.starts_with("string")),
-                    }
-
-                    let potential_type =
-                        to_type(potential_types.first().expect("potential types is empty"));
-
-                    potential_inputs.push(potential_type);
-                    covered_words.insert(i);
-                }
-
-                i += 1;
-            }
-
+            let calldata_words = byte_args.chunks(32).collect::<Vec<_>>();
+            let potential_inputs = infer_raw_inputs(&calldata_words);
             trace!(
                 "potential parameter inputs, ({:?})",
                 potential_inputs.iter().map(|x| x.to_string()).collect::<Vec<String>>()
@@ -289,88 +243,136 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     Ok(DecodeResult { decoded: selected_match, multicall_results, _trace: trace })
 }
 
+/// Alloy reads one word per inferred parameter from the start of the tuple.
+/// Only accept a dynamic layout if its tails account for every word after the head.
+fn infer_raw_inputs(words: &[&[u8]]) -> Vec<DynSolType> {
+    let mut inputs = Vec::new();
+    let mut head_end = words.len();
+    let mut next_tail = None;
+
+    let mut offsets = words
+        .iter()
+        .enumerate()
+        .filter_map(|(i, word)| {
+            let offset = offset_in_words(word)?;
+            (i < offset && offset < words.len()).then_some((i, offset))
+        })
+        .peekable();
+    while let Some((i, offset)) = offsets.next() {
+        if i >= head_end {
+            break;
+        }
+        if next_tail.is_some_and(|expected| offset != expected) {
+            continue;
+        }
+
+        // The next head offset can disambiguate packed bytes from a scalar array.
+        // A scalar can look like an offset too, so only use that boundary on an exact fit.
+        let inferred = offsets
+            .peek()
+            .filter(|&&(j, end)| j < head_end.min(offset) && offset < end)
+            .and_then(|&(_, end)| {
+                infer_dynamic_tail(offset, &words[..end]).filter(|param| param.tail.end == end)
+            })
+            .or_else(|| infer_dynamic_tail(offset, words));
+        if let Some(parameter) = inferred {
+            head_end = head_end.min(offset);
+            next_tail = Some(parameter.tail.end);
+            inputs.extend(words[inputs.len()..i].iter().map(|word| infer_scalar_type(word)));
+            inputs.push(parameter.ty);
+        }
+    }
+
+    if next_tail.is_some_and(|end| end != words.len()) {
+        inputs.clear();
+        head_end = words.len();
+    }
+    inputs.extend(words[inputs.len()..head_end].iter().map(|word| infer_scalar_type(word)));
+    inputs
+}
+
 #[cfg(test)]
 mod tests {
-    use std::future::Future;
-    use std::task::{Context, Poll, Waker};
-    use std::time::{Duration, Instant};
+    use alloy_dyn_abi::DynSolValue;
+    use heimdall_common::utils::strings::encode_hex;
 
     use super::decode;
-    use crate::interfaces::{DecodeArgs, DecodeResult};
+    use crate::DecodeArgsBuilder;
 
-    const REPEATED_OFFSET_WORDS: usize = 48;
-    const NESTING_CAP: usize = 4;
-
-    /// `decode` is async, but this fixture never waits on I/O.
-    fn block_on<F: Future>(future: F) -> F::Output {
-        let waker = Waker::noop();
-        let mut cx = Context::from_waker(&waker);
-        let mut future = std::pin::pin!(future);
-        // Hex calldata is ready without I/O. A few polls cover the async state machine.
-        for _ in 0..8 {
-            match future.as_mut().poll(&mut cx) {
-                Poll::Ready(value) => return value,
-                Poll::Pending => {}
-            }
-        }
-        panic!("decode fixture waited on I/O");
+    async fn decode_raw(arguments: &DynSolValue) -> Vec<DynSolValue> {
+        let target = format!("0xdeadbeef{}", encode_hex(&arguments.abi_encode_params()));
+        let args = DecodeArgsBuilder::new()
+            .target(target)
+            .skip_resolving(true)
+            .raw(true)
+            .build()
+            .expect("valid decode arguments");
+        decode(args)
+            .await
+            .expect("raw decode failed")
+            .decoded
+            .decoded_inputs
+            .expect("decoded inputs")
     }
 
-    /// Build a 4-byte selector plus `REPEATED_OFFSET_WORDS` copies of one 32-byte word.
-    fn repeated_offset_calldata(last_byte: u8) -> String {
-        let mut calldata = String::with_capacity(2 + 8 + REPEATED_OFFSET_WORDS * 64);
-        calldata.push_str("0xdeadbeef");
-        let word = format!("{:064x}", last_byte);
-        for _ in 0..REPEATED_OFFSET_WORDS {
-            calldata.push_str(&word);
+    fn nested_array(mut value: DynSolValue, depth: usize) -> DynSolValue {
+        for _ in 0..depth {
+            value = DynSolValue::Array(vec![value]);
         }
-        calldata
+        value
     }
 
-    fn repeated_offset_args(last_byte: u8) -> DecodeArgs {
-        DecodeArgs {
-            target: repeated_offset_calldata(last_byte),
-            rpc_url: String::new(),
-            openrouter_api_key: String::new(),
-            model: String::new(),
-            explain: false,
-            default: true,
-            constructor: false,
-            truncate_calldata: false,
-            skip_resolving: true,
-            raw: true,
-            abi: None,
-            output: String::from("print"),
+    #[tokio::test]
+    async fn raw_decode_preserves_scalar_positions_after_an_ambiguous_offset() {
+        let values = [32u8, 1, 7, 42].map(DynSolValue::from).to_vec();
+        assert_eq!(decode_raw(&DynSolValue::Tuple(values.clone())).await, values);
+    }
+
+    #[tokio::test]
+    async fn raw_decode_preserves_wide_scalar_arrays() {
+        for first in [0u8, 1] {
+            let array = DynSolValue::Array((first..first + 9).map(DynSolValue::from).collect());
+            assert_eq!(decode_raw(&array).await, [array]);
         }
     }
 
-    /// A word of `0x20` is an in-range offset and a length of 32. Each nested slice
-    /// starts two words later and, at ~48 words, that length still fits for several
-    /// levels. Uncapped, every level branches by 32, about `32^(n/2)` calls, and
-    /// does not return. `0x40` is the same repeated-offset shape (length 64).
-    /// Arrays wider than 8 elements are not walked, and nesting stops at 4, so
-    /// this returns. The time bound fails if those limits are removed.
-    #[test]
-    fn repeated_offsets_finish_with_capped_nesting() {
-        for last_byte in [0x20_u8, 0x40] {
-            let started = Instant::now();
-            let decoded = block_on(decode(repeated_offset_args(last_byte)))
-                .unwrap_or_else(|err| panic!("word {last_byte:#x} decode failed: {err}"));
-            assert_repeated_offset_bound(last_byte, &decoded, started.elapsed());
+    #[tokio::test]
+    async fn raw_decode_keeps_multiple_tails_in_head_order() {
+        let mut values = (0u16..8).map(DynSolValue::from).collect::<Vec<_>>();
+        values.push(DynSolValue::from(300u16));
+        let inputs = vec![
+            DynSolValue::Array(values),
+            DynSolValue::from(17u8),
+            DynSolValue::Bytes(vec![0x41; 32]),
+        ];
+        assert_eq!(decode_raw(&DynSolValue::Tuple(inputs.clone())).await, inputs);
+    }
+
+    #[tokio::test]
+    async fn raw_decode_preserves_leaves_at_the_array_depth_limit() {
+        for leaf in [
+            DynSolValue::from(7u8),
+            DynSolValue::Bytes(vec![0x41]),
+            DynSolValue::Bytes(vec![0x41; 32]),
+        ] {
+            let array = nested_array(leaf, 4);
+            assert_eq!(decode_raw(&array).await, [array]);
         }
     }
 
-    fn assert_repeated_offset_bound(last_byte: u8, decoded: &DecodeResult, elapsed: Duration) {
-        assert!(
-            elapsed < Duration::from_millis(100),
-            "word {last_byte:#x} took {elapsed:?}; uncapped, a repeated offset does not return"
-        );
-        let nesting =
-            decoded.decoded.inputs.iter().map(|ty| ty.matches("[]").count()).max().unwrap_or(0);
-        assert!(
-            nesting <= NESTING_CAP,
-            "word {last_byte:#x} inferred {} with {nesting} array levels",
-            decoded.decoded.inputs.join(", ")
-        );
+    #[tokio::test]
+    async fn raw_decode_falls_back_to_words_beyond_the_array_depth_limit() {
+        let array = nested_array(DynSolValue::from(7u8), 5);
+        // Five singleton arrays encode five offset/length pairs followed by the value.
+        let words = [32u8, 1, 32, 1, 32, 1, 32, 1, 32, 1, 7].map(DynSolValue::from);
+        assert_eq!(decode_raw(&array).await, words);
+    }
+
+    #[tokio::test]
+    async fn raw_decode_finishes_on_repeated_offsets() {
+        for offset in [32u8, 64] {
+            let words = vec![DynSolValue::from(offset); 48];
+            assert_eq!(decode_raw(&DynSolValue::Tuple(words.clone())).await, words);
+        }
     }
 }
