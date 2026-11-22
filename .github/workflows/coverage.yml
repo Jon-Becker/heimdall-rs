@@ -33,9 +33,9 @@ jobs:
           cache-on-failure: true
 
       - name: Get base branch coverage
-        env:
-          RPC_URL: ${{ secrets.RPC_URL }}
-          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
+        env: &rpc
+          RPC_URL: ${{ secrets.RPC_URL || 'https://eth.drpc.org' }}
+          WS_RPC_URL: ${{ secrets.WS_RPC_URL || 'wss://arbitrum.drpc.org' }}
         run: |
           git checkout ${{ github.base_ref }}
           make test-cov-json
@@ -45,9 +45,7 @@ jobs:
           git checkout -
 
       - name: Get PR branch coverage
-        env:
-          RPC_URL: ${{ secrets.RPC_URL }}
-          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
+        env: *rpc
         run: |
           make test-cov-json
           PR_COV=$(jq '.data[0].totals.lines.percent' coverage.json)
@@ -74,7 +72,7 @@ jobs:
 
           echo "Coverage check passed"
 
-      - name: Comment on PR
+      - name: Publish coverage report
         uses: actions/github-script@v7
         with:
           script: |
@@ -95,6 +93,10 @@ jobs:
             | Diff | ${sign}${diff}% |
 
             ${failed ? '**Coverage dropped by more than 2%!**' : ''}`;
+
+            await core.summary.addRaw(body).write();
+            // Fork workflows have a read-only token. Their report is available in the job summary.
+            if (context.payload.pull_request.head.repo.full_name !== process.env.GITHUB_REPOSITORY) return;
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,

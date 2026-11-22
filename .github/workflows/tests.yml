@@ -29,8 +29,8 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Run Tests
         env:
-          RPC_URL: ${{ secrets.RPC_URL }}
-          WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
+          RPC_URL: ${{ secrets.RPC_URL || 'https://eth.drpc.org' }}
+          WS_RPC_URL: ${{ secrets.WS_RPC_URL || 'wss://arbitrum.drpc.org' }}
         run: make test
 
   doctest:
