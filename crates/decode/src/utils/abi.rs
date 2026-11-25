@@ -66,9 +66,88 @@ pub(crate) fn offset_in_words(word: &[u8]) -> Option<usize> {
     (bytes != 0 && bytes.is_multiple_of(32)).then_some(bytes / 32)
 }
 
+/// Keep the interpretations shared by all siblings until the outermost type is known.
+enum InferredType {
+    Empty,
+    // A zero word fits every scalar width.
+    Word(Option<DynSolType>),
+    // A packed byte and a one-element array can occupy exactly the same tail.
+    Dynamic { array: Option<Box<InferredType>>, packed: Option<PackedType> },
+}
+
+enum PackedType {
+    Bytes,
+    // Printable UTF-8 can take its type from a textual sibling.
+    Utf8,
+    Text,
+}
+
+impl PackedType {
+    fn infer(data: &[&[u8]], size: usize, depth: usize, prefer_text: bool) -> Self {
+        if depth == 0 && !prefer_text {
+            return Self::Bytes;
+        }
+        let packed = &data[..size.div_ceil(32)];
+        let classify = |bytes: &[u8]| {
+            let Ok(text) = std::str::from_utf8(&bytes[..size]) else { return Self::Bytes };
+            if depth > 0 && text.chars().any(char::is_control) {
+                Self::Bytes
+            } else if prefer_text {
+                Self::Text
+            } else {
+                Self::Utf8
+            }
+        };
+        match packed {
+            [word] => classify(word),
+            words => classify(&words.concat()),
+        }
+    }
+
+    fn common(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Bytes, _) | (_, Self::Bytes) => Self::Bytes,
+            (Self::Text, _) | (_, Self::Text) => Self::Text,
+            _ => Self::Utf8,
+        }
+    }
+}
+
+impl InferredType {
+    fn common(self, other: Self) -> Option<Self> {
+        match (self, other) {
+            (Self::Word(a), Self::Word(b)) => Some(Self::Word(match (a, b) {
+                (Some(a), Some(b)) => Some(common_scalar_type(a, b)),
+                (a, b) => a.or(b),
+            })),
+            (Self::Empty, ty) | (ty, Self::Empty) if !matches!(ty, Self::Word(_)) => Some(ty),
+            (Self::Dynamic { array: a, packed: p }, Self::Dynamic { array: b, packed: q }) => {
+                let array = a.zip(b).and_then(|(a, b)| a.common(*b)).map(Box::new);
+                let packed = p.zip(q).map(|(p, q)| p.common(q));
+                (array.is_some() || packed.is_some()).then_some(Self::Dynamic { array, packed })
+            }
+            _ => None,
+        }
+    }
+
+    fn into_type(self) -> DynSolType {
+        match self {
+            Self::Empty => DynSolType::Bytes,
+            Self::Word(ty) => ty.unwrap_or(DynSolType::FixedBytes(32)),
+            Self::Dynamic { packed: Some(PackedType::Text), .. } => DynSolType::String,
+            Self::Dynamic { array: Some(ty), .. } => DynSolType::Array(Box::new(ty.into_type())),
+            Self::Dynamic { .. } => DynSolType::Bytes,
+        }
+    }
+}
+
 /// Infer a type and the contiguous region it consumes, starting at its length word.
 pub(crate) fn infer_dynamic_tail(offset: usize, words: &[&[u8]]) -> Option<AbiEncoded> {
     let (ty, count) = infer_dynamic_value(words.get(offset..)?, 0, false)?;
+    let ty = match ty {
+        InferredType::Empty => DynSolType::Array(Box::new(DynSolType::Bytes)),
+        ty => ty.into_type(),
+    };
     Some(AbiEncoded { ty, tail: offset..offset + count })
 }
 
@@ -76,18 +155,11 @@ fn infer_dynamic_value(
     words: &[&[u8]],
     depth: usize,
     has_siblings: bool,
-) -> Option<(DynSolType, usize)> {
+) -> Option<(InferredType, usize)> {
     let (length_word, data) = words.split_first()?;
     let size = usize::try_from(U256::from_be_slice(length_word)).ok()?;
     if size == 0 {
-        // Empty bytes, strings, and arrays share one encoding. Keep the existing
-        // empty-array default when another dimension fits.
-        let ty = if depth < MAX_DYNAMIC_DEPTH {
-            DynSolType::Array(Box::new(DynSolType::Bytes))
-        } else {
-            DynSolType::Bytes
-        };
-        return Some((ty, 1));
+        return Some((InferredType::Empty, 1));
     }
 
     let packed_words = size.div_ceil(32);
@@ -97,44 +169,25 @@ fn infer_dynamic_value(
         .get(packed_words - 1)
         .and_then(|word| word.get(last_byte..))
         .is_some_and(|padding| padding.iter().all(|byte| *byte == 0));
-    // Short textual siblings are a common ABI string[] layout. A binary
-    // sibling widens the common type to bytes, preserving its original data.
-    if has_siblings &&
-        packed_fits &&
-        data.len() == 1 &&
-        std::str::from_utf8(&data[0][..size])
-            .is_ok_and(|text| text.chars().all(|ch| !ch.is_control()))
-    {
-        return Some((DynSolType::String, 2));
-    }
-    let Some(elements) = data.get(..size) else {
-        return packed_fits.then_some((DynSolType::Bytes, 1 + packed_words));
-    };
-
+    let elements = data.get(..size);
     // Packed strings can resemble arrays when other heads or tails follow them.
     // Use a bounded sample to distinguish mixed padding from uniform element padding.
-    if packed_fits && size < data.len() && elements[0].iter().any(|&byte| byte != 0) {
-        let padding = get_padding(elements[0]);
-        if elements.iter().take(PADDING_SAMPLE_WORDS).skip(1).any(|w| get_padding(w) != padding) {
-            let packed = &data[..packed_words];
-            let ty = if match packed {
-                [word] => std::str::from_utf8(&word[..size]).is_ok(),
-                _ => std::str::from_utf8(&packed.concat()[..size]).is_ok(),
-            } {
-                DynSolType::String
-            } else {
-                DynSolType::Bytes
-            };
-            return Some((ty, 1 + packed_words));
-        }
-    }
-    if depth == MAX_DYNAMIC_DEPTH {
-        return packed_fits.then_some((DynSolType::Bytes, 1 + packed_words));
-    }
+    let mixed_padding = packed_fits && size < data.len() && data[0].iter().any(|&b| b != 0) && {
+        let padding = get_padding(data[0]);
+        data[..size].iter().take(PADDING_SAMPLE_WORDS).skip(1).any(|w| get_padding(w) != padding)
+    };
+    let prefer_text = mixed_padding || (has_siblings && packed_words == 1);
+    let packed_type = || PackedType::infer(data, size, depth, prefer_text);
+    let Some(elements) = elements.filter(|_| !mixed_padding && depth < MAX_DYNAMIC_DEPTH) else {
+        return packed_fits.then(|| {
+            (InferredType::Dynamic { array: None, packed: Some(packed_type()) }, 1 + packed_words)
+        });
+    };
 
-    let (element_ty, payload_words) = infer_dynamic_elements(elements, data, depth)
-        .unwrap_or_else(|| (infer_flat_element_type(elements), size));
-    Some((DynSolType::Array(Box::new(element_ty)), 1 + payload_words))
+    let (element, payload_words) = infer_dynamic_elements(elements, data, depth)
+        .unwrap_or_else(|| (InferredType::Word(infer_flat_element_type(elements)), size));
+    let packed = (packed_fits && packed_words == payload_words).then(packed_type);
+    Some((InferredType::Dynamic { array: Some(Box::new(element)), packed }, 1 + payload_words))
 }
 
 /// All elements of a dynamic ABI array share one type. Follow offsets only when
@@ -144,9 +197,9 @@ fn infer_dynamic_elements(
     elements: &[&[u8]],
     data: &[&[u8]],
     depth: usize,
-) -> Option<(DynSolType, usize)> {
+) -> Option<(InferredType, usize)> {
     let mut cursor = elements.len();
-    let mut element_ty = None;
+    let mut element_ty = InferredType::Empty;
     for (i, word) in elements.iter().enumerate() {
         if offset_in_words(word)? != cursor {
             return None;
@@ -158,16 +211,9 @@ fn infer_dynamic_elements(
         let (ty, count) =
             infer_dynamic_value(data.get(cursor..end)?, depth + 1, elements.len() > 1)?;
         cursor += count;
-
-        // An empty dynamic value is compatible with any sibling's dynamic type.
-        if count > 1 {
-            element_ty = Some(match element_ty {
-                Some(previous) => common_element_type(previous, ty)?,
-                None => ty,
-            });
-        }
+        element_ty = element_ty.common(ty)?;
     }
-    Some((element_ty.unwrap_or(DynSolType::Bytes), cursor))
+    Some((element_ty, cursor))
 }
 
 pub(crate) fn infer_scalar_type(word: &[u8]) -> DynSolType {
@@ -186,30 +232,25 @@ pub(crate) fn infer_scalar_type(word: &[u8]) -> DynSolType {
     to_type(&ty)
 }
 
-fn infer_flat_element_type(elements: &[&[u8]]) -> DynSolType {
-    // A zero word fits any scalar type. The remaining words determine the
-    // common width; bytes32 preserves every bit if their padding is mixed.
+fn infer_flat_element_type(elements: &[&[u8]]) -> Option<DynSolType> {
     elements
         .iter()
         .filter(|word| word.iter().any(|byte| *byte != 0))
         .map(|word| infer_scalar_type(word))
-        .reduce(|a, b| common_element_type(a, b).unwrap_or(DynSolType::FixedBytes(32)))
-        .unwrap_or(DynSolType::FixedBytes(32))
+        .reduce(common_scalar_type)
 }
 
-fn common_element_type(a: DynSolType, b: DynSolType) -> Option<DynSolType> {
-    use DynSolType::{Address, Array, Bytes, FixedBytes, String, Uint};
+fn common_scalar_type(a: DynSolType, b: DynSolType) -> DynSolType {
+    use DynSolType::{Address, FixedBytes, Uint};
     if a == b {
-        return Some(a);
+        return a;
     }
     match (a, b) {
-        (Uint(a), Uint(b)) => Some(Uint(a.max(b))),
-        (FixedBytes(a), FixedBytes(b)) => Some(FixedBytes(a.max(b))),
-        (Address, Uint(bits)) | (Uint(bits), Address) if bits <= 160 => Some(Address),
-        (Address, Uint(bits)) | (Uint(bits), Address) => Some(Uint(bits)),
-        (String, Bytes) | (Bytes, String) => Some(Bytes),
-        (Array(a), Array(b)) => Some(Array(Box::new(common_element_type(*a, *b)?))),
-        _ => None,
+        (Uint(a), Uint(b)) => Uint(a.max(b)),
+        (FixedBytes(a), FixedBytes(b)) => FixedBytes(a.max(b)),
+        (Address, Uint(bits)) | (Uint(bits), Address) if bits <= 160 => Address,
+        (Address, Uint(bits)) | (Uint(bits), Address) => Uint(bits),
+        _ => FixedBytes(32),
     }
 }
 

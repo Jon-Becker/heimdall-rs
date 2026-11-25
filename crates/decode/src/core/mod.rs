@@ -283,16 +283,54 @@ fn infer_raw_inputs(words: &[&[u8]]) -> Vec<DynSolType> {
         }
     }
 
-    if next_tail.is_some_and(|end| end != words.len()) {
-        inputs.clear();
-        head_end = words.len();
+    if let Some(end) = next_tail.filter(|&end| end != words.len()) {
+        return infer_inputs_from_end(words, end);
     }
     inputs.extend(words[inputs.len()..head_end].iter().map(|word| infer_scalar_type(word)));
     inputs
 }
 
+/// A scalar can look like either the first tail or the end of a preceding one.
+/// Retry the prefix consumed by the incomplete layout. Its apparent tail may
+/// contain a real head pointer when an earlier scalar looked like an offset.
+fn infer_inputs_from_end(words: &[&[u8]], prefix_end: usize) -> Vec<DynSolType> {
+    let mut end = words.len();
+    let mut tails = Vec::new();
+    // Accepted tails are disjoint. Limit the sum of overlapping, rejected probes
+    // to one extra pass over the input, even with many offset-like scalars.
+    let mut retry_words = words.len();
+    for (i, word) in words[..prefix_end].iter().enumerate().rev() {
+        let Some(offset) = offset_in_words(word) else { continue };
+        // Every selected pointer, including the rightmost one, belongs to the head.
+        let last_head_index = tails.first().map_or(i, |&(index, _)| index);
+        if offset <= last_head_index || offset >= end || end - offset > retry_words {
+            continue;
+        }
+        if let Some(param) = infer_dynamic_tail(offset, &words[..end]) {
+            if param.tail.end == end {
+                tails.push((i, param.ty));
+                end = offset;
+            } else {
+                retry_words -= end - offset;
+            }
+        }
+    }
+
+    // Only accept a head wholly covered by the prefix we just examined.
+    if end > prefix_end {
+        end = words.len();
+        tails.clear();
+    }
+    let mut inputs = words[..end].iter().map(|word| infer_scalar_type(word)).collect::<Vec<_>>();
+    for (i, ty) in tails {
+        inputs[i] = ty;
+    }
+    inputs
+}
+
 #[cfg(test)]
 mod tests {
+    use alloy::primitives::B256;
     use alloy_dyn_abi::DynSolValue;
     use heimdall_common::utils::strings::encode_hex;
 
@@ -320,6 +358,89 @@ mod tests {
             value = DynSolValue::Array(vec![value]);
         }
         value
+    }
+
+    fn fixed_bytes(bytes: &[u8]) -> DynSolValue {
+        DynSolValue::FixedBytes(B256::right_padding_from(bytes), bytes.len())
+    }
+
+    async fn assert_raw_array_in_both_orders(first: DynSolValue, second: DynSolValue) {
+        for rows in [vec![first.clone(), second.clone()], vec![second, first]] {
+            let array = DynSolValue::Array(rows);
+            assert_eq!(decode_raw(&array).await, [array]);
+        }
+    }
+
+    #[tokio::test]
+    async fn raw_decode_keeps_array_tails_next_to_offset_like_scalars() {
+        let fixed = DynSolValue::Array(vec![fixed_bytes(b"AB"), fixed_bytes(b"CD")]);
+        let integers = DynSolValue::Array([31u16, 256, 257].map(DynSolValue::from).to_vec());
+        for arguments in [
+            vec![fixed.clone(), DynSolValue::from(128u8)],
+            vec![DynSolValue::from(96u8), integers.clone()],
+            vec![DynSolValue::from(32u8), integers],
+            vec![fixed, DynSolValue::from(160u8), DynSolValue::Array(vec![DynSolValue::from(9u8)])],
+        ] {
+            assert_eq!(decode_raw(&DynSolValue::Tuple(arguments.clone())).await, arguments);
+        }
+    }
+
+    #[tokio::test]
+    async fn raw_decode_uses_sibling_width_for_zero_rows() {
+        assert_raw_array_in_both_orders(
+            DynSolValue::Array(vec![DynSolValue::from(0u8)]),
+            DynSolValue::Array(vec![DynSolValue::from(1u8)]),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn raw_decode_preserves_full_words_across_rows_with_different_padding() {
+        let mut one = [0; 32];
+        one[31] = 1;
+        assert_raw_array_in_both_orders(
+            DynSolValue::Array(vec![fixed_bytes(&one)]),
+            DynSolValue::Array(vec![fixed_bytes(&[0xab; 32])]),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn raw_decode_uses_siblings_to_distinguish_one_byte_payloads_from_arrays() {
+        assert_raw_array_in_both_orders(
+            DynSolValue::Bytes(vec![0xff]),
+            DynSolValue::Bytes(vec![0xff, 0xfe]),
+        )
+        .await;
+        assert_raw_array_in_both_orders(
+            DynSolValue::Array(vec![fixed_bytes(b"A")]),
+            DynSolValue::Array(vec![fixed_bytes(b"B"), fixed_bytes(b"C")]),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn raw_decode_preserves_multiword_text_with_a_short_text_sibling() {
+        for long in ["x".repeat(40), format!("{}€", "x".repeat(31))] {
+            assert_raw_array_in_both_orders(
+                DynSolValue::String("ok".into()),
+                DynSolValue::String(long),
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn raw_decode_preserves_binary_data_with_a_text_sibling() {
+        let mut binary = vec![b'x'; 32];
+        binary.push(0xff);
+        for bytes in [binary, vec![0x12, 0x01]] {
+            assert_raw_array_in_both_orders(
+                DynSolValue::Bytes(b"ok".to_vec()),
+                DynSolValue::Bytes(bytes),
+            )
+            .await;
+        }
     }
 
     #[tokio::test]
