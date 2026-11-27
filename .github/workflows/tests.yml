@@ -59,12 +59,14 @@ jobs:
         shell: bash
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVIEWDOG_REPORTER: ${{ github.event_name == 'pull_request' && 'github-pr-review' || 'github-annotations' }}
         run: |
+          # Capture the severity in Cargo's short diagnostics, including errors with a rustc code.
           cargo clippy --quiet --color never --message-format=short -- \
             --allow clippy::new_without_default --allow clippy::redundant_field_names \
             --allow clippy::too_many_arguments --allow clippy::format_in_format_args \
             --allow clippy::should_implement_trait 2>&1 |
-            reviewdog -f=clippy -name=clippy -reporter=github-pr-review -filter-mode=nofilter -level=error -tee
+            reviewdog '-efm=%f:%l:%c: %t%*[^:]: %m' -name=clippy -reporter="$REVIEWDOG_REPORTER" -filter-mode=nofilter -level=error -tee
 
   rustfmt:
     runs-on: ubuntu-latest
