@@ -261,13 +261,18 @@ mod integration_tests {
         // assert that the output is correct
         for line in &[
             "default {",
-            "if eq(0x02, tload(0)) { revert(0, 0); } else {",
+            "switch iszero(eq(0x02, tload(0)))",
             "tstore(0, 0x02)",
             "call(gas(), mload(0x40), 0, msize(), calldatasize(), 0, 0)",
         ] {
             println!("{line}");
             assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }
+        let source = result.source.as_ref().expect("decompile source is empty");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(normalized.contains(
+            "switch iszero(eq(0x02, tload(0))) case 0 { revert(0, 0) } default { tstore(0, 0x02)"
+        ));
     }
 
     #[tokio::test]

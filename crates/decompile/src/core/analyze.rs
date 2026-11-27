@@ -55,10 +55,6 @@ impl Display for AnalyzerType {
 /// State shared between heuristics
 #[derive(Debug, Clone)]
 pub(crate) struct AnalyzerState {
-    /// If we reach a JUMPI, this will hold the conditional for scope tracking
-    pub jumped_conditional: Option<Expr>,
-    /// Tracks a stack of conditionals, used for scope tracking
-    pub conditional_stack: Vec<Expr>,
     /// Tracks which analyzer type we are using
     pub analyzer_type: AnalyzerType,
     /// Whether to skip resolving internal calls
@@ -137,12 +133,8 @@ impl Analyzer {
         self.register_heuristics()?;
 
         // get the analyzer state
-        let mut analyzer_state = AnalyzerState {
-            jumped_conditional: None,
-            conditional_stack: Vec::new(),
-            analyzer_type: self.typ,
-            skip_resolving: self.skip_resolving,
-        };
+        let mut analyzer_state =
+            AnalyzerState { analyzer_type: self.typ, skip_resolving: self.skip_resolving };
 
         // Perform analysis
         self.analyze_inner(&trace_root, &mut analyzer_state).await?;
@@ -163,15 +155,16 @@ impl Analyzer {
         analyzer_state: &'a mut AnalyzerState,
     ) -> BoxFuture<'a, Result<(), Error>> {
         Box::pin(async move {
-            // reset jumped conditional, we dont propagate conditionals across branches
-            analyzer_state.jumped_conditional = None;
-
             // for each operation in the current trace branch, peform analysis with registerred
             // heuristics
             for operation in &branch.operations {
                 for heuristic in &self.heuristics {
                     heuristic.run(&mut self.function, operation, analyzer_state).await?;
                 }
+            }
+
+            if self.typ == AnalyzerType::Yul {
+                return self.analyze_yul_children(branch, analyzer_state).await;
             }
 
             // Preserve the taken and fallthrough children as explicit alternatives for Solidity.
@@ -253,35 +246,83 @@ impl Analyzer {
                 return Ok(())
             }
 
-            // Yul continues to use its flat control-flow markers.
             for child in &branch.children {
                 self.analyze_inner(child, analyzer_state).await?;
-            }
-
-            // check if the ending brackets are needed
-            if analyzer_state.jumped_conditional.is_some() &&
-                analyzer_state.conditional_stack.contains(
-                    analyzer_state.jumped_conditional.as_ref().expect(
-                        "impossible case: should have short-circuited in previous conditional",
-                    ),
-                )
-            {
-                // remove the conditional
-                for (i, conditional) in analyzer_state.conditional_stack.iter().enumerate() {
-                    if conditional ==
-                        analyzer_state.jumped_conditional.as_ref().expect(
-                            "impossible case: should have short-circuited in previous conditional",
-                        )
-                    {
-                        analyzer_state.conditional_stack.remove(i);
-                        break;
-                    }
-                }
-
-                self.function.push_statement(Statement::CloseBlock);
             }
 
             Ok(())
         })
     }
+
+    /// Keep each Yul branch's side effects and terminator together. Trace children are ordered
+    /// by symbolic execution, not by whether the JUMPI condition is true.
+    async fn analyze_yul_children(
+        &mut self,
+        branch: &VMTrace,
+        analyzer_state: &mut AnalyzerState,
+    ) -> Result<(), Error> {
+        if let Some(state) = branch.operations.last() {
+            let instruction = &state.last_instruction;
+            if instruction.opcode == 0x57 {
+                let destination = instruction
+                    .inputs
+                    .first()
+                    .and_then(|value| u128::try_from(*value).ok())
+                    .map(|value| value.saturating_add(1));
+                let fallthrough = instruction.instruction.saturating_add(1);
+                let taken = destination
+                    .and_then(|pc| branch.children.iter().find(|child| child.instruction == pc));
+                let not_taken =
+                    branch.children.iter().find(|child| child.instruction == fallthrough);
+
+                if let Some(condition) = instruction.input_operations.get(1) {
+                    // As in Solidity analysis, a constant branch retained by pruning can have
+                    // its continuation in a deduplicated sibling. Visit the feasible path first.
+                    if let Some(truthiness) = constant_truthiness(Expr::from_opcode(condition)) {
+                        let (feasible, sibling) =
+                            if truthiness { (taken, not_taken) } else { (not_taken, taken) };
+                        if let Some(feasible) = feasible {
+                            self.analyze_inner(feasible, analyzer_state).await?;
+                            if let Some(sibling) = sibling {
+                                self.analyze_inner(sibling, analyzer_state).await?;
+                            }
+                            return Ok(());
+                        }
+                    }
+
+                    if taken.is_some() || not_taken.is_some() {
+                        let start = self.function.statements.len();
+                        // Return-type inference reads this map. A revert payload in one child
+                        // must not replace the memory inherited by its successful sibling.
+                        let parent_memory = self.function.memory.clone();
+                        if let Some(taken) = taken {
+                            self.analyze_inner(taken, &mut analyzer_state.clone()).await?;
+                        }
+                        let then_body = self.function.statements.split_off(start);
+                        self.function.memory = parent_memory.clone();
+                        if let Some(not_taken) = not_taken {
+                            self.analyze_inner(not_taken, &mut analyzer_state.clone()).await?;
+                        }
+                        let else_body = self.function.statements.split_off(start);
+                        self.function.memory = parent_memory;
+                        self.function.push_statement(Statement::IfElse {
+                            condition: Expr::from_yul_opcode(condition),
+                            then_body,
+                            else_body,
+                        });
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        for child in &branch.children {
+            self.analyze_inner(child, analyzer_state).await?;
+        }
+        Ok(())
+    }
 }
+
+#[cfg(test)]
+#[path = "analyze_tests.rs"]
+mod tests;

@@ -45,11 +45,6 @@ fn statement_usages(statement: &Statement) -> HashSet<String> {
                 usages.extend(statement_usages(nested));
             }
         }
-        Statement::IfRevertElse { condition, offset, size } => {
-            collect(condition);
-            collect(offset);
-            collect(size);
-        }
         Statement::Require { condition, reason } => {
             collect(condition);
             if let Some(reason) = reason {
