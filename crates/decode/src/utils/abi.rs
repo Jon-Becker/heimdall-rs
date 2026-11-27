@@ -91,7 +91,8 @@ pub(crate) fn infer_tail_ending_at(
     words: &[&[u8]],
     start: usize,
     end: usize,
-    nested_budget: &mut usize,
+    canonical_budget: &mut usize,
+    reordered_budget: &mut usize,
 ) -> Option<AbiEncoded> {
     let tail = &words[start..end];
     let (len, data) = tail.split_first()?;
@@ -99,45 +100,54 @@ pub(crate) fn infer_tail_ending_at(
     // Word counts prove packed and flat extents in constant time. Only a
     // nested candidate can consume more words than both of those layouts.
     let nested = data.len() > size;
-    if (nested && tail.len() > *nested_budget) || !can_fill_tail(size, data, 0) {
+    let budget = match plausible_tail_order(size, data, 0)? {
+        TailOrder::Canonical => canonical_budget,
+        TailOrder::Reordered => reordered_budget,
+    };
+    if nested && tail.len() > *budget {
         return None;
     }
     let param = infer_dynamic_tail(start, words, end).filter(|p| p.tail.end == end);
     if nested && param.is_none() {
-        *nested_budget -= tail.len();
+        *budget -= tail.len();
     }
     param
 }
 
-/// Rule out impossible extents by inspecting a constant number of words per
-/// dimension. Full inference then checks every sibling in a plausible interval.
-fn can_fill_tail(size: usize, data: &[&[u8]], depth: usize) -> bool {
+enum TailOrder {
+    Canonical,
+    Reordered,
+}
+
+/// Inspect a constant number of words per dimension to decide which layouts
+/// could fill the interval. Full inference then checks every sibling.
+fn plausible_tail_order(size: usize, data: &[&[u8]], depth: usize) -> Option<TailOrder> {
     if size == 0 {
-        return data.is_empty();
+        return data.is_empty().then_some(TailOrder::Canonical);
     }
     if data.len() == size.div_ceil(32) && packed_payload_fits(data, size) {
-        return true;
+        return Some(TailOrder::Canonical);
     }
     if depth == MAX_DYNAMIC_DEPTH || size > data.len() {
-        return false;
+        return None;
     }
     if size == data.len() {
-        return true;
+        return Some(TailOrder::Canonical);
     }
     let offset = |word| offset_in_words(word).filter(|n| (size..data.len()).contains(n));
-    let (Some(first), Some(last)) = (offset(data[0]), offset(data[size - 1])) else { return false };
-    let Some((len, payload)) = data.get(last..).and_then(|child| child.split_first()) else {
-        return false
-    };
-    if first == size &&
-        usize::try_from(U256::from_be_slice(len))
-            .is_ok_and(|n| can_fill_tail(n, payload, depth + 1))
-    {
-        return true;
+    let first = offset(data[0])?;
+    let last = offset(data[size - 1])?;
+    if first == size {
+        let (len, payload) = data[last..].split_first()?;
+        let child_size = usize::try_from(U256::from_be_slice(len)).ok()?;
+        if let Some(order) = plausible_tail_order(child_size, payload, depth + 1) {
+            return Some(order);
+        }
     }
     // A reordered packed array may end at another child's tail. Check the
     // physical start and both outer head pointers before spending the scan budget.
-    first != last && [size, first, last].iter().all(|&i| packed_child_size(&data[i..]).is_some())
+    (first != last && [size, first, last].iter().all(|&i| packed_child_size(&data[i..]).is_some()))
+        .then_some(TailOrder::Reordered)
 }
 
 fn packed_child_size(words: &[&[u8]]) -> Option<usize> {

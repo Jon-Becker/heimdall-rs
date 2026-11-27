@@ -382,9 +382,13 @@ fn recover_inputs(words: &[&[u8]], offsets: &[(usize, usize)], prefix: usize) ->
         return inputs;
     }
 
-    let mut nested_budget = words.len();
+    // An unsuccessful reordered interpretation must leave the canonical
+    // allowance available for the actual tuple tails.
+    let mut canonical_budget = words.len();
+    let mut reordered_budget = words.len();
     inputs_from_end(words, offsets, words.len(), |start, end| {
-        infer_tail_ending_at(words, start, end, &mut nested_budget).map(|p| p.ty)
+        infer_tail_ending_at(words, start, end, &mut canonical_budget, &mut reordered_budget)
+            .map(|p| p.ty)
     })
     .unwrap_or_else(|| words.iter().map(|w| infer_scalar_type(w)).collect())
 }
@@ -567,6 +571,16 @@ mod tests {
     async fn raw_decode_keeps_reordered_offset_values_in_a_flat_array() {
         let values = DynSolValue::Array([160u8, 96, 160, 128].map(DynSolValue::from).to_vec());
         let args = vec![values, DynSolValue::Bytes(vec![0xab; 33])];
+        assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+    }
+
+    #[tokio::test]
+    async fn raw_decode_preserves_canonical_byte_arrays_after_a_failed_reordered_probe() {
+        let array = DynSolValue::Array(vec![
+            DynSolValue::Bytes(vec![0xaa, 0xbb]),
+            DynSolValue::Bytes(vec![0xcc, 0xee]),
+        ]);
+        let args = vec![480u16.into(), 480u16.into(), array.clone(), array, 160u8.into()];
         assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
     }
 
