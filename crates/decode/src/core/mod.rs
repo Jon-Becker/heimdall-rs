@@ -542,6 +542,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn raw_decode_reads_disjoint_array_tails_in_element_order() {
+        for values in [
+            [vec![0xca, 0xfe, 0xfe], vec![0x81; 40], vec![0x80; 65]],
+            [vec![], vec![0xff, 0], vec![0xfe, 0]],
+        ] {
+            let values = values.map(DynSolValue::Bytes);
+            for order in [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
+                let physical =
+                    DynSolValue::Array(order.iter().map(|&i| values[i].clone()).collect());
+                let mut encoded = physical.abi_encode_params();
+                // Array offsets are relative to the first word after its length.
+                let offsets = &mut encoded[64..64 + 32 * order.len()];
+                let sorted = offsets.to_vec();
+                for (&index, offset) in order.iter().zip(sorted.chunks_exact(32)) {
+                    offsets[32 * index..32 * (index + 1)].copy_from_slice(offset);
+                }
+                assert_eq!(decode_raw_bytes(&encoded).await, [DynSolValue::Array(values.to_vec())]);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn raw_decode_keeps_reordered_offset_values_in_a_flat_array() {
+        let values = DynSolValue::Array([160u8, 96, 160, 128].map(DynSolValue::from).to_vec());
+        let args = vec![values, DynSolValue::Bytes(vec![0xab; 33])];
+        assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+    }
+
+    #[tokio::test]
     async fn raw_decode_preserves_addresses_with_trailing_zeros() {
         let addresses = [
             address!("0000000000000000000000000000000000000001"),
@@ -556,6 +585,54 @@ mod tests {
             DynSolValue::Array(addresses[2..].to_vec()),
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn raw_decode_keeps_scalar_width_across_differently_padded_array_elements() {
+        use alloy::primitives::U256;
+
+        let mut low_byte = [0; 20];
+        low_byte[19] = 0xff;
+        for [a, b] in [
+            [
+                DynSolValue::Uint(U256::from(1) << 160, 216),
+                DynSolValue::Uint((U256::from(1) << 216) - U256::from(1), 216),
+            ],
+            [fixed_bytes(&low_byte), fixed_bytes(&[0xff; 20])],
+        ] {
+            assert_raw_array_in_both_orders(a.clone(), b.clone()).await;
+            assert_raw_array_in_both_orders(
+                DynSolValue::Array(vec![a]),
+                DynSolValue::Array(vec![b]),
+            )
+            .await;
+        }
+
+        // Neither a one-byte integer nor one fixed byte can hold both words.
+        let mut low = [0; 32];
+        low[31] = 0xff;
+        let mut high = [0; 32];
+        high[0] = 0xff;
+        assert_raw_array_in_both_orders(fixed_bytes(&low), fixed_bytes(&high)).await;
+
+        // One member establishes the padding direction, another the full width.
+        let mut prefix = [0; 20];
+        prefix[..7].fill(0xee);
+        let mut middle = [0xaa; 20];
+        middle[..3].fill(0);
+        assert_raw_array_in_both_orders(
+            DynSolValue::Array(vec![fixed_bytes(&low_byte)]),
+            DynSolValue::Array(vec![fixed_bytes(&prefix), fixed_bytes(&middle)]),
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn raw_decode_pads_a_short_final_array_element_before_inferring_its_width() {
+        let array = DynSolValue::Array(vec![fixed_bytes(&[0xab, 0xcd]), fixed_bytes(&[0, 0xff])]);
+        let mut encoded = array.abi_encode_params();
+        encoded.truncate(encoded.len() - 30);
+        assert_eq!(decode_raw_bytes(&encoded).await, [array]);
     }
 
     #[tokio::test]
@@ -585,6 +662,24 @@ mod tests {
                 DynSolValue::String(text),
                 DynSolValue::Array((1..=n).map(DynSolValue::from).collect()),
             ];
+            assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+        }
+    }
+
+    #[tokio::test]
+    async fn raw_decode_checks_the_next_tuple_boundary_for_long_text() {
+        let numbers = DynSolValue::Array(vec![DynSolValue::from(7u8); 257]);
+        for size in [255, 256, 257] {
+            let args = vec![DynSolValue::String("x".repeat(size)), numbers.clone()];
+            assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+        }
+        let args =
+            vec![DynSolValue::String("x".repeat(256)), DynSolValue::Array(vec![]), numbers.clone()];
+        assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+        for byte in [0xff, 0x01] {
+            let mut binary = vec![b'x'; 256];
+            binary.push(byte);
+            let args = vec![DynSolValue::Bytes(binary), numbers.clone()];
             assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
         }
     }
