@@ -292,6 +292,7 @@ impl Expr {
             opcodes::GASLIMIT => Self::identifier("block.gaslimit"),
             opcodes::CHAINID => Self::identifier("block.chainid"),
             opcodes::BASEFEE => Self::identifier("block.basefee"),
+            opcodes::BLOBBASEFEE => Self::identifier("block.blobbasefee"),
             opcodes::SELFBALANCE => Self::identifier("address(this).balance"),
             opcodes::GASPRICE => Self::identifier("tx.gasprice"),
             opcodes::GAS => Self::Call { callee: "gasleft".to_string(), args: vec![] },
@@ -309,6 +310,9 @@ impl Expr {
             },
             opcodes::BLOCKHASH => {
                 Self::Call { callee: "blockhash".to_string(), args: vec![input(0)] }
+            }
+            opcodes::BLOBHASH => {
+                Self::Call { callee: "blobhash".to_string(), args: vec![input(0)] }
             }
             opcodes::BALANCE => Self::Member {
                 base: Box::new(Self::Cast { ty: SolidityType::Address, value: Box::new(input(0)) }),
@@ -1036,6 +1040,21 @@ mod tests {
             ],
         );
         assert_eq!(Expr::from_opcode(&add).render(), "arg0");
+    }
+
+    #[test]
+    fn renders_blobhash_with_dynamic_index() {
+        let blobhash = WrappedOpcode::new(
+            opcodes::BLOBHASH,
+            vec![WrappedInput::Opcode(Arc::new(WrappedOpcode::new(opcodes::CALLVALUE, vec![])))],
+        );
+        assert_eq!(Expr::from_opcode(&blobhash).render(), "blobhash(msg.value)");
+    }
+
+    #[test]
+    fn renders_blobbasefee_as_block_property() {
+        let blobbasefee = WrappedOpcode::new(opcodes::BLOBBASEFEE, vec![]);
+        assert_eq!(Expr::from_opcode(&blobbasefee).render(), "block.blobbasefee");
     }
 
     #[test]

@@ -20,8 +20,16 @@ pub fn timestamp(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     Ok(())
 }
 
+/// BLOBHASH - Get the versioned hash of a transaction's blob at the given index
+pub fn blobhash(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+    vm.stack.pop()?;
+    // The analysis VM has no transaction blobs, so every index is out of range.
+    vm.stack.push(U256::ZERO, operation);
+    Ok(())
+}
+
 /// Generic handler for block info opcodes that return 1
-/// (NUMBER, PREVRANDAO, GASLIMIT, CHAINID, SELFBALANCE, BASEFEE, BLOBHASH, BLOBBASEFEE)
+/// (NUMBER, PREVRANDAO, GASLIMIT, CHAINID, SELFBALANCE, BASEFEE, BLOBBASEFEE)
 pub fn block_info_stub(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     vm.stack.push(U256::from(1u8), operation);
     Ok(())

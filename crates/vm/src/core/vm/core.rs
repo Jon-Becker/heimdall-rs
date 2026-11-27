@@ -440,6 +440,7 @@ impl VM {
 
             opcodes::COINBASE => handlers::block::coinbase(self, operation)?,
             opcodes::TIMESTAMP => handlers::block::timestamp(self, operation)?,
+            opcodes::BLOBHASH => handlers::block::blobhash(self, operation)?,
             (opcodes::NUMBER..=opcodes::BLOBBASEFEE) => {
                 handlers::block::block_info_stub(self, operation)?
             }
@@ -727,7 +728,10 @@ mod tests {
     use heimdall_common::utils::strings::decode_hex;
 
     use super::VM;
-    use crate::core::hardfork::HardFork;
+    use crate::core::{
+        hardfork::HardFork,
+        opcodes::{self, WrappedInput},
+    };
 
     // creates a new test VM with calldata.
     fn new_test_vm(bytecode: &str) -> VM {
@@ -1161,6 +1165,46 @@ mod tests {
         vm.execute().expect("execution failed!");
 
         assert_eq!(vm.stack.peek(0).value, U256::from_str("0x20").expect("failed to parse hex"));
+    }
+
+    #[test]
+    fn test_blobhash_consumes_index_and_preserves_provenance() {
+        let mut vm = new_test_vm("6005600249");
+        vm.step().expect("failed to push lower stack value");
+        vm.step().expect("failed to push blob index");
+        let index_operation = vm.stack.peek(0).operation;
+
+        let state = vm.step().expect("BLOBHASH failed");
+
+        assert_eq!(vm.stack.size(), 2);
+        assert_eq!(vm.stack.peek(0).value, U256::ZERO);
+        assert_eq!(vm.stack.peek(1).value, U256::from(5));
+        assert_eq!(state.last_instruction.inputs, vec![U256::from(2)]);
+        assert_eq!(state.last_instruction.outputs, vec![U256::ZERO]);
+        assert_eq!(state.last_instruction.input_operations, vec![index_operation.clone()]);
+        let operation = vm.stack.peek(0).operation;
+        assert_eq!(operation.opcode, opcodes::BLOBHASH);
+        assert_eq!(operation.inputs, vec![WrappedInput::from(index_operation)]);
+        assert_eq!(operation.yulify(), "blobhash(0x02)");
+    }
+
+    #[test]
+    fn test_blobhash_add_and_store() {
+        let mut vm = new_test_vm("60056000490160015500");
+        vm.execute().expect("execution failed!");
+
+        assert_eq!(vm.storage.load(U256::from(1)), U256::from(5));
+        assert_eq!(vm.stack.size(), 0);
+    }
+
+    #[test]
+    fn test_blobhash_requires_index() {
+        let mut vm = new_test_vm("49");
+
+        let error = vm.step().expect_err("BLOBHASH must consume an index");
+
+        assert_eq!(error.to_string(), "stack underflow");
+        assert_eq!(vm.stack.size(), 0);
     }
 
     #[test]

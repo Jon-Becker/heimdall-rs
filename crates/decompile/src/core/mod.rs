@@ -403,3 +403,32 @@ pub async fn decompile(args: DecompilerArgs) -> Result<DecompileResult, Error> {
 
     Ok(DecompileResult { source, abi, abi_with_details })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::decompile;
+    use crate::{DecompilerArgsBuilder, HardFork};
+
+    #[tokio::test]
+    async fn decompiles_blob_and_block_environment_arithmetic() {
+        let cases = [
+            ("60056000490160015500", "store_a = blobhash(0) + 0x05;"),
+            ("60056002490160015500", "store_a = blobhash(0x02) + 0x05;"),
+            ("60054a0160015500", "store_a = block.blobbasefee + 0x05;"),
+            ("60056000400160015500", "store_a = blockhash(0) + 0x05;"),
+            ("6005480160015500", "store_a = block.basefee + 0x05;"),
+        ];
+
+        for (bytecode, expected) in cases {
+            let args = DecompilerArgsBuilder::new()
+                .target(bytecode.to_string())
+                .hardfork(HardFork::Cancun)
+                .skip_resolving(true)
+                .include_solidity(true)
+                .build()
+                .unwrap();
+            let source = decompile(args).await.unwrap().source.unwrap();
+            assert!(source.contains(expected), "expected {expected} for {bytecode}:\n{source}");
+        }
+    }
+}
