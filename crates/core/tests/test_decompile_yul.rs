@@ -84,3 +84,29 @@ async fn solidity_require_preserves_the_passing_condition_and_reason() {
     assert!(function.contains("return 0xffff;"), "{function}");
     assert!(!function.contains("require(arg0 > 0x08"), "{function}");
 }
+
+#[tokio::test]
+async fn yul_branch_reconstruction_preserves_argument_mask_inference() {
+    let args = DecompilerArgsBuilder::new()
+        .target(include_str!("testdata/decompile/clamping.hex").trim().to_string())
+        .skip_resolving(true)
+        .include_yul(true)
+        .build()
+        .expect("failed to build decompiler arguments");
+    let result = decompile(args).await.expect("failed to decompile clamping fixture");
+
+    // ABI mask inference depends on trace visitation order. Rendering taken/fallthrough
+    // branches in their semantic positions must not reorder the heuristic observations.
+    for (selector, expected) in [
+        ("33320de3", vec!["uint256", "address"]),
+        ("3334e663", vec!["uint256", "uint256", "uint256"]),
+        ("3d4a345c", vec!["uint256", "uint32"]),
+        ("bf298c34", vec!["uint256", "uint32"]),
+        ("d9c45357", vec!["uint256", "uint256", "uint256"]),
+    ] {
+        let function = &result.abi.functions[&format!("Unresolved_{selector}")][0];
+        let inputs =
+            function.inputs.iter().map(|parameter| parameter.ty.as_str()).collect::<Vec<_>>();
+        assert_eq!(inputs, expected, "argument types changed for {selector}");
+    }
+}

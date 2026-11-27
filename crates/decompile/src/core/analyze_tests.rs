@@ -268,19 +268,22 @@ async fn yul_renders_nonboolean_memory_conditions_once_with_valid_branch_syntax(
 
 #[tokio::test]
 async fn yul_does_not_infer_a_return_type_from_a_sibling_revert_payload() {
-    let mut shared_store = state(1, opcodes::MSTORE, &[0, 0]);
-    shared_store.last_instruction.input_operations[1] =
-        WrappedOpcode::new(opcodes::CALLER, Vec::new());
-    let mut root = branch(
-        10,
-        20,
-        condition(),
-        vec![trace(11, vec![state(11, opcodes::RETURN, &[0, 32])]), reverting(21, 0xe0)],
-    );
-    root.operations.insert(0, shared_store);
-    let function = Analyzer::new(AnalyzerType::Yul, true, AnalyzedFunction::new("b3de648b", false))
-        .analyze(root)
-        .await
-        .expect("synthetic trace should analyze");
-    assert_eq!(function.returns, Some(SolidityType::Address));
+    for reverse_children in [false, true] {
+        let mut shared_store = state(1, opcodes::MSTORE, &[0, 0]);
+        shared_store.last_instruction.input_operations[1] =
+            WrappedOpcode::new(opcodes::CALLER, Vec::new());
+        let mut children =
+            vec![trace(11, vec![state(11, opcodes::RETURN, &[0, 32])]), reverting(21, 0xe0)];
+        if reverse_children {
+            children.reverse();
+        }
+        let mut root = branch(10, 20, condition(), children);
+        root.operations.insert(0, shared_store);
+        let function =
+            Analyzer::new(AnalyzerType::Yul, true, AnalyzedFunction::new("b3de648b", false))
+                .analyze(root)
+                .await
+                .expect("synthetic trace should analyze");
+        assert_eq!(function.returns, Some(SolidityType::Address));
+    }
 }

@@ -295,15 +295,22 @@ impl Analyzer {
                         // Return-type inference reads this map. A revert payload in one child
                         // must not replace the memory inherited by its successful sibling.
                         let parent_memory = self.function.memory.clone();
-                        if let Some(taken) = taken {
-                            self.analyze_inner(taken, &mut analyzer_state.clone()).await?;
+                        let mut then_body = Vec::new();
+                        let mut else_body = Vec::new();
+                        // ABI heuristics depend on observation order. Preserve trace visitation
+                        // order while assigning the emitted bodies by their actual branch role.
+                        for child in &branch.children {
+                            let body = if Some(child.instruction) == destination {
+                                &mut then_body
+                            } else if child.instruction == fallthrough {
+                                &mut else_body
+                            } else {
+                                continue;
+                            };
+                            self.function.memory = parent_memory.clone();
+                            self.analyze_inner(child, &mut analyzer_state.clone()).await?;
+                            body.extend(self.function.statements.split_off(start));
                         }
-                        let then_body = self.function.statements.split_off(start);
-                        self.function.memory = parent_memory.clone();
-                        if let Some(not_taken) = not_taken {
-                            self.analyze_inner(not_taken, &mut analyzer_state.clone()).await?;
-                        }
-                        let else_body = self.function.statements.split_off(start);
                         self.function.memory = parent_memory;
                         self.function.push_statement(Statement::IfElse {
                             condition: Expr::from_yul_opcode(condition),
