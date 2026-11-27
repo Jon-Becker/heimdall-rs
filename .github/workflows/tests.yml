@@ -52,12 +52,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
-      - uses: giraffate/clippy-action@v1
+      - uses: reviewdog/action-setup@v1
         with:
-          reporter: "github-pr-review"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          clippy_flags: "-- --allow clippy::new_without_default --allow clippy::redundant_field_names --allow clippy::too_many_arguments --allow clippy::format_in_format_args --allow clippy::should_implement_trait"
-          filter_mode: nofilter
+          reviewdog_version: v0.21.3
+      - name: Run Clippy with Reviewdog
+        shell: bash
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cargo clippy --quiet --color never --message-format=short -- \
+            --allow clippy::new_without_default --allow clippy::redundant_field_names \
+            --allow clippy::too_many_arguments --allow clippy::format_in_format_args \
+            --allow clippy::should_implement_trait 2>&1 |
+            reviewdog -f=clippy -name=clippy -reporter=github-pr-review -filter-mode=nofilter -level=error -tee
 
   rustfmt:
     runs-on: ubuntu-latest
