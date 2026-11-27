@@ -144,16 +144,15 @@ fn plausible_tail_order(size: usize, data: &[&[u8]], depth: usize) -> Option<Tai
             return Some(order);
         }
     }
-    // A reordered packed array may end at another child's tail. Check the
-    // physical start and both outer head pointers before spending the scan budget.
-    (first != last && [size, first, last].iter().all(|&i| packed_child_size(&data[i..]).is_some()))
-        .then_some(TailOrder::Reordered)
-}
-
-fn packed_child_size(words: &[&[u8]]) -> Option<usize> {
-    let (length, payload) = words.split_first()?;
-    let size = usize::try_from(U256::from_be_slice(length)).ok()?;
-    (size == 0 || packed_payload_fits(payload, size)).then_some(size)
+    // A reordered array's last head pointer can name an interior row. All
+    // three known starts must have enough data for at least one interpretation.
+    (first != last &&
+        [size, first, last].iter().all(|&i| {
+            let payload = &data[i + 1..];
+            usize::try_from(U256::from_be_slice(data[i]))
+                .is_ok_and(|n| n <= payload.len() || packed_payload_fits(payload, n))
+        }))
+    .then_some(TailOrder::Reordered)
 }
 
 fn packed_payload_fits(data: &[&[u8]], size: usize) -> bool {
@@ -329,66 +328,73 @@ fn infer_dynamic_elements(
             return None;
         }
         if offset < previous {
-            return infer_reordered_packed_elements(elements, data, depth);
+            let mut starts = std::collections::HashSet::with_capacity(elements.len());
+            for word in elements {
+                let start = offset_in_words(word)?;
+                if !(elements.len()..data.len()).contains(&start) || !starts.insert(start) {
+                    return None;
+                }
+            }
+            if !starts.contains(&elements.len()) {
+                return None;
+            }
+            let physical = (elements.len()..data.len()).filter(|i| starts.contains(i));
+            return infer_adjacent_elements(
+                physical.take(starts.len()),
+                data,
+                elements.len(),
+                depth,
+                TailOrder::Reordered,
+            );
         }
         previous = offset;
     }
-    let mut cursor = elements.len();
-    let mut element_ty = InferredType::Empty;
-    for (i, word) in elements.iter().enumerate() {
-        if offset_in_words(word)? != cursor {
-            return None;
-        }
-        let end = match elements.get(i + 1) {
-            Some(next) => offset_in_words(next)?,
-            None => data.len(),
-        };
-        let (ty, count) =
-            infer_dynamic_value(data.get(cursor..end)?, depth + 1, elements.len() > 1)?;
-        cursor += count;
-        element_ty = element_ty.common(ty)?;
-    }
-    Some((element_ty, cursor))
+    let physical = elements.iter().filter_map(|word| offset_in_words(word));
+    infer_adjacent_elements(physical, data, elements.len(), depth, TailOrder::Canonical)
 }
 
-/// Packed children have an explicit byte length, so we can walk them once in
-/// physical order and verify that each starts at a distinct head pointer.
-fn infer_reordered_packed_elements(
-    elements: &[&[u8]],
+fn infer_adjacent_elements(
+    starts: impl Iterator<Item = usize>,
     data: &[&[u8]],
+    count: usize,
     depth: usize,
+    order: TailOrder,
 ) -> Option<(InferredType, usize)> {
-    let mut starts = std::collections::HashSet::with_capacity(elements.len());
-    for word in elements {
-        let offset = offset_in_words(word)?;
-        if !(elements.len()..data.len()).contains(&offset) || !starts.insert(offset) {
-            return None;
-        }
-    }
-
-    let mut cursor = elements.len();
+    let mut starts = starts.peekable();
+    let mut cursor = count;
     let mut element_ty = InferredType::Empty;
     let mut packed_children = 0;
-    while !starts.is_empty() {
-        if !starts.remove(&cursor) {
+    while let Some(start) = starts.next() {
+        if start != cursor {
             return None;
         }
-        let child = data.get(cursor..)?;
-        let size = packed_child_size(child)?;
-        let payload = &child[1..1 + size.div_ceil(32)];
-        if size > 0 {
-            // Scalar lengths followed by zero or left-padded words are weak
-            // evidence for interpreting a flat array's values as pointers.
-            if has_packed_data(payload, size) {
+        let end = starts.peek().copied().unwrap_or(data.len());
+        let (ty, used) = infer_dynamic_value(&data[start..end], depth + 1, count > 1)?;
+        cursor += used;
+        if matches!(order, TailOrder::Reordered) &&
+            matches!(ty, InferredType::Dynamic { packed: Some(_), .. })
+        {
+            let size = usize::try_from(U256::from_be_slice(data[start])).ok()?;
+            if has_packed_data(&data[start + 1..cursor], size) {
                 packed_children += 1;
             }
-            let packed = PackedType::infer(payload, size, depth + 1, payload.len() == 1);
-            element_ty =
-                element_ty.common(InferredType::Dynamic { array: None, packed: Some(packed) })?;
         }
-        cursor += 1 + payload.len();
+        element_ty = element_ty.common(ty)?;
     }
-    (cursor == data.len() || packed_children >= 2).then_some((element_ty, cursor))
+    if matches!(order, TailOrder::Reordered) {
+        // Reordered packed leaves can also resemble one-element arrays. Keep
+        // the packed interpretation when it fits every member. Other reordered
+        // rows must account for the entire interval supplied by their parent.
+        if let InferredType::Dynamic { array, packed: Some(_) } = &mut element_ty {
+            *array = None;
+            if cursor != data.len() && packed_children < 2 {
+                return None;
+            }
+        } else if cursor != data.len() {
+            return None;
+        }
+    }
+    Some((element_ty, cursor))
 }
 
 pub(crate) fn infer_scalar_type(word: &[u8]) -> DynSolType {

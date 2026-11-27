@@ -12,7 +12,7 @@ use heimdall_common::{
     },
     utils::{io::logging::TraceFactory, strings::encode_hex},
 };
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     error::Error,
@@ -154,6 +154,7 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         .filter_map(|result| result.ok())
         .collect::<Vec<ResolvedFunction>>();
 
+    let mut alternatives = Vec::new();
     if matches.len() > 1 {
         debug!("multiple possible matches found. as of 0.8.0, heimdall uses a heuristic to select the best match.");
         let num_words = calldata[4..].chunks(32).len();
@@ -174,32 +175,24 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
     } else if matches.is_empty() {
         warn!("couldn't find any resolved matches for '{}'", function_selector);
 
-        if matches.is_empty() {
-            info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
-
-            let calldata_words = byte_args.chunks(32).collect::<Vec<_>>();
-            let potential_inputs = infer_raw_inputs(&calldata_words);
-            trace!(
-                "potential parameter inputs, ({:?})",
-                potential_inputs.iter().map(|x| x.to_string()).collect::<Vec<String>>()
-            );
-
-            let (decoded_inputs, params) = try_decode(&potential_inputs, &calldata[4..])
+        info!("falling back to raw calldata decoding: https://jbecker.dev/research/decoding-raw-calldata");
+        let words = byte_args.chunks(32).collect::<Vec<_>>();
+        let (primary, other_layouts) = infer_raw_inputs(&words);
+        let decode_layout = |inputs: &[DynSolType]| -> Result<ResolvedFunction, Error> {
+            let (values, params) = try_decode(inputs, byte_args)
                 .map_err(|e| Error::Eyre(eyre!("dynamically decoding calldata failed: {}", e)))?;
-            // build a ResolvedFunction to add to matches
-            let resolved_function = ResolvedFunction {
-                name: format!("Unresolved_{function_selector}"),
-                signature: format!(
-                    "Unresolved_{}({})",
-                    function_selector,
-                    params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>().join(", ")
-                ),
-                inputs: params.iter().map(|x| x.ty.to_string()).collect::<Vec<String>>(),
-                decoded_inputs: Some(decoded_inputs),
-            };
-
-            matches.push(resolved_function);
-        } // End of raw decoding
+            let inputs = params.into_iter().map(|p| p.ty).collect::<Vec<_>>();
+            let name = format!("Unresolved_{function_selector}");
+            Ok(ResolvedFunction {
+                signature: format!("{name}({})", inputs.join(", ")),
+                name,
+                inputs,
+                decoded_inputs: Some(values),
+            })
+        };
+        let mut others = other_layouts.iter().filter_map(|layout| decode_layout(layout).ok());
+        matches.push(decode_layout(&primary).or_else(|err| others.next().ok_or(err))?);
+        alternatives.extend(others);
     }
 
     let selected_match = matches.first().expect("matches is empty").clone();
@@ -241,12 +234,19 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
         format_multicall_trace(multicall_results, decode_call, &mut trace);
     }
 
-    Ok(DecodeResult { decoded: selected_match, multicall_results, _trace: trace })
+    for alternative in &alternatives {
+        let mut lines = vec![format!("Alternative inferred signature: {}", alternative.signature)];
+        if let Some(inputs) = &alternative.decoded_inputs {
+            lines.extend(heimdall_common::utils::io::types::display(inputs.clone(), "    "));
+        }
+        trace.add_message(1, line!(), lines);
+    }
+    Ok(DecodeResult { decoded: selected_match, alternatives, multicall_results, _trace: trace })
 }
 
-/// Recover disjoint tails in head order (canonical ABI), or in physical order
-/// when packed payloads corroborate pointers to a smaller, reordered tuple.
-fn infer_raw_inputs(words: &[&[u8]]) -> Vec<DynSolType> {
+/// Prefer complete layouts in head order. Keep competing interpretations when
+/// a packed boundary or a change in physical tail order explains the same data.
+fn infer_raw_inputs(words: &[&[u8]]) -> (Vec<DynSolType>, Vec<Vec<DynSolType>>) {
     let offsets = words
         .iter()
         .enumerate()
@@ -257,10 +257,23 @@ fn infer_raw_inputs(words: &[&[u8]]) -> Vec<DynSolType> {
         .collect::<Vec<_>>();
 
     if offsets.is_empty() {
-        return words.iter().map(|word| infer_scalar_type(word)).collect();
+        return (words.iter().map(|word| infer_scalar_type(word)).collect(), Vec::new());
     }
-    let canonical = ordered_inputs(words, &offsets)
-        .unwrap_or_else(|prefix| recover_inputs(words, &offsets, prefix));
+    let first_layout = || {
+        ordered_inputs(words, &offsets, None)
+            .unwrap_or_else(|prefix| recover_inputs(words, &offsets, prefix))
+    };
+    let mut used_packed_hint = false;
+    let mut primary = match ordered_inputs(words, &offsets, Some(&mut used_packed_hint)) {
+        Ok(inputs) => inputs,
+        Err(_) if used_packed_hint => {
+            // A speculative boundary must explain the whole tuple.
+            used_packed_hint = false;
+            first_layout()
+        }
+        Err(prefix) => recover_inputs(words, &offsets, prefix),
+    };
+    let mut alternatives = Vec::new();
     let mut head_end = words.len();
     let mut head_pointers = 0;
     for &(i, offset) in &offsets {
@@ -274,51 +287,129 @@ fn infer_raw_inputs(words: &[&[u8]]) -> Vec<DynSolType> {
     if head.windows(2).any(|w| w[0].1 > w[1].1) {
         // An offset-looking scalar may split a valid canonical tail. Prefer a
         // complete ordered interpretation of this head whenever one exists.
-        if let Some(inputs) = reordered_inputs(words, head, head_end, &canonical) {
+        if let Some(inputs) = reordered_inputs(words, head, head_end, &primary) {
             let first = head
                 .iter()
                 .position(|&(_, offset)| offset == head_end)
                 .expect("the first physical tail is referenced in the head");
-            return ordered_inputs(words, &head[first..])
+            let mut short_head_hint = false;
+            if let Some(ordered) = ordered_inputs(words, &head[first..], Some(&mut short_head_hint))
                 .ok()
-                .filter(|v| v.len() == head_end)
-                .unwrap_or(inputs);
+                .filter(|types| types.len() == head_end)
+            {
+                primary = ordered;
+                used_packed_hint |= short_head_hint;
+            }
+            if inputs != primary {
+                alternatives.push(inputs);
+            }
         }
     }
-    canonical
+    // A packed boundary can select a second strict ABI signature for the same
+    // bytes. Recover the competing layout once, only when that hint was used.
+    if used_packed_hint {
+        let previous = first_layout();
+        if previous != primary && !alternatives.contains(&previous) {
+            alternatives.push(previous);
+        }
+    }
+    (primary, alternatives)
 }
 
-fn ordered_inputs(words: &[&[u8]], offsets: &[(usize, usize)]) -> Result<Vec<DynSolType>, usize> {
+fn ordered_inputs(
+    words: &[&[u8]],
+    offsets: &[(usize, usize)],
+    mut used_packed_hint: Option<&mut bool>,
+) -> Result<Vec<DynSolType>, usize> {
     let mut inputs = Vec::new();
     let mut head_end = words.len();
     let mut next_tail = None;
-    let mut offsets = offsets.iter().copied().peekable();
-    while let Some((i, offset)) = offsets.next() {
+    let mut last_owner = None;
+    let mut candidates = offsets.iter().copied().peekable();
+    while let Some((i, offset)) = candidates.next() {
         if i >= head_end {
             break;
         }
         if next_tail.is_some_and(|end| end != offset) {
             continue;
         }
-        let inferred = offsets
-            .peek()
-            .filter(|&&(j, end)| j < head_end.min(offset) && offset < end)
-            .and_then(|&(_, end)| {
-                infer_dynamic_tail(offset, words, end).filter(|p| p.tail.end == end)
-            })
-            .or_else(|| infer_dynamic_tail(offset, words, words.len()));
-        if let Some(param) = inferred {
-            head_end = head_end.min(offset);
-            next_tail = Some(param.tail.end);
-            inputs.extend(words[inputs.len()..i].iter().map(|w| infer_scalar_type(w)));
-            inputs.push(param.ty);
+        let limit = head_end.min(offset);
+        let next = candidates.peek().copied().filter(|&(j, _)| j < limit);
+        let bounded = next.filter(|&(_, end)| offset < end).and_then(|(_, end)| {
+            infer_dynamic_tail(offset, words, end).filter(|p| p.tail.end == end)
+        });
+        let alternative = next.filter(|_| bounded.is_none());
+        let Some(mut param) = bounded.or_else(|| infer_dynamic_tail(offset, words, words.len()))
+        else {
+            continue;
+        };
+        if let (Some(used), Some((_, next_offset))) = (used_packed_hint.as_deref_mut(), alternative)
+        {
+            if matches!(param.ty, DynSolType::Array(_)) {
+                // A scalar between genuine pointers can hide the end of a
+                // packed value and let an array interpretation swallow its sibling.
+                if let Some((_, end)) =
+                    packed_extent(words, offset).filter(|&(_, end)| end < param.tail.end)
+                {
+                    let owners = last_owner.get_or_insert_with(|| {
+                        offsets
+                            .iter()
+                            .copied()
+                            .take_while(|&(j, _)| j < limit)
+                            .map(|(j, target)| (target, j))
+                            .collect::<std::collections::HashMap<_, _>>()
+                    });
+                    if owners.get(&end).is_some_and(|&j| i < j) &&
+                        packed_extent(words, end).is_some()
+                    {
+                        if let Some(packed) = infer_dynamic_tail(offset, words, end)
+                            .filter(|p| p.tail.end == end && p.has_packed_data(words))
+                        {
+                            param = packed;
+                            *used = true;
+                        }
+                    }
+                }
+            } else if next_tail.is_none() &&
+                param.ty == DynSolType::Bytes &&
+                next_offset == offset + 1 &&
+                encloses_packed_tail(words, offset, param.tail.end)
+            {
+                // The leading scalar and the following pointer together
+                // identify a more tightly sized payload ending at the same word.
+                *used = true;
+                continue;
+            }
         }
+        head_end = limit;
+        next_tail = Some(param.tail.end);
+        inputs.extend(words[inputs.len()..i].iter().map(|w| infer_scalar_type(w)));
+        inputs.push(param.ty);
     }
     if next_tail != Some(words.len()) {
         return Err(next_tail.unwrap_or(words.len()));
     }
     inputs.extend(words[inputs.len()..head_end].iter().map(|w| infer_scalar_type(w)));
     Ok(inputs)
+}
+
+/// Byte length and end word of a possible packed value at a tuple offset.
+fn packed_extent(words: &[&[u8]], start: usize) -> Option<(usize, usize)> {
+    let size = usize::try_from(alloy::primitives::U256::from_be_slice(words.get(start)?)).ok()?;
+    let end = (start + 1).checked_add(size.div_ceil(32))?;
+    (end <= words.len()).then_some((size, end))
+}
+
+/// A weak outer byte length can include a complete inner packed tail's length
+/// word and trailing zeroes. A pointer to that inner length corroborates it.
+fn encloses_packed_tail(words: &[&[u8]], start: usize, end: usize) -> bool {
+    let Some((size, outer_end)) = packed_extent(words, start) else { return false };
+    if size == 0 || outer_end != end || words[end - 1].get((size - 1) % 32) != Some(&0) {
+        return false;
+    }
+    packed_extent(words, start + 1).is_some_and(|(_, inner_end)| inner_end == end) &&
+        infer_dynamic_tail(start + 1, words, end)
+            .is_some_and(|p| p.tail.end == end && p.has_packed_data(words))
 }
 
 fn reordered_inputs(
@@ -425,6 +516,9 @@ fn types_in_head(words: &[&[u8]], end: usize, tails: Vec<(usize, DynSolType)>) -
 
 #[cfg(test)]
 mod tests {
+    mod reordered_rows;
+    mod tuple_boundaries;
+
     use alloy::primitives::{address, B256};
     use alloy_dyn_abi::DynSolValue;
     use heimdall_common::utils::strings::encode_hex;
@@ -437,6 +531,10 @@ mod tests {
     }
 
     async fn decode_raw_bytes(encoded: &[u8]) -> Vec<DynSolValue> {
+        decode_raw_result(encoded).await.decoded.decoded_inputs.expect("decoded inputs")
+    }
+
+    async fn decode_raw_result(encoded: &[u8]) -> crate::DecodeResult {
         let target = format!("0xdeadbeef{}", encode_hex(encoded));
         let args = DecodeArgsBuilder::new()
             .target(target)
@@ -444,12 +542,7 @@ mod tests {
             .raw(true)
             .build()
             .expect("valid decode arguments");
-        decode(args)
-            .await
-            .expect("raw decode failed")
-            .decoded
-            .decoded_inputs
-            .expect("decoded inputs")
+        decode(args).await.expect("raw decode failed")
     }
 
     fn nested_array(mut value: DynSolValue, depth: usize) -> DynSolValue {
@@ -524,7 +617,13 @@ mod tests {
         for (&index, offset) in order.iter().zip(head.chunks_exact(32)) {
             encoded[32 * index..32 * (index + 1)].copy_from_slice(offset);
         }
-        assert_eq!(decode_raw_bytes(&encoded).await, values);
+        let result = decode_raw_result(&encoded).await;
+        let primary = result.decoded.decoded_inputs.unwrap();
+        assert_eq!(DynSolValue::Tuple(primary).abi_encode_params(), encoded);
+        assert!(result
+            .alternatives
+            .iter()
+            .any(|alt| alt.decoded_inputs.as_deref() == Some(values)));
     }
 
     #[tokio::test]
@@ -553,15 +652,7 @@ mod tests {
         ] {
             let values = values.map(DynSolValue::Bytes);
             for order in [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
-                let physical =
-                    DynSolValue::Array(order.iter().map(|&i| values[i].clone()).collect());
-                let mut encoded = physical.abi_encode_params();
-                // Array offsets are relative to the first word after its length.
-                let offsets = &mut encoded[64..64 + 32 * order.len()];
-                let sorted = offsets.to_vec();
-                for (&index, offset) in order.iter().zip(sorted.chunks_exact(32)) {
-                    offsets[32 * index..32 * (index + 1)].copy_from_slice(offset);
-                }
+                let encoded = reordered_rows::encode_reordered_array(&values, &order);
                 assert_eq!(decode_raw_bytes(&encoded).await, [DynSolValue::Array(values.to_vec())]);
             }
         }

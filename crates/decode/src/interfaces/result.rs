@@ -17,6 +17,8 @@ use crate::error::Error;
 pub struct DecodeResult {
     /// The resolved function with its decoded inputs
     pub decoded: ResolvedFunction,
+    /// Other supported raw interpretations when the calldata fits multiple tuple layouts.
+    pub alternatives: Vec<ResolvedFunction>,
     /// Multicall results if detected
     pub multicall_results: Option<Vec<crate::utils::MulticallDecoded>>,
     pub(crate) _trace: TraceFactory,
@@ -86,19 +88,23 @@ impl DecodeResult {
             }
         };
 
-        let mut result = json!({
-            "name": self.decoded.name,
-            "signature": self.decoded.signature,
-            "inputs": inputs_to_abi_format(&self.decoded.signature),
-            "decoded_inputs": if let Some(decoded_inputs) = &self.decoded.decoded_inputs {
-                decoded_inputs
-                    .iter()
-                    .map(|input| input.serialize())
-                    .collect::<Vec<_>>()
-            } else {
-                vec![]
+        let function_json = |function: &ResolvedFunction| {
+            json!({
+                "name": function.name,
+                "signature": function.signature,
+                "inputs": inputs_to_abi_format(&function.signature),
+                "decoded_inputs": function.decoded_inputs.as_deref().unwrap_or_default().iter()
+                    .map(|input| input.serialize()).collect::<Vec<_>>()
+            })
+        };
+        let decoded_json = |decoded: &DecodeResult| {
+            let mut value = function_json(&decoded.decoded);
+            if !decoded.alternatives.is_empty() {
+                value["alternatives"] = decoded.alternatives.iter().map(&function_json).collect();
             }
-        });
+            value
+        };
+        let mut result = decoded_json(self);
 
         // Add multicall results if present
         if let Some(multicall_results) = &self.multicall_results {
@@ -114,19 +120,7 @@ impl DecodeResult {
 
                 // Add decoded result if available
                 if let Some(decoded) = &mc_result.decoded {
-                    mc_json["decoded"] = json!({
-                        "name": decoded.decoded.name,
-                        "signature": decoded.decoded.signature,
-                        "inputs": inputs_to_abi_format(&decoded.decoded.signature),
-                        "decoded_inputs": if let Some(decoded_inputs) = &decoded.decoded.decoded_inputs {
-                            decoded_inputs
-                                .iter()
-                                .map(|input| input.serialize())
-                                .collect::<Vec<_>>()
-                        } else {
-                            vec![]
-                        }
-                    });
+                    mc_json["decoded"] = decoded_json(decoded);
                 }
 
                 multicalls.push(mc_json);
