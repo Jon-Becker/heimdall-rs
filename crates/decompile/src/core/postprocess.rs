@@ -267,7 +267,6 @@ impl PostprocessOrchestrator {
         );
         let start_postprocess_time = Instant::now();
 
-        // get postprocessor state
         let mut state = PostprocessorState {
             storage_roots: self.state.storage_roots.clone(),
             storage_type_hints: self.state.storage_type_hints.clone(),
@@ -279,7 +278,6 @@ impl PostprocessOrchestrator {
             ..Default::default()
         };
 
-        // add the function arguments to memory_type_map
         state.memory_type_map.extend(function.arguments.iter().map(|(i, frame)| {
             (
                 format!("arg{i}"),
@@ -287,7 +285,6 @@ impl PostprocessOrchestrator {
             )
         }));
 
-        // add known variables to memory_type_map
         state.memory_type_map.extend([
             (String::from(".balance"), SolidityType::Uint(256)),
             (String::from(".blockhash"), SolidityType::FixedBytes(32)),
@@ -358,7 +355,6 @@ impl PostprocessOrchestrator {
             }
         }
 
-        // Detect simple getters and Solidity's RLP-backed string pattern directly on the IR.
         if !function.payable && (function.pure || function.view) && function.arguments.is_empty() {
             if let Some(storage) = returned_storage(&function.statements) {
                 if let Expr::StorageAccess(path) = &storage {
@@ -384,9 +380,16 @@ impl PostprocessOrchestrator {
             }
         }
 
-        // Transform structured statements before lowering to source text.
         for pass in &self.ir_passes {
+            state.conditional_depth = 0;
             for statement in &mut function.statements {
+                match statement {
+                    Statement::If { .. } => state.conditional_depth += 1,
+                    Statement::CloseBlock => {
+                        state.conditional_depth = state.conditional_depth.saturating_sub(1);
+                    }
+                    _ => {}
+                }
                 pass(statement, &mut state)?;
             }
         }
@@ -397,8 +400,6 @@ impl PostprocessOrchestrator {
 
         function.render_statements();
 
-        // wherever storage_map contains a value that doesnt exist in storage_type_map, add it with
-        // a default value
         state.storage_map.values().for_each(|value| {
             if let Some((name, indexed)) = expression_root(value) {
                 state
@@ -416,10 +417,8 @@ impl PostprocessOrchestrator {
             }
         });
 
-        // update the state, so we can share it between functions
         self.state = state;
 
-        // if this is a getter, replace function.maybe_getter_for with the actual getter
         if let Some(getter_for) = self.state.maybe_getter_for.as_ref() {
             // the smallest matching name is used, since map iteration order is not stable
             if let Some((name, _)) = self
@@ -497,6 +496,43 @@ mod tests {
         let mut orchestrator = PostprocessOrchestrator::new(AnalyzerType::Solidity).unwrap();
         orchestrator.postprocess(&mut function).unwrap();
         assert_eq!(function.maybe_getter_for.as_deref(), Some("store_a"));
+    }
+
+    #[test]
+    fn branch_local_memory_values_do_not_escape_the_scope() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.analyzer_type = AnalyzerType::Solidity;
+        function.statements = vec![
+            Statement::If { condition: Expr::identifier("condition") },
+            Statement::Assign {
+                target: Expr::index("memory", Expr::Literal(U256::ZERO)),
+                value: Expr::Literal(U256::from(1)),
+            },
+            Statement::CloseBlock,
+            Statement::Return(Expr::index("memory", Expr::Literal(U256::ZERO))),
+        ];
+        let mut orchestrator = PostprocessOrchestrator::new(AnalyzerType::Solidity).unwrap();
+        let state = orchestrator.postprocess(&mut function).unwrap();
+        assert!(!state.variable_map.contains_key(&Expr::identifier("var_a")));
+    }
+
+    #[test]
+    fn else_local_memory_values_do_not_escape_the_scope() {
+        let mut function = AnalyzedFunction::new("00000000", false);
+        function.analyzer_type = AnalyzerType::Solidity;
+        function.statements = vec![
+            Statement::If { condition: Expr::identifier("condition") },
+            Statement::Else,
+            Statement::Assign {
+                target: Expr::index("memory", Expr::Literal(U256::ZERO)),
+                value: Expr::Literal(U256::from(1)),
+            },
+            Statement::CloseBlock,
+            Statement::Return(Expr::index("memory", Expr::Literal(U256::ZERO))),
+        ];
+        let mut orchestrator = PostprocessOrchestrator::new(AnalyzerType::Solidity).unwrap();
+        let state = orchestrator.postprocess(&mut function).unwrap();
+        assert!(!state.variable_map.contains_key(&Expr::identifier("var_a")));
     }
 
     #[test]

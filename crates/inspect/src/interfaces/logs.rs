@@ -5,10 +5,11 @@ use alloy::{
 use async_convert::{async_trait, TryFrom};
 use heimdall_common::{
     ether::signatures::{ResolveSelector, ResolvedLog},
-    utils::{env::get_env, hex::ToLowerHex},
+    utils::hex::ToLowerHex,
 };
 use serde::{Deserialize, Serialize};
-use tracing::trace;
+use std::future::Future;
+use tracing::{trace, warn};
 
 /// Represents a decoded log
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -65,13 +66,30 @@ impl TryFrom<Log> for DecodedLog {
     type Error = eyre::Report;
 
     async fn try_from(value: Log) -> Result<Self, Self::Error> {
-        let mut resolved_logs = Vec::new();
-        let skip_resolving = get_env("SKIP_RESOLVING")
-            .unwrap_or_else(|| "false".to_string())
-            .parse::<bool>()
-            .unwrap_or(false);
+        Self::decode_with_options(value, false).await
+    }
+}
 
-        if !skip_resolving {
+impl DecodedLog {
+    pub(crate) async fn decode_with_options(
+        value: Log,
+        skip_resolving: bool,
+    ) -> Result<Self, eyre::Report> {
+        Self::decode_with_resolver(value, skip_resolving, |signature| async move {
+            ResolvedLog::resolve(&signature).await
+        })
+        .await
+    }
+
+    async fn decode_with_resolver<F, Fut>(
+        value: Log,
+        skip_resolving: bool,
+        resolve: F,
+    ) -> Result<Self, eyre::Report>
+    where
+        F: FnOnce(String) -> Fut,
+        Fut: Future<Output = Result<Option<Vec<ResolvedLog>>, eyre::Report>>, {
+        let resolved_logs = if !skip_resolving {
             let signature = match value.topics().first() {
                 Some(topic) => {
                     let topic = topic.to_lower_hex();
@@ -80,17 +98,22 @@ impl TryFrom<Log> for DecodedLog {
                 None => None,
             };
 
-            resolved_logs = match signature {
+            match signature {
                 Some(signature) => {
                     trace!("resolving signature: {}", signature.to_string().to_lowercase());
-                    ResolvedLog::resolve(&signature)
-                        .await
-                        .map_err(|e| eyre::eyre!("failed to resolve signature: {}", e.to_string()))?
-                        .unwrap_or(Vec::new())
+                    match resolve(signature.clone()).await {
+                        Ok(results) => results.unwrap_or_default(),
+                        Err(error) => {
+                            warn!("failed to resolve event signature {signature}: {error}");
+                            Vec::new()
+                        }
+                    }
                 }
                 None => Vec::new(),
-            };
-        }
+            }
+        } else {
+            Vec::new()
+        };
 
         Ok(Self {
             address: value.address(),
@@ -104,5 +127,38 @@ impl TryFrom<Log> for DecodedLog {
             removed: value.removed,
             resolved_event: resolved_logs.first().cloned(),
         })
+    }
+}
+
+#[cfg(test)]
+mod option_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn log_decoding_survives_signature_service_errors() {
+        let topic = B256::from([0x42; 32]);
+        let log = Log {
+            inner: alloy::primitives::Log::new_unchecked(Address::ZERO, vec![topic], Bytes::new()),
+            ..Default::default()
+        };
+        let decoded = DecodedLog::decode_with_resolver(log, false, |_| async {
+            Err(eyre::eyre!("signature service unavailable"))
+        })
+        .await
+        .unwrap();
+        assert_eq!(decoded.topics, [topic]);
+        assert!(decoded.resolved_event.is_none());
+    }
+
+    #[tokio::test]
+    async fn log_decoding_skips_signature_resolution_when_requested() {
+        let topic = B256::from([0x42; 32]);
+        let log = Log {
+            inner: alloy::primitives::Log::new_unchecked(Address::ZERO, vec![topic], Bytes::new()),
+            ..Default::default()
+        };
+        let decoded = DecodedLog::decode_with_options(log, true).await.unwrap();
+        assert_eq!(decoded.topics, [topic]);
+        assert!(decoded.resolved_event.is_none());
     }
 }

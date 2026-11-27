@@ -20,20 +20,16 @@ pub(crate) fn event_heuristic<'a>(
 ) -> BoxFuture<'a, Result<(), Error>> {
     Box::pin(async move {
         if (0xA0..=0xA4).contains(&state.last_instruction.opcode) {
-            // this should be the last event in state
             let event = state.events.last().ok_or_eyre("no events in state")?;
             let selector = event.topics.first().unwrap_or(&U256::ZERO).to_owned();
             let anonymous = selector == U256::ZERO;
 
-            // insert this selector into events
             function.events.insert(selector);
 
-            // decode the data field
             let data_mem_ops = function.get_memory_range(
                 state.last_instruction.inputs[0],
                 state.last_instruction.inputs[1],
             );
-            // add the event emission to the function's logic
             if analyzer_state.analyzer_type == AnalyzerType::Solidity {
                 let mut args = event
                     .topics

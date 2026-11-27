@@ -38,7 +38,6 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
     let mut compiler = Compiler::Unknown;
     let mut version = "unknown".to_string();
 
-    // Previously known heuristic: perform prefix check for rough version matching
     if bytecode.starts_with(&[
         0x36, 0x60, 0x00, 0x60, 0x00, 0x37, 0x61, 0x10, 0x00, 0x60, 0x00, 0x36, 0x60, 0x00, 0x73,
     ]) {
@@ -65,12 +64,10 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
         compiler = Compiler::Solc;
     }
 
-    // Remove `PUSHN [u8; n]` bytes so we are left with only operations
     let pruned_bytecode =
         remove_pushbytes_from_bytecode(alloy::primitives::Bytes::from_iter(bytecode))
             .expect("invalid bytecode");
 
-    // detect minimal proxies
     if pruned_bytecode.eq(&vec![
         0x36, 0x3d, 0x3d, 0x37, 0x3d, 0x3d, 0x3d, 0x36, 0x3d, 0x73, 0x5a, 0xf4, 0x3d, 0x82, 0x80,
         0x3e, 0x90, 0x3d, 0x91, 0x60, 0x57, 0xfd, 0x5b, 0xf3,
@@ -94,8 +91,6 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
         ([0x61, 0x52, 0x7f, 0x61, 0x52], 0.00, 0.2656),
     ];
 
-    // for each heuristic, check if the bytecode contains the sequence and increment the confidence
-    // for that compiler. the compiler with the highest confidence is chosen
     let (mut solc_confidence, mut vyper_confidence) = (0.0, 0.0);
     for (sequence, solc, vyper) in heuristics.iter() {
         if pruned_bytecode.contains_slice(sequence) {
@@ -110,7 +105,6 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
         compiler = Compiler::Vyper;
     }
 
-    // Previously known heuristic: check for cbor encoded compiler metadata
     // check for cbor encoded compiler metadata
     // https://cbor.io
     if bytecode.contains_slice(&[0x73, 0x6f, 0x6c, 0x63, 0x43]) {
@@ -147,7 +141,6 @@ pub fn detect_compiler(bytecode: &[u8]) -> (Compiler, String) {
 
     debug!("detected compiler {compiler} {version}.");
 
-    // if not Solidity, warn
     if compiler != Compiler::Solc {
         warn!("{} is not fully supported by heimdall", compiler);
     }

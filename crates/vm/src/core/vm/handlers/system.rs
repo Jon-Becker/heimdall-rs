@@ -17,34 +17,19 @@ pub fn create(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// CALL - Message-call into an account
 pub fn call(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
-    let address = vm.stack.pop()?.value;
-    vm.stack.pop_n(6)?;
-
-    // consume dynamic gas
-    if !vm.address_access_set.contains(&address) {
-        vm.consume_gas(2600);
-        vm.address_access_set.insert(address);
-    } else {
-        vm.consume_gas(100);
-    }
-
-    vm.stack.push(U256::from(1u8), operation);
-    Ok(())
+    call_like(vm, operation, 5)
 }
 
 /// CALLCODE - Message-call into this account with alternative account's code
 pub fn callcode(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
+    call_like(vm, operation, 5)
+}
+
+fn call_like(vm: &mut VM, operation: WrappedOpcode, remaining_inputs: usize) -> Result<()> {
+    vm.stack.pop()?;
     let address = vm.stack.pop()?.value;
-    vm.stack.pop_n(6)?;
-
-    // consume dynamic gas
-    if !vm.address_access_set.contains(&address) {
-        vm.consume_gas(2600);
-        vm.address_access_set.insert(address);
-    } else {
-        vm.consume_gas(100);
-    }
-
+    vm.stack.pop_n(remaining_inputs)?;
+    vm.charge_address_access(address);
     vm.stack.push(U256::from(1u8), operation);
     Ok(())
 }
@@ -54,11 +39,9 @@ pub fn op_return(vm: &mut VM) -> Result<()> {
     let offset = vm.stack.pop()?.value;
     let size = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let offset: usize = offset.try_into().unwrap_or(usize::MAX);
     let size: usize = size.try_into().unwrap_or(usize::MAX);
 
-    // consume dynamic gas
     let gas_cost = vm.memory.expansion_cost(offset, size);
     vm.consume_gas(gas_cost);
 
@@ -68,36 +51,12 @@ pub fn op_return(vm: &mut VM) -> Result<()> {
 
 /// DELEGATECALL - Message-call into this account with an alternative account's code
 pub fn delegatecall(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
-    let address = vm.stack.pop()?.value;
-    vm.stack.pop_n(5)?;
-
-    // consume dynamic gas
-    if !vm.address_access_set.contains(&address) {
-        vm.consume_gas(2600);
-        vm.address_access_set.insert(address);
-    } else {
-        vm.consume_gas(100);
-    }
-
-    vm.stack.push(U256::from(1u8), operation);
-    Ok(())
+    call_like(vm, operation, 4)
 }
 
 /// STATICCALL - Static message-call into an account
 pub fn staticcall(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
-    let address = vm.stack.pop()?.value;
-    vm.stack.pop_n(5)?;
-
-    // consume dynamic gas
-    if !vm.address_access_set.contains(&address) {
-        vm.consume_gas(2600);
-        vm.address_access_set.insert(address);
-    } else {
-        vm.consume_gas(100);
-    }
-
-    vm.stack.push(U256::from(1u8), operation);
-    Ok(())
+    call_like(vm, operation, 4)
 }
 
 /// CREATE2 - Create a new account with associated code at a predictable address
@@ -112,7 +71,6 @@ pub fn revert(vm: &mut VM) -> Result<()> {
     let offset = vm.stack.pop()?.value;
     let size = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let offset: usize = offset.try_into().unwrap_or(usize::MAX);
     let size: usize = size.try_into().unwrap_or(usize::MAX);
 

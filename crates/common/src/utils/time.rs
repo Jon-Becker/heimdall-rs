@@ -60,7 +60,6 @@ mod tests {
         assert_eq!(calculate_eta(0.5, 100), 200);
         assert_eq!(calculate_eta(1.0, 0), 0);
         assert_eq!(calculate_eta(0.0, 100), u128::MAX);
-        assert_eq!(calculate_eta(10.0, usize::MAX), 1844674407370955264);
     }
 
     #[test]

@@ -1,65 +1,65 @@
-use async_recursion::async_recursion;
 use reqwest::Client;
 use serde_json::Value;
 use std::time::Duration;
-use tokio::time::sleep as async_sleep;
+use tokio::time::sleep;
 use tracing::trace;
 
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
-/// Make a GET request to the target URL and return the response body as JSON
-///
-/// ```no_run
-/// use heimdall_common::utils::http::get_json_from_url;
-///
-/// let url = "https://example.com";
-/// let timeout = 5;
-/// // get_json_from_url(url, timeout).await;
-/// ```
+/// Make a GET request and return its JSON body, or `None` if the body is not JSON.
+/// Transport and HTTP status failures are returned to the caller.
 pub async fn get_json_from_url(url: &str, timeout: u64) -> Result<Option<Value>, reqwest::Error> {
-    _get_json_from_url(url, 0, 2, timeout).await
-}
-
-#[async_recursion]
-/// Internal function for making a GET request to the target URL and returning the response body as
-/// JSON
-async fn _get_json_from_url(
-    url: &str,
-    retry_count: u8,
-    retries_remaining: u8,
-    timeout: u64,
-) -> Result<Option<Value>, reqwest::Error> {
-    trace!("GET {}", &url);
-
     let client = Client::builder()
-        .danger_accept_invalid_certs(true)
         .user_agent(APP_USER_AGENT)
         .timeout(Duration::from_secs(timeout))
         .build()?;
 
-    let res = match client.get(url).send().await {
-        Ok(res) => {
-            trace!("GET {}: {:?}", &url, &res);
-            res
-        }
-        Err(e) => {
-            trace!("GET {}: {:?}", &url, &e);
-            if retries_remaining == 0 {
-                return Ok(None);
+    for attempt in 0..3 {
+        trace!("GET {}", url);
+        match client.get(url).send().await {
+            Ok(response) => {
+                let body = response.error_for_status()?.text().await?;
+                return Ok(serde_json::from_str(&body).ok());
             }
-
-            // exponential backoff
-            let retry_count = retry_count + 1;
-            let retries_remaining = retries_remaining - 1;
-            let sleep_time = 2u64.pow(retry_count as u32) * 250;
-            async_sleep(Duration::from_millis(sleep_time)).await;
-            return _get_json_from_url(url, retry_count, retries_remaining, timeout).await;
+            Err(error) if attempt < 2 => {
+                trace!("GET {}: {:?}", url, error);
+                sleep(Duration::from_millis(500 << attempt)).await;
+            }
+            Err(error) => return Err(error),
         }
-    };
-    let body = res.text().await?;
+    }
+    unreachable!("the final request returns either a response or an error")
+}
 
-    match serde_json::from_str(&body) {
-        Ok(json) => Ok(Some(json)),
-        Err(_) => Ok(None),
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
+    async fn serve_once(status: &str, body: &str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        tokio::spawn(async move {
+            let (mut connection, _) = listener.accept().await.unwrap();
+            let mut request = [0; 1024];
+            let _ = connection.read(&mut request).await.unwrap();
+            connection.write_all(response.as_bytes()).await.unwrap();
+        });
+        format!("http://{address}")
+    }
+
+    #[tokio::test]
+    async fn returns_json_and_surfaces_http_errors() {
+        let url = serve_once("200 OK", "{\"ok\":true}").await;
+        assert_eq!(get_json_from_url(&url, 2).await.unwrap().unwrap()["ok"], true);
+        let url = serve_once("503 Service Unavailable", "{}").await;
+        assert!(get_json_from_url(&url, 2).await.unwrap_err().is_status());
     }
 }

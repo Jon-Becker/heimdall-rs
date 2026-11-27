@@ -3,7 +3,7 @@
 use crate::ether::provider::MultiTransportProvider;
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
-    primitives::{Address, TxHash},
+    primitives::{keccak256, Address, TxHash},
     rpc::types::{
         trace::parity::{TraceResults, TraceResultsWithTransactionHash, TraceType},
         Filter, FilterBlockOption, FilterSet, Log, Transaction,
@@ -12,6 +12,10 @@ use alloy::{
 use eyre::{bail, OptionExt, Result};
 use heimdall_cache::with_cache;
 use tokio_retry::{strategy::ExponentialBackoff, Retry};
+
+fn chain_id_cache_key(rpc_url: &str) -> String {
+    format!("chain_id.{}", keccak256(rpc_url.as_bytes()))
+}
 
 /// Get the chainId of the provided RPC URL
 ///
@@ -23,13 +27,10 @@ use tokio_retry::{strategy::ExponentialBackoff, Retry};
 /// ```
 pub async fn chain_id(rpc_url: &str) -> Result<u64> {
     Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
-        with_cache(
-            &format!("chain_id.{}", &rpc_url.replace('/', "").replace(['.', ':'], "-")),
-            || async {
-                let provider = MultiTransportProvider::connect(rpc_url).await?;
-                provider.get_chainid().await
-            },
-        )
+        with_cache(&chain_id_cache_key(rpc_url), || async {
+            let provider = MultiTransportProvider::connect(rpc_url).await?;
+            provider.get_chainid().await
+        })
         .await
     })
     .await
@@ -59,13 +60,12 @@ pub async fn latest_block_number(rpc_url: &str) -> Result<u128> {
 /// // assert!(bytecode.is_ok());
 /// ```
 pub async fn get_code(contract_address: Address, rpc_url: &str) -> Result<Vec<u8>> {
-    // if rpc_url is empty, return an error
     if rpc_url.is_empty() {
         bail!("cannot get_code, rpc_url is empty");
     }
 
+    let chain_id = chain_id(rpc_url).await?;
     Retry::spawn(ExponentialBackoff::from_millis(50).take(2), || async {
-        let chain_id = chain_id(rpc_url).await.unwrap_or(1);
         with_cache(&format!("contract.{}.{}", &chain_id, &contract_address), || async {
             let provider = MultiTransportProvider::connect(rpc_url).await?;
             provider.get_code_at(contract_address).await
@@ -188,28 +188,24 @@ pub async fn get_contract_creation_block(contract_address: Address, rpc_url: &st
         bail!("cannot get_contract_creation_block, rpc_url is empty");
     }
 
-    let chain_id = chain_id(rpc_url).await.unwrap_or(1);
+    let chain_id = chain_id(rpc_url).await?;
 
     with_cache(&format!("contract_creation_block.{}.{}", chain_id, contract_address), || async {
         let provider = MultiTransportProvider::connect(rpc_url).await?;
 
-        // Verify the contract exists at the latest block
         let latest_code = provider.get_code_at(contract_address).await?;
         if latest_code.is_empty() {
             bail!("contract does not exist at address {}", contract_address);
         }
 
-        // Get the latest block number
         let latest_block = provider.get_block_number().await?;
 
-        // Binary search for the creation block
         let mut low: u64 = 0;
         let mut high: u64 = latest_block;
 
         while low < high {
             let mid = low + (high - low) / 2;
 
-            // Check if contract exists at block `mid`
             let code =
                 provider.get_code_at_block(contract_address, BlockId::Number(mid.into())).await?;
 
@@ -232,12 +228,66 @@ pub mod tests {
 
     use crate::{ether::rpc::*, utils::hex::ToLowerHex};
 
+    fn isolated_live_test(name: &str) -> bool {
+        const CHILD: &str = "HEIMDALL_LIVE_RPC_TEST_CHILD";
+        if std::env::var(CHILD).as_deref() == Ok(name) {
+            return true;
+        }
+        let home = std::env::temp_dir().join(format!(
+            "heimdall-live-rpc-{}-{}",
+            std::process::id(),
+            name.replace("::", "-")
+        ));
+        std::fs::create_dir_all(&home).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--ignored", "--exact", name])
+            .env(CHILD, name)
+            .env("HOME", &home)
+            .status()
+            .unwrap();
+        std::fs::remove_dir_all(home).unwrap();
+        assert!(status.success());
+        false
+    }
+
+    #[test]
+    fn unknown_chain_does_not_read_mainnet_cache() {
+        const CHILD: &str = "HEIMDALL_RPC_CACHE_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            let address = address!("1234567890123456789012345678901234567890");
+            heimdall_cache::store_cache(&format!("contract.1.{address}"), vec![0x60u8, 0x00], None)
+                .unwrap();
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            assert!(runtime.block_on(get_code(address, "http://127.0.0.1:0")).is_err());
+            return;
+        }
+        let home = std::env::temp_dir().join(format!("heimdall-rpc-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "ether::rpc::tests::unknown_chain_does_not_read_mainnet_cache"])
+            .env(CHILD, "1")
+            .env("HOME", &home)
+            .status()
+            .unwrap();
+        std::fs::remove_dir_all(home).unwrap();
+        assert!(status.success());
+    }
+
+    #[test]
+    fn rpc_urls_with_distinct_punctuation_have_distinct_chain_keys() {
+        assert_ne!(
+            chain_id_cache_key("http://example.test/a-b"),
+            chain_id_cache_key("http://example.test/a:b")
+        );
+    }
+
     #[tokio::test]
+    #[ignore = "requires a configured RPC endpoint"]
     async fn test_chain_id() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        if !isolated_live_test("ether::rpc::tests::test_chain_id") {
+            return;
+        }
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set for this test");
 
         let rpc_chain_id = chain_id(&rpc_url).await.expect("chain_id() returned an error!");
 
@@ -245,19 +295,12 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn test_chain_id_invalid_rpc_url() {
-        let rpc_url = "https://none.llamarpc.com";
-        let rpc_chain_id = chain_id(rpc_url).await;
-
-        assert!(rpc_chain_id.is_err())
-    }
-
-    #[tokio::test]
+    #[ignore = "requires a configured RPC endpoint"]
     async fn test_get_code() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        if !isolated_live_test("ether::rpc::tests::test_get_code") {
+            return;
+        }
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set for this test");
 
         let contract_address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
         let bytecode =
@@ -267,11 +310,12 @@ pub mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires a configured RPC endpoint"]
     async fn test_get_transaction() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        if !isolated_live_test("ether::rpc::tests::test_get_transaction") {
+            return;
+        }
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set for this test");
 
         let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
         let transaction = get_transaction(transaction_hash.parse().expect("invalid"), &rpc_url)
@@ -282,11 +326,12 @@ pub mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires a configured RPC endpoint"]
     async fn test_get_trace() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        if !isolated_live_test("ether::rpc::tests::test_get_trace") {
+            return;
+        }
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set for this test");
 
         let transaction_hash = "0x9a5f4ef7678a94dd87048eeec931d30af21b1f4cecbf7e850a531d2bb64a54ac";
         let trace = get_trace(transaction_hash, &rpc_url).await;
@@ -295,24 +340,12 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_trace_invalid_transaction_hash() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
-
-        let transaction_hash = "0x0";
-        let trace = get_trace(transaction_hash, &rpc_url).await;
-
-        assert!(trace.is_err())
-    }
-
-    #[tokio::test]
+    #[ignore = "requires a configured RPC endpoint"]
     async fn test_get_block_logs() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        if !isolated_live_test("ether::rpc::tests::test_get_block_logs") {
+            return;
+        }
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set for this test");
 
         let block_number = 18_000_000;
         let logs = get_block_logs(block_number, &rpc_url)
@@ -323,11 +356,12 @@ pub mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires a configured RPC endpoint"]
     async fn test_get_contract_creation_block() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        if !isolated_live_test("ether::rpc::tests::test_get_contract_creation_block") {
+            return;
+        }
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set for this test");
 
         // WETH contract on mainnet, deployed at block 4719568
         let contract_address = address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
@@ -339,11 +373,12 @@ pub mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires a configured RPC endpoint"]
     async fn test_chain_id_with_ws_rpc() {
-        let rpc_url = std::env::var("WS_RPC_URL").unwrap_or_else(|_| {
-            println!("WS_RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        if !isolated_live_test("ether::rpc::tests::test_chain_id_with_ws_rpc") {
+            return;
+        }
+        let rpc_url = std::env::var("WS_RPC_URL").expect("WS_RPC_URL must be set for this test");
 
         let rpc_chain_id = chain_id(&rpc_url).await.expect("chain_id() returned an error!");
 

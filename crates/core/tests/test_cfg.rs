@@ -10,11 +10,9 @@ mod integration_tests {
     use serde_json::Value;
 
     #[tokio::test]
+    #[ignore = "requires a live RPC_URL"]
     async fn test_cfg_simple() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         let result = heimdall_cfg::cfg(CfgArgs {
             target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
@@ -30,21 +28,20 @@ mod integration_tests {
         .await
         .expect("failed to generate cfg");
 
-        let output: String = format!("{}", Dot::with_config(&result.graph, &[]));
-
-        for line in
-            &[String::from(include_str!("testdata/cfg/cfg_simple.dot")), String::from("0 -> 13 []")]
-        {
-            output.contains(line);
-        }
+        let expected_node = include_str!("testdata/cfg/cfg_simple.dot")
+            .trim()
+            .strip_prefix("0 [ label = \"")
+            .and_then(|node| node.strip_suffix("\" ]"))
+            .expect("invalid CFG node fixture")
+            .replace("\\l", "\n");
+        assert_eq!(result.graph[NodeIndex::new(0)], expected_node);
+        assert!(result.graph.find_edge(NodeIndex::new(0), NodeIndex::new(13)).is_some());
     }
 
     #[tokio::test]
+    #[ignore = "requires a live RPC_URL"]
     async fn test_cfg_complex() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         let result = heimdall_cfg::cfg(CfgArgs {
             target: String::from("0xE90d8Fb7B79C8930B5C8891e61c298b412a6e81a"),
@@ -68,15 +65,13 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires a live RPC_URL"]
     async fn test_cfg_links_fallback_block() {
         // regression test for https://github.com/Jon-Becker/heimdall-rs/issues/627
         // the entry node dispatches to the fallback handler when `CALLDATASIZE < 4`, but the
         // edge into that block was previously dropped when the block had already been visited
         // through another path (e.g. the dispatcher's fall-through).
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         // WETH (0xc02a...cc2) exhibits the missing fallback edge from the entry node.
         let result = heimdall_cfg::cfg(CfgArgs {
@@ -112,11 +107,9 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires a live RPC_URL"]
     async fn test_cfg_auto_hardfork() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL is required for this live RPC test");
 
         // Test auto hardfork detection with a real contract
         let result = heimdall_cfg::cfg(CfgArgs {
@@ -166,7 +159,7 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "requires the external largest1k dataset"]
     async fn heavy_integration_test() {
         let root_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -177,10 +170,7 @@ mod integration_tests {
 
         // if the ./largest1k directory does not exist, download it from https://jbecker.dev/data/largest1k.tar.gz
         let dataset_dir = root_dir.join("largest1k");
-        if !dataset_dir.exists() {
-            eprintln!("dataset not found in root, skipping test");
-            std::process::exit(0);
-        }
+        assert!(dataset_dir.exists(), "largest1k dataset is required for this test");
 
         // list files in root_dir
         let contracts = std::fs::read_dir(dataset_dir)

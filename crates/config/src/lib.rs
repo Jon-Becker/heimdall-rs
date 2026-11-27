@@ -8,10 +8,10 @@ pub mod error;
 
 use crate::error::Error;
 use clap::Parser;
-use heimdall_common::utils::io::file::{delete_path, read_file, write_file};
 use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
 use std::env::home_dir;
+use std::path::{Path, PathBuf};
 use tracing::{debug, error, info};
 
 /// Command line arguments for the configuration command
@@ -72,33 +72,8 @@ impl Default for Configuration {
 impl Configuration {
     /// Returns the current configuration.
     pub fn load() -> Result<Self, Error> {
-        let mut home = home_dir().ok_or_else(|| {
-            Error::Generic(
-                "failed to get home directory. does your os support `std::env::home_dir()`?"
-                    .to_string(),
-            )
-        })?;
-        home.push(".bifrost");
-        home.push("config.toml");
+        let mut config = Self::load_from(&Self::path()?)?;
 
-        // if the config file doesn't exist, create it
-        if !home.exists() {
-            let config = Configuration::default();
-            config.save()?;
-        }
-
-        // read the config file
-        let contents = read_file(
-            home.to_str()
-                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
-        )
-        .map_err(|e| Error::Generic(format!("failed to read config file: {e}")))?;
-
-        // parse the config file
-        let mut config: Configuration = toml::from_str(&contents)
-            .map_err(|e| Error::ParseError(format!("failed to parse config file: {e}")))?;
-
-        // load mesc config if enabled
         if !mesc::is_mesc_enabled() {
             return Ok(config);
         }
@@ -131,50 +106,69 @@ impl Configuration {
         Ok(config)
     }
 
-    /// Saves the current configuration to disk.
-    pub fn save(&self) -> Result<(), Error> {
-        let mut home = home_dir().ok_or_else(|| {
+    fn path() -> Result<PathBuf, Error> {
+        let home = home_dir().ok_or_else(|| {
             Error::Generic(
                 "failed to get home directory. does your os support `std::env::home_dir()`?"
                     .to_string(),
             )
         })?;
-        home.push(".bifrost");
-        home.push("config.toml");
+        Ok(home.join(".bifrost").join("config.toml"))
+    }
 
-        write_file(
-            home.to_str()
-                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
-            &toml::to_string(&self)
-                .map_err(|e| Error::ParseError(format!("failed to serialize config: {e}")))?,
-        )
-        .map_err(|e| Error::Generic(format!("failed to write config file: {e}")))?;
+    fn load_from(path: &Path) -> Result<Self, Error> {
+        if !path.exists() {
+            let config = Self::default();
+            config.save_to(path)?;
+        }
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| Error::Generic(format!("failed to read config file: {e}")))?;
+        toml::from_str(&contents)
+            .map_err(|e| Error::ParseError(format!("failed to parse config file: {e}")))
+    }
 
-        Ok(())
+    fn save_to(&self, path: &Path) -> Result<(), Error> {
+        let contents = toml::to_string(self)
+            .map_err(|e| Error::ParseError(format!("failed to serialize config: {e}")))?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| Error::Generic(format!("failed to create config directory: {e}")))?;
+        }
+        std::fs::write(path, contents)
+            .map_err(|e| Error::Generic(format!("failed to write config file: {e}")))
+    }
+
+    fn delete_from(path: &Path) -> Result<(), Error> {
+        match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(Error::Generic(format!("failed to delete config file: {error}"))),
+        }
+    }
+
+    /// Saves the current configuration to disk.
+    pub fn save(&self) -> Result<(), Error> {
+        self.save_to(&Self::path()?)
     }
 
     /// Deletes the configuration file at `$HOME/.bifrost/config.toml`.
     pub fn delete() -> Result<(), Error> {
-        let mut home = home_dir().ok_or_else(|| {
-            Error::Generic(
-                "failed to get home directory. does your os support `std::env::home_dir()`?"
-                    .to_string(),
-            )
-        })?;
-        home.push(".bifrost");
-        home.push("config.toml");
-
-        delete_path(
-            home.to_str()
-                .ok_or_else(|| Error::Generic("failed to convert path to string".to_string()))?,
-        );
-
-        Ok(())
+        Self::delete_from(&Self::path()?)
     }
 
     /// Update a single key/value pair in the configuration.
     pub fn update(&mut self, key: &str, value: &str) -> Result<(), Error> {
-        // update the key in the struct and ensure it's the correct type
+        self.update_at(key, value, &Self::path()?)
+    }
+
+    fn update_at(&mut self, key: &str, value: &str, path: &Path) -> Result<(), Error> {
+        self.set(key, value)?;
+        let mut stored = Self::load_from(path)?;
+        stored.set(key, value)?;
+        stored.save_to(path)
+    }
+
+    fn set(&mut self, key: &str, value: &str) -> Result<(), Error> {
         match key {
             "rpc_url" => {
                 self.rpc_url = value.to_string();
@@ -201,9 +195,6 @@ impl Configuration {
             }
         }
 
-        // write the updated config to disk
-        self.save()?;
-
         Ok(())
     }
 }
@@ -212,16 +203,13 @@ impl Configuration {
 pub fn config(args: ConfigArgs) -> Result<(), Error> {
     if !args.key.is_empty() {
         if !args.value.is_empty() {
-            // read the config file and update the key/value pair
             let mut config = Configuration::load()?;
             config.update(&args.key, &args.value)?;
             info!("updated configuration! Set \'{}\' = \'{}\' .", &args.key, &args.value);
         } else {
-            // key is set, but no value is set
             error!("found key but no value to set. Please specify a value to set, use `heimdall config --help` for more information.");
         }
     } else {
-        // no key is set, print the config file
         println!("{:#?}", Configuration::load()?);
         info!("use `heimdall config <KEY> <VALUE>` to set a key/value pair.");
     }
@@ -239,90 +227,47 @@ pub fn parse_url_arg(url: &str) -> Result<String, String> {
     Ok(url.to_string())
 }
 
-#[allow(deprecated)]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
 
-    // Test default configuration
     #[test]
-    #[serial]
-    fn test_default_configuration() {
-        let config = Configuration::default();
-        assert_eq!(config.rpc_url, "");
-        assert_eq!(config.local_rpc_url, "http://localhost:8545");
-        assert_eq!(config.etherscan_api_key, "");
-        assert_eq!(config.transpose_api_key, "");
-        assert_eq!(config.openrouter_api_key, "");
-        assert_eq!(config.openrouter_model, "");
+    fn updating_one_value_does_not_persist_external_overrides() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let local = Configuration {
+            rpc_url: "local-rpc".into(),
+            etherscan_api_key: "local-key".into(),
+            ..Configuration::default()
+        };
+        local.save_to(&path).unwrap();
+        let mut effective = Configuration::load_from(&path).unwrap();
+        effective.rpc_url = "external-rpc".into();
+        effective.etherscan_api_key = "external-secret".into();
+        effective.update_at("openrouter_model", "new-model", &path).unwrap();
+        let stored = Configuration::load_from(&path).unwrap();
+        assert_eq!(stored.rpc_url, "local-rpc");
+        assert_eq!(stored.etherscan_api_key, "local-key");
+        assert_eq!(stored.openrouter_model, "new-model");
+        assert_eq!(effective.rpc_url, "external-rpc");
+        assert_eq!(effective.openrouter_model, "new-model");
     }
 
-    // Test loading configuration from a file
     #[test]
-    #[serial]
-    fn test_load_configuration() {
-        // delete config file if it exists
-        Configuration::delete().expect("failed to delete config file");
-        let config = Configuration::load().expect("failed to load config file");
-
-        assert_eq!(config.rpc_url, "");
+    fn configuration_round_trip_and_delete() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("nested/config.toml");
+        let mut config = Configuration::load_from(&path).unwrap();
         assert_eq!(config.local_rpc_url, "http://localhost:8545");
-        assert_eq!(config.etherscan_api_key, "");
-        assert_eq!(config.transpose_api_key, "");
-        assert_eq!(config.openrouter_api_key, "");
-        assert_eq!(config.openrouter_model, "");
-    }
-
-    // Test saving configuration to a file
-    #[test]
-    #[serial]
-    fn test_save_configuration() {
-        // delete config file if it exists
-        Configuration::delete().expect("failed to delete config file");
-        let mut config = Configuration::default();
-
-        // update rpc_url
-        config.update("rpc_url", "http://localhost:8545").expect("failed to update rpc_url");
-
-        // save the config file
-        config.save().expect("failed to save config file");
-
-        // load the config file
-        let loaded_config = Configuration::load().expect("failed to load config file");
-
-        // ensure the config file was saved correctly
-        assert_eq!(loaded_config.rpc_url, "http://localhost:8545");
-        assert_eq!(loaded_config.local_rpc_url, "http://localhost:8545");
-        assert_eq!(loaded_config.etherscan_api_key, "");
-        assert_eq!(loaded_config.transpose_api_key, "");
-        assert_eq!(loaded_config.openrouter_api_key, "");
-        assert_eq!(loaded_config.openrouter_model, "");
-    }
-
-    // Test deleting configuration file
-    #[test]
-    #[serial]
-    fn test_delete_configuration() {
-        // delete config file if it exists
-        Configuration::delete().expect("failed to delete config file");
-        let mut config = Configuration::load().expect("failed to load config file");
-
-        // save some values to the config file
-        config.update("rpc_url", "http://localhost:8545").expect("failed to update rpc_url");
-        config
-            .update("etherscan_api_key", "1234567890")
-            .expect("failed to update etherscan_api_key");
-
-        // delete config file if it exists
-        Configuration::delete().expect("failed to delete config file");
-        let config = Configuration::load().expect("failed to load config file");
-
-        assert_eq!(config.rpc_url, "");
-        assert_eq!(config.local_rpc_url, "http://localhost:8545");
-        assert_eq!(config.etherscan_api_key, "");
-        assert_eq!(config.transpose_api_key, "");
-        assert_eq!(config.openrouter_api_key, "");
-        assert_eq!(config.openrouter_model, "");
+        assert!(config.rpc_url.is_empty());
+        config.set("rpc_url", "https://example.invalid").unwrap();
+        config.set("etherscan_api_key", "key").unwrap();
+        config.save_to(&path).unwrap();
+        let loaded = Configuration::load_from(&path).unwrap();
+        assert_eq!(loaded.rpc_url, "https://example.invalid");
+        assert_eq!(loaded.etherscan_api_key, "key");
+        assert!(config.set("unknown", "value").is_err());
+        Configuration::delete_from(&path).unwrap();
+        assert!(Configuration::load_from(&path).unwrap().rpc_url.is_empty());
     }
 }

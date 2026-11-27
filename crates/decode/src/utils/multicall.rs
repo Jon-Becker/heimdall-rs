@@ -26,15 +26,12 @@ pub(crate) fn is_multicall_pattern(value: &DynSolValue) -> bool {
                 return false;
             }
 
-            // Check if all items follow multicall pattern
             items.iter().all(|item| match item {
                 DynSolValue::Tuple(tuple_items) => {
-                    // Must have at least address and bytes, regardless of other parameters
                     let has_address =
                         tuple_items.iter().any(|v| matches!(v, DynSolValue::Address(_)));
                     let has_bytes = tuple_items.iter().any(|v| matches!(v, DynSolValue::Bytes(_)));
 
-                    // As long as we have address and bytes, it's a potential multicall
                     has_address && has_bytes
                 }
                 _ => false,
@@ -81,7 +78,6 @@ async fn decode_multicall_item(
     args: &DecodeArgs,
     index: usize,
 ) -> Result<MulticallDecoded, Error> {
-    // Find each component regardless of order
     let mut target = None;
     let mut value = None;
     let mut calldata = None;
@@ -107,12 +103,10 @@ async fn decode_multicall_item(
         }
     }
 
-    // Validate we have required fields
     let target = target.ok_or_else(|| Error::Eyre(eyre!("No address found in multicall tuple")))?;
     let calldata =
         calldata.ok_or_else(|| Error::Eyre(eyre!("No bytes found in multicall tuple")))?;
 
-    // Check if calldata looks like a function call (4 byte selector + padded args)
     let decoded = if calldata.len() >= 4 && (calldata.len() - 4) % 32 == 0 {
         trace!(
             "Attempting to decode multicall item {} with calldata: {}",
@@ -120,7 +114,6 @@ async fn decode_multicall_item(
             encode_hex(&calldata)
         );
 
-        // Create a new DecodeArgs for the nested call
         let mut nested_args = args.clone();
         nested_args.target = encode_hex(&calldata);
         nested_args.raw = true;
@@ -148,7 +141,6 @@ pub(crate) fn format_multicall_trace(
     parent_trace: u32,
     trace_factory: &mut TraceFactory,
 ) {
-    // Build all multicall messages as a single batch
     let mut messages = Vec::new();
     messages.push("multicall:".to_string());
 
@@ -160,13 +152,10 @@ pub(crate) fn format_multicall_trace(
         messages.push(format!("   {} [{}] target: {}", prefix, result.index, result.target));
 
         if let Some(decoded) = &result.decoded {
-            // Add the decoded function signature
             messages.push(format!("   {}    └─ {}", continuation, decoded.decoded.signature));
 
-            // Add decoded inputs
             if let Some(inputs) = &decoded.decoded.decoded_inputs {
                 if inputs.is_empty() {
-                    // Show that there are no parameters
                     messages.push(format!("   {continuation}         (no parameters)"));
                 } else {
                     for (i, input) in inputs.iter().enumerate() {
@@ -175,7 +164,6 @@ pub(crate) fn format_multicall_trace(
                             &format!("   {continuation}              "),
                         );
                         if !formatted_inputs.is_empty() {
-                            // Format the first line with input index
                             let first_line = format!(
                                 "   {}         input {}: {}",
                                 continuation,
@@ -186,7 +174,6 @@ pub(crate) fn format_multicall_trace(
                             );
                             messages.push(first_line);
 
-                            // Add subsequent lines with proper indentation
                             for line in formatted_inputs.iter().skip(1) {
                                 let line = line.replace(
                                     &format!("   {continuation}              "),
@@ -195,7 +182,6 @@ pub(crate) fn format_multicall_trace(
                                 messages.push(line);
                             }
                         } else {
-                            // Handle case where display returns empty (e.g., for empty bytes)
                             match input {
                                 DynSolValue::Bytes(b) if b.is_empty() => {
                                     messages.push(format!(
@@ -208,7 +194,6 @@ pub(crate) fn format_multicall_trace(
                                     ));
                                 }
                                 _ => {
-                                    // Fallback for other empty types
                                     messages.push(format!(
                                         "   {continuation}         input {i}: (empty)"
                                     ));
@@ -219,7 +204,6 @@ pub(crate) fn format_multicall_trace(
                 }
             }
         } else {
-            // Show raw calldata if decoding failed
             messages.push(format!(
                 "   {}    └─ Raw calldata: 0x{}",
                 continuation,
@@ -227,13 +211,11 @@ pub(crate) fn format_multicall_trace(
             ));
         }
 
-        // Add space between multicalls if not the last one
         if !is_last {
             messages.push(format!("   {continuation} "));
         }
     }
 
-    // Add all multicall lines as a single message
     trace_factory.add_message(parent_trace, line!(), messages);
 }
 
@@ -410,64 +392,5 @@ mod tests {
             DynSolValue::Address(Address::ZERO),
         ])]);
         assert!(is_multicall_pattern(&permutation3));
-    }
-
-    #[test]
-    fn test_real_multicall_data() {
-        use alloy_dyn_abi::DynSolType;
-
-        // Test data from the failing test case
-        let calldata_hex =
-            include_str!("../../../core/tests/testdata/decode/real_multicall_data.hex");
-        let calldata = decode_hex(calldata_hex).unwrap();
-        let data = &calldata[4..]; // Skip selector
-
-        println!("Testing multicall detection with real data...");
-        println!("Data length: {} bytes", data.len());
-
-        // Debug: check what the decoder sees
-        println!("\nFirst 32 bytes (offset): {}", encode_hex(&data[0..32]));
-        println!("Next 32 bytes (length): {}", encode_hex(&data[32..64]));
-
-        // The issue might be that this is not (address, uint256, bytes)[]
-        // but rather a function with different parameters
-        // Let's check if this could be multicall((address,uint256,bytes)[])
-
-        // Try decoding as a single parameter that is an array
-        let inner_tuple =
-            DynSolType::Tuple(vec![DynSolType::Address, DynSolType::Uint(256), DynSolType::Bytes]);
-        let array_type = DynSolType::Array(Box::new(inner_tuple));
-
-        println!("\nTrying to decode as: {:?}", array_type);
-
-        match array_type.abi_decode(data) {
-            Ok(decoded) => {
-                println!("Successfully decoded!");
-                println!("Decoded value: {:?}", decoded);
-                assert!(is_multicall_pattern(&decoded), "Should be detected as multicall pattern");
-            }
-            Err(e) => {
-                println!("Failed with array decoding: {:?}", e);
-
-                // Maybe the function has other parameters?
-                // Let's just test the pattern detection with a manually constructed value
-                let test_value = DynSolValue::Array(vec![DynSolValue::Tuple(vec![
-                    DynSolValue::Address(Address::from([
-                        0x08, 0x13, 0xcc, 0xee, 0x6e, 0x0f, 0xc0, 0xfb, 0xc5, 0x06, 0xf8, 0x34,
-                        0x12, 0x2c, 0x7c, 0x08, 0x2c, 0xd4, 0xc3, 0x3f,
-                    ])),
-                    DynSolValue::Uint(U256::from(0x176a24), 256),
-                    DynSolValue::Bytes(vec![0x58, 0x5e, 0x33, 0xb0]), /* Just first 4 bytes as
-                                                                       * example */
-                ])]);
-
-                println!("\nTesting pattern detection with manually constructed value...");
-                assert!(
-                    is_multicall_pattern(&test_value),
-                    "Manually constructed multicall should be detected"
-                );
-                println!("Pattern detection works correctly!");
-            }
-        }
     }
 }

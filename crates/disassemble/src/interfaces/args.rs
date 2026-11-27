@@ -1,9 +1,8 @@
-use alloy::primitives::Address;
 use clap::Parser;
 use eyre::Result;
 use heimdall_common::ether::bytecode::get_bytecode_from_target;
 use heimdall_config::parse_url_arg;
-use heimdall_vm::core::hardfork::HardFork;
+use heimdall_vm::{core::hardfork::HardFork, ext::hardfork::resolve_hardfork};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -96,64 +95,7 @@ impl DisassemblerArgs {
     /// If `etherscan_api_key` is provided and the chain is supported, uses Etherscan API
     /// for faster creation block lookup. Otherwise, uses binary search via RPC.
     pub async fn get_hardfork(&self) -> HardFork {
-        if self.hardfork != HardFork::Auto {
-            return self.hardfork;
-        }
-
-        // Try to auto-detect hardfork from creation block
-        match self.detect_hardfork_from_creation_block().await {
-            Some(fork) => fork,
-            None => HardFork::Latest,
-        }
-    }
-
-    /// Attempts to detect the hardfork based on the contract's creation block.
-    ///
-    /// Returns `None` if the target is not a contract address, no RPC URL is available,
-    /// or the creation block cannot be determined.
-    async fn detect_hardfork_from_creation_block(&self) -> Option<HardFork> {
-        // Need RPC URL to get chain_id and creation block
-        if self.rpc_url.is_empty() {
-            return None;
-        }
-
-        // Try to parse target as an address
-        let address: Address = self.target.parse().ok()?;
-
-        // Get the chain_id first (needed for both etherscan and hardfork detection)
-        let chain_id = heimdall_common::ether::rpc::chain_id(&self.rpc_url).await.ok()?;
-
-        // Try to get the creation block
-        let creation_block = self.get_creation_block(address, chain_id).await?;
-
-        // Determine hardfork from chain and block number
-        // Note: For post-merge forks we don't have timestamp, so this will return Paris
-        // for post-merge blocks. This is conservative and safe for opcode recognition.
-        Some(HardFork::from_chain(chain_id, creation_block, None))
-    }
-
-    /// Gets the creation block for a contract address.
-    ///
-    /// Uses Etherscan API if available and supported, otherwise falls back to binary search.
-    async fn get_creation_block(&self, address: Address, chain_id: u64) -> Option<u64> {
-        // If etherscan_api_key is provided and chain is supported, use Etherscan API
-        if !self.etherscan_api_key.is_empty() &&
-            heimdall_common::ether::etherscan::is_supported_chain(chain_id)
-        {
-            if let Ok(block) = heimdall_common::ether::etherscan::get_contract_creation_block(
-                address,
-                &self.rpc_url,
-                chain_id,
-                &self.etherscan_api_key,
-            )
-            .await
-            {
-                return Some(block);
-            }
-        }
-
-        // Fall back to binary search
-        heimdall_common::ether::rpc::get_contract_creation_block(address, &self.rpc_url).await.ok()
+        resolve_hardfork(self.hardfork, &self.target, &self.rpc_url, &self.etherscan_api_key).await
     }
 }
 

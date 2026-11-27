@@ -23,3 +23,6 @@ bincode = { workspace = true }
 thiserror.workspace = true
 eyre.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -45,6 +45,12 @@ impl Storage {
         Storage { storage: HashMap::new(), access_set: HashSet::new(), transient: HashMap::new() }
     }
 
+    /// Clear transaction-scoped storage and access history while retaining persistent storage.
+    pub(crate) fn reset_transaction(&mut self) {
+        self.transient.clear();
+        self.access_set.clear();
+    }
+
     /// Store a key-value pair in the storage map.
     ///
     /// ```
@@ -93,7 +99,6 @@ impl Storage {
     pub fn load(&mut self, key: U256) -> U256 {
         self.access_set.insert(key);
 
-        // return the value associated with the key, with a null word if it doesn't exist
         match self.storage.get(&key) {
             Some(value) => *value,
             None => U256::ZERO,
@@ -112,7 +117,6 @@ impl Storage {
     /// assert_eq!(storage.tload(U256::from(1)), U256::from(1));
     /// ```
     pub fn tload(&mut self, key: U256) -> U256 {
-        // return the value associated with the key, with a null word if it doesn't exist
         match self.transient.get(&key) {
             Some(value) => *value,
             None => U256::ZERO,

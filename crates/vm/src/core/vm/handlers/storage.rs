@@ -9,7 +9,6 @@ use super::super::core::VM;
 pub fn sload(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let key = vm.stack.pop()?.value;
 
-    // consume dynamic gas
     let gas_cost = vm.storage.access_cost(key);
     vm.consume_gas(gas_cost);
 
@@ -22,7 +21,6 @@ pub fn sstore(vm: &mut VM) -> Result<()> {
     let key = vm.stack.pop()?.value;
     let value = vm.stack.pop()?.value;
 
-    // consume dynamic gas
     let gas_cost = vm.storage.storage_cost(key, value);
     vm.consume_gas(gas_cost);
 

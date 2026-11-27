@@ -33,12 +33,10 @@ pub enum Padding {
 /// assert_eq!(function_parameters, vec![DynSolType::Uint(256), DynSolType::Uint(256)]);
 /// ```
 pub fn parse_function_parameters(function_signature: &str) -> Result<Vec<DynSolType>> {
-    // remove the function name from the signature, only keep the parameters
     let param_range = find_balanced_encapsulator(function_signature, ('(', ')'))?;
 
     let function_inputs = function_signature[param_range].to_string();
 
-    // get inputs from the string
     extract_types_from_string(&function_inputs)
 }
 
@@ -52,18 +50,13 @@ fn extract_types_from_string(string: &str) -> Result<Vec<DynSolType>> {
 
     // if the string contains a tuple we cant simply split on commas
     if ['(', ')'].iter().any(|c| string.contains(*c)) {
-        // check if first type is a tuple
         if is_first_type_tuple(string) {
-            // get balanced encapsulator
             let tuple_range = find_balanced_encapsulator(string, ('(', ')'))?;
 
-            // extract the tuple
             let tuple_types = string[tuple_range.clone()].to_string();
 
-            // remove the tuple from the string
             let mut string = string[tuple_range.end + 1..].to_string();
 
-            // if string is not empty, split on commas and check if tuple is an array
             let mut is_array = false;
             let mut array_size: Option<usize> = None;
             if !string.is_empty() {
@@ -71,7 +64,6 @@ fn extract_types_from_string(string: &str) -> Result<Vec<DynSolType>> {
 
                 is_array = split.ends_with(']');
 
-                // get array size, or none if []
                 if is_array {
                     let array_range = find_balanced_encapsulator(split, ('[', ']'))?;
 
@@ -81,17 +73,12 @@ fn extract_types_from_string(string: &str) -> Result<Vec<DynSolType>> {
             }
 
             if is_array {
-                // if the string doesnt contain a comma, this is the last type
                 if string.contains(',') {
-                    // remove the array from the string by splitting on the first comma and taking
-                    // the second half
                     string = string.splitn(2, ',').collect::<Vec<&str>>()[1].to_string();
                 } else {
-                    // set string to empty string
                     string = "".to_string();
                 }
 
-                // recursively call this function to extract the tuple types
                 let inner_types = extract_types_from_string(&tuple_types)?;
 
                 if let Some(array_size) = array_size {
@@ -103,39 +90,29 @@ fn extract_types_from_string(string: &str) -> Result<Vec<DynSolType>> {
                     types.push(DynSolType::Array(Box::new(DynSolType::Tuple(inner_types))))
                 }
             } else {
-                // recursively call this function to extract the tuple types
                 let inner_types = extract_types_from_string(&tuple_types)?;
 
                 types.push(DynSolType::Tuple(inner_types));
             }
 
-            // recursively call this function to extract the remaining types
             types.append(&mut extract_types_from_string(&string)?);
         } else {
-            // first type is not a tuple, so we can extract it
             let string_parts = string.splitn(2, ',').collect::<Vec<&str>>();
 
-            // convert the string type to a DynSolType
             if string_parts[0].is_empty() {
-                // the first type is empty, so we can just recursively call this function to extract
-                // the remaining types
                 types.append(&mut extract_types_from_string(string_parts[1])?);
             } else {
                 let param_type = to_type(string_parts[0]);
                 types.push(param_type);
 
-                // remove the first type from the string
                 let string = string[string_parts[0].len() + 1..].to_string();
 
-                // recursively call this function to extract the remaining types
                 types.append(&mut extract_types_from_string(&string)?);
             }
         }
     } else {
-        // split on commas
         let split = string.split(',').collect::<Vec<&str>>();
 
-        // iterate over the split string and convert each type to a DynSolType
         for string_type in split {
             if string_type.is_empty() {
                 continue;
@@ -152,10 +129,8 @@ fn extract_types_from_string(string: &str) -> Result<Vec<DynSolType>> {
 /// A helper function used by [`extract_types_from_string`] to check if the first type in a string
 /// is a tuple.
 fn is_first_type_tuple(string: &str) -> bool {
-    // split by first comma
     let split = string.splitn(2, ',').collect::<Vec<&str>>();
 
-    // if the first element starts with a (, it is a tuple
     split[0].starts_with('(')
 }
 
@@ -166,7 +141,6 @@ pub fn to_type(string: &str) -> DynSolType {
     let mut array_size: VecDeque<Option<usize>> = VecDeque::new();
     let mut string = string.to_string();
 
-    // while string contains a [..]
     while string.ends_with(']') {
         let array_range = match find_balanced_encapsulator(&string, ('[', ']')) {
             Ok(range) => range,
@@ -196,7 +170,6 @@ pub fn to_type(string: &str) -> DynSolType {
                 let size = stripped.parse::<usize>().unwrap_or(32);
                 DynSolType::FixedBytes(size)
             } else {
-                // default to bytes if invalid
                 DynSolType::Bytes
             }
         }
@@ -205,9 +178,7 @@ pub fn to_type(string: &str) -> DynSolType {
     if is_array {
         let mut arg_type = arg_type;
 
-        // while array_size is not empty
         while !array_size.is_empty() {
-            // pop off first element of array_size
             if let Some(size) =
                 array_size.pop_front().expect("impossible case: failed to pop from array_size")
             {

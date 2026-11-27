@@ -25,7 +25,7 @@ pub(crate) struct AnalyzedFunction {
 
     /// memory structure:
     ///   - key : slot of the argument. I.E: slot 0 is CALLDATALOAD(4).
-    ///   - value : tuple of ({value: U256, operation: WrappedOpcode})
+    ///   - value : operation that produced the stored word
     pub memory: HashMap<U256, StorageFrame>,
 
     /// returns the return type for the function.
@@ -70,7 +70,6 @@ pub(crate) struct AnalyzedFunction {
 #[derive(Clone, Debug)]
 pub(crate) struct StorageFrame {
     pub operation: WrappedOpcode,
-    pub value: U256,
 }
 
 #[derive(Clone, Debug)]
@@ -83,7 +82,6 @@ pub(crate) struct CalldataFrame {
 impl CalldataFrame {
     /// Get the potential types for the given argument
     pub(crate) fn potential_types(&self) -> Vec<SolidityType> {
-        // get all potential types that can fit in self.mask_size
         byte_size_to_type(self.mask_size).1.iter().map(|ty| SolidityType::parse(ty)).collect()
     }
 }
@@ -149,11 +147,9 @@ impl AnalyzedFunction {
     pub(crate) fn get_memory_range(&self, _offset: U256, _size: U256) -> Vec<StorageFrame> {
         let mut memory_slice: Vec<StorageFrame> = Vec::new();
 
-        // Safely convert U256 to usize
         let mut offset: usize = std::cmp::min(_offset.try_into().unwrap_or(0), 2048);
         let mut size: usize = std::cmp::min(_size.try_into().unwrap_or(0), 2048);
 
-        // get the memory range
         while size > 0 {
             if let Some(memory) = self.memory.get(&U256::from(offset)) {
                 memory_slice.push(memory.clone());

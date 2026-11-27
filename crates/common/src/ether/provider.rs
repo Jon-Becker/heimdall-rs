@@ -1,6 +1,6 @@
 //! Create a custom data transport to use with a Provider.
 use alloy::{
-    eips::BlockId,
+    eips::{BlockId, BlockNumberOrTag},
     network::Ethereum,
     primitives::{Address, TxHash},
     providers::{ext::TraceApi, Provider, ProviderBuilder, RootProvider},
@@ -18,9 +18,6 @@ pub struct MultiTransportProvider {
     provider: RootProvider<Ethereum>,
 }
 
-// We implement a convenience "constructor" method, to easily initialize the transport.
-// This will connect to [`Http`] if the rpc_url contains 'http', to [`Ws`] if it contains 'ws',
-// otherwise it'll default to [`Ipc`].
 impl MultiTransportProvider {
     /// Connect to a provider using the given rpc_url.
     pub async fn connect(rpc_url: &str) -> Result<Self> {
@@ -40,6 +37,15 @@ impl MultiTransportProvider {
     /// Get the latest block number.
     pub async fn get_block_number(&self) -> Result<u64> {
         Ok(self.provider.get_block_number().await?)
+    }
+
+    /// Get the timestamp of a block, if that block exists.
+    pub async fn get_block_timestamp(&self, block: u64) -> Result<Option<u64>> {
+        Ok(self
+            .provider
+            .get_block_by_number(BlockNumberOrTag::Number(block))
+            .await?
+            .map(|block| block.header.inner.timestamp))
     }
 
     /// Get the bytecode at the given address.

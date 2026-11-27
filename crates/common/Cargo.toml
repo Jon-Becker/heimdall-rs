@@ -20,7 +20,6 @@ workspace = true
 async-openai.workspace = true
 clap = { workspace = true, features = ["derive"] }
 colored.workspace = true
-crossbeam-channel.workspace = true
 fancy-regex.workspace = true
 heimdall-cache = { workspace = true }
 indicatif.workspace = true
@@ -45,3 +44,6 @@ bytes = { workspace = true }
 alloy-dyn-abi.workspace = true
 tokio-retry = { workspace = true }
 hashbrown.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

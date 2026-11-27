@@ -7,6 +7,10 @@ use heimdall_inspect::{inspect, InspectArgsBuilder};
 use tokio::runtime::Runtime;
 
 fn test_inspect(c: &mut Criterion) {
+    let Ok(rpc_url) = std::env::var("RPC_URL") else {
+        eprintln!("RPC_URL not set; skipping inspect benchmark");
+        return;
+    };
     let mut group = c.benchmark_group("heimdall_inspect");
 
     let txids = [
@@ -18,15 +22,10 @@ fn test_inspect(c: &mut Criterion) {
         group.sample_size(100);
         group.bench_with_input(BenchmarkId::from_parameter(name), &txid, |b, c| {
             b.to_async::<Runtime>(Runtime::new().unwrap()).iter(|| async {
-                let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-                    println!("RPC_URL not set, skipping bench");
-                    std::process::exit(0);
-                });
-
                 let start = std::time::Instant::now();
                 let args = InspectArgsBuilder::new()
                     .target(c.to_string())
-                    .rpc_url(rpc_url)
+                    .rpc_url(rpc_url.clone())
                     .skip_resolving(true)
                     .build()
                     .expect("Failed to build InspectArgs");

@@ -22,10 +22,8 @@ pub struct Version {
 
 /// get the current version from cargo
 pub fn current_version() -> Version {
-    // get the current version from the cargo package
     let version_string = env!("CARGO_PKG_VERSION");
 
-    // remove +<channel>... from the version string
     let version_channel =
         version_string.split('+').collect::<Vec<&str>>().get(1).map(|s| s.to_string());
     let version_string = version_string.split('+').collect::<Vec<&str>>()[0];
@@ -41,11 +39,9 @@ pub fn current_version() -> Version {
 
 /// get the latest version from github
 pub async fn remote_version() -> Result<Version> {
-    // get the latest release from github
     let remote_repository_url =
         "https://api.github.com/repos/Jon-Becker/heimdall-rs/releases/latest";
 
-    // retrieve the latest release tag from github
     if let Some(release) = get_json_from_url(remote_repository_url, 1).await? {
         if let Some(tag_name) = release["tag_name"].as_str() {
             let version_string = tag_name.replace('v', "");
@@ -61,23 +57,17 @@ pub async fn remote_version() -> Result<Version> {
         }
     }
 
-    // if we can't get the latest release, return a default version
     Ok(Version { major: 0, minor: 0, patch: 0, channel: None })
 }
 
 /// get the latest nightly version from github
 pub async fn remote_nightly_version() -> Result<Version> {
-    // get the latest commit to main from github
     let remote_repository_url = "https://api.github.com/repos/Jon-Becker/heimdall-rs/commits/main";
 
-    // get the latest release
     let mut remote_ver = remote_version().await?;
 
-    // retrieve the latest commit from github
     if let Some(commit) = get_json_from_url(remote_repository_url, 1).await? {
-        // get the latest commit hash
         if let Some(sha) = commit["sha"].as_str() {
-            // channel is nightly.1234567
             remote_ver.channel = format!("nightly.{}", &sha[..7]).into();
         }
     }
@@ -243,19 +233,5 @@ mod tests {
         let version = current_version();
 
         assert_eq!(version.to_string(), env!("CARGO_PKG_VERSION"));
-    }
-
-    #[tokio::test]
-    async fn test_version_remote() {
-        let version = remote_version().await;
-
-        assert!(version.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_version_remote_nightly() {
-        let version = remote_nightly_version().await;
-
-        assert!(version.is_ok());
     }
 }

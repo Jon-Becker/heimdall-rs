@@ -15,13 +15,7 @@ pub fn address(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 pub fn balance(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let address = vm.stack.pop()?.value;
 
-    // consume dynamic gas
-    if !vm.address_access_set.contains(&address) {
-        vm.consume_gas(2600);
-        vm.address_access_set.insert(address);
-    } else {
-        vm.consume_gas(100);
-    }
+    vm.charge_address_access(address);
 
     // balance is set to 1 wei because we won't run into div by 0 errors
     vm.stack.push(U256::from(1), operation);
@@ -50,7 +44,6 @@ pub fn callvalue(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 pub fn calldataload(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let i = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let i: usize = i.try_into().unwrap_or(usize::MAX);
 
     let result = if i.saturating_add(32) > vm.calldata.len() {
@@ -91,7 +84,6 @@ pub fn calldatacopy(
 
     let value = VM::safe_copy_data(&vm.calldata, offset, size);
 
-    // consume dynamic gas
     let minimum_word_size = size.div_ceil(32) as u128;
     let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(offset, size);
     vm.consume_gas(gas_cost);
@@ -128,7 +120,6 @@ pub fn codecopy(
 
     let value = VM::safe_copy_data(&vm.bytecode, offset, size);
 
-    // consume dynamic gas
     let minimum_word_size = size.div_ceil(32) as u128;
     let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(offset, size);
     vm.consume_gas(gas_cost);
@@ -153,13 +144,7 @@ pub fn gasprice(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 pub fn extcodesize(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let address = vm.stack.pop()?.value;
 
-    // consume dynamic gas
-    if !vm.address_access_set.contains(&address) {
-        vm.consume_gas(2600);
-        vm.address_access_set.insert(address);
-    } else {
-        vm.consume_gas(100);
-    }
+    vm.charge_address_access(address);
 
     vm.stack.push(U256::from(1), operation);
     Ok(())
@@ -175,7 +160,6 @@ pub fn extcodecopy(
     vm.stack.pop()?;
     let size = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let dest_offset: usize = dest_offset.try_into().unwrap_or(0);
     let mut size: usize = size.try_into().unwrap_or(256);
     size = size.max(256);
@@ -183,16 +167,10 @@ pub fn extcodecopy(
     let mut value = Vec::with_capacity(size);
     value.fill(0xff);
 
-    // consume dynamic gas
     let minimum_word_size = size.div_ceil(32) as u128;
     let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(dest_offset, size);
     vm.consume_gas(gas_cost);
-    if !vm.address_access_set.contains(&address) {
-        vm.consume_gas(2600);
-        vm.address_access_set.insert(address);
-    } else {
-        vm.consume_gas(100);
-    }
+    vm.charge_address_access(address);
 
     vm.memory.store_with_opcode(
         dest_offset,
@@ -219,14 +197,12 @@ pub fn returndatacopy(
     vm.stack.pop()?;
     let size = vm.stack.pop()?.value;
 
-    // Safely convert U256 to usize
     let dest_offset: usize = dest_offset.try_into().unwrap_or(0);
     let size: usize = size.try_into().unwrap_or(256);
 
     let mut value = Vec::with_capacity(size);
     value.fill(0xff);
 
-    // consume dynamic gas
     let minimum_word_size = size.div_ceil(32) as u128;
     let gas_cost = 3 * minimum_word_size + vm.memory.expansion_cost(dest_offset, size);
     vm.consume_gas(gas_cost);
@@ -245,13 +221,7 @@ pub fn returndatacopy(
 pub fn extcodehash(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
     let address = vm.stack.pop()?.value;
 
-    // consume dynamic gas
-    if !vm.address_access_set.contains(&address) {
-        vm.consume_gas(2600);
-        vm.address_access_set.insert(address);
-    } else {
-        vm.consume_gas(100);
-    }
+    vm.charge_address_access(address);
 
     vm.stack.push(U256::ZERO, operation);
     Ok(())

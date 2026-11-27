@@ -60,33 +60,26 @@ impl TraceFactory {
         instruction: u32,
         message: Vec<String>,
     ) -> u32 {
-        // build the new trace
         let trace = Trace::new(category, parent_index, instruction, message);
         let trace_index = self.traces.len() as u32 + 1;
 
-        // add the children indices to the parent
         if trace.parent != 0 {
-            // get the parent
             let parent =
                 self.traces.get_mut(trace.parent as usize - 1).expect("Failed to build trace.");
 
-            // add the child index to the parent
             parent.children.push(trace_index);
         }
 
         self.traces.push(trace);
 
-        // return the index of the new trace
         trace_index
     }
 
     /// display the trace to the console if the verbosity is high enough
     pub fn display(&self) {
         for index in 0..self.traces.len() {
-            // safe to unwrap because we just iterated over the traces
             let trace = self.traces.get(index).expect("Failed to build trace.");
 
-            // match only root traces and print them
             if trace.parent == 0 {
                 self.print_trace(" ", index);
             }
@@ -100,10 +93,8 @@ impl TraceFactory {
             None => return,
         };
 
-        // each category has slightly different formatting
         match trace.category {
             TraceCategory::Call => {
-                // print the trace title
                 println!(
                     "{} {} {}",
                     replace_last(prefix, "│ ", " ├─").bold().bright_white(),
@@ -111,7 +102,6 @@ impl TraceFactory {
                     trace.message.first().expect("Failed to build trace.")
                 );
 
-                // print the children
                 for child in &trace.children {
                     self.print_trace(
                         &format!("{prefix}   │").bold().bright_white(),
@@ -119,7 +109,6 @@ impl TraceFactory {
                     );
                 }
 
-                // print the return value
                 println!(
                     "{} ← {}",
                     format!("{prefix}   └─").bold().bright_white(),
@@ -184,7 +173,6 @@ impl TraceFactory {
                     );
                 }
 
-                // print the children
                 for (i, child) in trace.children.iter().enumerate() {
                     if i == trace.children.len() - 1 {
                         self.print_trace(
@@ -210,7 +198,6 @@ impl TraceFactory {
                     trace.message.first().expect("Failed to build trace.")
                 );
 
-                // print the children
                 for child in &trace.children {
                     self.print_trace(
                         &format!("{prefix}   │").bold().bright_white(),
@@ -218,7 +205,6 @@ impl TraceFactory {
                     );
                 }
 
-                // print the return value
                 println!(
                     "{} ← {}",
                     format!("{prefix}   └─").bold().bright_white(),
@@ -236,10 +222,6 @@ impl TraceFactory {
             }
         }
     }
-
-    ////////////////////////////////////////////////////////////////////////////////
-    //                                TRACE HELPERS                               //
-    ////////////////////////////////////////////////////////////////////////////////
 
     /// adds a function call trace
     pub fn add_call(
@@ -420,7 +402,6 @@ impl Trace {
 
 impl Default for TraceFactory {
     fn default() -> Self {
-        // get the environment variable RUST_LOG and parse it
         let level = match std::env::var("RUST_LOG") {
             Ok(level) => match level.to_lowercase().as_str() {
                 "silent" => -1,
@@ -442,104 +423,18 @@ impl Default for TraceFactory {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]
-    fn test_raw_trace() {
+    fn nested_traces_link_to_their_parent_in_order() {
         let mut trace = TraceFactory::new(4);
-
-        let parent = trace.add("call", 0, 123123, vec!["Test::test_trace()".to_string()]);
-        trace.add(
-            "log",
-            parent,
-            234234,
-            vec!["ContractCreated(contractAddress: 0x0000000000000000000000000000000000000000)"
-                .to_string()],
-        );
-        let inner = trace.add(
-            "create",
-            parent,
-            121234,
-            vec![
-                "TestContract".to_string(),
-                "0x0000000000000000000000000000000000000000".to_string(),
-                "917".to_string(),
-            ],
-        );
-        trace.add(
-            "log_unknown",
-            inner,
-            12344,
-            vec!["0x0000000000000000000000000000000000000000000000000000000000000000".to_string()],
-        );
-        let deeper = trace.add(
-            "call",
-            inner,
-            12344,
-            vec![
-                "Test::transfer(to: 0x0000000000000000000000000000000000000000, amount: 1)"
-                    .to_string(),
-                "true".to_string(),
-            ],
-        );
-        trace.add("log", deeper, 12344, vec!["Transfer(from: 0x0000000000000000000000000000000000000000, to: 0x0000000000000000000000000000000000000000, amount: 1)".to_string()]);
-        trace.add("message", inner, 12344, vec!["warn: Transfer to the zero address!".to_string()]);
-        trace.add(
-            "message",
-            parent,
-            12344,
-            vec![
-                "Execution Reverted: Out of Gas.".to_string(),
-                "Execution Reverted: Out of Gas.".to_string(),
-            ],
-        );
-
-        trace.display();
-    }
-
-    #[test]
-    fn test_helper_functions() {
-        let mut trace = TraceFactory::new(4);
-
-        let parent = trace.add_call(
-            0,
-            123,
-            "Test".to_string(),
-            "test_trace".to_string(),
-            vec!["arg1: 0x0".to_string(), "arg2: 0x1".to_string()],
-            "()".to_string(),
-        );
-        trace.add_creation(
-            parent,
-            124,
-            "TestContract".to_string(),
-            "0x0000000000000000000000000000000000000000".to_string(),
-            1232,
-        );
-        trace.add_emission(
-            parent,
-            125,
-            "ContractCreated",
-            &["contractAddress: 0x0000000000000000000000000000000000000000".to_string()],
-        );
-        trace.add_raw_emission(
-            parent,
-            125,
-            vec![
-                "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-                "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            ],
-            "0x".to_string(),
-        );
-        trace.add_error(parent, 126, "Testing errors");
-        trace.add_info(parent, 127, "Testing info");
-        trace.add_message(
-            parent,
-            128,
-            vec!["test multiple".to_string(), "lines".to_string(), "to tracing".to_string()],
-        );
-
-        trace.display();
+        let root = trace.add_call(0, 10, "Contract".into(), "run".into(), vec![], "()".into());
+        let event = trace.add_emission(root, 11, "Transfer", &["amount: 1".into()]);
+        let nested = trace.add_call(root, 12, "Other".into(), "call".into(), vec![], "()".into());
+        let message = trace.add_message(nested, 13, vec!["done".into()]);
+        assert_eq!(trace.traces[(root - 1) as usize].children, [event, nested]);
+        assert_eq!(trace.traces[(nested - 1) as usize].children, [message]);
+        assert_eq!(trace.traces[(message - 1) as usize].parent, nested);
+        assert_eq!(trace.traces[(message - 1) as usize].message, ["done"]);
     }
 }

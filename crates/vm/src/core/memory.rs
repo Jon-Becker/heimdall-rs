@@ -4,6 +4,8 @@ use crate::ext::range_map::RangeMap;
 #[cfg(feature = "experimental")]
 use super::opcodes::WrappedOpcode;
 
+const MAX_MEMORY_ACCESS: usize = 65_536;
+
 /// A type alias for tracking byte ranges in memory with associated opcodes.
 #[cfg(feature = "experimental")]
 pub type ByteTracker = RangeMap;
@@ -61,10 +63,8 @@ impl Memory {
     /// assert_eq!(memory.size(), 32);
     /// ```
     pub fn extend(&mut self, offset: u128, size: u128) {
-        // Calculate the new size of the memory
         let new_mem_size = (offset.saturating_add(size).saturating_add(31)) / 32 * 32;
 
-        // If the new memory size is greater than the current size, extend the memory
         if new_mem_size > self.size() {
             let byte_difference = (new_mem_size - self.size()) as usize;
             self.memory.resize(self.memory.len().saturating_add(byte_difference), 0u8);
@@ -82,29 +82,23 @@ impl Memory {
     /// assert_eq!(memory.read(0, 32), vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff]);
     /// ```
     pub fn store(&mut self, mut offset: usize, mut size: usize, value: &[u8]) {
-        // Cap offset and size to 2**16
-        offset = offset.min(65536);
-        size = size.min(65536);
+        offset = offset.min(MAX_MEMORY_ACCESS);
+        size = size.min(MAX_MEMORY_ACCESS);
 
         let value_len = value.len();
 
-        // Truncate or extend value to the desired size
         let value: Vec<u8> = if value_len >= size {
             value[..size].to_vec()
         } else {
             let mut value = value.to_vec();
 
-            // prepend null bytes until the value is the desired size
-            // ex, ff with size 4 -> 00 00 00 ff
             let null_bytes = vec![0u8; size - value_len];
             value.splice(0..0, null_bytes);
             value
         };
 
-        // Extend the memory to allocate for the new space
         self.extend(offset as u128, size as u128);
 
-        // Store the value in memory by replacing bytes in the memory
         self.memory.splice(offset..offset.saturating_add(size), value);
     }
 
@@ -129,7 +123,7 @@ impl Memory {
     ) {
         self.store(offset, size, value);
         #[cfg(feature = "experimental")]
-        self.bytes.write(offset, size, opcode);
+        self.bytes.write(offset.min(MAX_MEMORY_ACCESS), size.min(MAX_MEMORY_ACCESS), opcode);
     }
 
     /// Read the given number of bytes from the memory at the given offset.
@@ -144,11 +138,9 @@ impl Memory {
     /// assert_eq!(memory.read(0, 32), vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff]);
     /// ```
     pub fn read(&self, offset: usize, size: usize) -> Vec<u8> {
-        // Cap size to 2**16 and offset to 2**16 for optimization
-        let size = size.min(65536);
-        let offset = offset.min(65536);
+        let size = size.min(MAX_MEMORY_ACCESS);
+        let offset = offset.min(MAX_MEMORY_ACCESS);
 
-        // If the offset + size will be out of bounds, append null bytes until the size is met
         if offset.saturating_add(size) > self.size() as usize {
             let mut value = Vec::with_capacity(size);
 
@@ -163,6 +155,23 @@ impl Memory {
         }
     }
 
+    /// Read memory without silently changing the requested range.
+    ///
+    /// Returns `None` if the range exceeds the VM's current per-access resource limits.
+    /// Unallocated bytes within the limit are returned as zeroes.
+    pub fn try_read(&self, offset: usize, size: usize) -> Option<Vec<u8>> {
+        if size == 0 {
+            return Some(Vec::new());
+        }
+        if offset > MAX_MEMORY_ACCESS ||
+            size > MAX_MEMORY_ACCESS ||
+            offset.checked_add(size).is_none()
+        {
+            return None;
+        }
+        Some(self.read(offset, size))
+    }
+
     /// Calculate the current memory cost
     ///
     /// ```
@@ -173,7 +182,6 @@ impl Memory {
     /// assert_eq!(memory.memory_cost(), 3);
     /// ```
     pub fn memory_cost(&self) -> u128 {
-        // Calculate the new size of the memory
         let memory_word_size = (self.size().saturating_add(31)) / 32;
         ((memory_word_size.pow(2)) / 512).saturating_add(3 * memory_word_size)
     }
@@ -189,7 +197,6 @@ impl Memory {
     /// assert_eq!(memory.expansion_cost(0, 64), 3);
     /// ```
     pub fn expansion_cost(&self, offset: usize, size: usize) -> u128 {
-        // Calculate the new size of the memory
         let new_memory_word_size = ((offset.saturating_add(size).saturating_add(31)) / 32) as u128;
         let new_memory_cost =
             ((new_memory_word_size.pow(2)) / 512).saturating_add(3 * new_memory_word_size);
@@ -215,6 +222,16 @@ mod tests {
     use heimdall_common::utils::strings::decode_hex;
 
     use super::*;
+
+    #[test]
+    fn checked_reads_report_limits_instead_of_aliasing_offsets() {
+        let mut memory = Memory::new();
+        memory.store(65_536, 1, &[0xab]);
+        assert_eq!(memory.try_read(65_536, 2), Some(vec![0xab, 0]));
+        assert_eq!(memory.try_read(65_537, 1), None);
+        assert_eq!(memory.try_read(0, 65_537), None);
+        assert_eq!(memory.try_read(usize::MAX, 0), Some(Vec::new()));
+    }
 
     #[test]
     fn test_mstore_simple() {

@@ -54,10 +54,7 @@ impl DecodedInstruction {
     /// A truncated operand is right-padded with zero bytes, matching the EVM's code-reading
     /// semantics at the end of bytecode.
     pub fn push_value(&self) -> Option<U256> {
-        let width = push_width(self.opcode)?;
-        let mut bytes = [0u8; 32];
-        bytes[32 - width..32 - width + self.immediate.len()].copy_from_slice(&self.immediate);
-        Some(U256::from_be_bytes(bytes))
+        decode_push_operand(self.opcode, &self.immediate)
     }
 }
 
@@ -153,6 +150,15 @@ impl Program {
             self.instructions[block.instructions.start].opcode == opcodes::JUMPDEST
         })
     }
+
+    /// Whether `pc` is an instruction boundary containing JUMPDEST in the given bytecode.
+    ///
+    /// This uses the same decoder as `Program::decode` and stops as soon as the target is passed.
+    pub fn is_valid_jumpdest_in(bytecode: &[u8], pc: usize) -> bool {
+        decoded_bytes(bytecode)
+            .take_while(|(offset, ..)| *offset <= pc)
+            .any(|(offset, opcode, ..)| offset == pc && opcode == opcodes::JUMPDEST)
+    }
 }
 
 fn push_width(opcode: u8) -> Option<usize> {
@@ -163,25 +169,38 @@ fn push_width(opcode: u8) -> Option<usize> {
     }
 }
 
-fn decode_instructions(bytecode: &[u8]) -> Vec<DecodedInstruction> {
-    let mut instructions = Vec::new();
-    let mut pc = 0;
+pub(crate) fn decode_push_operand(opcode: u8, immediate: &[u8]) -> Option<U256> {
+    let width = push_width(opcode)?;
+    let mut bytes = [0u8; 32];
+    let available = immediate.len().min(width);
+    bytes[32 - width..32 - width + available].copy_from_slice(&immediate[..available]);
+    Some(U256::from_be_bytes(bytes))
+}
 
-    while pc < bytecode.len() {
+fn decoded_bytes(bytecode: &[u8]) -> impl Iterator<Item = (usize, u8, &[u8], bool)> + '_ {
+    let mut pc = 0;
+    std::iter::from_fn(move || {
+        if pc >= bytecode.len() {
+            return None;
+        }
         let opcode = bytecode[pc];
         let width = push_width(opcode).unwrap_or(0);
         let available = width.min(bytecode.len().saturating_sub(pc + 1));
-        let immediate = bytecode[pc + 1..pc + 1 + available].to_vec();
-        instructions.push(DecodedInstruction {
+        let instruction = (pc, opcode, &bytecode[pc + 1..pc + 1 + available], available < width);
+        pc += 1 + available;
+        Some(instruction)
+    })
+}
+
+fn decode_instructions(bytecode: &[u8]) -> Vec<DecodedInstruction> {
+    decoded_bytes(bytecode)
+        .map(|(pc, opcode, immediate, truncated)| DecodedInstruction {
             pc,
             opcode,
-            truncated: available < width,
-            immediate,
-        });
-        pc += 1 + available;
-    }
-
-    instructions
+            immediate: immediate.to_vec(),
+            truncated,
+        })
+        .collect()
 }
 
 fn ends_block(instruction: &DecodedInstruction, hardfork: HardFork) -> bool {

@@ -14,7 +14,6 @@ use eyre::eyre;
 use heimdall_common::{
     ether::{signatures::ResolvedFunction, types::DynSolValueExt},
     utils::{
-        env::get_env,
         hex::ToLowerHex,
         io::{logging::TraceFactory, types::Parameterize},
     },
@@ -25,7 +24,7 @@ use tracing::trace;
 
 use async_convert::{async_trait, TryFrom};
 use futures::future::try_join_all;
-use heimdall_decoder::{decode, DecodeArgsBuilder};
+use heimdall_decoder::{decode, decode_parameters, DecodeArgsBuilder};
 
 use crate::error::Error;
 
@@ -116,13 +115,20 @@ impl TryFrom<Vec<TransactionTrace>> for DecodedTransactionTrace {
     type Error = crate::error::Error;
 
     async fn try_from(value: Vec<TransactionTrace>) -> Result<Self, Self::Error> {
-        // convert each [`TransactionTrace`] to a [`DecodedTransactionTrace`]
-        let handles = value.into_iter().map(|trace| {
-            <DecodedTransactionTrace as async_convert::TryFrom<TransactionTrace>>::try_from(trace)
-        });
+        Self::decode_with_options(value, false).await
+    }
+}
+
+impl DecodedTransactionTrace {
+    pub(crate) async fn decode_with_options(
+        value: Vec<TransactionTrace>,
+        skip_resolving: bool,
+    ) -> Result<Self, Error> {
+        let handles = value
+            .into_iter()
+            .map(|trace| DecodedTransactionTrace::decode_one_with_options(trace, skip_resolving));
         let mut decoded_transaction_traces = VecDeque::from(try_join_all(handles).await?);
 
-        // get the first trace, this will be the one we are building.
         let mut decoded_transaction_trace = decoded_transaction_traces
             .pop_front()
             .ok_or(Error::Eyre(eyre!("No transaction trace found")))?;
@@ -136,7 +142,6 @@ impl TryFrom<Vec<TransactionTrace>> for DecodedTransactionTrace {
             let mut current_trace = &mut decoded_transaction_trace;
             let trace_address = &decoded_trace.trace_address;
 
-            // Iterate through the trace address, navigating through subtraces
             for &index in trace_address.iter().take(trace_address.len() - 1) {
                 current_trace = current_trace
                     .subtraces
@@ -144,7 +149,6 @@ impl TryFrom<Vec<TransactionTrace>> for DecodedTransactionTrace {
                     .ok_or(Error::Eyre(eyre!("Invalid trace address: {:?}", trace_address)))?;
             }
 
-            // Insert the decoded trace into the correct position
             if let Some(last_index) = trace_address.last() {
                 current_trace.subtraces.insert(*last_index, decoded_trace);
             } else {
@@ -161,10 +165,19 @@ impl TryFrom<TransactionTrace> for DecodedTransactionTrace {
     type Error = crate::error::Error;
 
     async fn try_from(value: TransactionTrace) -> Result<Self, Self::Error> {
+        Self::decode_one_with_options(value, false).await
+    }
+}
+
+impl DecodedTransactionTrace {
+    async fn decode_one_with_options(
+        value: TransactionTrace,
+        skip_resolving: bool,
+    ) -> Result<Self, Error> {
         let action = match value.action {
-            Action::Call(call) => DecodedAction::Call(
-                <DecodedCall as async_convert::TryFrom<CallAction>>::try_from(call).await?,
-            ),
+            Action::Call(call) => {
+                DecodedAction::Call(DecodedCall::decode_with_options(call, skip_resolving).await?)
+            }
             Action::Create(create) => DecodedAction::Create(create),
             Action::Selfdestruct(suicide) => DecodedAction::SelfDestruct(suicide),
             Action::Reward(reward) => DecodedAction::Reward(reward),
@@ -198,18 +211,20 @@ impl TryFrom<CallAction> for DecodedCall {
     type Error = crate::error::Error;
 
     async fn try_from(value: CallAction) -> Result<Self, Self::Error> {
+        Self::decode_with_options(value, false).await
+    }
+}
+
+impl DecodedCall {
+    async fn decode_with_options(value: CallAction, skip_resolving: bool) -> Result<Self, Error> {
         let calldata = value.input.to_string().replacen("0x", "", 1);
         let mut decoded_inputs = Vec::new();
-        let resolved_function = if !calldata.is_empty() {
+        let resolved_function = if value.input.len() >= 4 {
             let result = decode(
                 DecodeArgsBuilder::new()
                     .target(calldata)
-                    .skip_resolving(
-                        get_env("SKIP_RESOLVING")
-                            .unwrap_or_else(|| "false".to_string())
-                            .parse::<bool>()
-                            .unwrap_or(false),
-                    )
+                    .raw(true)
+                    .skip_resolving(skip_resolving)
                     .build()
                     .expect("failed to build DecodeArgs"),
             )
@@ -240,20 +255,7 @@ impl TryFrom<CallOutput> for DecodedCallResult {
     type Error = crate::error::Error;
 
     async fn try_from(value: CallOutput) -> Result<Self, Self::Error> {
-        // we can attempt to decode this as if it is calldata, we just need to add some
-        // 4byte prefix.
-        let output = format!("0x00000000{}", value.output.to_string().replacen("0x", "", 1));
-        let result = decode(
-            DecodeArgsBuilder::new()
-                .target(output)
-                .skip_resolving(true)
-                .build()
-                .expect("failed to build DecodeArgs"),
-        )
-        .await?;
-
-        // get first result
-        let decoded_outputs = result.decoded.decoded_inputs.unwrap_or_default();
+        let decoded_outputs = decode_parameters(&value.output)?;
 
         Ok(Self {
             gas_used: alloy::primitives::U64::from(value.gas_used),
@@ -277,33 +279,28 @@ impl DecodedTransactionTrace {
                 addresses.insert(call.to);
 
                 if include_inputs {
-                    let _ = call.decoded_inputs.iter().map(|token| match token {
-                        DynSolValue::Address(address) => addresses.insert(address.to_owned()),
-                        _ => false,
-                    });
+                    for token in &call.decoded_inputs {
+                        if let DynSolValue::Address(address) = token {
+                            addresses.insert(*address);
+                        }
+                    }
                 }
                 if include_outputs {
-                    let _ = self.result.iter().map(|result| {
-                        if let DecodedRes::Call(call_result) = result {
-                            let _ = call_result.decoded_outputs.iter().map(|token| match token {
-                                DynSolValue::Address(address) => {
-                                    addresses.insert(address.to_owned())
-                                }
-                                _ => false,
-                            });
+                    if let Some(DecodedRes::Call(result)) = &self.result {
+                        for token in &result.decoded_outputs {
+                            if let DynSolValue::Address(address) = token {
+                                addresses.insert(*address);
+                            }
                         }
-                    });
+                    }
                 }
             }
             DecodedAction::Create(create) => {
                 addresses.insert(create.from);
-
                 if include_outputs {
-                    let _ = self.result.iter().map(|result| {
-                        if let DecodedRes::Create(create_result) = result {
-                            addresses.insert(create_result.address);
-                        }
-                    });
+                    if let Some(DecodedRes::Create(result)) = &self.result {
+                        addresses.insert(result.address);
+                    }
                 }
             }
             DecodedAction::SelfDestruct(suicide) => {
@@ -315,7 +312,6 @@ impl DecodedTransactionTrace {
             }
         };
 
-        // add all addresses found in subtraces
         for subtrace in &self.subtraces {
             addresses.extend(subtrace.addresses(include_inputs, include_outputs))
         }
@@ -330,22 +326,16 @@ impl DecodedTransactionTrace {
         vm_trace: &VmTrace,
         parent_address: Vec<usize>,
     ) -> Result<(), Error> {
-        // Track the current depth using trace_address. Initialize with the trace_address of self.
         let mut current_address = parent_address;
         let mut relative_index = 0;
 
-        // Iterate over vm_trace.ops
         for op in vm_trace.ops.iter() {
             match op.op.as_deref().unwrap_or_default() {
-                // Check if the operation is one of the LOG operations
                 "LOG0" | "LOG1" | "LOG2" | "LOG3" | "LOG4" => {
-                    // Pop the first decoded log, this is the log that corresponds to the current
-                    // operation
                     let decoded_log = decoded_logs
                         .pop_front()
                         .ok_or(Error::Eyre(eyre!("no decoded log found for log operation")))?;
 
-                    // add the log to the correct position in the trace
                     let mut current_trace = self.borrow_mut();
                     for &index in current_address.iter() {
                         current_trace = current_trace
@@ -354,13 +344,11 @@ impl DecodedTransactionTrace {
                             .ok_or(Error::Eyre(eyre!("subtrace not found")))?;
                     }
 
-                    // push decoded log into current_trace.logs
                     current_trace.logs.push(decoded_log);
                 }
                 _ => {}
             }
 
-            // Handle subtraces if present
             if let Some(sub) = &op.sub {
                 current_address.push(relative_index);
                 let _ = &self.join_logs(decoded_logs, sub, current_address.clone()).await?;
@@ -378,15 +366,12 @@ impl DecodedTransactionTrace {
         vm_trace: VmTrace,
         parent_address: Vec<usize>,
     ) -> Result<(), Error> {
-        // Track the current depth using trace_address. Initialize with the trace_address of self.
         let mut current_address = parent_address;
         let mut relative_index = 0;
 
-        // Iterate over vm_trace.ops
         for op in vm_trace.ops {
             if let Some(ex) = op.ex {
                 if let Some(store) = ex.store {
-                    // add the diff to the correct position in the trace
                     let mut current_trace = self.borrow_mut();
                     for &index in current_address.iter() {
                         current_trace = current_trace
@@ -395,12 +380,10 @@ impl DecodedTransactionTrace {
                             .ok_or(Error::Eyre(eyre!("subtrace not found")))?;
                     }
 
-                    // push decoded log into current_trace.diff
                     current_trace.diff.push(store);
                 }
             }
 
-            // Handle subtraces if present
             if let Some(sub) = op.sub {
                 current_address.push(relative_index);
                 let _ = &self.build_state_diffs(sub, current_address.clone()).await?;
@@ -492,7 +475,6 @@ impl DecodedTransactionTrace {
             ),
         };
 
-        // for each log, add to trace
         for log in &self.logs {
             if let Some(event) = &log.resolved_event {
                 // TODO: ResolveLog should decode raw data
@@ -518,7 +500,6 @@ impl DecodedTransactionTrace {
             }
         }
 
-        // for each diff, add to trace
         for diff in &self.diff {
             trace.add_message(
                 parent_trace_index,
@@ -531,7 +512,6 @@ impl DecodedTransactionTrace {
             );
         }
 
-        // iterate over traces
         for decoded_trace in self.subtraces.iter() {
             decoded_trace.add_to_trace(contracts, trace, parent_trace_index)
         }
@@ -539,14 +519,115 @@ impl DecodedTransactionTrace {
 }
 
 fn wei_to_ether(wei: U256) -> f64 {
-    // convert U256 to u64 safely
     let wei_u64: u64 = wei.min(U256::from(u64::MAX)).try_into().unwrap_or(0);
     let wei_f64 = wei_u64 as f64;
 
-    // if wei = u64::MAX, log that it was truncated
     if wei_u64 == u64::MAX {
         trace!("WARNING: wei value was truncated to u64::MAX. Original value: {}", wei);
     }
 
     wei_f64 / 10f64.powi(18)
+}
+
+#[cfg(test)]
+mod option_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn trace_decoding_skips_signature_resolution_when_requested() {
+        let root = TransactionTrace {
+            action: Action::Call(CallAction {
+                input: Bytes::from(vec![0x12, 0x34, 0x56, 0x78]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let trace = DecodedTransactionTrace::decode_with_options(vec![root], true).await.unwrap();
+        match trace.action {
+            DecodedAction::Call(call) => {
+                assert_eq!(call.resolved_function.unwrap().name, "Unresolved_12345678")
+            }
+            _ => panic!("expected a call"),
+        }
+    }
+
+    #[tokio::test]
+    async fn short_call_data_is_kept_without_decoding() {
+        for bytes in [vec![], vec![1], vec![1, 2, 3]] {
+            let call = CallAction { input: Bytes::from(bytes.clone()), ..Default::default() };
+            let decoded = DecodedCall::decode_with_options(call, false).await.unwrap();
+            assert_eq!(decoded.input.as_ref(), bytes);
+            assert!(decoded.resolved_function.is_none());
+            assert!(decoded.decoded_inputs.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn decodes_empty_and_single_word_call_output() {
+        let empty = CallOutput { gas_used: 12, output: Bytes::new() };
+        let decoded = <DecodedCallResult as async_convert::TryFrom<CallOutput>>::try_from(empty)
+            .await
+            .unwrap();
+        assert!(decoded.decoded_outputs.is_empty());
+        assert!(decoded.output.is_empty());
+        assert_eq!(decoded.gas_used, U64::from(12));
+
+        let mut word = vec![0; 32];
+        word[31] = 42;
+        let output = CallOutput { gas_used: 23, output: Bytes::from(word.clone()) };
+        let decoded = <DecodedCallResult as async_convert::TryFrom<CallOutput>>::try_from(output)
+            .await
+            .unwrap();
+        assert_eq!(decoded.output.as_ref(), word);
+        assert_eq!(decoded.decoded_outputs.len(), 1);
+        assert!(
+            matches!(&decoded.decoded_outputs[0], DynSolValue::Uint(value, _) if *value == U256::from(42))
+        );
+    }
+
+    #[test]
+    fn collects_requested_input_output_and_created_addresses() {
+        let from = Address::from([1; 20]);
+        let to = Address::from([2; 20]);
+        let input = Address::from([3; 20]);
+        let output = Address::from([4; 20]);
+        let created = Address::from([5; 20]);
+        let child = DecodedTransactionTrace {
+            trace_address: vec![0],
+            action: DecodedAction::Create(CreateAction { from, ..Default::default() }),
+            result: Some(DecodedRes::Create(CreateOutput {
+                address: created,
+                code: Bytes::new(),
+                gas_used: 0,
+            })),
+            error: None,
+            subtraces: vec![],
+            logs: vec![],
+            diff: vec![],
+        };
+        let trace = DecodedTransactionTrace {
+            trace_address: vec![],
+            action: DecodedAction::Call(DecodedCall {
+                from,
+                to,
+                decoded_inputs: vec![DynSolValue::Address(input)],
+                ..Default::default()
+            }),
+            result: Some(DecodedRes::Call(DecodedCallResult {
+                decoded_outputs: vec![DynSolValue::Address(output)],
+                ..Default::default()
+            })),
+            error: None,
+            subtraces: vec![child],
+            logs: vec![],
+            diff: vec![],
+        };
+        assert_eq!(trace.addresses(false, false), [from, to].into_iter().collect());
+        assert_eq!(trace.addresses(true, false), [from, to, input].into_iter().collect());
+        assert_eq!(trace.addresses(false, true), [from, to, output, created].into_iter().collect());
+        assert_eq!(
+            trace.addresses(true, true),
+            [from, to, input, output, created].into_iter().collect()
+        );
+    }
 }

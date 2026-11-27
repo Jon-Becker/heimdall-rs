@@ -48,6 +48,7 @@ heimdall-disassembler = { workspace = true }
 
 
 [dev-dependencies]
+tempfile.workspace = true
 criterion = { workspace = true }
 memory-stats = { workspace = true }
 
