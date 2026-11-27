@@ -3,6 +3,8 @@ mod constructor;
 mod multicall;
 
 // re-export
-pub(crate) use abi::{try_decode, try_decode_dynamic_parameter};
+pub(crate) use abi::{
+    infer_dynamic_tail, infer_scalar_type, infer_tail_ending_at, offset_in_words, try_decode,
+};
 pub(crate) use constructor::*;
 pub(crate) use multicall::*;
