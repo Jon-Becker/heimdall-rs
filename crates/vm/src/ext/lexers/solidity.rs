@@ -7,12 +7,12 @@ use heimdall_common::{
 };
 
 use crate::core::opcodes::{
-    WrappedInput, WrappedOpcode, ADD, ADDMOD, ADDRESS, AND, BALANCE, BASEFEE, BLOCKHASH, BYTE,
-    CALL, CALLCODE, CALLDATALOAD, CALLDATASIZE, CALLER, CALLVALUE, CHAINID, CLZ, CODESIZE,
-    COINBASE, DELEGATECALL, DIV, EQ, EXP, EXTCODEHASH, EXTCODESIZE, GAS, GASLIMIT, GASPRICE, GT,
-    ISZERO, LT, MLOAD, MOD, MSIZE, MUL, MULMOD, NOT, NUMBER, OR, ORIGIN, PREVRANDAO, PUSH0,
-    RETURNDATASIZE, SAR, SDIV, SELFBALANCE, SGT, SHA3, SHL, SHR, SLOAD, SLT, SMOD, STATICCALL, SUB,
-    TIMESTAMP, TLOAD, XOR,
+    WrappedInput, WrappedOpcode, ADD, ADDMOD, ADDRESS, AND, BALANCE, BASEFEE, BLOBBASEFEE,
+    BLOBHASH, BLOCKHASH, BYTE, CALL, CALLCODE, CALLDATALOAD, CALLDATASIZE, CALLER, CALLVALUE,
+    CHAINID, CLZ, CODESIZE, COINBASE, DELEGATECALL, DIV, EQ, EXP, EXTCODEHASH, EXTCODESIZE, GAS,
+    GASLIMIT, GASPRICE, GT, ISZERO, LT, MLOAD, MOD, MSIZE, MUL, MULMOD, NOT, NUMBER, OR, ORIGIN,
+    PREVRANDAO, PUSH0, RETURNDATASIZE, SAR, SDIV, SELFBALANCE, SGT, SHA3, SHL, SHR, SLOAD, SLT,
+    SMOD, STATICCALL, SUB, TIMESTAMP, TLOAD, XOR,
 };
 
 /// Checks if a given address is a supported precompiled contract address
@@ -279,6 +279,10 @@ impl WrappedOpcode {
                 solidified_wrapped_opcode
                     .push_str(format!("blockhash({})", self.inputs[0]._solidify()).as_str());
             }
+            BLOBHASH => {
+                solidified_wrapped_opcode
+                    .push_str(format!("blobhash({})", self.inputs[0]._solidify()).as_str());
+            }
             COINBASE => {
                 solidified_wrapped_opcode.push_str("block.coinbase");
             }
@@ -302,6 +306,9 @@ impl WrappedOpcode {
             }
             BASEFEE => {
                 solidified_wrapped_opcode.push_str("block.basefee");
+            }
+            BLOBBASEFEE => {
+                solidified_wrapped_opcode.push_str("block.blobbasefee");
             }
             GAS => {
                 solidified_wrapped_opcode.push_str("gasleft()");
@@ -436,5 +443,30 @@ impl WrappedInput {
         }
 
         solidified_wrapped_input
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_solidify_blobhash() {
+        let operation = WrappedOpcode::new(BLOBHASH, vec![WrappedInput::Raw(U256::from(2))]);
+
+        assert_eq!(operation.solidify(), "blobhash(0x02)");
+    }
+
+    #[test]
+    fn test_solidify_nested_blob_opcodes() {
+        let operation = WrappedOpcode::new(
+            ADD,
+            vec![
+                WrappedOpcode::new(BLOBHASH, vec![WrappedInput::Raw(U256::ZERO)]).into(),
+                WrappedOpcode::new(BLOBBASEFEE, vec![]).into(),
+            ],
+        );
+
+        assert_eq!(operation.solidify(), "blobhash(0) + block.blobbasefee");
     }
 }

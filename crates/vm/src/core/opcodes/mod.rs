@@ -377,7 +377,7 @@ opcodes! {
     // London (EIP-3198)
     0x48 => BASEFEE => stack_io(0, 1), min_gas(2), non_pure, activated(HardFork::London);
     // Cancun (EIP-4844)
-    0x49 => BLOBHASH => stack_io(0, 1), min_gas(3), non_pure, activated(HardFork::Cancun);
+    0x49 => BLOBHASH => stack_io(1, 1), min_gas(3), non_pure, activated(HardFork::Cancun);
     0x4a => BLOBBASEFEE => stack_io(0, 1), min_gas(2), non_pure, activated(HardFork::Cancun);
 
     0x50 => POP => stack_io(1, 0), min_gas(2);
