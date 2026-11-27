@@ -287,3 +287,72 @@ async fn yul_does_not_infer_a_return_type_from_a_sibling_revert_payload() {
         assert_eq!(function.returns, Some(SolidityType::Address));
     }
 }
+
+#[tokio::test]
+async fn yul_preserves_complete_branches_when_solidity_lowering_loses_information() {
+    let value = WrappedOpcode::new(opcodes::CALLVALUE, Vec::new());
+    let unary = |opcode, operand: WrappedOpcode| WrappedOpcode::new(opcode, vec![operand.into()]);
+    let binary = |opcode, lhs: WrappedOpcode, rhs: WrappedOpcode| {
+        WrappedOpcode::new(opcode, vec![lhs.into(), rhs.into()])
+    };
+    let identities = [
+        (binary(opcodes::BYTE, literal(0), value.clone()), value.clone()),
+        (
+            binary(opcodes::SDIV, value.clone(), literal(2)),
+            binary(opcodes::DIV, value.clone(), literal(2)),
+        ),
+        (
+            binary(opcodes::SMOD, value.clone(), literal(2)),
+            binary(opcodes::MOD, value.clone(), literal(2)),
+        ),
+        (
+            binary(opcodes::SLT, value.clone(), literal(0)),
+            binary(opcodes::LT, value.clone(), literal(0)),
+        ),
+        (
+            binary(opcodes::SAR, literal(1), value.clone()),
+            binary(opcodes::SHR, literal(1), value.clone()),
+        ),
+        (unary(opcodes::ISZERO, unary(opcodes::ISZERO, value.clone())), value),
+    ];
+
+    for (lhs, rhs) in identities {
+        let equality = binary(opcodes::EQ, lhs, rhs);
+        for inverted in [false, true] {
+            let condition =
+                if inverted { unary(opcodes::ISZERO, equality.clone()) } else { equality.clone() };
+            for terminal in [opcodes::REVERT, opcodes::STOP] {
+                for reverse_children in [false, true] {
+                    let terminal_pc = if inverted { 11 } else { 21 };
+                    let return_pc = if inverted { 21 } else { 11 };
+                    let (inputs, terminal_body) = if terminal == opcodes::REVERT {
+                        (vec![0, 0], vec![call("revert", &[0, 0])])
+                    } else {
+                        (vec![], vec![call("stop", &[])])
+                    };
+                    let mut children = vec![
+                        trace(terminal_pc, vec![state(terminal_pc, terminal, &inputs)]),
+                        returning(return_pc),
+                    ];
+                    if reverse_children {
+                        children.reverse();
+                    }
+                    let (then_body, else_body) = if inverted {
+                        (return_body(), terminal_body)
+                    } else {
+                        (terminal_body, return_body())
+                    };
+                    assert_eq!(
+                        analyze(branch(10, 20, condition.clone(), children)).await,
+                        vec![Statement::IfElse {
+                            condition: Expr::from_yul_opcode(&condition),
+                            then_body,
+                            else_body,
+                        }],
+                        "condition={condition:?}, terminal={terminal:#x}, reverse_children={reverse_children}",
+                    );
+                }
+            }
+        }
+    }
+}

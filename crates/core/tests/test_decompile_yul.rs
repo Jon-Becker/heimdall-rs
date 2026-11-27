@@ -110,3 +110,27 @@ async fn yul_branch_reconstruction_preserves_argument_mask_inference() {
         assert_eq!(inputs, expected, "argument types changed for {selector}");
     }
 }
+
+#[tokio::test]
+async fn yul_preserves_dynamic_byte_condition_before_a_complete_revert_branch() {
+    // if byte(0, callvalue()) == callvalue(): revert(0, 0), otherwise return 0xffff.
+    // The condition is true for value 0 and false for value 1. Solidity expression
+    // lowering drops BYTE, so treating its apparent identity as a constant is unsound.
+    let args = DecompilerArgsBuilder::new()
+        .target("348060001a1460145761ffff60005260206000f35b60006000fd".to_string())
+        .skip_resolving(true)
+        .include_yul(true)
+        .build()
+        .expect("failed to build decompiler arguments");
+    let source =
+        decompile(args).await.expect("failed to decompile BYTE guard").source.expect("no source");
+    let (fallback, _) = block_after(&source, "default");
+    assert!(
+        fallback.trim_start().starts_with("switch iszero(eq(byte(0, callvalue()), callvalue()))"),
+        "{fallback}"
+    );
+    let (failure, following) = block_after(fallback, "case 0");
+    let (success, _) = block_after(following, "default");
+    assert_eq!(statements(failure), ["revert(0, 0)"]);
+    assert_eq!(statements(success), ["mstore(0, 0xffff)", "return(0, 0x20)"]);
+}

@@ -6,7 +6,9 @@ use tracing::debug;
 
 use crate::{
     core::{
-        control_flow::{constant_truthiness, is_bare_reverting, prune_constant_branches},
+        control_flow::{
+            constant_truthiness, is_bare_reverting, is_complete, prune_constant_branches,
+        },
         ir::{Expr, Statement},
     },
     interfaces::AnalyzedFunction,
@@ -276,12 +278,16 @@ impl Analyzer {
                     branch.children.iter().find(|child| child.instruction == fallthrough);
 
                 if let Some(condition) = instruction.input_operations.get(1) {
-                    // As in Solidity analysis, a constant branch retained by pruning can have
-                    // its continuation in a deduplicated sibling. Visit the feasible path first.
+                    // A retained constant branch may need its deduplicated sibling as a
+                    // continuation, but only when the feasible child is incomplete. A complete
+                    // child can instead retain a return sibling because Solidity lowering loses
+                    // information (e.g. BYTE); keep that condition and both alternatives intact.
                     if let Some(truthiness) = constant_truthiness(Expr::from_opcode(condition)) {
                         let (feasible, sibling) =
                             if truthiness { (taken, not_taken) } else { (not_taken, taken) };
-                        if let Some(feasible) = feasible {
+                        if let Some(feasible) =
+                            feasible.filter(|trace| sibling.is_none() || !is_complete(trace))
+                        {
                             self.analyze_inner(feasible, analyzer_state).await?;
                             if let Some(sibling) = sibling {
                                 self.analyze_inner(sibling, analyzer_state).await?;
