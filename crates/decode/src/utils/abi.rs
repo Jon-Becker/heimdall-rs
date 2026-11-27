@@ -1,21 +1,19 @@
-use hashbrown::HashSet;
+use std::ops::Range;
 
 use alloy::primitives::{Selector, U256};
 use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType, DynSolValue};
 use alloy_json_abi::Param;
 use eyre::eyre;
-use heimdall_common::utils::strings::encode_hex;
-use heimdall_vm::core::types::{
-    get_padding, get_padding_size, get_potential_types_for_word, Padding,
-};
+use heimdall_vm::core::types::{get_padding, get_potential_types_for_word, to_type, Padding};
 use tracing::trace;
 
 use crate::error::Error;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AbiEncoded {
-    pub ty: String,
-    pub coverages: HashSet<usize>,
+    pub ty: DynSolType,
+    /// Length word and payload, excluding the offset in the enclosing head.
+    pub tail: Range<usize>,
 }
 
 /// Attempt to decode the given calldata with the given types.
@@ -59,372 +57,441 @@ pub(crate) fn try_decode(
     Ok((result, params))
 }
 
-/// Finds the offsets of all ABI-encoded items in the given calldata.
-pub(crate) fn try_decode_dynamic_parameter(
-    parameter_index: usize,
-    calldata_words: &[Vec<u8>],
-) -> Result<Option<AbiEncoded>, Error> {
-    trace!(
-        "calldata_words: {:#?}",
-        calldata_words.iter().map(|w| encode_hex(w)).collect::<Vec<String>>()
-    );
+/// Maximum number of array dimensions to infer. Packed bytes and strings are leaves.
+const MAX_DYNAMIC_DEPTH: usize = 4;
+const PADDING_SAMPLE_WORDS: usize = 8;
 
-    // initialize a [`HashSet<usize>`] called `word_coverages` with `parameter_index`
-    // this works similarly to `covered_words`, but is used to keep track of which
-    // words we've covered while attempting to ABI-decode the current word
-    let mut coverages = HashSet::from([parameter_index]);
+pub(crate) fn offset_in_words(word: &[u8]) -> Option<usize> {
+    let bytes = usize::try_from(U256::from_be_slice(word)).ok()?;
+    (bytes != 0 && bytes.is_multiple_of(32)).then_some(bytes / 32)
+}
 
-    // (1) the first validation step. this checks if the current word could be a valid
-    // pointer to an ABI-encoded dynamic type. if it is not, we return None.
-    let (byte_offset, word_offset) =
-        match process_and_validate_word(parameter_index, calldata_words) {
-            Ok((byte_offset, word_offset)) => (byte_offset, word_offset),
-            Err(_) => return Ok(None),
+impl AbiEncoded {
+    /// Packed data provides evidence that a scalar-looking head word really is
+    /// a pointer, even when following it changes the physical order of tails.
+    pub(crate) fn has_packed_data(&self, words: &[&[u8]]) -> bool {
+        let payload = &words[self.tail.start + 1..self.tail.end];
+        let Ok(length) = usize::try_from(U256::from_be_slice(words[self.tail.start])) else {
+            return false
         };
+        matches!(self.ty, DynSolType::Bytes | DynSolType::String) &&
+            has_packed_data(payload, length)
+    }
+}
 
-    // (3) the second validation step. this checks if the pointed-to word is a valid pointer to a
-    // word in `calldata_words`. if it is not, we return an [`Error::BoundsError`].
-    //
-    // note: `size` is the size of the ABI-encoded item. It varies depending on the type of the
-    // item. For example, the size of a `bytes` is the number of bytes in the encoded data, while
-    // for a dynamic-length array, the size is the number of elements in the array.
-    let size_word = calldata_words
-        .get(word_offset.try_into().unwrap_or(usize::MAX))
-        .ok_or(Error::BoundsError)?;
-    let size = U256::from_be_slice(size_word).min(U256::from(usize::MAX));
+fn has_packed_data(payload: &[&[u8]], length: usize) -> bool {
+    length > 0 &&
+        payload.last().is_some_and(|w| w[(length - 1) % 32] != 0) &&
+        payload
+            .iter()
+            .any(|w| w.iter().any(|&byte| byte != 0) && get_padding(w) != Padding::Left)
+}
 
-    // (3) add the size word index to `word_coverages`, since this word is part of the ABI-encoded
-    // type and should not be decoded again
-    coverages.insert(word_offset.try_into().unwrap_or(usize::MAX));
+pub(crate) fn infer_tail_ending_at(
+    words: &[&[u8]],
+    start: usize,
+    end: usize,
+    canonical_budget: &mut usize,
+    reordered_budget: &mut usize,
+) -> Option<AbiEncoded> {
+    let tail = &words[start..end];
+    let (len, data) = tail.split_first()?;
+    let size = usize::try_from(U256::from_be_slice(len)).ok()?;
+    // Word counts prove packed and flat extents in constant time. Only a
+    // nested candidate can consume more words than both of those layouts.
+    let nested = data.len() > size;
+    let budget = match plausible_tail_order(size, data, 0)? {
+        TailOrder::Canonical => canonical_budget,
+        TailOrder::Reordered => reordered_budget,
+    };
+    if nested && tail.len() > *budget {
+        return None;
+    }
+    let param = infer_dynamic_tail(start, words, end).filter(|p| p.tail.end == end);
+    if nested && param.is_none() {
+        *budget -= tail.len();
+    }
+    param
+}
 
-    // (4) check if there are enough words left in the calldata to contain the ABI-encoded item.
-    // if there aren't, it doesn't necessarily mean that the calldata is invalid, but it does
-    // indicate that this type cannot be an array, since there aren't enough words left to store
-    // the array elements.
-    let data_start_word_offset = word_offset + U256::from(1);
-    let data_end_word_offset = data_start_word_offset + size;
-    if data_end_word_offset > U256::from(calldata_words.len()) {
-        try_decode_dynamic_parameter_bytes(
-            parameter_index,
-            calldata_words,
-            byte_offset,
-            word_offset,
-            data_start_word_offset,
-            size,
-            coverages,
-        )
+enum TailOrder {
+    Canonical,
+    Reordered,
+}
+
+/// Inspect a constant number of words per dimension to decide which layouts
+/// could fill the interval. Full inference then checks every sibling.
+fn plausible_tail_order(size: usize, data: &[&[u8]], depth: usize) -> Option<TailOrder> {
+    if size == 0 {
+        return data.is_empty().then_some(TailOrder::Canonical);
+    }
+    if data.len() == size.div_ceil(32) && packed_payload_fits(data, size) {
+        return Some(TailOrder::Canonical);
+    }
+    if depth == MAX_DYNAMIC_DEPTH || size > data.len() {
+        return None;
+    }
+    if size == data.len() {
+        return Some(TailOrder::Canonical);
+    }
+    let offset = |word| offset_in_words(word).filter(|n| (size..data.len()).contains(n));
+    let first = offset(data[0])?;
+    let last = offset(data[size - 1])?;
+    if first == size {
+        let (len, payload) = data[last..].split_first()?;
+        let child_size = usize::try_from(U256::from_be_slice(len)).ok()?;
+        if let Some(order) = plausible_tail_order(child_size, payload, depth + 1) {
+            return Some(order);
+        }
+    }
+    // A reordered packed array may end at another child's tail. Check the
+    // physical start and both outer head pointers before spending the scan budget.
+    (first != last && [size, first, last].iter().all(|&i| packed_child_size(&data[i..]).is_some()))
+        .then_some(TailOrder::Reordered)
+}
+
+fn packed_child_size(words: &[&[u8]]) -> Option<usize> {
+    let (length, payload) = words.split_first()?;
+    let size = usize::try_from(U256::from_be_slice(length)).ok()?;
+    (size == 0 || packed_payload_fits(payload, size)).then_some(size)
+}
+
+fn packed_payload_fits(data: &[&[u8]], size: usize) -> bool {
+    // Only the final word of nonstandard calldata can be short.
+    data.get((size - 1) / 32)
+        .and_then(|word| word.get((size - 1) % 32 + 1..))
+        .is_some_and(|padding| padding.iter().all(|byte| *byte == 0))
+}
+
+/// Keep the interpretations shared by all siblings until the outermost type is known.
+enum InferredType {
+    Empty,
+    // A zero word fits every scalar width.
+    Word(Option<InferredWord>),
+    // A packed byte and a one-element array can occupy exactly the same tail.
+    Dynamic { array: Option<Box<InferredType>>, packed: Option<PackedType> },
+}
+
+enum PackedType {
+    Bytes,
+    // Printable UTF-8 can take its type from a textual sibling.
+    Utf8,
+    // Two independently printable multiword members also establish a string array.
+    LongUtf8,
+    Text,
+}
+
+impl PackedType {
+    fn infer(data: &[&[u8]], size: usize, depth: usize, prefer_text: bool) -> Self {
+        if depth == 0 && !prefer_text {
+            return Self::Bytes;
+        }
+        let packed = &data[..size.div_ceil(32)];
+        let classify = |bytes: &[u8]| {
+            let Ok(text) = std::str::from_utf8(&bytes[..size]) else { return Self::Bytes };
+            if text.chars().any(|ch| ch.is_control() && !matches!(ch, '\t' | '\n' | '\r')) {
+                Self::Bytes
+            } else if prefer_text {
+                Self::Text
+            } else if packed.len() > 1 {
+                Self::LongUtf8
+            } else {
+                Self::Utf8
+            }
+        };
+        match packed {
+            [word] => classify(word),
+            words => classify(&words.concat()),
+        }
+    }
+
+    fn common(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Bytes, _) | (_, Self::Bytes) => Self::Bytes,
+            (Self::Text, _) | (_, Self::Text) | (Self::LongUtf8, Self::LongUtf8) => Self::Text,
+            (Self::LongUtf8, _) | (_, Self::LongUtf8) => Self::LongUtf8,
+            _ => Self::Utf8,
+        }
+    }
+}
+
+impl InferredType {
+    fn common(self, other: Self) -> Option<Self> {
+        match (self, other) {
+            (Self::Word(a), Self::Word(b)) => Some(Self::Word(match (a, b) {
+                (Some(a), Some(b)) => Some(a.common(b)),
+                (a, b) => a.or(b),
+            })),
+            (Self::Empty, ty) | (ty, Self::Empty) if !matches!(ty, Self::Word(_)) => Some(ty),
+            (Self::Dynamic { array: a, packed: p }, Self::Dynamic { array: b, packed: q }) => {
+                let array = a.zip(b).and_then(|(a, b)| a.common(*b)).map(Box::new);
+                let packed = p.zip(q).map(|(p, q)| p.common(q));
+                (array.is_some() || packed.is_some()).then_some(Self::Dynamic { array, packed })
+            }
+            _ => None,
+        }
+    }
+
+    fn into_type(self) -> DynSolType {
+        match self {
+            Self::Empty => DynSolType::Bytes,
+            Self::Word(word) => word.map_or(DynSolType::FixedBytes(32), InferredWord::into_type),
+            Self::Dynamic { packed: Some(PackedType::Text), .. } => DynSolType::String,
+            Self::Dynamic { array: Some(ty), .. } => DynSolType::Array(Box::new(ty.into_type())),
+            Self::Dynamic { .. } => DynSolType::Bytes,
+        }
+    }
+}
+
+/// Infer a type and the contiguous region it consumes, starting at its length word.
+pub(crate) fn infer_dynamic_tail(offset: usize, words: &[&[u8]], end: usize) -> Option<AbiEncoded> {
+    let tail = words.get(offset..end)?;
+    // A confirmed boundary can hide the mixed padding that identifies a string
+    // before another tuple argument. Include the next tail's length word when
+    // a long packed payload would occupy the entire padding sample.
+    let tuple_text = if end < words.len() {
+        let size = usize::try_from(U256::from_be_slice(tail.first()?)).ok()?;
+        let packed_words = size.div_ceil(32);
+        1 + packed_words == tail.len() &&
+            words[offset + 1..].get(..size).is_some_and(|sample| {
+                let next_tail =
+                    sample.get(packed_words).filter(|_| packed_words >= PADDING_SAMPLE_WORDS);
+                has_mixed_padding(sample, next_tail.copied())
+            })
     } else {
-        try_decode_dynamic_parameter_array(
-            parameter_index,
-            calldata_words,
-            byte_offset,
-            word_offset,
-            data_start_word_offset,
-            data_end_word_offset,
-            size,
-            coverages,
-        )
-    }
+        false
+    };
+    let (ty, count) = infer_dynamic_value(tail, 0, tuple_text)?;
+    let ty = match ty {
+        InferredType::Empty => DynSolType::Array(Box::new(DynSolType::Bytes)),
+        ty => ty.into_type(),
+    };
+    Some(AbiEncoded { ty, tail: offset..offset + count })
 }
 
-/// Processes a word and validates that it is could be a ptr to an ABI-encoded item.
-fn process_and_validate_word(
-    parameter_index: usize,
-    calldata_words: &[Vec<u8>],
-) -> Result<(U256, U256), Error> {
-    let word = U256::from_be_slice(calldata_words[parameter_index].as_slice());
-
-    // if the word is a multiple of 32, it may be an offset pointing to the start of an
-    // ABI-encoded item
-    if word % U256::from(32) != U256::ZERO || word == U256::ZERO {
-        trace!("parameter {}: '{}' doesnt appear to be an offset ptr", parameter_index, word);
-        return Err(Error::BoundsError);
+fn infer_dynamic_value(
+    words: &[&[u8]],
+    depth: usize,
+    has_text_hint: bool,
+) -> Option<(InferredType, usize)> {
+    let (length_word, data) = words.split_first()?;
+    let size = usize::try_from(U256::from_be_slice(length_word)).ok()?;
+    if size == 0 {
+        return Some((InferredType::Empty, 1));
     }
 
-    // check if the pointer is pointing to a valid location in the calldata
-    let word_offset = word / U256::from(32);
-    if word_offset >= U256::from(calldata_words.len()) {
-        trace!("parameter {}: '{}' is out of bounds (offset check)", parameter_index, word);
-        return Err(Error::BoundsError);
-    }
-
-    Ok((word, word_offset))
-}
-
-/// Handle ABI-encoded bytes
-fn try_decode_dynamic_parameter_bytes(
-    parameter_index: usize,
-    calldata_words: &[Vec<u8>],
-    word: U256,
-    word_offset: U256,
-    data_start_word_offset: U256,
-    size: U256,
-    coverages: HashSet<usize>,
-) -> Result<Option<AbiEncoded>, Error> {
-    let mut coverages = coverages;
-    trace!("parameter {}: '{}' may be bytes", parameter_index, word);
-
-    // (1) join all words from `data_start_word_offset` to the end of `calldata_words`.
-    // this is where the encoded data may be stored.
-    let data_words = &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..];
-
-    // (2) perform a quick validation check to see if there are enough remaining bytes
-    // to contain the ABI-encoded item. If there aren't, return an [`Error::BoundsError`].
-    if data_words.concat().len() < size.try_into().unwrap_or(usize::MAX) {
-        trace!("parameter {}: '{}' is out of bounds (bytes check)", parameter_index, word);
-        return Ok(None);
-    }
-
-    // (3) calculate how many words are needed to store the encoded data with size `size`.
-    let word_count_for_size =
-        U256::from((size.try_into().unwrap_or(u32::MAX) as f32 / 32f32).ceil() as u32); // wont panic unless calldata is huge
-    let data_end_word_offset = data_start_word_offset + word_count_for_size;
-    trace!("with data: {:#?}", encode_hex(&data_words.concat()));
-
-    // (4) get the last word in `data_words`, so we can perform a size check. There should be
-    // `size % 32` bytes in this word, and the rest should be null bytes.
-    let last_word = data_words
-        .get(word_count_for_size.try_into().unwrap_or(usize::MAX) - 1)
-        .ok_or(Error::BoundsError)?;
-    let last_word_size = size.try_into().unwrap_or(usize::MAX) % 32;
-
-    // if the padding size of this last word is greater than `32 - last_word_size`,
-    // there are too many bytes in the last word, and this is not a valid ABI-encoded type.
-    // return an [`Error::BoundsError`].
-    let padding_size = get_padding_size(last_word);
-    if padding_size > 32 - last_word_size {
-        trace!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (bytes)", parameter_index, word, size, padding_size);
-        return Ok(None);
-    }
-
-    // (5) we've covered all words from `data_start_word_offset` to `data_end_word_offset`,
-    // so add them to `word_coverages`.
-    coverages.extend(
-        (word_offset.try_into().unwrap_or(usize::MAX)..
-            data_end_word_offset.try_into().unwrap_or(usize::MAX))
-            .collect::<Vec<usize>>(),
-    );
-
-    trace!("parameter {}: '{}' is bytes", parameter_index, word);
-    Ok(Some(AbiEncoded { ty: String::from("bytes"), coverages }))
-}
-
-/// Handle ABI-encoded bytes
-#[allow(clippy::too_many_arguments)]
-fn try_decode_dynamic_parameter_array(
-    parameter_index: usize,
-    calldata_words: &[Vec<u8>],
-    word: U256,
-    word_offset: U256,
-    data_start_word_offset: U256,
-    data_end_word_offset: U256,
-    size: U256,
-    coverages: HashSet<usize>,
-) -> Result<Option<AbiEncoded>, Error> {
-    let mut coverages = coverages;
-    trace!("parameter {}: '{}' may be an array", parameter_index, word);
-
-    // (1) join all words from `data_start_word_offset` to `data_end_word_offset`. This is where
-    // the encoded data may be stored.
-    let data_words = &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..
-        data_end_word_offset.try_into().unwrap_or(usize::MAX)];
-    trace!("potential array items: {:#?}", data_words);
-
-    // (2) first, check if this is a `string` type, since some string encodings may appear to be
-    // arrays.
-    if let Ok(Some(abi_encoded)) = try_decode_dynamic_parameter_string(
-        data_words,
-        parameter_index,
-        calldata_words,
-        word,
-        word_offset,
-        data_start_word_offset,
-        size,
-        coverages.clone(),
-    ) {
-        return Ok(Some(abi_encoded));
-    }
-
-    // (3) this is not a `string` type, so we can assume that it is an array. we can extend
-    // `word_coverages` with the indices of all words from `data_start_word_offset` to
-    // `data_end_word_offset`, since we've now covered all words in the ABI-encoded type.
-    coverages.extend(
-        (word_offset.try_into().unwrap_or(usize::MAX)..
-            data_end_word_offset.try_into().unwrap_or(usize::MAX))
-            .collect::<Vec<usize>>(),
-    );
-
-    // (4) get the potential type of the array elements. under the hood, this function:
-    //     - iterates over each word in `data_words`
-    //     - checks if the word is a dynamic type by recursively calling
-    //       `try_decode_dynamic_parameter`
-    //         - if it is a dynamic type, we know the type of the array elements and can return it
-    //         - if it is a static type, find the potential types that can represent each element in
-    //           the array
-    let potential_type = get_potential_type(
-        data_words,
-        parameter_index,
-        calldata_words,
-        word,
-        data_start_word_offset,
-        &mut coverages,
-    );
-    let type_str = format!("{potential_type}[]");
-    trace!("parameter {}: '{}' is {}", parameter_index, word, type_str);
-    Ok(Some(AbiEncoded { ty: type_str, coverages }))
-}
-
-/// Determine if the given word is an abi-encoded string.
-#[allow(clippy::too_many_arguments)]
-fn try_decode_dynamic_parameter_string(
-    data_words: &[Vec<u8>],
-    parameter_index: usize,
-    calldata_words: &[Vec<u8>],
-    word: U256,
-    word_offset: U256,
-    data_start_word_offset: U256,
-    size: U256,
-    coverages: HashSet<usize>,
-) -> Result<Option<AbiEncoded>, Error> {
-    let mut coverages = coverages;
-    // (1) check if the data words all have conforming padding
-    // we do this check because strings will typically be of the form:
-    // 0000000000000000000000000000000000000000000000000000000000000003 // length of 3
-    // 6f6e650000000000000000000000000000000000000000000000000000000000 // "one"
-    //
-    // so, if the data words have conforming padding, we can assume that this is not a string
-    // and is instead an array.
-    if data_words
-        .iter()
-        .map(|word| get_padding(word))
-        .all(|padding| padding == get_padding(&data_words[0]))
-    {
-        trace!("parameter {}: '{}' is not string (conforming padding)", parameter_index, word);
-        return Ok(None);
-    }
-    trace!("parameter {}: '{}' may be string", parameter_index, word);
-
-    // (3) calculate how many words are needed to store the encoded data with size `size`.
-    let word_count_for_size =
-        U256::from((size.try_into().unwrap_or(u32::MAX) as f32 / 32f32).ceil() as u32);
-    let data_end_word_offset = data_start_word_offset + word_count_for_size;
-    trace!(
-        "with data: {:#?}",
-        encode_hex(
-            &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..
-                data_end_word_offset.try_into().unwrap_or(usize::MAX)]
-                .concat()
-        )
-    );
-
-    // (4) get the last word in `data_words`, so we can perform a size check. There should be
-    // `size % 32` bytes in this word, and the rest should be null bytes.
-    let last_word = data_words
-        .get(word_count_for_size.try_into().unwrap_or(usize::MAX) - 1)
-        .ok_or(Error::BoundsError)?;
-    let last_word_size = size.try_into().unwrap_or(usize::MAX) % 32;
-
-    // if the padding size of this last word is greater than `32 - last_word_size`,
-    // there are too many bytes in the last word, and this is not a valid ABI-encoded type.
-    // return an [`Error::BoundsError`].
-    let padding_size = get_padding_size(last_word);
-    if padding_size > 32 - last_word_size {
-        trace!("parameter {}: '{}' with size {} cannot fit into last word with padding of {} bytes (string)", parameter_index, word, size, padding_size);
-        return Err(Error::BoundsError);
-    }
-
-    // (5) we've covered all words from `data_start_word_offset` to `data_end_word_offset`,
-    // so add them to `word_coverages`.
-    coverages.extend(
-        (word_offset.try_into().unwrap_or(usize::MAX)..
-            data_end_word_offset.try_into().unwrap_or(usize::MAX))
-            .collect::<Vec<usize>>(),
-    );
-
-    trace!("parameter {}: '{}' is string", parameter_index, word);
-    Ok(Some(AbiEncoded { ty: String::from("string"), coverages }))
-}
-
-/// Handle determining the most potential type of an abi-encoded item.
-fn get_potential_type(
-    data_words: &[Vec<u8>],
-    parameter_index: usize,
-    calldata_words: &[Vec<u8>],
-    word: U256,
-    data_start_word_offset: U256,
-    coverages: &mut HashSet<usize>,
-) -> String {
-    let (_, potential_type) = data_words
-        .iter()
-        .enumerate()
-        .map(|(i, w)| {
-            // we need to get a slice of calldata_words from `data_start_word_offset` to the end
-            // of the calldata_words. this is because nested abi-encoded items
-            // reset the offsets of the words.
-            let data_words =
-                &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..];
-
-            // first, check if this word *could* be a nested abi-encoded item
-            trace!(
-                "parameter {}: '{}' checking for nested abi-encoded data",
-                parameter_index,
-                word
-            );
-            if let Ok(Some(nested_abi_encoded_param)) = try_decode_dynamic_parameter(i, data_words)
-            {
-                // we need to add data_start_word_offset to all the offsets in nested_coverages
-                // because they are relative to the start of the nested abi-encoded item.
-                let nested_coverages = nested_abi_encoded_param
-                    .coverages
-                    .into_iter()
-                    .map(|nested_coverage| {
-                        nested_coverage + data_start_word_offset.try_into().unwrap_or(usize::MAX)
-                    })
-                    .collect::<HashSet<usize>>();
-
-                // merge coverages and nested_coverages
-                coverages.extend(nested_coverages);
-                return (32, vec![nested_abi_encoded_param.ty]);
-            }
-
-            let (padding_size, mut potential_types) = get_potential_types_for_word(w);
-
-            // perform heuristics
-            // - if we use right-padding, this is probably bytesN
-            // - if we use left-padding, this is probably uintN or intN
-            // - if we use no padding, this is probably bytes32
-            match get_padding(w) {
-                Padding::Left => {
-                    potential_types.retain(|t| t.starts_with("uint") || t.starts_with("address"))
-                }
-                _ => potential_types.retain(|t| t.starts_with("bytes") || t.starts_with("string")),
-            }
-
-            (padding_size, potential_types)
-        })
-        .fold((0, String::from("")), |(max_size, mut potential_type), (size, types)| {
-            // "address" and "string" are priority types
-            if types.contains(&String::from("string")) {
-                return (32, String::from("string"));
-            } else if types.contains(&String::from("address")) {
-                return (32, String::from("address"));
-            }
-
-            if size > max_size {
-                potential_type.clone_from(types.first().expect("types is empty"));
-            }
-
-            (max_size, potential_type)
+    let packed_words = size.div_ceil(32);
+    let packed_fits = packed_payload_fits(data, size);
+    let elements = data.get(..size);
+    // Packed strings can resemble arrays when other heads or tails follow them.
+    // Use a bounded sample to distinguish mixed padding from uniform element padding.
+    let mixed_padding = packed_fits && size < data.len() && has_mixed_padding(&data[..size], None);
+    let prefer_text = mixed_padding || (has_text_hint && (depth == 0 || packed_words == 1));
+    let packed_type = || PackedType::infer(data, size, depth, prefer_text);
+    let Some(elements) = elements.filter(|_| !mixed_padding && depth < MAX_DYNAMIC_DEPTH) else {
+        return packed_fits.then(|| {
+            (InferredType::Dynamic { array: None, packed: Some(packed_type()) }, 1 + packed_words)
         });
+    };
 
-    potential_type
+    let (element, payload_words) = infer_dynamic_elements(elements, data, depth)
+        .unwrap_or_else(|| (InferredType::Word(infer_flat_element_type(elements)), size));
+    let packed = (packed_fits && packed_words == payload_words).then(packed_type);
+    Some((InferredType::Dynamic { array: Some(Box::new(element)), packed }, 1 + payload_words))
+}
+
+fn has_mixed_padding(words: &[&[u8]], next_tail: Option<&[u8]>) -> bool {
+    let Some((first, rest)) = words.split_first() else { return false };
+    if first.iter().all(|&byte| byte == 0) {
+        return false;
+    }
+    let padding = get_padding(first);
+    rest.iter().take(PADDING_SAMPLE_WORDS - 1).any(|word| get_padding(word) != padding) ||
+        next_tail.is_some_and(|length| {
+            get_padding(length) != padding || length.iter().all(|&byte| byte == 0)
+        })
+}
+
+/// All elements of a dynamic ABI array share one type. Follow offsets only when
+/// their tails consecutively partition the payload, so one probe cannot revisit
+/// a sibling's words, and the inferred type is valid for every element.
+fn infer_dynamic_elements(
+    elements: &[&[u8]],
+    data: &[&[u8]],
+    depth: usize,
+) -> Option<(InferredType, usize)> {
+    // Identify the physical order before following any pointers. A failed
+    // canonical probe must never visit the same children again in a new order.
+    let mut previous = 0;
+    for word in elements {
+        let offset = offset_in_words(word)?;
+        if !(elements.len()..data.len()).contains(&offset) || offset == previous {
+            return None;
+        }
+        if offset < previous {
+            return infer_reordered_packed_elements(elements, data, depth);
+        }
+        previous = offset;
+    }
+    let mut cursor = elements.len();
+    let mut element_ty = InferredType::Empty;
+    for (i, word) in elements.iter().enumerate() {
+        if offset_in_words(word)? != cursor {
+            return None;
+        }
+        let end = match elements.get(i + 1) {
+            Some(next) => offset_in_words(next)?,
+            None => data.len(),
+        };
+        let (ty, count) =
+            infer_dynamic_value(data.get(cursor..end)?, depth + 1, elements.len() > 1)?;
+        cursor += count;
+        element_ty = element_ty.common(ty)?;
+    }
+    Some((element_ty, cursor))
+}
+
+/// Packed children have an explicit byte length, so we can walk them once in
+/// physical order and verify that each starts at a distinct head pointer.
+fn infer_reordered_packed_elements(
+    elements: &[&[u8]],
+    data: &[&[u8]],
+    depth: usize,
+) -> Option<(InferredType, usize)> {
+    let mut starts = std::collections::HashSet::with_capacity(elements.len());
+    for word in elements {
+        let offset = offset_in_words(word)?;
+        if !(elements.len()..data.len()).contains(&offset) || !starts.insert(offset) {
+            return None;
+        }
+    }
+
+    let mut cursor = elements.len();
+    let mut element_ty = InferredType::Empty;
+    let mut packed_children = 0;
+    while !starts.is_empty() {
+        if !starts.remove(&cursor) {
+            return None;
+        }
+        let child = data.get(cursor..)?;
+        let size = packed_child_size(child)?;
+        let payload = &child[1..1 + size.div_ceil(32)];
+        if size > 0 {
+            // Scalar lengths followed by zero or left-padded words are weak
+            // evidence for interpreting a flat array's values as pointers.
+            if has_packed_data(payload, size) {
+                packed_children += 1;
+            }
+            let packed = PackedType::infer(payload, size, depth + 1, payload.len() == 1);
+            element_ty =
+                element_ty.common(InferredType::Dynamic { array: None, packed: Some(packed) })?;
+        }
+        cursor += 1 + payload.len();
+    }
+    (cursor == data.len() || packed_children >= 2).then_some((element_ty, cursor))
+}
+
+pub(crate) fn infer_scalar_type(word: &[u8]) -> DynSolType {
+    let (_, types) = get_potential_types_for_word(word);
+    let left_padded = get_padding(word) == Padding::Left;
+    let ty = types
+        .into_iter()
+        .find(|ty| {
+            if left_padded {
+                ty.starts_with("uint") || ty == "address"
+            } else {
+                ty.starts_with("bytes") || ty == "string"
+            }
+        })
+        .expect("a word always has a scalar ABI type");
+    to_type(&ty)
+}
+
+// Zeros at both ends can make a number look like fixed bytes or vice versa.
+// Keep each observed width and the width needed to hold every sibling.
+struct InferredWord {
+    uint_width: usize,
+    bytes_width: usize,
+    required_uint_width: usize,
+    required_bytes_width: usize,
+    has_address: bool,
+}
+
+impl InferredWord {
+    fn from_word(word: &[u8]) -> Option<Self> {
+        let first = word.iter().position(|&byte| byte != 0)?;
+        let last = word.iter().rposition(|&byte| byte != 0)?;
+        // try_decode right-pads a short final word before passing it to Alloy.
+        let padded;
+        let word = if word.len() < 32 {
+            padded = alloy::primitives::B256::right_padding_from(word);
+            padded.as_slice()
+        } else {
+            word
+        };
+        let ty = infer_scalar_type(word);
+        let (uint_width, bytes_width) = match ty {
+            DynSolType::Uint(bits) => (bits / 8, 0),
+            DynSolType::Address => (20, 0),
+            DynSolType::FixedBytes(bytes) => (0, bytes),
+            _ => unreachable!("word inference yields an integer, address, or fixed bytes"),
+        };
+        Some(Self {
+            uint_width,
+            bytes_width,
+            required_uint_width: 32 - first,
+            required_bytes_width: last + 1,
+            has_address: ty == DynSolType::Address,
+        })
+    }
+
+    fn common(self, other: Self) -> Self {
+        Self {
+            uint_width: self.uint_width.max(other.uint_width),
+            bytes_width: self.bytes_width.max(other.bytes_width),
+            required_uint_width: self.required_uint_width.max(other.required_uint_width),
+            required_bytes_width: self.required_bytes_width.max(other.required_bytes_width),
+            has_address: self.has_address || other.has_address,
+        }
+    }
+
+    fn into_type(self) -> DynSolType {
+        if self.has_address && self.required_uint_width <= 20 {
+            return DynSolType::Address;
+        }
+        // For mixed padding, a nonzero byte at the opposite end rules out
+        // every narrower interpretation in that direction.
+        let fits_uint = self.uint_width >= self.required_uint_width &&
+            (self.bytes_width == 0 || self.required_bytes_width == 32);
+        let fits_bytes = self.bytes_width >= self.required_bytes_width &&
+            (self.uint_width == 0 || self.required_uint_width == 32);
+        match (fits_uint, fits_bytes) {
+            (true, false) => DynSolType::Uint(self.uint_width * 8),
+            (false, true) => DynSolType::FixedBytes(self.bytes_width),
+            _ => DynSolType::FixedBytes(32),
+        }
+    }
+}
+
+fn infer_flat_element_type(elements: &[&[u8]]) -> Option<InferredWord> {
+    elements.iter().filter_map(|word| InferredWord::from_word(word)).reduce(InferredWord::common)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use heimdall_common::utils::strings::decode_hex;
 
     use super::*;
+
+    fn probe(index: usize, words: &[&[u8]]) -> Option<AbiEncoded> {
+        infer_dynamic_tail(offset_in_words(words[index])?, words, words.len())
+    }
+
+    fn covered_words(index: usize, param: Option<&AbiEncoded>) -> HashSet<usize> {
+        param.map(|p| std::iter::once(index).chain(p.tail.clone()).collect()).unwrap_or_default()
+    }
 
     #[test]
     fn test_detect_abi_encoded_parameters_nominal() {
@@ -445,23 +512,13 @@ mod tests {
             "../../../core/tests/testdata/decode/abi/detect_abi_encoded_parameters_nominal.hex"
         );
 
-        let calldata = &calldata[10..];
-
-        // chunk in blocks of 32 bytes (64 hex chars)
-        let calldata_words = calldata
-            .as_bytes()
-            .chunks(64)
-            .map(|chunk| {
-                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
-                decode_hex(s).expect("failed to decode hex")
-            })
-            .collect::<Vec<_>>();
+        let calldata = decode_hex(&calldata[10..]).expect("invalid fixture");
+        let calldata_words = calldata.chunks(32).collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
-                .expect("failed to decode dynamic parameter");
+            let abi_encoded_params = probe(i, &calldata_words);
             let is_abi_encoded = abi_encoded_params.is_some();
-            let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
+            let coverages = covered_words(i, abi_encoded_params.as_ref());
 
             println!(
                 "{i} - is_abi_encoded: {}, with word coverage: {:?}",
@@ -501,23 +558,13 @@ mod tests {
             "../../../core/tests/testdata/decode/abi/detect_abi_encoded_parameters_2.hex"
         );
 
-        let calldata = &calldata[10..];
-
-        // chunk in blocks of 32 bytes (64 hex chars)
-        let calldata_words = calldata
-            .as_bytes()
-            .chunks(64)
-            .map(|chunk| {
-                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
-                decode_hex(s).expect("failed to decode hex")
-            })
-            .collect::<Vec<_>>();
+        let calldata = decode_hex(&calldata[10..]).expect("invalid fixture");
+        let calldata_words = calldata.chunks(32).collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
-                .expect("failed to decode dynamic parameter");
+            let abi_encoded_params = probe(i, &calldata_words);
             let is_abi_encoded = abi_encoded_params.is_some();
-            let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
+            let coverages = covered_words(i, abi_encoded_params.as_ref());
 
             println!(
                 "{i} - is_abi_encoded: {}, with word coverage: {:?}",
@@ -569,25 +616,14 @@ mod tests {
         let calldata =
             include_str!("../../../core/tests/testdata/decode/abi/detect_abi_encoded_complex.hex");
 
-        let calldata = &calldata[10..];
-
-        // chunk in blocks of 32 bytes (64 hex chars)
-        let calldata_words = calldata
-            .as_bytes()
-            .chunks(64)
-            .map(|chunk| {
-                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
-                decode_hex(s).expect("failed to decode hex")
-            })
-            .collect::<Vec<_>>();
+        let calldata = decode_hex(&calldata[10..]).expect("invalid fixture");
+        let calldata_words = calldata.chunks(32).collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
-                .expect("failed to decode dynamic parameter");
+            let abi_encoded_params = probe(i, &calldata_words);
             let is_abi_encoded = abi_encoded_params.is_some();
-            let coverages =
-                abi_encoded_params.as_ref().map(|p| p.coverages.to_owned()).unwrap_or_default();
-            let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();
+            let coverages = covered_words(i, abi_encoded_params.as_ref());
+            let ty = abi_encoded_params.map(|p| p.ty.to_string()).unwrap_or_default();
 
             println!(
                 "{i} - is_abi_encoded: {}, ty: {:?}, with word coverage: {:?}",
@@ -599,6 +635,7 @@ mod tests {
                 assert_eq!(coverages, HashSet::from([0, 2, 3, 4, 5, 6, 7, 8, 9]));
             } else if i == 1 {
                 assert!(is_abi_encoded);
+                assert_eq!(ty, "string[]");
                 assert_eq!(coverages, HashSet::from([1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]));
             }
         }
@@ -626,25 +663,14 @@ mod tests {
         let calldata =
             include_str!("../../../core/tests/testdata/decode/abi/detect_abi_encoded_mixed.hex");
 
-        let calldata = &calldata[10..];
-
-        // chunk in blocks of 32 bytes (64 hex chars)
-        let calldata_words = calldata
-            .as_bytes()
-            .chunks(64)
-            .map(|chunk| {
-                let s = std::str::from_utf8(chunk).expect("failed to convert chunk to string");
-                decode_hex(s).expect("failed to decode hex")
-            })
-            .collect::<Vec<_>>();
+        let calldata = decode_hex(&calldata[10..]).expect("invalid fixture");
+        let calldata_words = calldata.chunks(32).collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
-                .expect("failed to decode dynamic parameter");
+            let abi_encoded_params = probe(i, &calldata_words);
             let is_abi_encoded = abi_encoded_params.is_some();
-            let coverages =
-                abi_encoded_params.as_ref().map(|p| p.coverages.to_owned()).unwrap_or_default();
-            let ty = abi_encoded_params.map(|p| p.ty).unwrap_or_default();
+            let coverages = covered_words(i, abi_encoded_params.as_ref());
+            let ty = abi_encoded_params.map(|p| p.ty.to_string()).unwrap_or_default();
 
             println!(
                 "{i} - is_abi_encoded: {}, ty: {:?}, with word coverage: {:?}",
@@ -660,6 +686,21 @@ mod tests {
                 assert!(is_abi_encoded);
                 assert_eq!(coverages, HashSet::from([2, 5, 6, 7, 8]));
             }
+        }
+    }
+
+    #[test]
+    fn repeated_offsets_have_bounded_tails() {
+        for (value, expected_ty, expected_tail) in [
+            (0x20, DynSolType::Array(Box::new(DynSolType::Uint(8))), 1..34),
+            (0x40, DynSolType::Bytes, 2..5),
+        ] {
+            let mut word = [0; 32];
+            word[31] = value;
+            let words = [word.as_slice(); 48];
+            let decoded = probe(0, &words).expect("valid dynamic tail");
+            assert_eq!(decoded.ty, expected_ty);
+            assert_eq!(decoded.tail, expected_tail);
         }
     }
 }

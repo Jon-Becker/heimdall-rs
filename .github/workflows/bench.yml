@@ -21,6 +21,9 @@ jobs:
       REPORT_PREFIX: pull/${{ github.event.pull_request.number }}/${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
+      # The comparison action reuses an installed critcmp. Its lockfile supports Rust 1.91.
+      - name: Install benchmark comparison tool
+        run: cargo install --locked critcmp
       - id: bench
         uses: boa-dev/criterion-compare-action@v3
         with:
