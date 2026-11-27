@@ -1,0 +1,26 @@
+[package]
+name = "heimdall-strings"
+description = "Extracts printable strings from EVM bytecode"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+exclude.workspace = true
+
+[lib]
+bench = false
+
+[lints]
+workspace = true
+
+[dependencies]
+heimdall-common.workspace = true
+heimdall-config.workspace = true
+alloy.workspace = true
+clap = { workspace = true, features = ["derive"] }
+derive_builder.workspace = true
+eyre.workspace = true
+thiserror.workspace = true

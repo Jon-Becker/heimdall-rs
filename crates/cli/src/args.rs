@@ -6,7 +6,7 @@ use heimdall_config::ConfigArgs;
 use heimdall_core::{
     heimdall_cfg::CfgArgs, heimdall_decoder::DecodeArgs, heimdall_decompiler::DecompilerArgs,
     heimdall_disassembler::DisassemblerArgs, heimdall_dump::DumpArgs,
-    heimdall_inspect::InspectArgs,
+    heimdall_inspect::InspectArgs, heimdall_strings::StringsArgs,
 };
 use heimdall_tracing::{
     tracing_subscriber::filter::Directive, FileWorkerGuard, HeimdallTracer, LayerInfo, LogFormat,
@@ -37,6 +37,9 @@ pub(crate) struct Arguments {
 pub(crate) enum Subcommands {
     #[clap(name = "disassemble", about = "Disassemble EVM bytecode to assembly")]
     Disassemble(DisassemblerArgs),
+
+    #[clap(name = "strings", about = "Extract printable ASCII strings from bytecode")]
+    Strings(StringsArgs),
 
     #[clap(name = "decompile", about = "Decompile EVM bytecode to Solidity")]
     Decompile(DecompilerArgs),
