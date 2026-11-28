@@ -694,11 +694,6 @@ pub(crate) enum Statement {
         then_body: Vec<Statement>,
         else_body: Vec<Statement>,
     },
-    IfRevertElse {
-        condition: Expr,
-        offset: Expr,
-        size: Expr,
-    },
     Require {
         condition: Expr,
         reason: Option<Expr>,
@@ -743,11 +738,6 @@ impl Statement {
                 for statement in then_body.iter_mut().chain(else_body.iter_mut()) {
                     statement.visit_exprs_mut(visitor);
                 }
-            }
-            Self::IfRevertElse { condition, offset, size } => {
-                condition.visit_mut(visitor);
-                offset.visit_mut(visitor);
-                size.visit_mut(visitor);
             }
             Self::Require { condition, reason } => {
                 condition.visit_mut(visitor);
@@ -798,11 +788,6 @@ impl Statement {
                 then_body: then_body.into_iter().map(Self::simplify).collect(),
                 else_body: else_body.into_iter().map(Self::simplify).collect(),
             },
-            Self::IfRevertElse { condition, offset, size } => Self::IfRevertElse {
-                condition: condition.simplify(),
-                offset: offset.simplify(),
-                size: size.simplify(),
-            },
             Self::Require { condition, reason } => Self::Require {
                 condition: condition.simplify(),
                 reason: reason.map(Expr::simplify),
@@ -835,14 +820,22 @@ impl Statement {
 
     pub(crate) fn render_lines(&self, target: RenderTarget) -> Vec<String> {
         if let Self::IfElse { condition, then_body, else_body } = self {
-            let condition = match target {
-                RenderTarget::Solidity => format!("if ({}) {{", condition.render()),
-                RenderTarget::Yul => format!("if {} {{", condition.render()),
+            // Yul has no `else`. A switch evaluates the condition once, even when a branch
+            // changes memory or storage read by the condition. iszero also handles non-boolean
+            // EVM conditions: every nonzero value selects the taken branch.
+            let (header, separator) = match target {
+                RenderTarget::Solidity => (format!("if ({}) {{", condition.render()), "} else {"),
+                RenderTarget::Yul if else_body.is_empty() => {
+                    (format!("if {} {{", condition.render()), "")
+                }
+                RenderTarget::Yul => {
+                    (format!("switch iszero({})\ncase 0 {{", condition.render()), "} default {")
+                }
             };
-            let mut lines = vec![condition];
+            let mut lines: Vec<String> = header.lines().map(str::to_string).collect();
             lines.extend(then_body.iter().flat_map(|statement| statement.render_lines(target)));
             if !else_body.is_empty() {
-                lines.push("} else {".to_string());
+                lines.push(separator.to_string());
                 lines.extend(else_body.iter().flat_map(|statement| statement.render_lines(target)));
             }
             lines.push("}".to_string());
@@ -857,12 +850,6 @@ impl Statement {
             (RenderTarget::Yul, Self::If { condition }) => {
                 format!("if {} {{", condition.render())
             }
-            (RenderTarget::Yul, Self::IfRevertElse { condition, offset, size }) => format!(
-                "if {} {{ revert({}, {}); }} else {{",
-                condition.render(),
-                offset.render(),
-                size.render()
-            ),
             (RenderTarget::Yul, Self::Expression(expr)) => expr.render(),
             (_, statement) => statement.render_solidity(),
         }
@@ -897,12 +884,6 @@ impl Statement {
             Self::If { condition } => format!("if ({}) {{", condition.render()),
             Self::Else => "} else {".to_string(),
             Self::IfElse { .. } => self.render_lines(RenderTarget::Solidity).join("\n"),
-            Self::IfRevertElse { condition, offset, size } => format!(
-                "if ({}) {{ revert({}, {}); }} else {{",
-                condition.render(),
-                offset.render(),
-                size.render()
-            ),
             Self::Require { condition, reason } => match reason {
                 Some(reason) => format!("require({}, {});", condition.render(), reason.render()),
                 None => format!("require({});", condition.render()),
