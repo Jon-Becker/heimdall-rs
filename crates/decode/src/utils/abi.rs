@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{borrow::Cow, ops::Range};
 
 use alloy::primitives::{Selector, U256};
 use alloy_dyn_abi::{DynSolCall, DynSolReturns, DynSolType, DynSolValue};
@@ -25,15 +25,15 @@ pub(crate) fn try_decode(
 
     // For non-standard sized calldata that isn't a multiple of 32 bytes,
     // we need to pad it to ensure proper ABI decoding
-    let padded_args = if !byte_args.is_empty() && !byte_args.len().is_multiple_of(32) {
+    let padded_args = if byte_args.len().is_multiple_of(32) {
+        Cow::Borrowed(byte_args)
+    } else {
         let mut padded = byte_args.to_vec();
         // Pad to the next multiple of 32 bytes
         let padding_needed = 32 - (byte_args.len() % 32);
         padded.extend(vec![0u8; padding_needed]);
         trace!("padded byte_args from {} to {} bytes", byte_args.len(), padded.len());
-        padded
-    } else {
-        byte_args.to_vec()
+        Cow::Owned(padded)
     };
 
     // convert inputs to tuple
@@ -155,6 +155,14 @@ fn plausible_tail_order(size: usize, data: &[&[u8]], depth: usize) -> Option<Tai
     .then_some(TailOrder::Reordered)
 }
 
+/// A candidate must fit at least a packed payload or a flat array in the
+/// remaining calldata. Checking this needs only its length and final padding.
+pub(crate) fn can_start_dynamic_tail(start: usize, words: &[&[u8]]) -> bool {
+    let Ok(size) = usize::try_from(U256::from_be_slice(words[start])) else { return false };
+    let data = &words[start + 1..];
+    size <= data.len() || packed_payload_fits(data, size)
+}
+
 fn packed_payload_fits(data: &[&[u8]], size: usize) -> bool {
     // Only the final word of nonstandard calldata can be short.
     data.get((size - 1) / 32)
@@ -168,9 +176,22 @@ enum InferredType {
     // A zero word fits every scalar width.
     Word(Option<InferredWord>),
     // A packed byte and a one-element array can occupy exactly the same tail.
-    Dynamic { array: Option<Box<InferredType>>, packed: Option<PackedType> },
+    Dynamic {
+        array: Option<Box<InferredType>>,
+        packed: Option<PackedEvidence>,
+        prefer_packed: bool,
+    },
 }
 
+#[derive(Clone, Copy)]
+enum LeafPreference {
+    Inferred,
+    Packed,
+    ConservativeText,
+    Utf8,
+}
+
+#[derive(Clone, Copy)]
 enum PackedType {
     Bytes,
     // Printable UTF-8 can take its type from a textual sibling.
@@ -180,22 +201,59 @@ enum PackedType {
     Text,
 }
 
-impl PackedType {
-    fn infer(data: &[&[u8]], size: usize, depth: usize, prefer_text: bool) -> Self {
-        if depth == 0 && !prefer_text {
-            return Self::Bytes;
+/// A packed payload can rely on surrounding padding or a whitespace control to
+/// establish text. Retain the interpretation supported by the leaf alone too.
+struct PackedEvidence {
+    inferred: PackedType,
+    conservative: PackedType,
+    // All members must be UTF-8 and at least one must contain visible text.
+    visible_utf8: Option<bool>,
+}
+
+impl PackedEvidence {
+    fn infer(
+        data: &[&[u8]],
+        size: usize,
+        depth: usize,
+        prefer_text: bool,
+        boundary_text: bool,
+    ) -> Self {
+        let binary = Self {
+            inferred: PackedType::Bytes,
+            conservative: PackedType::Bytes,
+            visible_utf8: None,
+        };
+        if depth == 0 && !prefer_text && !boundary_text {
+            return binary;
         }
         let packed = &data[..size.div_ceil(32)];
         let classify = |bytes: &[u8]| {
-            let Ok(text) = std::str::from_utf8(&bytes[..size]) else { return Self::Bytes };
-            if text.chars().any(|ch| ch.is_control() && !matches!(ch, '\t' | '\n' | '\r')) {
-                Self::Bytes
-            } else if prefer_text {
-                Self::Text
+            let Ok(text) = std::str::from_utf8(&bytes[..size]) else { return binary };
+            let mut extended_whitespace = false;
+            let mut binary_control = false;
+            let mut visible = false;
+            for ch in text.chars() {
+                if ch.is_control() {
+                    binary_control |= !ch.is_whitespace();
+                    extended_whitespace |= !matches!(ch, '\t' | '\n' | '\r');
+                } else {
+                    visible |= !ch.is_whitespace();
+                }
+            }
+            if binary_control {
+                return Self { visible_utf8: Some(visible), ..binary };
+            }
+            let leaf = if prefer_text || (depth == 0 && boundary_text) {
+                PackedType::Text
             } else if packed.len() > 1 {
-                Self::LongUtf8
+                PackedType::LongUtf8
             } else {
-                Self::Utf8
+                PackedType::Utf8
+            };
+            Self {
+                inferred: if boundary_text { PackedType::Text } else { leaf },
+                conservative: if extended_whitespace { PackedType::Bytes } else { leaf },
+                visible_utf8: Some(visible),
             }
         };
         match packed {
@@ -204,6 +262,26 @@ impl PackedType {
         }
     }
 
+    fn is_text(&self, preference: LeafPreference, depth: usize) -> bool {
+        let ty = match preference {
+            LeafPreference::Utf8 if depth > 0 => return self.visible_utf8 == Some(true),
+            LeafPreference::Packed if depth > 0 => return false,
+            LeafPreference::ConservativeText => self.conservative,
+            _ => self.inferred,
+        };
+        matches!(ty, PackedType::Text)
+    }
+
+    fn common(self, other: Self) -> Self {
+        Self {
+            inferred: self.inferred.common(other.inferred),
+            conservative: self.conservative.common(other.conservative),
+            visible_utf8: self.visible_utf8.zip(other.visible_utf8).map(|(a, b)| a || b),
+        }
+    }
+}
+
+impl PackedType {
     fn common(self, other: Self) -> Self {
         match (self, other) {
             (Self::Bytes, _) | (_, Self::Bytes) => Self::Bytes,
@@ -222,21 +300,47 @@ impl InferredType {
                 (a, b) => a.or(b),
             })),
             (Self::Empty, ty) | (ty, Self::Empty) if !matches!(ty, Self::Word(_)) => Some(ty),
-            (Self::Dynamic { array: a, packed: p }, Self::Dynamic { array: b, packed: q }) => {
+            (
+                Self::Dynamic { array: a, packed: p, prefer_packed: left_prefers_packed },
+                Self::Dynamic { array: b, packed: q, prefer_packed: right_prefers_packed },
+            ) => {
                 let array = a.zip(b).and_then(|(a, b)| a.common(*b)).map(Box::new);
                 let packed = p.zip(q).map(|(p, q)| p.common(q));
-                (array.is_some() || packed.is_some()).then_some(Self::Dynamic { array, packed })
+                (array.is_some() || packed.is_some()).then_some(Self::Dynamic {
+                    array,
+                    packed,
+                    prefer_packed: left_prefers_packed || right_prefers_packed,
+                })
             }
             _ => None,
         }
     }
 
-    fn into_type(self) -> DynSolType {
+    fn abi_type(&self, depth: usize, preference: LeafPreference) -> DynSolType {
         match self {
+            Self::Empty
+                if depth == 0 ||
+                    (matches!(preference, LeafPreference::Packed) &&
+                        depth < MAX_DYNAMIC_DEPTH) =>
+            {
+                DynSolType::Array(Box::new(DynSolType::Bytes))
+            }
             Self::Empty => DynSolType::Bytes,
-            Self::Word(word) => word.map_or(DynSolType::FixedBytes(32), InferredWord::into_type),
-            Self::Dynamic { packed: Some(PackedType::Text), .. } => DynSolType::String,
-            Self::Dynamic { array: Some(ty), .. } => DynSolType::Array(Box::new(ty.into_type())),
+            Self::Word(word) => {
+                word.as_ref().map_or(DynSolType::FixedBytes(32), InferredWord::abi_type)
+            }
+            Self::Dynamic { packed: Some(packed), .. } if packed.is_text(preference, depth) => {
+                DynSolType::String
+            }
+            Self::Dynamic { packed: Some(_), prefer_packed, .. }
+                if *prefer_packed ||
+                    (depth > 0 && matches!(preference, LeafPreference::Packed)) =>
+            {
+                DynSolType::Bytes
+            }
+            Self::Dynamic { array: Some(ty), .. } => {
+                DynSolType::Array(Box::new(ty.abi_type(depth + 1, preference)))
+            }
             Self::Dynamic { .. } => DynSolType::Bytes,
         }
     }
@@ -244,36 +348,78 @@ impl InferredType {
 
 /// Infer a type and the contiguous region it consumes, starting at its length word.
 pub(crate) fn infer_dynamic_tail(offset: usize, words: &[&[u8]], end: usize) -> Option<AbiEncoded> {
-    let tail = words.get(offset..end)?;
-    // A confirmed boundary can hide the mixed padding that identifies a string
-    // before another tuple argument. Include the next tail's length word when
-    // a long packed payload would occupy the entire padding sample.
-    let tuple_text = if end < words.len() {
-        let size = usize::try_from(U256::from_be_slice(tail.first()?)).ok()?;
-        let packed_words = size.div_ceil(32);
-        1 + packed_words == tail.len() &&
-            words[offset + 1..].get(..size).is_some_and(|sample| {
-                let next_tail =
-                    sample.get(packed_words).filter(|_| packed_words >= PADDING_SAMPLE_WORDS);
-                has_mixed_padding(sample, next_tail.copied())
-            })
-    } else {
-        false
-    };
-    let (ty, count) = infer_dynamic_value(tail, 0, tuple_text)?;
-    let ty = match ty {
-        InferredType::Empty => DynSolType::Array(Box::new(DynSolType::Bytes)),
-        ty => ty.into_type(),
-    };
+    let (ty, count) =
+        infer_dynamic_value(words.get(offset..)?, end.checked_sub(offset)?, 0, false)?;
+    let ty = ty.abi_type(0, LeafPreference::Inferred);
     Some(AbiEncoded { ty, tail: offset..offset + count })
+}
+
+/// Reconcile ambiguous leaf types once per disjoint argument. Apply each
+/// preference consistently across the tuple instead of enumerating combinations.
+pub(crate) fn alternative_raw_inputs(
+    words: &[&[u8]],
+    inputs: &[DynSolType],
+) -> Vec<Vec<DynSolType>> {
+    let has_ambiguous_leaf = |ty: &DynSolType| match ty {
+        DynSolType::String => true,
+        DynSolType::Array(element) if element.is_dynamic() => {
+            let mut leaf = element.as_ref();
+            while let DynSolType::Array(inner) = leaf {
+                leaf = inner;
+            }
+            // A nonzero integer or address rules out a packed one-byte leaf.
+            matches!(leaf, DynSolType::String | DynSolType::Bytes | DynSolType::FixedBytes(_))
+        }
+        _ => false,
+    };
+    if !inputs.iter().any(has_ambiguous_leaf) {
+        return Vec::new();
+    }
+    let mut owners = vec![None; words.len()];
+    for (i, ty) in inputs.iter().enumerate().filter(|(_, ty)| ty.is_dynamic()) {
+        let Some(start) = words.get(i).and_then(|w| offset_in_words(w)) else { return Vec::new() };
+        if start < inputs.len() || start >= words.len() || owners[start].replace((i, ty)).is_some()
+        {
+            return Vec::new();
+        }
+    }
+    let mut alternatives = [None, None, None];
+    let mut end = words.len();
+    for (start, owner) in owners.into_iter().enumerate().rev() {
+        let Some((index, ty)) = owner else { continue };
+        let length = end - start;
+        end = start;
+        if !has_ambiguous_leaf(ty) {
+            continue;
+        }
+        let Some((inferred, used)) = infer_dynamic_value(&words[start..], length, 0, false) else {
+            continue;
+        };
+        if used != length || inferred.abi_type(0, LeafPreference::Inferred) != *ty {
+            continue;
+        }
+        for (layout, preference) in alternatives.iter_mut().zip([
+            LeafPreference::ConservativeText,
+            LeafPreference::Packed,
+            LeafPreference::Utf8,
+        ]) {
+            let alternative = inferred.abi_type(0, preference);
+            if alternative != *ty {
+                layout.get_or_insert_with(|| inputs.to_vec())[index] = alternative;
+            }
+        }
+    }
+    alternatives.into_iter().flatten().collect()
 }
 
 fn infer_dynamic_value(
     words: &[&[u8]],
+    end: usize,
     depth: usize,
-    has_text_hint: bool,
+    has_siblings: bool,
 ) -> Option<(InferredType, usize)> {
-    let (length_word, data) = words.split_first()?;
+    let (length_word, data) = words.get(..end)?.split_first()?;
+    let following = &words[1..];
     let size = usize::try_from(U256::from_be_slice(length_word)).ok()?;
     if size == 0 {
         return Some((InferredType::Empty, 1));
@@ -285,18 +431,38 @@ fn infer_dynamic_value(
     // Packed strings can resemble arrays when other heads or tails follow them.
     // Use a bounded sample to distinguish mixed padding from uniform element padding.
     let mixed_padding = packed_fits && size < data.len() && has_mixed_padding(&data[..size], None);
-    let prefer_text = mixed_padding || (has_text_hint && (depth == 0 || packed_words == 1));
-    let packed_type = || PackedType::infer(data, size, depth, prefer_text);
+    // A packed leaf at a confirmed boundary may have its padding evidence in
+    // the following sibling or tuple tail. Sample it without consuming those words.
+    let boundary_text = packed_fits &&
+        packed_words == data.len() &&
+        data.len() < following.len() &&
+        following.get(..size).is_some_and(|sample| {
+            let next_tail =
+                sample.get(packed_words).filter(|_| packed_words >= PADDING_SAMPLE_WORDS);
+            has_mixed_padding(sample, next_tail.copied())
+        });
+    let prefer_text = mixed_padding || (has_siblings && packed_words == 1);
+    let packed_type = || PackedEvidence::infer(data, size, depth, prefer_text, boundary_text);
     let Some(elements) = elements.filter(|_| !mixed_padding && depth < MAX_DYNAMIC_DEPTH) else {
         return packed_fits.then(|| {
-            (InferredType::Dynamic { array: None, packed: Some(packed_type()) }, 1 + packed_words)
+            (
+                InferredType::Dynamic {
+                    array: None,
+                    packed: Some(packed_type()),
+                    prefer_packed: false,
+                },
+                1 + packed_words,
+            )
         });
     };
 
-    let (element, payload_words) = infer_dynamic_elements(elements, data, depth)
+    let (element, payload_words) = infer_dynamic_elements(elements, following, data.len(), depth)
         .unwrap_or_else(|| (InferredType::Word(infer_flat_element_type(elements)), size));
     let packed = (packed_fits && packed_words == payload_words).then(packed_type);
-    Some((InferredType::Dynamic { array: Some(Box::new(element)), packed }, 1 + payload_words))
+    Some((
+        InferredType::Dynamic { array: Some(Box::new(element)), packed, prefer_packed: false },
+        1 + payload_words,
+    ))
 }
 
 fn has_mixed_padding(words: &[&[u8]], next_tail: Option<&[u8]>) -> bool {
@@ -317,6 +483,7 @@ fn has_mixed_padding(words: &[&[u8]], next_tail: Option<&[u8]>) -> bool {
 fn infer_dynamic_elements(
     elements: &[&[u8]],
     data: &[&[u8]],
+    end: usize,
     depth: usize,
 ) -> Option<(InferredType, usize)> {
     // Identify the physical order before following any pointers. A failed
@@ -324,24 +491,25 @@ fn infer_dynamic_elements(
     let mut previous = 0;
     for word in elements {
         let offset = offset_in_words(word)?;
-        if !(elements.len()..data.len()).contains(&offset) || offset == previous {
+        if !(elements.len()..end).contains(&offset) || offset == previous {
             return None;
         }
         if offset < previous {
             let mut starts = std::collections::HashSet::with_capacity(elements.len());
             for word in elements {
                 let start = offset_in_words(word)?;
-                if !(elements.len()..data.len()).contains(&start) || !starts.insert(start) {
+                if !(elements.len()..end).contains(&start) || !starts.insert(start) {
                     return None;
                 }
             }
             if !starts.contains(&elements.len()) {
                 return None;
             }
-            let physical = (elements.len()..data.len()).filter(|i| starts.contains(i));
+            let physical = (elements.len()..end).filter(|i| starts.contains(i));
             return infer_adjacent_elements(
                 physical.take(starts.len()),
                 data,
+                end,
                 elements.len(),
                 depth,
                 TailOrder::Reordered,
@@ -350,12 +518,13 @@ fn infer_dynamic_elements(
         previous = offset;
     }
     let physical = elements.iter().filter_map(|word| offset_in_words(word));
-    infer_adjacent_elements(physical, data, elements.len(), depth, TailOrder::Canonical)
+    infer_adjacent_elements(physical, data, end, elements.len(), depth, TailOrder::Canonical)
 }
 
 fn infer_adjacent_elements(
     starts: impl Iterator<Item = usize>,
     data: &[&[u8]],
+    end: usize,
     count: usize,
     depth: usize,
     order: TailOrder,
@@ -368,8 +537,9 @@ fn infer_adjacent_elements(
         if start != cursor {
             return None;
         }
-        let end = starts.peek().copied().unwrap_or(data.len());
-        let (ty, used) = infer_dynamic_value(&data[start..end], depth + 1, count > 1)?;
+        let child_end = starts.peek().copied().unwrap_or(end);
+        let (ty, used) =
+            infer_dynamic_value(&data[start..], child_end - start, depth + 1, count > 1)?;
         cursor += used;
         if matches!(order, TailOrder::Reordered) &&
             matches!(ty, InferredType::Dynamic { packed: Some(_), .. })
@@ -382,15 +552,14 @@ fn infer_adjacent_elements(
         element_ty = element_ty.common(ty)?;
     }
     if matches!(order, TailOrder::Reordered) {
-        // Reordered packed leaves can also resemble one-element arrays. Keep
-        // the packed interpretation when it fits every member. Other reordered
-        // rows must account for the entire interval supplied by their parent.
-        if let InferredType::Dynamic { array, packed: Some(_) } = &mut element_ty {
-            *array = None;
-            if cursor != data.len() && packed_children < 2 {
+        // Prefer packed leaves on a tie, but an enclosing sibling may still
+        // identify every leaf as a one-element array.
+        if let InferredType::Dynamic { prefer_packed, packed: Some(_), .. } = &mut element_ty {
+            *prefer_packed = true;
+            if cursor != end && packed_children < 2 {
                 return None;
             }
-        } else if cursor != data.len() {
+        } else if cursor != end {
             return None;
         }
     }
@@ -461,7 +630,7 @@ impl InferredWord {
         }
     }
 
-    fn into_type(self) -> DynSolType {
+    fn abi_type(&self) -> DynSolType {
         if self.has_address && self.required_uint_width <= 20 {
             return DynSolType::Address;
         }

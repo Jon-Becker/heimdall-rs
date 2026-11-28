@@ -1,4 +1,6 @@
-use super::{decode_raw, decode_raw_result, fixed_bytes, DynSolValue};
+use super::{
+    assert_arguments_in_physical_order, decode_raw, decode_raw_result, fixed_bytes, DynSolValue,
+};
 
 #[tokio::test]
 async fn packed_text_keeps_its_empty_sibling_after_offset_like_scalars() {
@@ -63,4 +65,48 @@ async fn raw_decode_keeps_canonical_arguments_when_packed_tails_can_be_reordered
             alternative.len()
         );
     }
+}
+
+#[tokio::test]
+async fn reordered_tuple_retains_array_arguments() {
+    let first = DynSolValue::Array([1u8, 2, 3].map(DynSolValue::from).to_vec());
+    let second = DynSolValue::Array([4u8, 5].map(DynSolValue::from).to_vec());
+    let bytes = DynSolValue::Bytes(vec![0xaa, 0xbb]);
+
+    for values in [vec![first.clone(), second.clone()], vec![bytes.clone(), first.clone()]] {
+        assert_eq!(decode_raw(&DynSolValue::Tuple(values.clone())).await, values);
+        assert_arguments_in_physical_order(&values, &[1, 0]).await;
+    }
+
+    let values = [first, bytes, second];
+    for order in [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
+        assert_arguments_in_physical_order(&values, &order).await;
+    }
+}
+
+#[tokio::test]
+async fn reordered_tuple_skips_scalar_offsets_inside_an_array_tail() {
+    let integers = DynSolValue::Array([7u8, 7].map(DynSolValue::from).to_vec());
+    let bytes = DynSolValue::Bytes(vec![0x80; 41]);
+    // The scalar can name a word inside the array, even twice, or it
+    // can point at a second scalar that cannot describe a tail at all.
+    for (args, order) in [
+        (vec![128u8.into(), DynSolValue::Array(vec![7u8.into()]), integers.clone()], vec![0, 2, 1]),
+        (vec![bytes.clone(), 160u8.into(), integers.clone(), 160u8.into()], vec![2, 1, 0, 3]),
+        (vec![32u8.into(), 31u8.into(), integers, bytes], vec![0, 1, 3, 2]),
+    ] {
+        assert_arguments_in_physical_order(&args, &order).await;
+    }
+}
+
+#[tokio::test]
+async fn reordered_array_alternatives_preserve_the_canonical_primary() {
+    let args = vec![
+        DynSolValue::from(256u16),
+        DynSolValue::Array([1u8, 2].map(DynSolValue::from).to_vec()),
+        96u8.into(),
+        4u8.into(),
+        fixed_bytes(&[0xbb]),
+    ];
+    assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
 }

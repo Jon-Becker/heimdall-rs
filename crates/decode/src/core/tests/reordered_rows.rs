@@ -1,6 +1,6 @@
 use alloy_dyn_abi::DynSolValue;
 
-use super::decode_raw_bytes;
+use super::{decode_raw_bytes, decode_raw_result};
 
 /// Encode the children in physical order, then restore the logical head order.
 pub(super) fn encode_reordered_array(values: &[DynSolValue], order: &[usize]) -> Vec<u8> {
@@ -40,4 +40,41 @@ async fn raw_decode_preserves_nested_rows_with_reordered_tails() {
     ];
     let encoded = encode_reordered_array(&rows, &[1, 0]);
     assert_eq!(decode_raw_bytes(&encoded).await, [DynSolValue::Array(rows)]);
+}
+
+#[tokio::test]
+async fn surrounding_rows_resolve_reordered_empty_and_zero_children() {
+    let children = vec![integers(&[]), integers(&[0])];
+    let rows = DynSolValue::Array(vec![
+        DynSolValue::Array(children.clone()),
+        DynSolValue::Array(vec![integers(&[1])]),
+    ]);
+    for order in [[0, 1], [1, 0]] {
+        let mut encoded = rows.abi_encode_params();
+        let first_row = encode_reordered_array(&children, &order);
+        // The tuple offset, outer length and two child offsets precede the first row.
+        let first_row_body = &first_row[32..];
+        encoded[128..128 + first_row_body.len()].copy_from_slice(first_row_body);
+        assert_eq!(decode_raw_bytes(&encoded).await, std::slice::from_ref(&rows));
+    }
+}
+
+#[tokio::test]
+async fn reordered_single_byte_leaves_keep_their_packed_type() {
+    let values = [0xff, 0x80].map(|byte| DynSolValue::Bytes(vec![byte]));
+    let encoded = encode_reordered_array(&values, &[1, 0]);
+    assert_eq!(decode_raw_bytes(&encoded).await, [DynSolValue::Array(values.to_vec())]);
+}
+
+#[tokio::test]
+async fn raw_decode_preserves_ambiguous_packed_and_empty_rows() {
+    let empty = DynSolValue::Array(Vec::new());
+    for first_row in [empty.clone(), DynSolValue::Array(vec![DynSolValue::Bytes(vec![0xcc])])] {
+        let array = DynSolValue::Array(vec![first_row, empty.clone()]);
+        let result = decode_raw_result(&array.abi_encode_params()).await;
+        assert!(std::iter::once(&result.decoded).chain(&result.alternatives).any(|candidate| {
+            candidate.inputs == ["bytes[][]"] &&
+                candidate.decoded_inputs.as_deref() == Some(std::slice::from_ref(&array))
+        }));
+    }
 }

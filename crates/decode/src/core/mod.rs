@@ -18,9 +18,9 @@ use crate::{
     error::Error,
     interfaces::{DecodeArgs, DecodeResult},
     utils::{
-        decode_multicall, format_multicall_trace, infer_dynamic_tail, infer_scalar_type,
-        infer_tail_ending_at, is_multicall_pattern, offset_in_words, parse_deployment_bytecode,
-        try_decode,
+        alternative_raw_inputs, can_start_dynamic_tail, decode_multicall, format_multicall_trace,
+        infer_dynamic_tail, infer_scalar_type, infer_tail_ending_at, is_multicall_pattern,
+        offset_in_words, parse_deployment_bytecode, try_decode,
     },
 };
 
@@ -280,25 +280,31 @@ fn infer_raw_inputs(words: &[&[u8]]) -> (Vec<DynSolType>, Vec<Vec<DynSolType>>) 
         if i >= head_end {
             break;
         }
-        head_end = head_end.min(offset);
+        if offset < head_end && can_start_dynamic_tail(offset, words) {
+            head_end = offset;
+        }
         head_pointers += 1;
     }
     let head = &offsets[..head_pointers];
     if head.windows(2).any(|w| w[0].1 > w[1].1) {
         // An offset-looking scalar may split a valid canonical tail. Prefer a
         // complete ordered interpretation of this head whenever one exists.
-        if let Some(inputs) = reordered_inputs(words, head, head_end, &primary) {
-            let first = head
-                .iter()
-                .position(|&(_, offset)| offset == head_end)
-                .expect("the first physical tail is referenced in the head");
-            let mut short_head_hint = false;
-            if let Some(ordered) = ordered_inputs(words, &head[first..], Some(&mut short_head_hint))
-                .ok()
-                .filter(|types| types.len() == head_end)
-            {
-                primary = ordered;
-                used_packed_hint |= short_head_hint;
+        if let Some((inputs, prefer_short_head)) = reordered_inputs(words, head, head_end, &primary)
+        {
+            if prefer_short_head {
+                let first = head
+                    .iter()
+                    .position(|&(_, offset)| offset == head_end)
+                    .expect("the first physical tail is referenced in the head");
+                let mut short_head_hint = false;
+                if let Some(ordered) =
+                    ordered_inputs(words, &head[first..], Some(&mut short_head_hint))
+                        .ok()
+                        .filter(|types| types.len() == head_end)
+                {
+                    primary = ordered;
+                    used_packed_hint |= short_head_hint;
+                }
             }
             if inputs != primary {
                 alternatives.push(inputs);
@@ -311,6 +317,17 @@ fn infer_raw_inputs(words: &[&[u8]]) -> (Vec<DynSolType>, Vec<Vec<DynSolType>>) 
         let previous = first_layout();
         if previous != primary && !alternatives.contains(&previous) {
             alternatives.push(previous);
+        }
+    }
+    // A tuple can have the same boundaries with either packed or array arguments.
+    // Inspect each selected layout once, without expanding alternatives recursively.
+    let packed_alternatives: Vec<_> = std::iter::once(&primary)
+        .chain(&alternatives)
+        .flat_map(|layout| alternative_raw_inputs(words, layout))
+        .collect();
+    for layout in packed_alternatives {
+        if layout != primary && !alternatives.contains(&layout) {
+            alternatives.push(layout);
         }
     }
     (primary, alternatives)
@@ -416,39 +433,63 @@ fn reordered_inputs(
     words: &[&[u8]],
     head: &[(usize, usize)],
     head_end: usize,
-    canonical: &[DynSolType],
-) -> Option<Vec<DynSolType>> {
-    if canonical.len() <= head_end || canonical[head_end..].iter().any(DynSolType::is_dynamic) {
-        return None;
-    }
-    // Index by physical offset so each tail is scanned once. Duplicate head
-    // pointers cannot identify disjoint dynamic arguments.
+    primary: &[DynSolType],
+) -> Option<(Vec<DynSolType>, bool)> {
+    // Validate each physical tail once. Interior offset-looking scalars may
+    // also refer to a word inside a tail; those are left in the tuple head.
+    // A repeated reference cannot identify one owner. It can still be two
+    // scalar arguments that happen to name a word inside an unrelated tail.
     let mut owners = vec![None; words.len()];
     for &(i, offset) in head {
-        if owners[offset].replace(i).is_some() {
-            return None;
-        }
+        let owner = &mut owners[offset];
+        *owner = Some(if owner.is_none() { i } else { head_end });
     }
-    let mut end = words.len();
+    let unique_owner = |start: usize| owners.get(start)?.filter(|&i| i < head_end);
+    let mut starts = (head_end..words.len()).filter(|&i| unique_owner(i).is_some()).peekable();
+    let mut cursor = head_end;
     let mut types = Vec::with_capacity(head.len());
     let mut packed_tails = 0;
-    for (start, owner) in owners.into_iter().enumerate().rev() {
-        let Some(i) = owner else { continue };
-        let param = infer_dynamic_tail(start, words, end)?;
-        if param.tail.end != end {
+    let mut prefer_short_head =
+        primary.len() > head_end && !primary[head_end..].iter().any(DynSolType::is_dynamic);
+    while let Some(start) = starts.next() {
+        if start < cursor {
+            continue;
+        }
+        if start != cursor {
             return None;
         }
-        // Integer or offset words can accidentally form an array tail. Require
-        // independent packed payloads before changing an ordered interpretation.
-        if param.has_packed_data(words) {
-            packed_tails += 1;
-        } else if !canonical[i].is_dynamic() {
-            return None;
+        let owner = unique_owner(start)?;
+        let next = starts.peek().copied().unwrap_or(words.len());
+        let exact = |end| infer_dynamic_tail(start, words, end).filter(|p| p.tail.end == end);
+        let param = exact(next).or_else(|| {
+            // A scalar may point into a real array or byte payload. Both have
+            // a length word that supplies the end even when the next pointer
+            // is spurious. Only accept an end at another head pointer or EOF.
+            let (size, packed_end) = packed_extent(words, start)?;
+            let flat_end = (start + 1).checked_add(size);
+            [flat_end, Some(packed_end)]
+                .into_iter()
+                .flatten()
+                .filter(|&end| end > next && (end == words.len() || unique_owner(end).is_some()))
+                .find_map(exact)
+        })?;
+        if prefer_short_head {
+            if param.has_packed_data(words) {
+                packed_tails += 1;
+            } else if !primary[owner].is_dynamic() {
+                prefer_short_head = false;
+            }
         }
-        types.push((i, param.ty));
-        end = start;
+        types.push((owner, param.ty));
+        cursor = param.tail.end;
     }
-    (packed_tails >= 2).then(|| types_in_head(words, end, types))
+    if cursor != words.len() || !types.windows(2).any(|pair| pair[0].0 > pair[1].0) {
+        return None;
+    }
+    // Strong packed evidence can corroborate a shorter ordered interpretation.
+    // Other disjoint layouts are still useful as alternatives.
+    prefer_short_head &= types.len() == head.len() && packed_tails >= 2;
+    Some((types_in_head(words, head_end, types), prefer_short_head))
 }
 
 /// Several signatures can describe the same words. Prefer a complete layout
@@ -610,7 +651,7 @@ mod tests {
 
     // Alloy emits tails in head order. Move just the head pointers so the same
     // disjoint tails occur in the specified physical order.
-    async fn assert_bytes_in_physical_order(values: &[DynSolValue], order: &[usize]) {
+    async fn assert_arguments_in_physical_order(values: &[DynSolValue], order: &[usize]) {
         let physical = order.iter().map(|&i| values[i].clone()).collect();
         let mut encoded = DynSolValue::Tuple(physical).abi_encode_params();
         let head = encoded[..32 * values.len()].to_vec();
@@ -632,7 +673,7 @@ mod tests {
             DynSolValue::Bytes(b"hello world!".to_vec()),
             DynSolValue::Bytes(b"customer billing address".to_vec()),
         ];
-        assert_bytes_in_physical_order(&text, &[1, 0]).await;
+        assert_arguments_in_physical_order(&text, &[1, 0]).await;
 
         let binary = [
             DynSolValue::Bytes(vec![0xff, 0xfe]),
@@ -640,7 +681,7 @@ mod tests {
             DynSolValue::Bytes(vec![0x80; 65]),
         ];
         for order in [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
-            assert_bytes_in_physical_order(&binary, &order).await;
+            assert_arguments_in_physical_order(&binary, &order).await;
         }
     }
 
@@ -751,12 +792,85 @@ mod tests {
 
     #[tokio::test]
     async fn raw_decode_recognizes_whitespace_in_strings() {
-        for text in ["line\nbreak", "tab\there", "line\r\nbreak"] {
+        for text in ["line\nbreak", "tab\there", "line\r\nbreak", "ABC\x0c123", "first\u{85}second"]
+        {
             assert_raw_array_in_both_orders(
                 DynSolValue::String("ok".into()),
                 DynSolValue::String(text.into()),
             )
             .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn raw_decode_recognizes_text_in_a_singleton_array_at_a_tuple_boundary() {
+        let tail = DynSolValue::Bytes(vec![0xaa, 0xbb]);
+        let args = vec![nested_array(DynSolValue::String("hi".into()), 1), tail.clone()];
+        let bytes = vec![nested_array(DynSolValue::Bytes(b"hi".to_vec()), 1), tail.clone()];
+        let result = decode_raw_result(&DynSolValue::Tuple(args.clone()).abi_encode_params()).await;
+        assert_eq!(result.decoded.decoded_inputs, Some(args));
+        assert!(result.alternatives.iter().any(|alt| alt.decoded_inputs.as_ref() == Some(&bytes)));
+
+        let binary = vec![nested_array(DynSolValue::Bytes(vec![0xff, 0xee]), 1), tail];
+        assert_eq!(decode_raw(&DynSolValue::Tuple(binary.clone())).await, binary);
+        let standalone = nested_array(DynSolValue::Bytes(b"hi".to_vec()), 1);
+        assert_eq!(decode_raw(&standalone).await, [standalone]);
+    }
+
+    #[tokio::test]
+    async fn raw_decode_preserves_bytes_for_nested_printable_payloads() {
+        let rows = |populated, empty| {
+            DynSolValue::Array(vec![nested_array(populated, 1), nested_array(empty, 1)])
+        };
+        let text = rows(DynSolValue::String("é".into()), DynSolValue::String(String::new()));
+        let bytes =
+            rows(DynSolValue::Bytes("é".as_bytes().to_vec()), DynSolValue::Bytes(Vec::new()));
+        let result = decode_raw_result(&text.abi_encode_params()).await;
+        assert_eq!(result.decoded.decoded_inputs, Some(vec![text]));
+        assert!(result
+            .alternatives
+            .iter()
+            .any(|alt| alt.decoded_inputs.as_deref() == Some(std::slice::from_ref(&bytes))));
+    }
+
+    #[tokio::test]
+    async fn raw_decode_recognizes_one_multiword_string_among_empty_members() {
+        let mut strings = vec![DynSolValue::String(String::new()); 32];
+        strings[0] = DynSolValue::String("x".repeat(33));
+        let array = DynSolValue::Array(strings.clone());
+        assert_eq!(decode_raw(&array).await, [array]);
+        strings[0] = DynSolValue::String("x".repeat(64));
+        let args = vec![DynSolValue::Array(strings), DynSolValue::Array(vec![7u8.into(); 35])];
+        let result = decode_raw_result(&DynSolValue::Tuple(args.clone()).abi_encode_params()).await;
+        assert!(std::iter::once(&result.decoded)
+            .chain(&result.alternatives)
+            .any(|f| f.decoded_inputs.as_ref() == Some(&args)));
+    }
+
+    #[tokio::test]
+    async fn raw_decode_retains_compatible_bytes_and_utf8_arrays() {
+        for first in ["a", "\0"] {
+            let texts = DynSolValue::Array(vec![
+                DynSolValue::String(first.into()),
+                DynSolValue::String("ok".into()),
+            ]);
+            let bytes = DynSolValue::Array(vec![
+                DynSolValue::Bytes(first.as_bytes().to_vec()),
+                DynSolValue::Bytes(b"ok".to_vec()),
+            ]);
+            let result = decode_raw_result(&texts.abi_encode_params()).await;
+            for value in [texts, bytes] {
+                assert!(std::iter::once(&result.decoded)
+                    .chain(&result.alternatives)
+                    .any(|f| f.decoded_inputs.as_deref() == Some(std::slice::from_ref(&value))));
+            }
+        }
+        for payload in [vec![0, 0], vec![0xff, 0xff]] {
+            let bytes = DynSolValue::Array(vec![DynSolValue::Bytes(payload); 2]);
+            let result = decode_raw_result(&bytes.abi_encode_params()).await;
+            assert!(std::iter::once(&result.decoded)
+                .chain(&result.alternatives)
+                .all(|f| f.inputs != ["string[]"]));
         }
     }
 
