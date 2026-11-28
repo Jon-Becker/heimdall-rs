@@ -78,3 +78,52 @@ async fn raw_decode_preserves_ambiguous_packed_and_empty_rows() {
         }));
     }
 }
+
+#[tokio::test]
+async fn zero_only_scalar_rows_keep_the_full_word_interpretation() {
+    let mut integer_word = [0; 32];
+    integer_word[31] = 1;
+    let mut bytes_word = [0x61; 32];
+    bytes_word[31] = 0;
+    for (word, primary) in [(integer_word, "uint8[][]"), (bytes_word, "bytes31[][]")] {
+        let array = DynSolValue::Array(vec![
+            DynSolValue::Array(vec![super::fixed_bytes(&word)]),
+            DynSolValue::Array(Vec::new()),
+            DynSolValue::Array(vec![super::fixed_bytes(&[0; 32])]),
+        ]);
+        let result = decode_raw_result(&array.abi_encode_params()).await;
+        assert_eq!(result.decoded.inputs, [primary]);
+        let mut full_words = result.alternatives.iter().filter(|alt| alt.inputs == ["bytes32[][]"]);
+        assert_eq!(
+            full_words.next().unwrap().decoded_inputs.as_deref(),
+            Some(std::slice::from_ref(&array))
+        );
+        assert!(full_words.next().is_none());
+    }
+
+    let mixed = DynSolValue::Array(vec![integers(&[0, 1]), integers(&[1])]);
+    let result = decode_raw_result(&mixed.abi_encode_params()).await;
+    assert!(result.alternatives.iter().all(|alt| alt.inputs != ["bytes32[][]"]));
+}
+
+#[tokio::test]
+async fn nested_packed_and_empty_arrays_keep_their_textual_tuple_sibling() {
+    let strings = DynSolValue::Array(vec![DynSolValue::String("hi".into())]);
+    let empty = DynSolValue::Array(Vec::new());
+    for first in [empty.clone(), DynSolValue::Array(vec![DynSolValue::Bytes(vec![0xcc])])] {
+        let args = [strings.clone(), DynSolValue::Array(vec![first, empty.clone()])];
+        let result =
+            decode_raw_result(&DynSolValue::Tuple(args.to_vec()).abi_encode_params()).await;
+        assert!(result.alternatives.iter().any(|alt| {
+            alt.inputs == ["string[]", "bytes[][]"] && alt.decoded_inputs.as_deref() == Some(&args)
+        }));
+    }
+
+    let zero_rows =
+        DynSolValue::Array(vec![DynSolValue::Array(vec![super::fixed_bytes(&[0; 32])])]);
+    let args = [zero_rows, strings];
+    let result = decode_raw_result(&DynSolValue::Tuple(args.to_vec()).abi_encode_params()).await;
+    assert!(result.alternatives.iter().any(|alt| {
+        alt.inputs == ["bytes32[][]", "string[]"] && alt.decoded_inputs.as_deref() == Some(&args)
+    }));
+}

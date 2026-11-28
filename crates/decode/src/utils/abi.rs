@@ -189,6 +189,9 @@ enum LeafPreference {
     Packed,
     ConservativeText,
     Utf8,
+    // Prefer bytes over an equally sized scalar row when the UTF-8 check fails.
+    Utf8OrBytes,
+    Array,
 }
 
 #[derive(Clone, Copy)]
@@ -264,7 +267,9 @@ impl PackedEvidence {
 
     fn is_text(&self, preference: LeafPreference, depth: usize) -> bool {
         let ty = match preference {
-            LeafPreference::Utf8 if depth > 0 => return self.visible_utf8 == Some(true),
+            LeafPreference::Utf8 | LeafPreference::Utf8OrBytes if depth > 0 => {
+                return self.visible_utf8 == Some(true)
+            }
             LeafPreference::Packed if depth > 0 => return false,
             LeafPreference::ConservativeText => self.conservative,
             _ => self.inferred,
@@ -320,7 +325,7 @@ impl InferredType {
         match self {
             Self::Empty
                 if depth == 0 ||
-                    (matches!(preference, LeafPreference::Packed) &&
+                    (matches!(preference, LeafPreference::Array | LeafPreference::Packed) &&
                         depth < MAX_DYNAMIC_DEPTH) =>
             {
                 DynSolType::Array(Box::new(DynSolType::Bytes))
@@ -329,12 +334,21 @@ impl InferredType {
             Self::Word(word) => {
                 word.as_ref().map_or(DynSolType::FixedBytes(32), InferredWord::abi_type)
             }
+            Self::Dynamic { array: Some(ty), .. }
+                if depth > 0 && matches!(preference, LeafPreference::Array) =>
+            {
+                DynSolType::Array(Box::new(ty.abi_type(depth + 1, preference)))
+            }
             Self::Dynamic { packed: Some(packed), .. } if packed.is_text(preference, depth) => {
                 DynSolType::String
             }
             Self::Dynamic { packed: Some(_), prefer_packed, .. }
                 if *prefer_packed ||
-                    (depth > 0 && matches!(preference, LeafPreference::Packed)) =>
+                    (depth > 0 &&
+                        matches!(
+                            preference,
+                            LeafPreference::Packed | LeafPreference::Utf8OrBytes
+                        )) =>
             {
                 DynSolType::Bytes
             }
@@ -383,7 +397,14 @@ pub(crate) fn alternative_raw_inputs(
             return Vec::new();
         }
     }
-    let mut alternatives = [None, None, None];
+    let preferences = [
+        LeafPreference::ConservativeText,
+        LeafPreference::Packed,
+        LeafPreference::Utf8,
+        LeafPreference::Array,
+        LeafPreference::Utf8OrBytes,
+    ];
+    let mut alternatives = preferences.map(|_| None);
     let mut end = words.len();
     for (start, owner) in owners.into_iter().enumerate().rev() {
         let Some((index, ty)) = owner else { continue };
@@ -398,11 +419,7 @@ pub(crate) fn alternative_raw_inputs(
         if used != length || inferred.abi_type(0, LeafPreference::Inferred) != *ty {
             continue;
         }
-        for (layout, preference) in alternatives.iter_mut().zip([
-            LeafPreference::ConservativeText,
-            LeafPreference::Packed,
-            LeafPreference::Utf8,
-        ]) {
+        for (layout, preference) in alternatives.iter_mut().zip(preferences) {
             let alternative = inferred.abi_type(0, preference);
             if alternative != *ty {
                 layout.get_or_insert_with(|| inputs.to_vec())[index] = alternative;
@@ -650,6 +667,51 @@ impl InferredWord {
 
 fn infer_flat_element_type(elements: &[&[u8]]) -> Option<InferredWord> {
     elements.iter().filter_map(|word| InferredWord::from_word(word)).reduce(InferredWord::common)
+}
+
+/// Nonzero siblings establish a scalar width, while an entire row of zeros also
+/// supports bytes32. Inspect decoded rows to preserve that interpretation.
+pub(crate) fn full_word_row_inputs(
+    inputs: &[DynSolType],
+    values: &[DynSolValue],
+) -> Option<Vec<DynSolType>> {
+    let mut alternative = None;
+    for (index, (ty, value)) in inputs.iter().zip(values).enumerate() {
+        let mut leaf = ty;
+        let mut depth = 0;
+        while let DynSolType::Array(element) = leaf {
+            depth += 1;
+            leaf = element;
+        }
+        if depth < 2 ||
+            !matches!(
+                leaf,
+                DynSolType::Uint(_) | DynSolType::Address | DynSolType::FixedBytes(1..=31)
+            )
+        {
+            continue;
+        }
+        if has_zero_word_row(value, depth) {
+            let full_words = (0..depth)
+                .fold(DynSolType::FixedBytes(32), |ty, _| DynSolType::Array(Box::new(ty)));
+            alternative.get_or_insert_with(|| inputs.to_vec())[index] = full_words;
+        }
+    }
+    alternative
+}
+
+fn has_zero_word_row(value: &DynSolValue, depth: usize) -> bool {
+    let DynSolValue::Array(row) = value else { return false };
+    if depth > 1 {
+        return row.iter().any(|child| has_zero_word_row(child, depth - 1));
+    }
+    !row.is_empty() &&
+        row.iter().all(|word| match word {
+            DynSolValue::Uint(value, _) => value.is_zero(),
+            DynSolValue::Address(value) => value.is_zero(),
+            DynSolValue::FixedBytes(value, _) => value.is_zero(),
+            _ => false,
+        })
 }
 
 #[cfg(test)]

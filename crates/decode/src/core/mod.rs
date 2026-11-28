@@ -19,8 +19,8 @@ use crate::{
     interfaces::{DecodeArgs, DecodeResult},
     utils::{
         alternative_raw_inputs, can_start_dynamic_tail, decode_multicall, format_multicall_trace,
-        infer_dynamic_tail, infer_scalar_type, infer_tail_ending_at, is_multicall_pattern,
-        offset_in_words, parse_deployment_bytecode, try_decode,
+        full_word_row_inputs, infer_dynamic_tail, infer_scalar_type, infer_tail_ending_at,
+        is_multicall_pattern, offset_in_words, parse_deployment_bytecode, try_decode,
     },
 };
 
@@ -190,9 +190,27 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
                 decoded_inputs: Some(values),
             })
         };
-        let mut others = other_layouts.iter().filter_map(|layout| decode_layout(layout).ok());
-        matches.push(decode_layout(&primary).or_else(|err| others.next().ok_or(err))?);
+        let mut full_word_layouts = Vec::new();
+        let mut decode_inferred = |layout: &[DynSolType]| {
+            let resolved = decode_layout(layout)?;
+            if let Some(alternative) =
+                full_word_row_inputs(layout, resolved.decoded_inputs.as_deref().unwrap_or_default())
+            {
+                if alternative != primary &&
+                    !other_layouts.contains(&alternative) &&
+                    !full_word_layouts.contains(&alternative)
+                {
+                    full_word_layouts.push(alternative);
+                }
+            }
+            Ok::<_, Error>(resolved)
+        };
+        let preferred = decode_inferred(&primary);
+        let mut others = other_layouts.iter().filter_map(|layout| decode_inferred(layout).ok());
+        matches.push(preferred.or_else(|err| others.next().ok_or(err))?);
         alternatives.extend(others);
+        alternatives
+            .extend(full_word_layouts.iter().filter_map(|layout| decode_layout(layout).ok()));
     }
 
     let selected_match = matches.first().expect("matches is empty").clone();
@@ -287,27 +305,40 @@ fn infer_raw_inputs(words: &[&[u8]]) -> (Vec<DynSolType>, Vec<Vec<DynSolType>>) 
     }
     let head = &offsets[..head_pointers];
     if head.windows(2).any(|w| w[0].1 > w[1].1) {
-        // An offset-looking scalar may split a valid canonical tail. Prefer a
-        // complete ordered interpretation of this head whenever one exists.
-        if let Some((inputs, prefer_short_head)) = reordered_inputs(words, head, head_end, &primary)
-        {
-            if prefer_short_head {
-                let first = head
-                    .iter()
-                    .position(|&(_, offset)| offset == head_end)
-                    .expect("the first physical tail is referenced in the head");
-                let mut short_head_hint = false;
-                if let Some(ordered) =
-                    ordered_inputs(words, &head[first..], Some(&mut short_head_hint))
-                        .ok()
-                        .filter(|types| types.len() == head_end)
-                {
-                    primary = ordered;
-                    used_packed_hint |= short_head_hint;
-                }
+        let reordered = reordered_inputs(words, head, head_end, &primary);
+        // An earlier scalar can point inside a later argument. Conversely, a
+        // short apparent tail can instead be scalar words in a larger tuple
+        // head. Try the earliest and latest plausible first tails once each.
+        let earliest = head.iter().position(|&(_, offset)| offset == head_end);
+        let latest = head
+            .iter()
+            .enumerate()
+            .filter(|&(_, &(_, offset))| {
+                offset > primary.len() && can_start_dynamic_tail(offset, words)
+            })
+            .max_by_key(|&(_, &(_, offset))| offset)
+            .map(|(index, _)| index);
+        for first in [earliest.filter(|_| head_end < primary.len()), latest].into_iter().flatten() {
+            let mut short_head_hint = false;
+            let Ok(ordered) = ordered_inputs(words, &offsets[first..], Some(&mut short_head_hint))
+            else {
+                continue
+            };
+            if ordered.len() != head[first].1 {
+                continue;
             }
-            if inputs != primary {
-                alternatives.push(inputs);
+            if Some(first) == earliest &&
+                reordered.as_ref().is_some_and(|(_, prefer_short_head)| *prefer_short_head)
+            {
+                primary = ordered;
+                used_packed_hint |= short_head_hint;
+            } else if ordered != primary && !alternatives.contains(&ordered) {
+                alternatives.push(ordered);
+            }
+        }
+        if let Some((inputs, _)) = reordered {
+            if inputs != primary && !alternatives.contains(&inputs) {
+                alternatives.insert(0, inputs);
             }
         }
     }
@@ -871,6 +902,19 @@ mod tests {
             assert!(std::iter::once(&result.decoded)
                 .chain(&result.alternatives)
                 .all(|f| f.inputs != ["string[]"]));
+        }
+    }
+
+    #[tokio::test]
+    async fn raw_decode_retains_one_byte_arrays_with_printable_elements() {
+        let fixed = DynSolValue::Array(vec![nested_array(fixed_bytes(b"A"), 1); 2]);
+        let text = DynSolValue::Array(vec![DynSolValue::String("A".into()); 2]);
+        let bytes = DynSolValue::Array(vec![DynSolValue::Bytes(b"A".to_vec()); 2]);
+        let result = decode_raw_result(&fixed.abi_encode_params()).await;
+        for expected in [fixed, text, bytes] {
+            assert!(std::iter::once(&result.decoded)
+                .chain(&result.alternatives)
+                .any(|f| f.decoded_inputs.as_deref() == Some(std::slice::from_ref(&expected))));
         }
     }
 
