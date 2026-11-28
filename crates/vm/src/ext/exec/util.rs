@@ -45,7 +45,9 @@ pub(super) fn jump_stack_depth_less_than_max_stack_depth(
     let matching_keys = handled_jumps
         .keys()
         .filter(|key| {
-            key.pc == current_jump_frame.pc && key.jumpdest == current_jump_frame.jumpdest
+            key.pc == current_jump_frame.pc &&
+                key.jumpdest == current_jump_frame.jumpdest &&
+                key.calldata_heads == current_jump_frame.calldata_heads
         })
         .collect::<Vec<&JumpFrame>>();
 

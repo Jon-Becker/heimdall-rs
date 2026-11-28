@@ -78,11 +78,19 @@ pub(crate) struct CalldataFrame {
     pub arg_op: String,
     pub mask_size: usize,
     pub heuristics: HashSet<TypeHeuristic>,
+    /// Dynamic shape established by calldata length/bounds checks.
+    pub dynamic_type: Option<SolidityType>,
 }
 
 impl CalldataFrame {
     /// Get the potential types for the given argument
     pub(crate) fn potential_types(&self) -> Vec<SolidityType> {
+        if let Some(ty) = &self.dynamic_type {
+            return match ty {
+                SolidityType::Bytes => vec![SolidityType::Bytes, SolidityType::String],
+                ty => vec![ty.clone()],
+            };
+        }
         // get all potential types that can fit in self.mask_size
         byte_size_to_type(self.mask_size).1.iter().map(|ty| SolidityType::parse(ty)).collect()
     }

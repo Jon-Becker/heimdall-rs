@@ -87,27 +87,40 @@ async fn solidity_require_preserves_the_passing_condition_and_reason() {
 
 #[tokio::test]
 async fn yul_branch_reconstruction_preserves_argument_mask_inference() {
-    let args = DecompilerArgsBuilder::new()
-        .target(include_str!("testdata/decompile/clamping.hex").trim().to_string())
-        .skip_resolving(true)
-        .include_yul(true)
-        .build()
-        .expect("failed to build decompiler arguments");
-    let result = decompile(args).await.expect("failed to decompile clamping fixture");
+    // The three two-array decoders bound each tail by offset + 32 + length * 32.
+    // Their address/bool/bytes4 masks apply to tail elements, not top-level arguments.
+    // The complex 3334e663 decoder currently reaches an array and a scalar address;
+    // its remaining nested decoding is outside this regression's coverage.
+    // d9c45357 has one byte-length tail (length * 1); its nested abi.decode reads
+    // must not become additional top-level arguments.
+    let expected_inputs = [
+        ("33320de3", vec!["uint256[]", "uint256[]"]),
+        ("3334e663", vec!["uint256[]", "address"]),
+        ("3d4a345c", vec!["uint256[]", "uint256[]"]),
+        ("bf298c34", vec!["uint256[]", "uint256[]"]),
+        ("d9c45357", vec!["bytes"]),
+    ];
 
-    // ABI mask inference depends on trace visitation order. Rendering taken/fallthrough
-    // branches in their semantic positions must not reorder the heuristic observations.
-    for (selector, expected) in [
-        ("33320de3", vec!["uint256", "address"]),
-        ("3334e663", vec!["uint256", "uint256", "uint256"]),
-        ("3d4a345c", vec!["uint256", "uint32"]),
-        ("bf298c34", vec!["uint256", "uint32"]),
-        ("d9c45357", vec!["uint256", "uint256", "uint256"]),
-    ] {
-        let function = &result.abi.functions[&format!("Unresolved_{selector}")][0];
-        let inputs =
-            function.inputs.iter().map(|parameter| parameter.ty.as_str()).collect::<Vec<_>>();
-        assert_eq!(inputs, expected, "argument types changed for {selector}");
+    // Rendering taken/fallthrough branches must preserve the argument observations
+    // made by ABI-only analysis, including masks on actual scalar head words.
+    for include_yul in [false, true] {
+        let args = DecompilerArgsBuilder::new()
+            .target(include_str!("testdata/decompile/clamping.hex").trim().to_string())
+            .skip_resolving(true)
+            .include_yul(include_yul)
+            .build()
+            .expect("failed to build decompiler arguments");
+        let result = decompile(args).await.expect("failed to decompile clamping fixture");
+
+        for (selector, expected) in &expected_inputs {
+            let function = &result.abi.functions[&format!("Unresolved_{selector}")][0];
+            let inputs =
+                function.inputs.iter().map(|parameter| parameter.ty.as_str()).collect::<Vec<_>>();
+            assert_eq!(
+                &inputs, expected,
+                "argument types changed for {selector} (include_yul={include_yul})"
+            );
+        }
     }
 }
 

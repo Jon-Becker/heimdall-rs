@@ -5,6 +5,7 @@ use crate::{core::analyze::AnalyzerState, interfaces::AnalyzedFunction, Error};
 
 // import heuristics
 mod arguments;
+mod calldata;
 mod events;
 mod extcall;
 mod modifiers;
