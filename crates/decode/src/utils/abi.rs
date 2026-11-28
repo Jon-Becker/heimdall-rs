@@ -63,7 +63,22 @@ pub(crate) fn try_decode(
 pub(crate) fn try_decode_dynamic_parameter(
     parameter_index: usize,
     calldata_words: &[Vec<u8>],
+    remaining: &mut Option<usize>,
 ) -> Result<Option<AbiEncoded>, Error> {
+    let candidate = infer_dynamic_parameter(parameter_index, calldata_words, remaining, 0)?;
+    // A partially explored array type could expand the same offsets again in Alloy.
+    Ok(candidate.filter(|_| remaining.is_some()))
+}
+
+fn infer_dynamic_parameter(
+    parameter_index: usize,
+    calldata_words: &[Vec<u8>],
+    remaining: &mut Option<usize>,
+    depth: u8,
+) -> Result<Option<AbiEncoded>, Error> {
+    if remaining.is_none() {
+        return Ok(None);
+    }
     trace!(
         "calldata_words: {:#?}",
         calldata_words.iter().map(|w| encode_hex(w)).collect::<Vec<String>>()
@@ -103,7 +118,20 @@ pub(crate) fn try_decode_dynamic_parameter(
     // the array elements.
     let data_start_word_offset = word_offset + U256::from(1);
     let data_end_word_offset = data_start_word_offset + size;
-    if data_end_word_offset > U256::from(calldata_words.len()) {
+    let packed = data_end_word_offset > U256::from(calldata_words.len());
+    let size_in_words = size.to::<usize>();
+    let payload_words = if packed { size_in_words.div_ceil(32) } else { size_in_words };
+    if payload_words > calldata_words.len() - data_start_word_offset.to::<usize>() {
+        return Ok(None);
+    }
+    // Each disjoint array or packed payload consumes its own portion of calldata.
+    // Overlapping guesses spend the same allowance on every visit.
+    *remaining = remaining.and_then(|words| words.checked_sub(payload_words));
+    if depth >= alloy::sol_types::abi::RECURSION_LIMIT || remaining.is_none() {
+        *remaining = None;
+        return Ok(None);
+    }
+    if packed {
         try_decode_dynamic_parameter_bytes(
             parameter_index,
             calldata_words,
@@ -123,6 +151,8 @@ pub(crate) fn try_decode_dynamic_parameter(
             data_end_word_offset,
             size,
             coverages,
+            remaining,
+            depth,
         )
     }
 }
@@ -220,6 +250,8 @@ fn try_decode_dynamic_parameter_array(
     data_end_word_offset: U256,
     size: U256,
     coverages: HashSet<usize>,
+    remaining: &mut Option<usize>,
+    depth: u8,
 ) -> Result<Option<AbiEncoded>, Error> {
     let mut coverages = coverages;
     trace!("parameter {}: '{}' may be an array", parameter_index, word);
@@ -263,11 +295,11 @@ fn try_decode_dynamic_parameter_array(
     //           the array
     let potential_type = get_potential_type(
         data_words,
-        parameter_index,
-        calldata_words,
-        word,
+        &calldata_words[data_start_word_offset.to::<usize>()..],
         data_start_word_offset,
         &mut coverages,
+        remaining,
+        depth,
     );
     let type_str = format!("{potential_type}[]");
     trace!("parameter {}: '{}' is {}", parameter_index, word, type_str);
@@ -348,29 +380,18 @@ fn try_decode_dynamic_parameter_string(
 /// Handle determining the most potential type of an abi-encoded item.
 fn get_potential_type(
     data_words: &[Vec<u8>],
-    parameter_index: usize,
     calldata_words: &[Vec<u8>],
-    word: U256,
     data_start_word_offset: U256,
     coverages: &mut HashSet<usize>,
+    remaining: &mut Option<usize>,
+    depth: u8,
 ) -> String {
     let (_, potential_type) = data_words
         .iter()
         .enumerate()
         .map(|(i, w)| {
-            // we need to get a slice of calldata_words from `data_start_word_offset` to the end
-            // of the calldata_words. this is because nested abi-encoded items
-            // reset the offsets of the words.
-            let data_words =
-                &calldata_words[data_start_word_offset.try_into().unwrap_or(usize::MAX)..];
-
-            // first, check if this word *could* be a nested abi-encoded item
-            trace!(
-                "parameter {}: '{}' checking for nested abi-encoded data",
-                parameter_index,
-                word
-            );
-            if let Ok(Some(nested_abi_encoded_param)) = try_decode_dynamic_parameter(i, data_words)
+            if let Ok(Some(nested_abi_encoded_param)) =
+                infer_dynamic_parameter(i, calldata_words, remaining, depth + 1)
             {
                 // we need to add data_start_word_offset to all the offsets in nested_coverages
                 // because they are relative to the start of the nested abi-encoded item.
@@ -458,8 +479,9 @@ mod tests {
             .collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
-                .expect("failed to decode dynamic parameter");
+            let abi_encoded_params =
+                try_decode_dynamic_parameter(i, &calldata_words, &mut Some(calldata_words.len()))
+                    .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
 
@@ -514,8 +536,9 @@ mod tests {
             .collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
-                .expect("failed to decode dynamic parameter");
+            let abi_encoded_params =
+                try_decode_dynamic_parameter(i, &calldata_words, &mut Some(calldata_words.len()))
+                    .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages = abi_encoded_params.map(|p| p.coverages).unwrap_or_default();
 
@@ -582,8 +605,9 @@ mod tests {
             .collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
-                .expect("failed to decode dynamic parameter");
+            let abi_encoded_params =
+                try_decode_dynamic_parameter(i, &calldata_words, &mut Some(calldata_words.len()))
+                    .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages =
                 abi_encoded_params.as_ref().map(|p| p.coverages.to_owned()).unwrap_or_default();
@@ -639,8 +663,9 @@ mod tests {
             .collect::<Vec<_>>();
 
         for i in 0..calldata_words.len() {
-            let abi_encoded_params = try_decode_dynamic_parameter(i, &calldata_words)
-                .expect("failed to decode dynamic parameter");
+            let abi_encoded_params =
+                try_decode_dynamic_parameter(i, &calldata_words, &mut Some(calldata_words.len()))
+                    .expect("failed to decode dynamic parameter");
             let is_abi_encoded = abi_encoded_params.is_some();
             let coverages =
                 abi_encoded_params.as_ref().map(|p| p.coverages.to_owned()).unwrap_or_default();
