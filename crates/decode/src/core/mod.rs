@@ -187,11 +187,16 @@ pub async fn decode(mut args: DecodeArgs) -> Result<DecodeResult, Error> {
             // while calldata_words is not empty, iterate over itcar
             let mut i = 0;
             let mut covered_words = HashSet::new();
+            // Allow several plausible interpretations per word while bounding speculative work
+            // across the entire call, including unsuccessful top-level guesses.
+            let mut remaining = Some(calldata_words.len().saturating_mul(8));
             while covered_words.len() != calldata_words.len() {
                 let word = calldata_words[i].to_owned();
 
                 // check if the first word is abiencoded
-                if let Some(abi_encoded) = try_decode_dynamic_parameter(i, &calldata_words)? {
+                if let Some(abi_encoded) =
+                    try_decode_dynamic_parameter(i, &calldata_words, &mut remaining)?
+                {
                     let potential_type = to_type(&abi_encoded.ty);
                     potential_inputs.push(potential_type);
                     covered_words.extend(abi_encoded.coverages);

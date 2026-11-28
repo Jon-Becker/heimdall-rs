@@ -5,6 +5,52 @@ mod integration_tests {
     use heimdall_decoder::{DecodeArgs, DecodeArgsBuilder};
     use serde_json::Value;
 
+    fn encode_words(words: &[u8]) -> Vec<u8> {
+        words.iter().flat_map(|word| [0; 31].into_iter().chain([*word])).collect()
+    }
+
+    async fn decode_raw_words(words: &[u8]) -> heimdall_decoder::DecodeResult {
+        let hex = heimdall_common::utils::strings::encode_hex(&encode_words(words));
+        let args = DecodeArgsBuilder::new()
+            .target(format!("0xdeadbeef{hex}"))
+            .skip_resolving(true)
+            .raw(true)
+            .build()
+            .unwrap();
+        heimdall_decoder::decode(args).await.unwrap()
+    }
+
+    #[test]
+    fn raw_repeated_offsets_finish() {
+        let (done, finished) = std::sync::mpsc::channel();
+        // Inference runs synchronously; poll the deadline on a separate thread.
+        std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(async {
+                for word in [0x20, 0x40] {
+                    let result = decode_raw_words(&[word; 48]).await;
+                    assert!(!result.decoded.inputs.is_empty());
+                }
+            });
+            let _ = done.send(());
+        });
+        finished
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("raw decoding did not finish");
+    }
+
+    #[tokio::test]
+    async fn raw_wide_and_nested_arrays_keep_their_values() {
+        for (words, expected) in [
+            (vec![32, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9], "uint8[]"),
+            (vec![32, 1, 32, 1, 32, 1, 32, 1, 32, 1, 7], "uint8[][][][][]"),
+        ] {
+            let result = decode_raw_words(&words).await;
+            assert_eq!(result.decoded.inputs, [expected]);
+            let encoded = result.decoded.decoded_inputs.unwrap()[0].abi_encode_params();
+            assert_eq!(encoded, encode_words(&words));
+        }
+    }
+
     #[tokio::test]
     async fn test_decode_transfer() {
         let args = DecodeArgs {
