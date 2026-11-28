@@ -9,7 +9,7 @@ const workflow = fs.readFileSync(
 );
 const authorization = workflow.split('// BEGIN MAINTAINER AUTHORIZATION\n')[1]
   .split('// END MAINTAINER AUTHORIZATION')[0];
-const report = workflow.slice(workflow.lastIndexOf('            const results = ['));
+const report = workflow.slice(workflow.lastIndexOf('            const results = [')).split('\n  prepare-reports:')[0];
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const authorize = new AsyncFunction('github', 'context', 'core', 'process', authorization);
 const publish = new AsyncFunction('github', 'context', 'process', report);
@@ -248,7 +248,7 @@ for (const result of ['success', 'failure', 'cancelled', 'skipped', undefined]) 
       await f.publish();
       assert.equal(f.statuses.length, 1);
       assert.equal(f.statuses[0].sha, sha);
-      assert.equal(f.statuses[0].context, 'Maintainer CI');
+      assert.equal(f.statuses[0].context, 'Admin-approved CI');
       assert.equal(f.statuses[0].state, result === 'success' ? 'success' : 'failure');
       assert.equal(f.statuses[0].target_url,
         'https://github.com/Jon-Becker/heimdall-rs/actions/runs/123');
@@ -257,7 +257,7 @@ for (const result of ['success', 'failure', 'cancelled', 'skipped', undefined]) 
 }
 
 test('status publisher never checks out code or consumes artifacts', () => {
-  const reporter = workflow.split('\n  report:\n')[1];
+  const reporter = workflow.split('\n  report:\n')[1].split('\n  prepare-reports:')[0];
   assert.doesNotMatch(reporter, /uses: actions\/checkout|download-artifact|secrets\.|run: /);
   assert.match(reporter, /permissions:\n      contents: read\n      pull-requests: read\n      statuses: write/);
 });
@@ -272,9 +272,9 @@ test('stale approval becomes failure on the original SHA instead of stranded pen
   await f.publish();
   assert.equal(f.statuses[0].state, 'failure');
   assert.equal(f.statuses[0].sha, sha);
-  const reporter = workflow.split('\n  report:\n')[1];
+  const reporter = workflow.split('\n  report:\n')[1].split('\n  prepare-reports:')[0];
   assert.match(reporter, /id: revalidate\n        continue-on-error: true/);
-  assert.match(reporter, /name: Publish separate Maintainer CI status\n        if: \$\{\{ always\(\) \}\}/);
+  assert.match(reporter, /name: Publish separate Admin-approved CI status\n        if: \$\{\{ always\(\) \}\}/);
 });
 
 test('an administrator can approve their own PR without a review requirement', async () => {

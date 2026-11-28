@@ -24,10 +24,48 @@ jobs:
           - os: macos-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
+      - name: Run secretless PR tests
+        if: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]') }}
+        env:
+          # Keep all unit tests and local integration tests, excluding only the
+          # exact live-RPC cases. New tests are included by default, not hidden.
+          RPC_URL: ''
+          WS_RPC_URL: ''
+          SECRETLESS_FILTER: >-
+            not (test(=ether::bytecode::tests::test_get_bytecode_when_target_is_address) |
+            test(=ether::bytecode::tests::test_get_creation_bytecode_for_self_destructed_contract) |
+            test(=ether::bytecode::tests::test_get_bytecode_returns_empty_for_self_destructed_without_api_key) |
+            test(=ether::calldata::tests::test_get_calldata_when_target_is_txhash) |
+            test(=ether::rpc::tests::test_chain_id) |
+            test(=ether::rpc::tests::test_get_code) |
+            test(=ether::rpc::tests::test_get_transaction) |
+            test(=ether::rpc::tests::test_get_trace) |
+            test(=ether::rpc::tests::test_get_trace_invalid_transaction_hash) |
+            test(=ether::rpc::tests::test_get_block_logs) |
+            test(=ether::rpc::tests::test_get_contract_creation_block) |
+            test(=ether::rpc::tests::test_chain_id_with_ws_rpc) |
+            test(=integration_tests::test_cfg_simple) |
+            test(=integration_tests::test_cfg_complex) |
+            test(=integration_tests::test_cfg_links_fallback_block) |
+            test(=integration_tests::test_cfg_auto_hardfork) |
+            test(=integration_tests::test_decompile_precompile) |
+            test(=integration_tests::test_decompile_edge_case_u256_conversion_overflow_1) |
+            test(=integration_tests::test_decompile_edge_case_u256_conversion_overflow_2) |
+            test(=integration_tests::test_decompile_edge_case_vec_overflow) |
+            test(=integration_tests::test_decompile_weth) |
+            test(=integration_tests::test_decompile_ctf) |
+            test(=integration_tests::test_decompile_auto_hardfork) |
+            test(=integration_tests::test_disassemble_from_rpc) |
+            test(=integration_tests::test_disassemble_auto_hardfork) |
+            test(=integration_tests::test_inspect_simple) |
+            test(=integration_tests::test_inspect_create) |
+            test(=output::tests::test_output_default_address))
+        run: cargo nextest run --no-fail-fast --release -E "$SECRETLESS_FILTER"
       - name: Run Tests
+        if: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
         env:
           RPC_URL: ${{ secrets.RPC_URL }}
           WS_RPC_URL: ${{ secrets.WS_RPC_URL }}
@@ -48,7 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
@@ -73,8 +111,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustc
       - run: make check
+
+
+  workflow-tests:
+    name: workflow regression tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test .github/tests/*.test.cjs

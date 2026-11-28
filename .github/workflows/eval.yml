@@ -17,7 +17,7 @@ permissions:
 jobs:
   request-eval:
     name: Post evaluation request instructions
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Comment with evaluation instructions
