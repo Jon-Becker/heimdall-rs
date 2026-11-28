@@ -34,10 +34,7 @@ pub(crate) fn variable_postprocessor(
     // Keep branch and require conditions expressed in terms of their original operands. Replacing
     // a comparison subtree with a VM temporary can later alias that temporary to one operand,
     // turning checks such as `amount + total >= total` into `total >= total`.
-    let preserves_operands = matches!(
-        statement,
-        Statement::If { .. } | Statement::IfRevertElse { .. } | Statement::Require { .. }
-    );
+    let preserves_operands = matches!(statement, Statement::If { .. } | Statement::Require { .. });
     if !preserves_operands {
         statement.visit_exprs_mut(&mut |expr| {
             // the smallest matching variable is used, since map iteration order is not stable

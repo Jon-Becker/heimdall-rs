@@ -174,10 +174,7 @@ pub(crate) fn storage_inference_postprocessor(
         }
     });
 
-    if matches!(
-        statement,
-        Statement::If { .. } | Statement::IfElse { .. } | Statement::IfRevertElse { .. }
-    ) {
+    if matches!(statement, Statement::If { .. } | Statement::IfElse { .. }) {
         state.symbolic_memory_scopes.push(state.symbolic_memory.clone());
         state.keccak_preimage_scopes.push(state.keccak_preimages.clone());
     }

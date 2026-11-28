@@ -25,7 +25,7 @@ pub(crate) fn constant_truthiness(expr: Expr) -> Option<bool> {
 ///
 /// Symbolic execution deduplicates revisited jumps across sibling paths, so a subtree cut short at
 /// a JUMPI may rely on a sibling for the rest of its body. Such a subtree is not self-contained.
-fn is_complete(trace: &VMTrace) -> bool {
+pub(crate) fn is_complete(trace: &VMTrace) -> bool {
     match trace.operations.last().map(|state| state.last_instruction.opcode) {
         Some(JUMPI) => trace.children.len() == 2 && trace.children.iter().all(is_complete),
         Some(opcode) => trace.children.is_empty() && OpCodeInfo::from(opcode).terminating(),
