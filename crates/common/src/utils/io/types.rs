@@ -19,6 +19,11 @@ pub fn display(inputs: Vec<DynSolValue>, prefix: &str) -> Vec<String> {
             DynSolValue::Uint(val, _) => {
                 output.push(format!("{prefix}{} {}", "uint   ".blue(), val))
             }
+            DynSolValue::String(val)
+                if val.chars().any(|ch| ch.is_control() && !matches!(ch, '\t' | '\n')) =>
+            {
+                output.push(format!("{prefix}{} {}", "string ".blue(), val.escape_debug()));
+            }
             DynSolValue::String(val) => output.push(format!("{prefix}{} {val}", "string ".blue())),
             DynSolValue::Bool(val) => {
                 if val {
@@ -29,6 +34,9 @@ pub fn display(inputs: Vec<DynSolValue>, prefix: &str) -> Vec<String> {
             }
             DynSolValue::FixedBytes(val, _) => {
                 output.push(format!("{prefix}{} {}", "bytes  ".blue(), val));
+            }
+            DynSolValue::Bytes(val) if val.is_empty() => {
+                output.push(format!("{prefix}{} 0x", "bytes  ".blue()));
             }
             DynSolValue::Bytes(val) => {
                 // chunk val into 32-byte chunks
@@ -201,6 +209,22 @@ mod tests {
     use alloy::primitives::{Address, FixedBytes};
 
     use super::*;
+
+    #[test]
+    fn display_keeps_empty_byte_strings_in_argument_order() {
+        let array =
+            DynSolValue::Array(vec![DynSolValue::Bytes(vec![]), DynSolValue::Bytes(vec![0xff])]);
+        let lines = display(vec![array], "");
+        assert_eq!(lines.len(), 4);
+        assert!(lines[1].ends_with(" 0x"));
+        assert!(lines[2].ends_with(" 0xff"));
+    }
+
+    #[test]
+    fn display_escapes_control_bytes_in_text() {
+        let lines = display(vec![DynSolValue::String("a\0b".into())], "");
+        assert!(lines[0].ends_with(r" a\0b"));
+    }
 
     #[test]
     fn test_parameterize_address() {

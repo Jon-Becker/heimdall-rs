@@ -1,0 +1,144 @@
+use super::{
+    assert_arguments_in_physical_order, decode_raw, decode_raw_result, fixed_bytes, DynSolValue,
+};
+
+#[tokio::test]
+async fn packed_text_keeps_its_empty_sibling_after_offset_like_scalars() {
+    for scalars in [vec![64u8], vec![128], vec![64, 96]] {
+        let mut args = vec![DynSolValue::String("hi".into())];
+        args.extend(scalars.into_iter().map(DynSolValue::from));
+        args.push(DynSolValue::Array(Vec::new()));
+        assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+    }
+}
+
+#[tokio::test]
+async fn an_offset_to_an_array_element_must_identify_a_valid_tail() {
+    let array = DynSolValue::Array(vec![fixed_bytes(b"AB"), fixed_bytes(b"CD")]);
+    let args = vec![array, 96u8.into(), 160u8.into()];
+    assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+}
+
+#[tokio::test]
+async fn inner_pointer_preserves_a_tightly_sized_byte_argument() {
+    let args = vec![64u8.into(), DynSolValue::Bytes(vec![1, 2]), 37u8.into()];
+    let encoded = DynSolValue::Tuple(args.clone()).abi_encode_params();
+    let result = decode_raw_result(&encoded).await;
+    assert_eq!(result.decoded.decoded_inputs.unwrap(), args);
+
+    // The same inner length word and trailing zeroes are also valid byte data.
+    // Only the tuple with a pointer to the inner length supplies corroboration.
+    let mut bytes = vec![0; 37];
+    bytes[31..34].copy_from_slice(&[2, 1, 2]);
+    let other = [DynSolValue::Bytes(bytes.clone()), 96u8.into()];
+    assert!(result.alternatives.iter().any(|alt| alt.decoded_inputs.as_deref() == Some(&other)));
+    let args = vec![DynSolValue::Bytes(bytes), 7u8.into()];
+    assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+}
+
+#[tokio::test]
+async fn simple_call_omits_alternatives_from_json() {
+    let encoded = DynSolValue::Tuple(vec![7u8.into()]).abi_encode_params();
+    let result = decode_raw_result(&encoded).await;
+    assert!(result.alternatives.is_empty());
+    let json: serde_json::Value = serde_json::from_str(&result.to_json().unwrap()).unwrap();
+    assert!(json.get("alternatives").is_none());
+}
+
+#[tokio::test]
+async fn raw_decode_keeps_canonical_arguments_when_packed_tails_can_be_reordered() {
+    let first = DynSolValue::Bytes(vec![0xaa, 0xbb]);
+    let last = fixed_bytes(&[0xcc, 0xdd]);
+    for args in [
+        vec![first.clone(), 64u8.into(), 2u8.into(), last.clone()],
+        vec![first.clone(), first, 96u8.into(), 2u8.into(), last],
+    ] {
+        let encoded = DynSolValue::Tuple(args.clone()).abi_encode_params();
+        let result = decode_raw_result(&encoded).await;
+        assert_eq!(result.decoded.decoded_inputs.as_ref().unwrap(), &args);
+        let json: serde_json::Value = serde_json::from_str(&result.to_json().unwrap()).unwrap();
+        assert_eq!(json["inputs"].as_array().unwrap().len(), args.len());
+        let alternative = result.alternatives.first().unwrap().decoded_inputs.as_ref().unwrap();
+        assert_eq!(alternative.last(), Some(&DynSolValue::Bytes(vec![0xcc, 0xdd])));
+        assert_eq!(
+            json["alternatives"][0]["decoded_inputs"].as_array().unwrap().len(),
+            alternative.len()
+        );
+    }
+}
+
+#[tokio::test]
+async fn reordered_tuple_retains_array_arguments() {
+    let first = DynSolValue::Array([1u8, 2, 3].map(DynSolValue::from).to_vec());
+    let second = DynSolValue::Array([4u8, 5].map(DynSolValue::from).to_vec());
+    let bytes = DynSolValue::Bytes(vec![0xaa, 0xbb]);
+
+    for values in [vec![first.clone(), second.clone()], vec![bytes.clone(), first.clone()]] {
+        assert_eq!(decode_raw(&DynSolValue::Tuple(values.clone())).await, values);
+        assert_arguments_in_physical_order(&values, &[1, 0]).await;
+    }
+
+    let values = [first, bytes, second];
+    for order in [[0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
+        assert_arguments_in_physical_order(&values, &order).await;
+    }
+}
+
+#[tokio::test]
+async fn reordered_tuple_skips_scalar_offsets_inside_an_array_tail() {
+    let integers = DynSolValue::Array([7u8, 7].map(DynSolValue::from).to_vec());
+    let bytes = DynSolValue::Bytes(vec![0x80; 41]);
+    // The scalar can name a word inside the array, even twice, or it
+    // can point at a second scalar that cannot describe a tail at all.
+    for (args, order) in [
+        (vec![128u8.into(), DynSolValue::Array(vec![7u8.into()]), integers.clone()], vec![0, 2, 1]),
+        (vec![bytes.clone(), 160u8.into(), integers.clone(), 160u8.into()], vec![2, 1, 0, 3]),
+        (vec![32u8.into(), 31u8.into(), integers, bytes], vec![0, 1, 3, 2]),
+    ] {
+        assert_arguments_in_physical_order(&args, &order).await;
+    }
+}
+
+#[tokio::test]
+async fn reordered_array_alternatives_preserve_the_canonical_primary() {
+    let args = vec![
+        DynSolValue::from(256u16),
+        DynSolValue::Array([1u8, 2].map(DynSolValue::from).to_vec()),
+        96u8.into(),
+        4u8.into(),
+        fixed_bytes(&[0xbb]),
+    ];
+    assert_eq!(decode_raw(&DynSolValue::Tuple(args.clone())).await, args);
+}
+
+#[tokio::test]
+async fn scalar_pointing_into_packed_bytes_keeps_both_strict_tuples() {
+    let mut payload = vec![0u8; 33];
+    payload[31..].copy_from_slice(&[3, b'A']);
+    let args = vec![DynSolValue::from(96u8), DynSolValue::Bytes(payload)];
+    let encoded = DynSolValue::Tuple(args.clone()).abi_encode_params();
+    let result = decode_raw_result(&encoded).await;
+    let previous = vec![DynSolValue::Bytes(vec![b'A', 0, 0]), 64u8.into(), 33u8.into()];
+    assert_eq!(result.decoded.decoded_inputs.unwrap(), previous);
+    assert_eq!(DynSolValue::Tuple(previous).abi_encode_params(), encoded);
+    assert!(result.alternatives.iter().any(|alt| alt.decoded_inputs.as_deref() == Some(&args)));
+}
+
+#[tokio::test]
+async fn scalar_words_before_a_real_bytes_argument_can_extend_the_tuple_head() {
+    let args = vec![
+        128u8.into(),
+        384u16.into(),
+        DynSolValue::Bytes(vec![0xff, 0xee]),
+        160u8.into(),
+        5u8.into(),
+        fixed_bytes(&[0xbe, 0xef]),
+    ];
+    let encoded = DynSolValue::Tuple(args.clone()).abi_encode_params();
+    let result = decode_raw_result(&encoded).await;
+    assert_eq!(
+        DynSolValue::Tuple(result.decoded.decoded_inputs.unwrap()).abi_encode_params(),
+        encoded
+    );
+    assert!(result.alternatives.iter().any(|alt| alt.decoded_inputs.as_deref() == Some(&args)));
+}

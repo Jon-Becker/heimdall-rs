@@ -2756,7 +2756,6 @@ dependencies = [
  "clap",
  "derive_builder 0.12.0",
  "eyre",
- "hashbrown 0.14.5",
  "heimdall-cache",
  "heimdall-common",
  "heimdall-config",
@@ -2764,6 +2763,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
 ]
 
