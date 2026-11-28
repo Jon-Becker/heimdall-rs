@@ -1,0 +1,14 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "DynamicCalldata.sol": { "urls": ["DynamicCalldata.sol"] }
+  },
+  "settings": {
+    "optimizer": { "enabled": true, "runs": 200 },
+    "evmVersion": "cancun",
+    "metadata": { "appendCBOR": false },
+    "outputSelection": {
+      "*": { "*": ["abi", "evm.deployedBytecode.object"] }
+    }
+  }
+}

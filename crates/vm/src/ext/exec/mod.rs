@@ -74,7 +74,12 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        let trace = match self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)? {
+        let trace = match self.recursive_map(
+            &mut branch_count,
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &timeout,
+        )? {
             Some(trace) => trace,
             None => {
                 warn!("symbolic execution returned no valid traces for selector 0x{}", selector);
@@ -107,7 +112,12 @@ impl VM {
 
         // the VM is at the function entry point, begin tracing
         let mut branch_count = 0;
-        let trace = match self.recursive_map(&mut branch_count, &mut HashMap::new(), &timeout)? {
+        let trace = match self.recursive_map(
+            &mut branch_count,
+            &mut HashMap::new(),
+            &mut HashMap::new(),
+            &timeout,
+        )? {
             Some(trace) => trace,
             None => {
                 warn!("symbolic execution returned no valid traces");
@@ -126,6 +136,7 @@ impl VM {
         &mut self,
         branch_count: &mut u32,
         handled_jumps: &mut HashMap<JumpFrame, Vec<Stack>>,
+        decoder_progress: &mut HashMap<JumpFrame, Vec<Stack>>,
         timeout_at: &Instant,
     ) -> Result<Option<VMTrace>> {
         let vm = self;
@@ -180,6 +191,7 @@ impl VM {
                     last_instruction.inputs[0],
                     vm.stack.size(),
                     jump_taken,
+                    last_instruction.input_operations.get(1),
                 );
 
                 // if the stack contains too many items, it's probably a loop
@@ -202,6 +214,21 @@ impl VM {
                 // jumps, it's probably a loop
                 if jump_stack_depth_less_than_max_stack_depth(&jump_frame, handled_jumps) {
                     return Ok(None);
+                }
+
+                // A loop can scan successive statically folded calldata offsets, producing a
+                // new apparent ABI head each time. Keep numeric-progress checks across decoder
+                // contexts so changing the inferred owner cannot bypass loop termination.
+                if !jump_frame.calldata_heads.is_empty() {
+                    let mut progress_frame = jump_frame.clone();
+                    progress_frame.calldata_heads.clear();
+                    let prior_contexts = decoder_progress.entry(progress_frame).or_default();
+                    if historical_diffs_approximately_equal(&vm.stack, prior_contexts) ||
+                        stack_position_shows_pattern(&vm.stack, prior_contexts)
+                    {
+                        return Ok(None);
+                    }
+                    prior_contexts.push(vm.stack.clone());
                 }
 
                 // perform heuristic checks on historical stacks
@@ -339,7 +366,12 @@ impl VM {
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction =
                         last_instruction.inputs[0].try_into().unwrap_or(u128::MAX) + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    match trace_vm.recursive_map(
+                        branch_count,
+                        handled_jumps,
+                        decoder_progress,
+                        timeout_at,
+                    ) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -349,7 +381,12 @@ impl VM {
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    match vm.recursive_map(
+                        branch_count,
+                        handled_jumps,
+                        decoder_progress,
+                        timeout_at,
+                    ) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -362,7 +399,12 @@ impl VM {
                     // push a new vm trace to the children
                     let mut trace_vm = vm.clone();
                     trace_vm.instruction = last_instruction.instruction + 1;
-                    match trace_vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    match trace_vm.recursive_map(
+                        branch_count,
+                        handled_jumps,
+                        decoder_progress,
+                        timeout_at,
+                    ) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -372,7 +414,12 @@ impl VM {
                     }
 
                     // push the current path onto the stack
-                    match vm.recursive_map(branch_count, handled_jumps, timeout_at) {
+                    match vm.recursive_map(
+                        branch_count,
+                        handled_jumps,
+                        decoder_progress,
+                        timeout_at,
+                    ) {
                         Ok(Some(child_trace)) => vm_trace.children.push(child_trace),
                         Ok(None) => {}
                         Err(e) => {
@@ -396,5 +443,73 @@ impl VM {
 
 #[cfg(test)]
 mod tests {
-    // TODO: add tests for symbolic execution & recursive_map
+    use std::time::Duration;
+
+    use alloy::primitives::Address;
+
+    use super::*;
+    use crate::core::opcodes::{CALLDATALOAD, STOP};
+
+    fn execute(bytecode: &str) -> (VMTrace, u32) {
+        VM::new(
+            &decode_hex(bytecode).unwrap(),
+            &[],
+            Address::ZERO,
+            Address::ZERO,
+            Address::ZERO,
+            0,
+            u128::MAX,
+        )
+        .symbolic_exec(Instant::now() + Duration::from_secs(5))
+        .unwrap()
+    }
+
+    fn opcodes(trace: &VMTrace) -> Vec<u8> {
+        trace
+            .operations
+            .iter()
+            .map(|state| state.last_instruction.opcode)
+            .chain(trace.children.iter().flat_map(opcodes))
+            .collect()
+    }
+
+    #[test]
+    fn shared_calldata_decoder_reaches_each_argument_and_the_function_body() {
+        // Four calls pass 4 + calldataload(head) to one helper, with head offsets
+        // 4, 36, 68, and 100. The helper checks that the length word fits within calldata,
+        // then returns to its caller. STOP is the body following all four decodes.
+        let (trace, _) = execute(concat!(
+            "600b6004356004016031565b",
+            "60176024356004016031565b",
+            "60236044356004016031565b",
+            "602f6064356004016031565b00",
+            "5b80601f013611603e575f5ffd5b5056",
+        ));
+        let operations = opcodes(&trace);
+        assert_eq!(operations.iter().filter(|opcode| **opcode == CALLDATALOAD).count(), 4);
+        assert!(operations.contains(&STOP));
+    }
+
+    #[test]
+    fn loop_over_elements_of_one_calldata_argument_still_terminates() {
+        // Start at 4 + calldataload(4), read a word, advance by 32, and repeat while
+        // below calldatasize(). Symbolic offsets change, but the owning head does not.
+        let (trace, branches) = execute("6004356004015b80355060200180361060065700");
+        assert!(branches <= 2, "loop should be bounded by its existing history");
+        assert!(opcodes(&trace).len() < 32);
+    }
+
+    #[test]
+    fn scanning_calldata_words_cannot_escape_loop_history_by_changing_heads() {
+        for bytecode in [
+            // Branch on 4 + calldataload(index).
+            "60045b8035600401906020019060025700",
+            // The same scan with a calldatasize() comparison resembles a decoder guard.
+            "60045b80356004013610906020019060025700",
+        ] {
+            let (trace, branches) = execute(bytecode);
+            assert!(branches <= 5, "successive head offsets must not reset loop history");
+            assert!(opcodes(&trace).len() < 100);
+        }
+    }
 }

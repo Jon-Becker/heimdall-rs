@@ -1,13 +1,12 @@
 use futures::future::BoxFuture;
 use hashbrown::HashSet;
 
-use alloy::primitives::U256;
 use heimdall_vm::core::{
     opcodes::{opcode_name, CALLDATALOAD, ISZERO},
     types::{byte_size_to_type, convert_bitmask},
     vm::State,
 };
-use tracing::{debug, trace};
+use tracing::debug;
 
 use crate::{
     core::{
@@ -26,35 +25,22 @@ pub(crate) fn argument_heuristic<'a>(
     analyzer_state: &'a mut AnalyzerState,
 ) -> BoxFuture<'a, Result<(), Error>> {
     Box::pin(async move {
+        super::calldata::infer_dynamic_arguments(function, &state.last_instruction);
         match state.last_instruction.opcode {
             // CALLDATALOAD
             0x35 => {
-                // calculate the argument index, with the 4byte signature padding removed
-                // for example, CALLDATALOAD(4) -> (4-4)/32 = 0
-                //              CALLDATALOAD(36) -> (36-4)/32 = 1
-                let arg_index = (state.last_instruction.inputs[0].saturating_sub(U256::from(4)) /
-                    U256::from(32))
-                .try_into()
-                .unwrap_or(usize::MAX);
-
-                // insert only if this argument is not already in the hashmap
-                function.arguments.entry(arg_index).or_insert_with(|| {
-                    debug!(
-                        "discovered new argument at index {} from CALLDATALOAD({})",
-                        arg_index, state.last_instruction.inputs[0]
-                    );
-                    CalldataFrame {
+                // Concrete symbolic-execution calldata is zero-filled. Only a constant,
+                // aligned head offset denotes a new argument; tail reads belong to that head.
+                if let Some(arg_index) =
+                    super::calldata::head_index(&state.last_instruction.input_operations[0])
+                {
+                    function.arguments.entry(arg_index).or_insert_with(|| CalldataFrame {
                         arg_op: state.last_instruction.input_operations[0].to_string(),
-                        mask_size: 32, // init to 32 because all CALLDATALOADs are 32 bytes
+                        mask_size: 32,
                         heuristics: HashSet::new(),
-                    }
-                });
-            }
-
-            // CALLDATACOPY
-            0x37 => {
-                // TODO: implement CALLDATACOPY support
-                trace!("CALLDATACOPY detected; not implemented");
+                        dynamic_type: None,
+                    });
+                }
             }
 
             // AND | OR

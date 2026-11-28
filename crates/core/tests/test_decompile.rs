@@ -10,14 +10,10 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_decompile_precompile() {
-        let rpc_url = std::env::var("RPC_URL").unwrap_or_else(|_| {
-            println!("RPC_URL not set, skipping test");
-            std::process::exit(0);
-        });
-
+        // Runtime from 0x1bf797219482a29013d804ad96d1c6f84fba4c45, also used by the benchmarks.
         let result = decompile(DecompilerArgs {
-            target: String::from("0x1bf797219482a29013d804ad96d1c6f84fba4c45"),
-            rpc_url,
+            target: String::from(include_str!("testdata/bytecode/ecrecover.hex")),
+            rpc_url: String::new(),
             default: true,
             skip_resolving: true,
             indexed_log_check: false,
@@ -39,11 +35,21 @@ mod integration_tests {
         .await
         .expect("failed to decompile");
 
-        // assert that the output is correct
-        for line in &["function Unresolved_19045a25(uint256 arg0, uint256 arg1) public payable returns (address) {",
-            " = ecrecover("] {
-            println!("{line}");
-            assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
+        // CALLDATALOAD(0x24) is a tail offset: CALLDATACOPY uses its length word to
+        // copy the signature bytes. It must not be emitted as another scalar argument.
+        let inputs = result.abi.functions["Unresolved_19045a25"][0]
+            .inputs
+            .iter()
+            .map(|parameter| parameter.ty.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(inputs, ["uint256", "bytes"]);
+
+        let source = result.source.as_ref().expect("decompile source is empty");
+        for line in [
+            "function Unresolved_19045a25(uint256 arg0, bytes arg1) public payable returns (address) {",
+            " = ecrecover(",
+        ] {
+            assert!(source.contains(line), "missing {line}:\n{source}");
         }
     }
 
