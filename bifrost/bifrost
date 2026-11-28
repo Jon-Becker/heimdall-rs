@@ -11,8 +11,7 @@ main() {
     requires_cmd git
     requires_cmd curl
     requires_cmd cargo
-    ensure_apt_package "libssl-dev"
-    ensure_apt_package "build-essential"
+    ensure_build_dependencies
 
     # parsing parameters
     while [[ $1 ]]; do
@@ -208,20 +207,70 @@ ensure() {
     if ! "$@"; then echo "bifrost: required command '$*' failed."; exit 1; fi
 }
 
-# ensure an apt package is installed
-ensure_apt_package() {
-    # if we are not on a linux system, return success
+# detect the system package manager, preferring apt-get so existing
+# Debian/Ubuntu behavior is preserved. echoes an empty string if none is known.
+detect_package_manager() {
+    local pm
+    for pm in apt-get dnf yum pacman zypper apk; do
+        if command_exists "$pm"; then
+            echo "$pm"
+            return
+        fi
+    done
+}
+
+# echo the OpenSSL development headers and C toolchain packages required to
+# build heimdall from source for the given package manager. an empty result
+# means the package manager is not supported.
+build_dependency_packages() {
+    case $1 in
+        apt-get) echo "libssl-dev build-essential" ;;
+        dnf|yum) echo "openssl-devel gcc gcc-c++ make" ;;
+        pacman)  echo "openssl base-devel" ;;
+        zypper)  echo "libopenssl-devel gcc gcc-c++ make" ;;
+        apk)     echo "openssl-dev build-base" ;;
+    esac
+}
+
+# echo the full, non-interactive install command for the given package manager
+# and packages. an empty result means bifrost cannot install automatically and
+# must not guess at a package manager.
+package_install_command() {
+    local pm=$1; shift
+    case $pm in
+        apt-get) echo "sudo apt-get install -y $*" ;;
+        dnf)     echo "sudo dnf install -y $*" ;;
+        yum)     echo "sudo yum install -y $*" ;;
+        pacman)  echo "sudo pacman -S --needed --noconfirm $*" ;;
+        zypper)  echo "sudo zypper install -y $*" ;;
+        apk)     echo "sudo apk add $*" ;;
+    esac
+}
+
+# ensure the OpenSSL headers and C toolchain needed to build from source are
+# installed, using whichever package manager the host provides.
+ensure_build_dependencies() {
+    # macOS and other systems ship a toolchain / provide OpenSSL via their own
+    # channels (e.g. homebrew), so we don't touch system packages there.
     if [[ "$OSTYPE" != "linux-gnu"* ]]; then
         return
     fi
 
-    # if the package is not installed, install it
-    if ! dpkg -l | grep -q $1; then
-        echo "bifrost: installing $1."
-        ensure sudo apt-get install -y $1
-    else
-        echo "bifrost: $1 is already installed."
+    local pm packages cmd
+    pm=$(detect_package_manager)
+    packages=$(build_dependency_packages "$pm")
+    cmd=$(package_install_command "$pm" $packages)
+
+    # no known package manager: fail loudly with actionable guidance rather than
+    # invoking the wrong one (e.g. apt-get on Amazon Linux / Fedora / Arch).
+    if [ -z "$cmd" ]; then
+        echo "bifrost: could not detect a supported package manager (apt-get, dnf, yum, pacman, zypper, apk)."
+        echo "bifrost: please install an OpenSSL development package and a C toolchain, then re-run bifrost."
+        return
     fi
+
+    echo "bifrost: ensuring build dependencies ($packages) via $pm."
+    ensure $cmd
 }
 
 # command_exists checks if a command exists
@@ -244,5 +293,7 @@ set_version() {
     sed -i "" "s/^version.*/version = \"${version}\"/" $file
 }
 
-# run main
-main "$@" || exit 1
+# run main (skipped when the script is sourced, e.g. by the test suite)
+if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+    main "$@" || exit 1
+fi
