@@ -4,10 +4,11 @@ use std::{
     time::Instant,
 };
 
+use alloy::primitives::U256;
 use eyre::Result;
 use heimdall_common::{
     ether::signatures::{ResolveSelector, ResolvedFunction},
-    utils::strings::decode_hex,
+    utils::strings::{decode_hex, encode_hex_reduced},
 };
 use tokio::task;
 use tracing::{debug, error, info, trace, warn};
@@ -113,7 +114,14 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
     let mut handled_jumps = HashSet::new();
 
     // execute the EVM call to find the entry point for the given selector
-    vm.calldata = decode_hex(selector).expect("Failed to decode selector.");
+    let selector_bytes = decode_hex(selector).expect("Failed to decode selector.");
+    vm.calldata = selector_bytes.clone();
+
+    // selectors with leading zero-bytes (e.g. `0x00aabbcc`) are solidified without those
+    // bytes in the jump condition (e.g. `0xaabbcc`), so match against the same reduced form
+    // that `solidify` produces. otherwise these functions are dropped from the dispatcher.
+    let reduced_selector = encode_hex_reduced(U256::from_be_slice(&selector_bytes));
+
     while vm.bytecode.len() >= vm.instruction as usize {
         let call = match vm.step() {
             Ok(call) => call,
@@ -125,7 +133,7 @@ pub fn resolve_entry_point(vm: &mut VM, selector: &str) -> u128 {
             let jump_condition = call.last_instruction.input_operations[1].solidify();
             let jump_taken = call.last_instruction.inputs[1].try_into().unwrap_or(1);
 
-            if jump_condition.contains(selector) &&
+            if jump_condition.contains(&reduced_selector) &&
                 jump_condition.contains("msg.data[0]") &&
                 jump_condition.contains(" == ") &&
                 jump_taken == 1
