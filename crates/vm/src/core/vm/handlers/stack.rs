@@ -19,21 +19,15 @@ pub fn push0(vm: &mut VM, operation: WrappedOpcode) -> Result<()> {
 
 /// PUSH1-PUSH32 - Push N bytes onto stack
 pub fn push_n(vm: &mut VM, opcode: u8, mut operation: WrappedOpcode) -> Result<()> {
-    // Get the number of bytes to push
-    let num_bytes = (opcode - 95) as u128;
-
-    // Get the bytes to push from bytecode
-    let bytes =
-        &vm.bytecode[(vm.instruction - 1) as usize..(vm.instruction - 1 + num_bytes) as usize];
-    vm.instruction += num_bytes;
-
-    // update the operation's inputs
-    let new_operation_inputs = vec![WrappedInput::Raw(U256::from_be_slice(bytes))];
-
-    operation.inputs = new_operation_inputs;
-
-    // Push the bytes to the stack
-    vm.stack.push(U256::from_be_slice(bytes), operation);
+    let num_bytes = usize::from(opcode - 95);
+    let start = (vm.instruction - 1) as usize;
+    let available = vm.bytecode.len().saturating_sub(start).min(num_bytes);
+    let mut bytes = [0u8; 32];
+    bytes[..available].copy_from_slice(&vm.bytecode[start..start + available]);
+    let value = U256::from_be_slice(&bytes[..num_bytes]);
+    vm.instruction += num_bytes as u128;
+    operation.inputs = vec![WrappedInput::Raw(value)];
+    vm.stack.push(value, operation);
     Ok(())
 }
 
@@ -53,4 +47,38 @@ pub fn swap_n(vm: &mut VM, opcode: u8) -> Result<()> {
     // Perform the swap
     vm.stack.swap(index as usize);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::Address;
+
+    #[test]
+    fn push_immediates_zero_pad_missing_trailing_bytes() {
+        for width in 1..=32usize {
+            for available in 0..=width {
+                let mut bytecode = vec![95 + width as u8];
+                bytecode.extend(vec![0xab; available]);
+                let mut vm = VM::new(
+                    &bytecode,
+                    &[],
+                    Address::ZERO,
+                    Address::ZERO,
+                    Address::ZERO,
+                    0,
+                    u128::MAX,
+                );
+                vm.step().unwrap();
+                let mut expected = vec![0xab; available];
+                expected.resize(width, 0);
+                let value = U256::from_be_slice(&expected);
+                assert_eq!(vm.stack.peek(0).value, value);
+                assert_eq!(vm.stack.peek(0).operation.inputs, vec![WrappedInput::Raw(value)]);
+                assert_eq!(vm.instruction, (width + 2) as u128);
+                vm.step().unwrap();
+                assert_eq!(vm.exitcode, 2);
+            }
+        }
+    }
 }

@@ -40,11 +40,40 @@ mod integration_tests {
         .expect("failed to decompile");
 
         // assert that the output is correct
-        for line in &["function Unresolved_19045a25(uint256 arg0, uint256 arg1) public payable returns (address) {",
+        for line in &["function Unresolved_19045a25(uint256 arg0, bytes arg1) public payable returns (address) {",
             " = ecrecover("] {
             println!("{line}");
             assert!(result.source.as_ref().expect("decompile source is empty").contains(line));
         }
+    }
+
+    #[tokio::test]
+    async fn infers_dynamic_signature_payload_in_existing_ecrecover_fixture() {
+        let args = DecompilerArgsBuilder::new()
+            .target(include_str!("testdata/bytecode/ecrecover.hex").trim().to_string())
+            .skip_resolving(true)
+            .include_solidity(true)
+            .timeout(10000)
+            .build()
+            .unwrap();
+        let result = decompile(args).await.unwrap();
+        let functions: Vec<_> = result.abi.functions().collect();
+        assert_eq!(functions.len(), 1);
+        let function = functions[0];
+        assert_eq!(function.name, "Unresolved_19045a25");
+        assert_eq!(
+            function.inputs.iter().map(|input| input.ty.as_str()).collect::<Vec<_>>(),
+            vec!["uint256", "bytes"]
+        );
+        assert_eq!(
+            function.outputs.iter().map(|output| output.ty.as_str()).collect::<Vec<_>>(),
+            vec!["address"]
+        );
+        let source = result.source.unwrap();
+        assert!(source.contains(
+            "function Unresolved_19045a25(uint256 arg0, bytes arg1) public payable returns (address) {"
+        ));
+        assert!(source.contains(" = ecrecover("));
     }
 
     #[tokio::test]
