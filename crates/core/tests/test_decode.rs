@@ -39,14 +39,21 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn raw_wide_and_nested_arrays_keep_their_values() {
+    async fn raw_wide_arrays_and_depth_fallback_keep_their_values() {
         for (words, expected) in [
-            (vec![32, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9], "uint8[]"),
-            (vec![32, 1, 32, 1, 32, 1, 32, 1, 32, 1, 7], "uint8[][][][][]"),
+            (vec![32, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9], vec!["uint8[]"]),
+            (vec![32, 1, 32, 1, 32, 1, 32, 1, 7], vec!["uint8[][][][]"]),
+            (vec![32, 1, 32, 1, 32, 1, 32, 1, 32, 1, 7], vec!["uint8"; 11]),
         ] {
             let result = decode_raw_words(&words).await;
-            assert_eq!(result.decoded.inputs, [expected]);
-            let encoded = result.decoded.decoded_inputs.unwrap()[0].abi_encode_params();
+            assert_eq!(result.decoded.inputs, expected);
+            let encoded: Vec<_> = result
+                .decoded
+                .decoded_inputs
+                .unwrap()
+                .iter()
+                .flat_map(|v| v.abi_encode_params())
+                .collect();
             assert_eq!(encoded, encode_words(&words));
         }
     }
